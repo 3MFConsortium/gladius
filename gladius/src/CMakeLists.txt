@@ -15,8 +15,7 @@ endif()
 set (INCLUDE_PATHS
     ../
     ../components/IconFontCppHeaders
-    ../components/psimpl
-    ../components/nanovdb
+    ../components/psimpl/lib
     ${STB_INCLUDE_DIRS}
     ${OPENMESH_INCLUDE_DIRS}
     ${AdditionalIncludes}

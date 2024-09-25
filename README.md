@@ -59,10 +59,12 @@ Gladius is designed to run on Windows and Linux, but might run on other platform
 * clone this repository and update the submodules:
 ```
 git clone https://github.com/3MFConsortium/gladius
+cd gladius
 git submodule update --init --recursive
 ```
 * Configure and build the project with cmake:
 ```
+cd gladius
 mkdir build
 cd build
 cmake -DCMAKE_TOOLCHAIN_FILE=<path to vcpkg>/scripts/buildsystems/vcpkg.cmake ..
@@ -77,10 +79,12 @@ During the configuration process CMake will download and compile the dependencie
 * clone this repository and update the submodules:
 ```
 git clone https://github.com/3MFConsortium/gladius
+cd gladius
 git submodule update --init --recursive
 ```
 * configure and build the project with cmake:
 ```
+cd gladius
 mkdir build
 cd build
 cmake -DCMAKE_TOOLCHAIN_FILE=<path to vcpkg>/scripts/buildsystems/vcpkg.cmake -G Ninja ..
