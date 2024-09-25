@@ -1,0 +1,131 @@
+{
+    "configurePresets": [
+        {
+            "name": "windows-base",
+            "description": "Target Windows with the Visual Studio development environment.",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "installDir": "$env{CML}/gladius/gladius-1.2.9",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                },
+                "USE_CACHE": "true",
+                "ENABLE_ASAN": "false",
+                "VCPKG_TARGET_TRIPLET": "x64-windows-gladius",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
+                "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
+                "CMAKE_BUILD_PARALLEL_LEVEL": "8"
+            }
+        },
+        {
+            "name": "x64-debug",
+            "displayName": "x64 Debug",
+            "description": "Target Windows (64-bit) with the Visual Studio development environment. (Debug)",
+            "inherits": "windows-base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS_DEBUG": "/Z7 /RTCus /D_ITERATOR_DEBUG_LEVEL=2 /D_DEBUG /D_DISABLE_VECTOR_ANNOTATION",
+                "ENABLE_TRACY": "false",
+                "ENABLE_ASAN": "false"
+            }
+        },
+        {
+            "name": "x64-release",
+            "displayName": "x64 Release",
+            "description": "Target Windows (64-bit) with the Visual Studio development environment. (RelWithDebInfo)",
+            "inherits": "windows-base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_TRACY": "false"
+            }
+        },
+        {
+            "name": "x64-release-debug",
+            "displayName": "x64 Release with Debug",
+            "description": "Target Windows (64-bit) with the Visual Studio development environment. (RelWithDebInfo)",
+            "inherits": "x64-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_CXX_FLAGS_DEBUG": "/Z7",
+                "ENABLE_TRACY": "false",
+                "ENABLE_ASAN": "false"
+            }
+        },
+        {
+            "name": "x64-release-debug-asan",
+            "displayName": "x64 Release with Debug and ASAN",
+            "description": "Target Windows (64-bit) with the Visual Studio development environment. (RelWithDebInfo)",
+            "inherits": "x64-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "ENABLE_TRACY": "false",
+                "ENABLE_ASAN": "true",
+                "VCPKG_TARGET_TRIPLET": "x64-windows-asan"
+            }
+        },
+        {
+            "name": "linux-base",
+            "displayName": "Default Clang",
+            "description": "Using compilers: C = /usr/bin/clang, CXX = /usr/bin/clang++",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/clang",
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+                "USE_CACHE": "true",
+                "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports"
+
+            }
+        },
+        {
+            "name": "linux-debug",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "linux-release",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "linux-releaseWithDebug",
+            "description": "",
+            "displayName": "",
+            "inherits": [
+                "linux-release"
+            ],
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        }
+    ],
+    "version": 3,
+    "testPresets": [
+        {
+            "name": "ReleaseWithDebug",
+            "description": "",
+            "displayName": "",
+            "configurePreset": "linux-releaseWithDebug"
+        }
+    ]
+}

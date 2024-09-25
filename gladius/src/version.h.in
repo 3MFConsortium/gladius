@@ -1,0 +1,11 @@
+#pragma once
+
+namespace gladius
+{
+    struct Version
+    {
+        static int constexpr major = @CPACK_PACKAGE_VERSION_MAJOR@;
+        static int constexpr minor = @CPACK_PACKAGE_VERSION_MINOR@;
+        static int constexpr revision = @CPACK_PACKAGE_VERSION_PATCH@;
+    };
+}

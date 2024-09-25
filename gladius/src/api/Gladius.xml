@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component xmlns="http://schemas.autodesk.com/netfabb/automaticcomponenttoolkit/2018"
+  libraryname="GladiusLib" namespace="GladiusLib" copyright="Jan Orend" year="2023"
+  basename="gladius" version="1.2.0">
+  <license>
+    <line value="All rights reserved." />
+  </license>
+  <bindings>
+    <binding language="CDynamic" indentation="4spaces" />
+    <binding language="CppDynamic" indentation="4spaces" />
+    <binding language="Cpp" indentation="4spaces" />
+    <binding language="Python" indentation="tabs" />
+    <binding language="CSharp" indentation="4spaces" />
+  </bindings>
+  <implementations>
+    <implementation language="Cpp" indentation="4spaces" />
+  </implementations>
+  <errors>
+    <error name="NOTIMPLEMENTED" code="1" description="functionality not implemented" />
+    <error name="INVALIDPARAM" code="2" description="an invalid parameter was passed" />
+    <error name="INVALIDCAST" code="3" description="a type cast failed" />
+    <error name="BUFFERTOOSMALL" code="4" description="a provided buffer is too small" />
+    <error name="GENERICEXCEPTION" code="5" description="a generic exception occurred" />
+    <error name="COULDNOTLOADLIBRARY" code="6" description="the library could not be loaded" />
+    <error name="COULDNOTFINDLIBRARYEXPORT" code="7"
+      description="a required exported symbol could not be found in the library" />
+    <error name="INCOMPATIBLEBINARYVERSION" code="8"
+      description="the version of the binary interface does not match the bindings interface" />
+  </errors>
+  <class name="Base">
+  </class>
+
+  <global baseclassname="Base" acquiremethod="AcquireInstance" releasemethod="ReleaseInstance"
+    versionmethod="GetVersion" errormethod="GetLastError">
+    <method name="GetVersion" description="retrieves the binary version of this library.">
+      <param name="Major" type="uint32" pass="out"
+        description="returns the major version of this library" />
+      <param name="Minor" type="uint32" pass="out"
+        description="returns the minor version of this library" />
+      <param name="Micro" type="uint32" pass="out"
+        description="returns the micro version of this library" />
+    </method>
+    <method name="GetLastError" description="Returns the last error recorded on this object">
+      <param name="Instance" type="class" class="Base" pass="in" description="Instance Handle" />
+      <param name="ErrorMessage" type="string" pass="out" description="Message of the last error" />
+      <param name="HasError" type="bool" pass="return" description="Is there a last error to query" />
+    </method>
+    <method name="AcquireInstance" description="Acquire shared ownership of an Instance">
+      <param name="Instance" type="class" class="Base" pass="in" description="Instance Handle" />
+    </method>
+    <method name="ReleaseInstance" description="Releases shared ownership of an Instance">
+      <param name="Instance" type="class" class="Base" pass="in" description="Instance Handle" />
+    </method>
+    <method name="CreateGladius" description="Creates a new Gladius instance">
+      <param name="Instance" type="class" class="Gladius" pass="return"
+        description="New Gladius instance" />
+    </method>
+  </global>
+
+  <struct name="Vector2f">
+    <member name="Coordinates" type="single" rows="2" />
+  </struct>
+
+  <struct name="Vector3f">
+    <member name="Coordinates" type="single" rows="3" />
+  </struct>
+
+  <class name="BoundingBox">
+    <method name="GetMin" description="Returns the minimum coordinates of the bounding box">
+      <param name="Min" type="struct" class="Vector3f" pass="return"
+        description="The number of elements" />
+    </method>
+    <method name="GetMax" description="Returns the nmaximum coordinates of the bounding box">
+      <param name="Max" type="struct" class="Vector3f" pass="return"
+        description="The number of elements" />
+    </method>
+  </class>
+
+  <class name="Face">
+    <method name="GetVertexA" description="Returns the vertex A of the face">
+      <param name="VertexA" type="struct" class="Vector3f" pass="return"
+        description="Vertex of the face" />
+    </method>
+
+    <method name="GetVertexB" description="Returns the vertex B of the face">
+      <param name="VertexB" type="struct" class="Vector3f" pass="return"
+        description="Vertex of the face" />
+    </method>
+
+    <method name="GetVertexC" description="Returns the vertex C of the face">
+      <param name="VertexC" type="struct" class="Vector3f" pass="return"
+        description="Vertex of the face" />
+    </method>
+
+    <method name="GetNormal" description="Returns the normal of the face">
+      <param name="Normal" type="struct" class="Vector3f" pass="return"
+        description="Normal of the face" />
+    </method>
+
+    <method name="GetNormalA" description="Returns the normal of vertex A">
+      <param name="Normal" type="struct" class="Vector3f" pass="return"
+        description="Normal of vertex A" />
+    </method>
+
+    <method name="GetNormalB" description="Returns the normal of vertex B">
+      <param name="Normal" type="struct" class="Vector3f" pass="return"
+        description="Normal of vertex B" />
+    </method>
+    <method name="GetNormalC" description="Returns the normal of vertex C">
+      <param name="Normal" type="struct" class="Vector3f" pass="return"
+        description="Normal of vertex C" />
+    </method>
+  </class>
+
+  <class name="DetailedErrorAccessor">
+    <method name="GetSize" description="Returns the number of elements">
+      <param name="Size" type="uint64" pass="return" description="The number of elements" />
+    </method>
+    <method name="Next" description="Go to the next element">
+      <param name="Result" type="bool" pass="return"
+        description="Returns true, if there is a next element" />
+    </method>
+    <method name="Prev" description="Go to the previous element">
+      <param name="Result" type="bool" pass="return"
+        description="Returns true, if there is a previous element" />
+    </method>
+    <method name="Begin" description="Go to the first element">
+    </method>
+    <!-- actual payload -->
+    <method name="GetTitle" description="Returns the title of the error">
+      <param name="Title" type="string" pass="return" description="Title of the error" />
+    </method>
+    <method name="GetDescription" description="Returns the description of the error">
+      <param name="Description" type="string" pass="return" description="Description of the error" />
+    </method>
+    <method name="GetSeverity" description="Returns the severity of the error">
+      <!-- 0: Information (will only be logged), 1: Warning, 2: Error (part cannot be used, abort
+      import) -->
+      <param name="Severity" type="uint32" pass="return" description="Severity of the error" />
+    </method>
+  </class>
+
+  <class name="ResourceAccessor" parent="Base">
+    <method name="GetSize" description="Returns the number of elements">
+      <param name="Size" type="uint64" pass="return" description="The number of elements" />
+    </method>
+    <method name="Next" description="Go to the next element">
+      <param name="Result" type="bool" pass="return"
+        description="Returns true, if there is a next element" />
+    </method>
+    <method name="Prev" description="Go to the previous element">
+      <param name="Result" type="bool" pass="return"
+        description="Returns true, if there is a previous element" />
+    </method>
+    <method name="Begin" description="Go to the first element">
+    </method>
+  </class>
+
+  <class name="PolygonAccessor" parent="ResourceAccessor">
+    <method name="GetCurrentVertex" description="Returns the current vertex">
+      <param name="Vertex" type="struct" class="Vector2f" pass="return"
+        description="Returns the current vertex" />
+    </method>
+    <method name="GetArea" description="Returns the enclosed area">
+      <param name="Area" type="single" pass="return" description="Enclosed area" />
+    </method>
+  </class>
+
+  <class name="ContourAccessor" parent="ResourceAccessor">
+    <method name="GetCurrentPolygon" description="Returns an Accessor for the current Polygon">
+      <param name="Vertex" type="class" class="PolygonAccessor" pass="return"
+        description="Returns the current vertex" />
+    </method>
+  </class>
+
+  <class name="FaceAccessor" parent="ResourceAccessor">
+    <method name="GetCurrentFace" description="Returns an Accessor for the current Face">
+      <param name="Face" type="class" class="Face" pass="return"
+        description="Returns the current vertex" />
+    </method>
+  </class>
+
+  <struct name="ChannelMetaInfo">
+    <member name="MinPosition" type="single" rows="2"
+      description="The position in the slice plane in the build area coordinate system with its origin in the left bottom corner" />
+    <member name="MaxPosition" type="single" rows="2"
+      description="Position + dimensions [mm] of the matrix" />
+    <member name="Size" type="int32" rows="2"
+      description="The size (number of elements) of the matrix" />
+    <member name="RequiredMemory" type="int32" description="The size of the required memory" />
+  </struct>
+
+  <class name="ChannelAccessor" parent="ResourceAccessor">
+    <method name="Evaluate" description="Generates the matrix, necessary to call the methods below">
+      <param name="Z_mm" type="single" pass="in" description="Z-height in mm" />
+      <param name="PixelWidth_mm" type="single" pass="in" describtion="Pixel width in mm" />
+      <param name="PixelHeight_mm" type="single" pass="in" describtion="Pixel height in mm" />
+    </method>
+    <method name="GetMetaInfo"
+      description="Returns meta information to the matrix. Note: Evaluate has to be called before.">
+      <param name="MetaInfo" type="struct" class="ChannelMetaInfo" pass="return"
+        description="Returns the current meta information to the channel matrix" />
+    </method>
+    <method name="Copy"
+      description="Copies the matrix to the target address provided by the client. It is the responsibility of the client to ensure, that enough memory is reserverd. The required size can be queried from ChannelMetaInfo. Note: Evaluate has to be called before.">
+      <param name="TargetPtr" type="int64" pass="in"
+        description="Target address to copy the matrix to." />
+    </method>
+    <method name="GetName"
+      description="Short name of the channel, also used as key for accessing the channel">
+      <param name="Name" type="string" pass="return"
+        description="Short name of the channel, also used as key for accessing the channel" />
+    </method>
+
+    <method name="SwitchToChannel" description="Switches to the channel with the given name">
+      <param name="Name" type="string" pass="in" description="Name of the channel to switch to." />
+      <param name="Result" type="bool" pass="return" description="True, if successful" />
+    </method>
+  </class>
+
+  <class name="Gladius" parent="Base">
+    <method name="LoadAssembly" description="Loads an Assembly">
+      <param name="Filename" type="string" pass="in" description="The filename of the assembly" />
+    </method>
+    <method name="ExportSTL" description="Exports the current assembly to an stl-file">
+      <param name="Filename" type="string" pass="in" description="The target filename" />
+    </method>
+    <method name="GetFloatParameter" description="Returns the value of the given parameter">
+      <param name="ModelName" type="string" pass="in"
+        description="Name of the model the parameter belongs to" />
+      <param name="NodeName" type="string" pass="in"
+        description="Name of the node the parameter belongs to" />
+      <param name="ParameterName" type="string" pass="in" description="Name of the parameter" />
+      <param name="Value" type="single" pass="return" description="Value of the parameter" />
+    </method>
+    <method name="SetFloatParameter" description="Sets the value of the given parameter">
+      <param name="ModelName" type="string" pass="in"
+        description="Name of the model the parameter belongs to" />
+      <param name="NodeName" type="string" pass="in"
+        description="Name of the node the parameter belongs to" />
+      <param name="ParameterName" type="string" pass="in" description="Name of the parameter" />
+      <param name="Value" type="single" pass="in" description="Value of the parameter" />
+    </method>
+    <method name="GetStringParameter" description="Returns the value of the given parameter">
+      <param name="ModelName" type="string" pass="in"
+        description="Name of the model the parameter belongs to" />
+      <param name="NodeName" type="string" pass="in"
+        description="Name of the node the parameter belongs to" />
+      <param name="ParameterName" type="string" pass="in" description="Name of the parameter" />
+      <param name="Value" type="string" pass="return" description="Value of the parameter" />
+    </method>
+    <method name="SetStringParameter" description="Sets the value of the given parameter">
+      <param name="ModelName" type="string" pass="in"
+        description="Name of the model the parameter belongs to" />
+      <param name="NodeName" type="string" pass="in"
+        description="Name of the node the parameter belongs to" />
+      <param name="ParameterName" type="string" pass="in" description="Name of the parameter" />
+      <param name="Value" type="string" pass="in" description="Value of the parameter" />
+    </method>
+
+    <method name="GetVector3fParameter" description="Returns the value of the given parameter">
+      <param name="ModelName" type="string" pass="in"
+        description="Name of the model the parameter belongs to" />
+      <param name="NodeName" type="string" pass="in"
+        description="Name of the node the parameter belongs to" />
+      <param name="ParameterName" type="string" pass="in" description="Name of the parameter" />
+      <param name="Value" type="struct" class="Vector3f" pass="return"
+        description="Value of the parameter" />
+    </method>
+    <method name="SetVector3fParameter" description="Sets the value of the given parameter">
+      <param name="ModelName" type="string" pass="in"
+        description="Name of the model the parameter belongs to" />
+      <param name="NodeName" type="string" pass="in"
+        description="Name of the node the parameter belongs to" />
+      <param name="ParameterName" type="string" pass="in" description="Name of the parameter" />
+      <param name="X" type="single" pass="in" description="Value of the parameter" />
+      <param name="Y" type="single" pass="in" description="Value of the parameter" />
+      <param name="Z" type="single" pass="in" description="Value of the parameter" />
+    </method>
+
+    <method name="GenerateContour" description="Generates a contour in the xy-plane">
+      <param name="Z" type="single" pass="in" description="Z-height in mm" />
+      <param name="Offset" type="single" pass="in" description="Offset from the part boundary in mm" />
+      <param name="Accessor" type="class" class="ContourAccessor" pass="return"
+        description="Accessor for the generated contour" />
+    </method>
+
+    <method name="ComputeBoundingBox"
+      description="Computes and returns the bounding box of the model">
+      <param name="BoundingBox" type="class" class="BoundingBox" pass="return"
+        description="The computed bounding box"></param>
+    </method>
+
+    <method name="GeneratePreviewMesh"
+      description="Computes a coarse mesh of the model that can be used for preview or collision detection">
+      <param name="Faces" type="class" class="FaceAccessor" pass="return"
+        description="Accessor to the faces of the preview mesh"></param>
+    </method>
+
+    <method name="GetChannels" description="Returns an accessor to all channels">
+      <param name="Accessor" type="class" class="ChannelAccessor" pass="return"
+        description="Accessor to the the avilable channels"></param>
+    </method>
+
+    <method name="GetDetailedErrorAccessor"
+      description="Returns an accessor to the detailed error information">
+      <param name="Accessor" type="class" class="DetailedErrorAccessor" pass="return"
+        description="Accessor to the detailed error information" />
+    </method>
+
+    <method name="ClearDetailedErrors" description="Clears all detailed errors" />
+
+    <method name="InjectSmoothingKernel" description="Injects a smoothing kernel into the model">
+      <param name="Kernel" type="string" pass="in" description="Code of of the kernel to inject" />
+    </method>
+  </class>
+</component>

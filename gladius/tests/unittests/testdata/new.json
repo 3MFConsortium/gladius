@@ -1,0 +1,224 @@
+{
+	"Assembly" : 
+	[
+		{
+			"displayName" : "Begin_1",
+			"id" : 1,
+			"name" : "Begin_1",
+			"out" : 
+			{
+				"cs" : 
+				{
+					"name" : "Begin_1_cs"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 0.0,
+				"y" : 0.0
+			},
+			"type" : "Begin"
+		},
+		{
+			"displayName" : "Part Translation",
+			"id" : 3,
+			"in" : 
+			{
+				"cs" : 
+				{
+					"source" : "Begin_1_cs"
+				},
+				"offset" : 
+				{
+					"isArgument" : false,
+					"x" : 75.0,
+					"y" : 75.0,
+					"z" : 0.0
+				}
+			},
+			"name" : "Translation_3",
+			"out" : 
+			{
+				"cs" : 
+				{
+					"name" : "Translation_3_cs"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 496.0,
+				"y" : -1.0
+			},
+			"type" : "Translation"
+		},
+		{
+			"displayName" : "Part_5",
+			"id" : 5,
+			"in" : 
+			{
+				"cs" : 
+				{
+					"source" : "Translation_3_cs"
+				},
+				"part" : 
+				{
+					"isArgument" : false,
+					"text" : "YourPart"
+				}
+			},
+			"name" : "Part_5",
+			"out" : 
+			{
+				"color" : 
+				{
+					"name" : "Part_5_color"
+				},
+				"shape" : 
+				{
+					"name" : "Part_5_shape"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 1019.0,
+				"y" : 19.0
+			},
+			"type" : "Part"
+		},
+		{
+			"displayName" : "End_2",
+			"id" : 2,
+			"in" : 
+			{
+				"color" : 
+				{
+					"isArgument" : false,
+					"x" : 0.5,
+					"y" : 0.5,
+					"z" : 0.5
+				},
+				"shape" : 
+				{
+					"source" : "Part_5_shape"
+				}
+			},
+			"name" : "End_2",
+			"screenPos" : 
+			{
+				"x" : 1520.0,
+				"y" : -24.0
+			},
+			"type" : "End"
+		}
+	],
+	"YourPart" : 
+	[
+		{
+			"displayName" : "Begin_1",
+			"id" : 1,
+			"name" : "Begin_1",
+			"out" : 
+			{
+				"cs" : 
+				{
+					"name" : "Begin_1_cs"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 0.0,
+				"y" : 0.0
+			},
+			"type" : "Begin"
+		},
+		{
+			"displayName" : "Translation_4",
+			"id" : 4,
+			"in" : 
+			{
+				"cs" : 
+				{
+					"source" : "Begin_1_cs"
+				},
+				"offset" : 
+				{
+					"isArgument" : false,
+					"x" : 0.0,
+					"y" : 0.0,
+					"z" : 7.5
+				}
+			},
+			"name" : "Translation_4",
+			"out" : 
+			{
+				"cs" : 
+				{
+					"name" : "Translation_4_cs"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 499.0,
+				"y" : 0.0
+			},
+			"type" : "Translation"
+		},
+		{
+			"displayName" : "Box_3",
+			"id" : 3,
+			"in" : 
+			{
+				"cs" : 
+				{
+					"source" : "Translation_4_cs"
+				},
+				"dimensions" : 
+				{
+					"isArgument" : false,
+					"x" : 10.0,
+					"y" : 10.0,
+					"z" : 10.0
+				}
+			},
+			"name" : "Box_3",
+			"out" : 
+			{
+				"shape" : 
+				{
+					"name" : "Box_3_shape"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 999.0,
+				"y" : 0.0
+			},
+			"type" : "Box"
+		},
+		{
+			"displayName" : "End_2",
+			"id" : 2,
+			"in" : 
+			{
+				"color" : 
+				{
+					"isArgument" : false,
+					"x" : 0.5,
+					"y" : 0.5,
+					"z" : 0.5
+				},
+				"shape" : 
+				{
+					"source" : "Box_3_shape"
+				}
+			},
+			"name" : "End_2",
+			"screenPos" : 
+			{
+				"x" : 1499.0,
+				"y" : 0.0
+			},
+			"type" : "End"
+		}
+	]
+}

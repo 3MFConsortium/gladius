@@ -1,0 +1,54 @@
+#Features requiring a newer clang-format version than the one provided by VS2017 are commented out
+
+#AllowAllArgumentsOnNextLine: false
+#AllowAllConstructorInitializersOnNextLine: false
+#AllowShortLambdasOnASingleLine: All
+#BasedOnStyle: Microsoft
+#BreakInheritanceList: BeforeColon
+#IncludeBlocksStyle: Preserve
+#SpaceAfterLogicalNot: false
+#SpaceBeforeCpp11BracedList: true
+#SpaceBeforeInheritanceColon: true
+#SpaceBeforeRangeBasedForLoopColon: true
+#SpaceInEmptyBlock: false
+#Standard: Latest
+
+AlignAfterOpenBracket: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakTemplateDeclarations: true
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBraces: Allman
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeComma
+ColumnLimit: 100
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ContinuationIndentWidth: 2
+DerivePointerAlignment: false
+FixNamespaceComments: false
+IndentWidth: 4
+Language: Cpp
+NamespaceIndentation: All
+PointerAlignment: Left
+PointerAlignment: Middle
+SortIncludes: true
+SpaceAfterCStyleCast: true
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInSquareBrackets: false
+UseTab: Never
+
+IncludeCategories:
+  - Regex:           'EOSPreComp'
+    Priority:        0
+#   SortPriority:    0

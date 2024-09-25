@@ -1,0 +1,397 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns="http://schemas.autodesk.com/netfabb/automaticcomponenttoolkit/2018"
+	xmlns:xs="http://www.w3.org/2001/XMLSchema"
+	xmlns:xml="http://www.w3.org/XML/1998/namespace" targetNamespace="http://schemas.autodesk.com/netfabb/automaticcomponenttoolkit/2018"
+	elementFormDefault="unqualified" attributeFormDefault="unqualified" blockDefault="#all"
+	>
+	<xs:annotation>
+		<xs:documentation><![CDATA[
+		Schema notes:
+		Items within this schema follow a simple naming convention of appending a prefix indicating the type of element for references:
+		Unprefixed: Element names
+		CT_: Complex types
+		ST_: Simple types
+		
+		]]></xs:documentation>
+	</xs:annotation>
+	
+	<!-- Complex Types -->
+	<xs:complexType name="CT_Component">
+		<xs:choice minOccurs="0" maxOccurs="unbounded">
+			<xs:element ref="importcomponent" minOccurs="0" maxOccurs="99999"/>
+			<xs:element ref="license" minOccurs="1" maxOccurs="1"/>
+			<xs:element ref="bindings" minOccurs="1" maxOccurs="1"/>
+			<xs:element ref="implementations" minOccurs="1" maxOccurs="1"/>
+			<xs:element ref="errors" minOccurs="1" maxOccurs="1"/>
+			<xs:element ref="global" minOccurs="1" maxOccurs="1"/>
+			<xs:element ref="struct" minOccurs="0" maxOccurs="99999"/>
+			<xs:element ref="enum" minOccurs="0" maxOccurs="99999"/>
+			<xs:element ref="class" minOccurs="0" maxOccurs="99999"/>
+			<xs:element ref="functiontype" minOccurs="0" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:choice>
+		<xs:attribute name="libraryname" type="ST_LibraryName" use="required"/>
+		<xs:attribute name="namespace" type="ST_NameSpace" use="required"/>
+		<xs:attribute name="copyright" type="xs:string" use="required"/>
+		<xs:attribute name="year" type="ST_Year"/>
+		<xs:attribute name="basename" type="ST_BaseName" use="required"/>
+		<xs:attribute name="version" type="ST_Version" use="required"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_ImportComponent">
+		<xs:attribute name="uri" type="xs:string"/>
+		<xs:attribute name="namespace" type="ST_NameSpace"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+
+	<xs:complexType name="CT_License">
+		<xs:sequence>
+			<xs:element ref="line" minOccurs="1" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_LicenseLine">
+		<xs:attribute name="value" type="xs:string"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+
+	<xs:complexType name="CT_BindingList">
+		<xs:sequence>
+			<xs:element ref="binding" minOccurs="0" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_ImplementationList">
+		<xs:sequence>
+			<xs:element ref="implementation" minOccurs="0" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Export">
+		<xs:attribute name="language" type="ST_Language" use="required"/>
+		<xs:attribute name="indentation" type="ST_Indentation" default="4spaces"/>
+		<xs:attribute name="classidentifier" type="ST_ClassIdentifier" use="optional"/>
+		<xs:attribute name="stubidentifier" type="ST_StubIdentifier" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_ErrorList">
+		<xs:sequence>
+			<xs:element ref="error" minOccurs="1" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Error">
+		<xs:attribute name="name" type="ST_ErrorName" use="required"/>
+		<xs:attribute name="code" type="xs:positiveInteger" use="required"/>
+		<xs:attribute name="description" type="ST_ErrorDescription" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Struct">
+		<xs:sequence>
+			<xs:element ref="member" minOccurs="1" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:attribute name="name" type="ST_Name" use="required"/>
+		<xs:attribute name="description" type="ST_ErrorDescription" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Member">
+		<xs:attribute name="name" type="ST_Name" use="required"/>
+		<xs:attribute name="type" type="ST_ScalarType" use="required"/>
+		<xs:attribute name="rows" type="xs:positiveInteger" use="optional" default="1"/>
+		<xs:attribute name="columns" type="xs:positiveInteger" use="optional" default="1"/>
+		<xs:attribute name="description" type="ST_ErrorDescription" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Enum">
+		<xs:sequence>
+			<xs:element ref="option" minOccurs="1" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:attribute name="name" type="ST_Name" use="required"/>
+		<xs:attribute name="description" type="ST_ErrorDescription" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Option">
+		<xs:attribute name="name" type="ST_Name" use="required"/>
+		<xs:attribute name="value" type="xs:nonNegativeInteger" use="required"/>
+		<xs:attribute name="description" type="ST_ErrorDescription" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Class">
+		<xs:sequence>
+			<xs:element ref="method" minOccurs="0" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:attribute name="name" type="ST_Name" use="required"/>
+		<xs:attribute name="parent" type="ST_Name" use="optional"/>
+		<xs:attribute name="description" type="ST_Description" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Param">
+		<xs:attribute name="name" type="ST_Name" use="required"/>
+		<xs:attribute name="pass" type="ST_Pass" use="required"/>
+		<xs:attribute name="type" type="ST_Type" use="required"/>
+		<xs:attribute name="class" type="ST_NameSpacedClassName" use="optional"/>
+		<xs:attribute name="description" type="ST_Description" use="optional"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_Global">
+		<xs:annotation><xs:documentation xml:lang="en">The global element contains all exported global methods.</xs:documentation></xs:annotation>
+		<xs:sequence>
+			<xs:element ref="method" minOccurs="2" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:attribute name="baseclassname" type="ST_Name" use="required">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;baseclassname&gt; must match a class with the same name and specifies the name of a class that is the base class for all classes of the generated component.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="acquiremethod" type="ST_Name" use="required">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;acquiremethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="releasemethod" type="ST_Name" use="required">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;releasemethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="versionmethod" type="ST_Name" use="required">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;versionmethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="errormethod" type="ST_Name" use="required">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;errormethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="prereleasemethod" type="ST_Name" use="optional">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;prereleasemethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="buildinfomethod" type="ST_Name" use="optional">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;buildinfomethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="journalmethod" type="ST_Name" use="optional">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;journalmethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="injectionmethod" type="ST_Name" use="optional">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;injectionmethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="symbollookupmethod" type="ST_Name" use="optional">
+			<xs:annotation><xs:documentation xml:lang="en">The &lt;symbollookupmethod&gt; must match a method with the same name and the correct signature.</xs:documentation></xs:annotation>
+		</xs:attribute>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	<xs:complexType name="CT_FunctionType">
+		<xs:sequence>
+			<xs:element ref="param" minOccurs="0" maxOccurs="99999"/>
+			<xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="99999"/>
+		</xs:sequence>
+		<xs:attribute name="name" type="ST_Name" use="required"/>
+		<xs:attribute name="description" type="ST_ErrorDescription" use="optional"/>
+		<xs:anyAttribute namespace="##other" processContents="lax"/>
+	</xs:complexType>
+	
+	
+	<!-- Simple Types -->
+	<xs:simpleType name="ST_Indentation">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="1spaces"/>
+			<xs:enumeration value="2spaces"/>
+			<xs:enumeration value="3spaces"/>
+			<xs:enumeration value="4spaces"/>
+			<xs:enumeration value="5spaces"/>
+			<xs:enumeration value="6spaces"/>
+			<xs:enumeration value="7spaces"/>
+			<xs:enumeration value="8spaces"/>
+			<xs:enumeration value="tabs"/>
+		</xs:restriction>
+	</xs:simpleType>
+	
+	
+	<xs:simpleType name="ST_Language">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="C"/>
+			<xs:enumeration value="Cpp"/>
+			<xs:enumeration value="CDynamic"/>
+			<xs:enumeration value="CppDynamic"/>
+			<xs:enumeration value="Python"/>
+			<xs:enumeration value="Pascal"/>
+			<xs:enumeration value="Fortran"/>
+			<xs:enumeration value="Node"/>
+			<xs:enumeration value="Go"/>
+			<xs:enumeration value="CSharp"/>
+		</xs:restriction>
+	</xs:simpleType>
+	
+	<xs:simpleType name="ST_Year">
+		<xs:restriction base="xs:positiveInteger">
+			<xs:minExclusive value="1900"/>
+			<xs:maxExclusive value="2147483648"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_Pass">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="in"/>
+			<xs:enumeration value="out"/>
+			<xs:enumeration value="return"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_Name">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Z][a-zA-Z0-9_]{0,63}"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+
+	<xs:simpleType name="ST_NameSpacedClassName">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="^(([A-Z][a-zA-Z0-9_]{0,63}):){0,1}([a-zA-Z0-9_]{0,64})"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_ErrorName">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Z][A-Z0-9_]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_ErrorDescription">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[a-zA-Z][a-zA-Z0-9_+\-:,.=!/ ]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_Description">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[a-zA-Z][a-zA-Z0-9_\\/+\-:,.=!?()'; |]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_Version">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="([0-9]+\.[0-9]+\.[0-9])(\-[a-zA-Z0-9.\-]+)?(\+[a-zA-Z0-9.\-]+)?"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_Type">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="bool"/>
+			<xs:enumeration value="uint8"/>
+			<xs:enumeration value="uint16"/>
+			<xs:enumeration value="uint32"/>
+			<xs:enumeration value="uint64"/>
+			<xs:enumeration value="int8"/>
+			<xs:enumeration value="int16"/>
+			<xs:enumeration value="int32"/>
+			<xs:enumeration value="int64"/>
+			<xs:enumeration value="single"/>
+			<xs:enumeration value="double"/>
+			<xs:enumeration value="pointer"/>
+			<xs:enumeration value="struct"/>
+			<xs:enumeration value="enum"/>
+			<xs:enumeration value="basicarray"/>
+			<xs:enumeration value="enumarray"/>
+			<xs:enumeration value="structarray"/>
+			<xs:enumeration value="string"/>
+			<xs:enumeration value="handle"/>
+			<xs:enumeration value="class"/>
+			<xs:enumeration value="optionalclass"/>
+			<xs:enumeration value="functiontype"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_ScalarType">
+		<xs:restriction base="ST_Type">
+			<xs:enumeration value="bool"/>
+			<xs:enumeration value="uint8"/>
+			<xs:enumeration value="uint16"/>
+			<xs:enumeration value="uint32"/>
+			<xs:enumeration value="uint64"/>
+			<xs:enumeration value="int8"/>
+			<xs:enumeration value="int16"/>
+			<xs:enumeration value="int32"/>
+			<xs:enumeration value="int64"/>
+			<xs:enumeration value="single"/>
+			<xs:enumeration value="double"/>
+			<xs:enumeration value="pointer"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_ComposedType">
+		<xs:restriction base="ST_Type">
+			<xs:enumeration value="struct"/>
+			<xs:enumeration value="enum"/>
+			<xs:enumeration value="basicarray"/>
+			<xs:enumeration value="enumarray"/>
+			<xs:enumeration value="structarray"/>
+			<xs:enumeration value="handle"/>
+			<xs:enumeration value="class"/>
+			<xs:enumeration value="optionalclass"/>
+			<xs:enumeration value="functiontype"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_BaseName">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[a-zA-Z][a-zA-Z0-9_\-.]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_NameSpace">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Z][a-zA-Z0-9_]{0,63}"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_LibraryName">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[a-zA-Z][a-zA-Z0-9_+\-:,.=!/ ]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_ClassIdentifier">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value=""/>
+			<xs:pattern value="[A-Z][A-Za-z0-9_]{0,63}"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="ST_StubIdentifier">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Za-z0-9_]{0,63}"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+	<!-- Elements -->
+	<xs:element name="component" type="CT_Component"/>
+	<xs:element name="importcomponent" type="CT_ImportComponent"/>
+	<xs:element name="license" type="CT_License"/>
+	<xs:element name="line" type="CT_LicenseLine"/>
+	<xs:element name="bindings" type="CT_BindingList"/>
+	<xs:element name="implementations" type="CT_ImplementationList"/>
+	<xs:element name="binding" type="CT_Export"/>
+	<xs:element name="implementation" type="CT_Export"/>
+	<xs:element name="errors" type="CT_ErrorList"/>
+	<xs:element name="error" type="CT_Error"/>
+	<xs:element name="struct" type="CT_Struct"/>
+	<xs:element name="member" type="CT_Member"/>
+	<xs:element name="enum" type="CT_Enum"/>
+	<xs:element name="option" type="CT_Option"/>
+	<xs:element name="class" type="CT_Class"/>
+	<xs:element name="method" type="CT_FunctionType"/>
+	<xs:element name="param" type="CT_Param"/>
+	<xs:element name="global" type="CT_Global"/>
+	<xs:element name="functiontype" type="CT_FunctionType"/>
+</xs:schema>

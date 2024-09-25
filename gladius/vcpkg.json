@@ -1,0 +1,52 @@
+{
+  "dependencies": [
+    "fmt",
+    "openmesh",
+    "glad",
+    "glfw3",
+    "eigen3",
+    "tinyfiledialogs",
+    "gtest",
+    "platform-folders",
+    "opencl",
+     {
+        "name": "openvdb",
+        "features":
+        [
+          "nanovdb"
+        ]
+    },
+    {
+        "name": "imgui",
+        "features":
+        [
+          "docking-experimental",
+          "glfw-binding",
+          "opengl2-binding"
+        ]
+    },
+    "imgui-node-editor",
+    "cmakerc",
+    "blosc",
+    "zlib",
+    "lodepng",
+    "minizip",
+    "pugixml",
+    "lib3mf",
+    "minizip",
+    "tracy"
+  ],
+  "overrides": [
+    {
+      "name": "imgui",
+      "version": "1.89.9"
+    },
+    {
+      "name": "imgui-node-editor",
+      "version": "0.9.2"
+    }
+  ],
+  "name": "gladius",
+  "builtin-baseline": "e590c2b30c08caf1dd8d612ec602a003f9784b7d",
+  "version-string": "1.2.9"
+}

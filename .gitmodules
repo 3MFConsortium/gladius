@@ -1,0 +1,8 @@
+[submodule "gladius/components/IconFontCppHeaders"]
+	path = gladius/components/IconFontCppHeaders
+	url = https://github.com/juliettef/IconFontCppHeaders.git
+
+[submodule "gladius/components/psimpl"]
+	path = gladius/components/psimpl
+	url = https://github.com/dand-oss/psimpl-code.git
+

@@ -1,0 +1,80 @@
+{
+	"Assembly" : 
+	[
+		{
+			"displayName" : "Begin_1",
+			"id" : 1,
+			"name" : "Begin_1",
+			"out" : 
+			{
+				"cs" : 
+				{
+					"name" : "Begin_1_cs"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 0.0,
+				"y" : 0.0
+			},
+			"type" : "Begin"
+		},
+		{
+			"displayName" : "Box_5",
+			"id" : 5,
+			"in" : 
+			{
+				"cs" : 
+				{
+					"source" : "Begin_1_cs"
+				},
+				"dimensions" : 
+				{
+					"isArgument" : false,
+					"x" : 10.0,
+					"y" : 10.0,
+					"z" : 10.0
+				}
+			},
+			"name" : "Box_5",
+			"out" : 
+			{
+				"shape" : 
+				{
+					"name" : "Box_5_shape"
+				}
+			},
+			"screenPos" : 
+			{
+				"x" : 627.0,
+				"y" : 15.0
+			},
+			"type" : "Box"
+		},
+		{
+			"displayName" : "End_2",
+			"id" : 4,
+			"in" : 
+			{
+				"color" : 
+				{
+					"isArgument" : false,
+					"x" : 0.5,
+					"y" : 0.5,
+					"z" : 0.5
+				},
+				"shape" : 
+				{
+					"source" : "Box_5_shape"
+				}
+			},
+			"name" : "End_2",
+			"screenPos" : 
+			{
+				"x" : 1499.0,
+				"y" : 0.0
+			},
+			"type" : "End"
+		}
+	]
+}
