@@ -254,8 +254,8 @@ namespace gladius::ui
                 int i = 0;
                 for (auto & node : *model.second)
                 {
-
-                    auto const colorIter = m_nodeTypeToColor.find(typeid(*node.second));
+                    auto & nodeRef = *node.second;
+                    auto const colorIter = m_nodeTypeToColor.find(typeid(nodeRef));
                     if (colorIter != std::end(m_nodeTypeToColor))
                     {
                         auto const color = colorIter->second;
@@ -297,7 +297,8 @@ namespace gladius::ui
             {
                 for (auto & [nodeId, node] : *model.second)
                 {
-                    auto const colorIter = m_nodeTypeToColor.find(typeid(*node));
+                    auto & nodeRef = *node;
+                    auto const colorIter = m_nodeTypeToColor.find(typeid(nodeRef));
                     if (colorIter != std::end(m_nodeTypeToColor))
                     {
                         auto const color = colorIter->second;

@@ -4,6 +4,8 @@
 
 #include <filesystem>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 #define STRINGIFY(x) #x
 #define EXPAND_AND_STRINGIFY(x) STRINGIFY(x)

@@ -22,7 +22,7 @@ namespace gladius::nodes
         {
         }
 
-        void setInputA(const Port & port)
+        void setInputA(Port & port)
         {
             NodeBase::m_parameter[FieldNames::A].setInputFromPort(port);
         }
@@ -42,7 +42,7 @@ namespace gladius::nodes
         {
         }
 
-        void setInputB(const Port & port)
+        void setInputB(Port & port)
         {
             NodeBase::m_parameter[FieldNames::B].setInputFromPort(port);
         }
