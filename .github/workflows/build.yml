@@ -23,9 +23,9 @@ jobs:
       #
       # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         build_type: [Release]
-        c_compiler: [clang, cl]
+        c_compiler: [gcc, clang, cl]
         include:
           - os: windows-latest
             c_compiler: cl
@@ -50,7 +50,7 @@ jobs:
           submodules: true
     - name: Install dependencies of glfw on linux
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get install -y libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+      run: sudo apt-get install -y libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev build-essential
     - name: Setup anew (or from cache) vcpkg (and does not build any package)
       uses: lukka/run-vcpkg@v11 # Always specify the specific _version_ of the
                               # action you need, `v11` in this case to stay up
