@@ -50,7 +50,7 @@ jobs:
           submodules: true
     - name: Install dependencies of glfw on linux
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get install -y libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev build-essential
+      run: sudo apt-get install -y libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev build-essential libglfw3-dev
     - name: Setup anew (or from cache) vcpkg (and does not build any package)
       uses: lukka/run-vcpkg@v11 # Always specify the specific _version_ of the
                               # action you need, `v11` in this case to stay up
