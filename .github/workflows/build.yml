@@ -56,6 +56,7 @@ jobs:
                               # action you need, `v11` in this case to stay up
                               # to date with fixes on the v11 branch.
       with:
+        vcpkgGitCommitId: 'e590c2b30c08caf1dd8d612ec602a003f9784b7d'
         vcpkgJsonGlob: '${{ github.workspace }}/gladius/vcpkg.json'
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
@@ -83,3 +84,11 @@ jobs:
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+    - name: Install WiX Toolset
+      if: runner.os == 'Windows'
+      run: |
+        choco install wixtoolset --version=3.11.2
+    - name: Package
+      if: runner.os == 'Windows'
+      run: |
+        cpack -C ${{ matrix.build_type }}
