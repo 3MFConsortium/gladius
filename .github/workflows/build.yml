@@ -84,10 +84,6 @@ jobs:
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
-    - name: Install WiX Toolset
-      if: runner.os == 'Windows'
-      run: |
-        choco install wixtoolset --version=3.11.2
     - name: Package
       if: runner.os == 'Windows'
       run: |
