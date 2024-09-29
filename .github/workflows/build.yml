@@ -49,7 +49,10 @@ jobs:
           submodules: true
     - name: Install dependencies of glfw on linux
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get install -y libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev build-essential libglfw3-dev
+      run: sudo apt-get install -y libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev build-essential libglfw3-dev ninja-build
+    - name: Install Ninja with Chocolatey on Windows
+      if: runner.os == 'Windows'
+      run: choco install ninja -y
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       shell: bash
@@ -83,6 +86,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -G Ninja
         -S ${{ github.workspace }}/gladius
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
