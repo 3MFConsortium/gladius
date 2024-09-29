@@ -54,22 +54,13 @@ jobs:
       if: runner.os == 'Windows'
       run: choco install ninja -y
     
-    - name: Set up Visual Studio environment
+    - name: Set up Visual Studio environment and set environment variables
       if: runner.os == 'Windows'
       shell: cmd
       run: |
         "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" > nul
         set > env_vars.txt
-
-    - name: Set environment variables
-      if: runner.os == 'Windows'
-      run: |
-        Get-Content env_vars.txt | ForEach-Object {
-          if ($_ -match "^(.*)=(.*)$") {
-            "$($matches[1])=$($matches[2])" >> $env:GITHUB_ENV
-          }
-        }
-      shell: pwsh
+        for /f "tokens=1,* delims==" %%a in (env_vars.txt) do echo "%%a=%%b" >> %GITHUB_ENV%
 
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
