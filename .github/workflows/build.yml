@@ -53,9 +53,24 @@ jobs:
     - name: Install Ninja with Chocolatey on Windows
       if: runner.os == 'Windows'
       run: choco install ninja -y
-    - name: Setup Visual Studio 2022 Command Prompt (64 bit)
+    
+    - name: Set up Visual Studio environment
       if: runner.os == 'Windows'
-      run: "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat\""
+      shell: cmd
+      run: |
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat" > nul
+        set > env_vars.txt
+
+        - name: Set environment variables
+        if: runner.os == 'Windows'
+        run: |
+          Get-Content env_vars.txt | ForEach-Object {
+            if ($_ -match "^(.*)=(.*)$") {
+              "$($matches[1])=$($matches[2])" >> $env:GITHUB_ENV
+            }
+          }
+        shell: pwsh
+        
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       shell: bash
