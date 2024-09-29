@@ -77,6 +77,7 @@ jobs:
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -S ${{ github.workspace }}/gladius
+        --preset
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
 
@@ -90,7 +91,14 @@ jobs:
       if: runner.os == 'Windows'
       uses: actions/upload-artifact@v4
       with:
-        name: msi-files
-        path: ${{ steps.strings.outputs.build-output-dir }}/**/*.msi
-
-
+        name: gladius_win64
+        path: ${{ steps.strings.outputs.build-output-dir }}/*.msi
+    - name: Package_Linux
+      if: runner.os == 'Linux'
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --target Generate_Installer --config ${{ matrix.build_type }}
+    - name: Upload_Linux_Package
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: gladius
+        path: ${{ steps.strings.outputs.build-output-dir }}/*.deb
