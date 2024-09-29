@@ -55,7 +55,7 @@ jobs:
       run: choco install ninja -y
     - name: Setup Visual Studio 2022 Command Prompt (64 bit)
       if: runner.os == 'Windows'
-      run: "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+      run: "\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat\""
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       shell: bash
