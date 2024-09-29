@@ -56,7 +56,6 @@ jobs:
       run: 
         echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=x64-windows-gladius" >> $GITHUB_ENV
-        echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
     - name: Setup anew (or from cache) vcpkg (and does not build any package)
       uses: lukka/run-vcpkg@v11 # Always specify the specific _version_ of the
                               # action you need, `v11` in this case to stay up
@@ -83,6 +82,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -G "Ninja"
         -S ${{ github.workspace }}/gladius
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
@@ -106,5 +106,5 @@ jobs:
       if: runner.os == 'Linux'
       uses: actions/upload-artifact@v4
       with:
-        name: gladius_deb
+        name: gladius_ubuntu
         path: ${{ steps.strings.outputs.build-output-dir }}/*.deb
