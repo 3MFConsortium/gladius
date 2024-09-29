@@ -53,13 +53,6 @@ jobs:
     - name: Install Ninja with Chocolatey on Windows
       if: runner.os == 'Windows'
       run: choco install ninja -y
-    
-    - name: Set up Visual Studio environment and set environment variables
-      if: runner.os == 'Windows'
-      shell: cmd
-      run: |
-        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        set >> %GITHUB_ENV%
 
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
@@ -85,8 +78,8 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-    - name: Configure CMake
-    
+    - name: Configure CMake non Windows
+      if: runner.os != 'Windows'
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: >
@@ -99,6 +92,18 @@ jobs:
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
 
+    - name: Configure CMake Windows with VS Environment
+      if: runner.os == 'Windows'
+      run: >
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -G Ninja
+        -S ${{ github.workspace }}/gladius
+      env:
+        VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
