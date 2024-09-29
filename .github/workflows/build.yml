@@ -53,8 +53,10 @@ jobs:
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       run: 
-        echo "VCPKG_OVERLAY_TRIPLETS='${{ github.workspace }}/gladius/vcpkg-triplets'" >> $GITHUB_ENV
+        echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=x64-windows-gladius" >> $GITHUB_ENV
+    
+      
     - name: Setup anew (or from cache) vcpkg (and does not build any package)
       uses: lukka/run-vcpkg@v11 # Always specify the specific _version_ of the
                               # action you need, `v11` in this case to stay up
