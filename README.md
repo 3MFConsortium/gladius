@@ -62,12 +62,12 @@ git clone https://github.com/3MFConsortium/gladius
 cd gladius
 git submodule update --init --recursive
 ```
-* Configure and build the project with cmake:
+* Configure and build the project with cmake in a Visual Studio Developer prompt:
 ```
-cd gladius
+cd gladius/gladius
 mkdir build
 cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=<path to vcpkg>/scripts/buildsystems/vcpkg.cmake ..
+cmake --preset x64-release -S ../
 cmake --build .
 ```
 During the configuration process CMake will download and compile the dependencies using vcpkg. This might take a moment.
