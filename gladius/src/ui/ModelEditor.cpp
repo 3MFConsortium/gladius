@@ -280,11 +280,21 @@ namespace gladius::ui
                                                           model.second->getResourceId());
             std::string editableName = nodeLabel;
 
+            if (!model.second->isValid())
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.f, 0.f, 1.f));
+            }
+
             bool nodeOpen =
               ImGui::TreeNodeEx("",
                                 baseFlags | (isModelSelected ? ImGuiTreeNodeFlags_Selected : 0),
                                 "%s",
                                 nodeLabel.c_str());
+
+            if (!model.second->isValid())
+            {
+                ImGui::PopStyleColor();
+            }
 
             if (ImGui::IsItemClicked())
             {
@@ -972,7 +982,6 @@ namespace gladius::ui
         {
             return;
         }
-
 
         m_nodePositionsNeedUpdate = false;
 

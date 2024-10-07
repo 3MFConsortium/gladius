@@ -196,6 +196,16 @@ namespace gladius
         return hash;
     }
 
+    size_t numberOfLines(cl::Program::Sources const & sources)
+    {
+        size_t lines = 0;
+        for (auto const & source : sources)
+        {
+            lines += std::count(source.begin(), source.end(), '\n');
+        }
+        return lines;
+    }
+
     void CLProgram::compile(BuildCallBack & callBack)
     {
         ProfileFunction
@@ -219,6 +229,8 @@ namespace gladius
           std::make_unique<cl::Program>(cl::Program(m_ComputeContext->GetContext(), m_sources));
 
         const auto arguments = generateDefineSymbol();
+
+        std::cout << "Compiling program with " << numberOfLines(m_sources) << " lines\n";
 
         m_callBackUserData.computeContext = m_ComputeContext.get();
         m_callBackUserData.callBack = &callBack;

@@ -652,7 +652,11 @@ namespace gladius
         {
             for (auto const & error : validator.getErrors())
             {
-                logMsg(error.message);
+                logMsg(fmt::format("{}: Review parameter {} of node {} in model {}",
+                                   error.message,
+                                   error.parameter,
+                                   error.node,
+                                   error.model));
             }
             return;
         }
@@ -931,7 +935,7 @@ namespace gladius
         return true;
     }
 
-    Primitives & ComputeCore::getPrimitves() const
+    Primitives & ComputeCore::getPrimitives() const
     {
         return *m_primitives;
     }

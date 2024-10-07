@@ -235,6 +235,7 @@ namespace gladius::nodes
         void markAsLayouted();
         [[nodiscard]] bool hasBeenLayouted() const;
 
+        void setIsValid(bool isValid);
       private:
         void updateOrder();
         auto buildGraph() -> graph::DirectedGraph &;
@@ -263,6 +264,8 @@ namespace gladius::nodes
         bool m_isManaged = false;
         bool m_allInputReferencesAreValid = false;
         bool m_nodesHaveBeenLayouted = false;
+
+        bool m_isValid = true;
     };
 
     using SharedModel = std::shared_ptr<Model>;

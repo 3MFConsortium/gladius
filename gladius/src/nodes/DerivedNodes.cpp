@@ -6,38 +6,45 @@
 #include "Parameter.h"
 #include "nodesfwd.h"
 #include <filesystem>
+#include <fmt/format.h>
 #include <limits>
 #include <map>
-#include <fmt/format.h>
 
 namespace gladius::nodes
 {
 
     TypeRules operatorFunctionRules()
     {
-        TypeRule scalar_scalar = {RuleType::Scalar, InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float},
+        TypeRule scalar_scalar = {RuleType::Scalar,
+                                  InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float},
                                                {FieldNames::B, ParameterTypeIndex::Float}},
                                   OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float}}};
 
-        TypeRule vector_vector = {RuleType::Vector, InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float3},
+        TypeRule vector_vector = {RuleType::Vector,
+                                  InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float3},
                                                {FieldNames::B, ParameterTypeIndex::Float3}},
                                   OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float3}}};
 
-        TypeRule matrix_matrix = {RuleType::Matrix, InputTypeMap{{FieldNames::A, ParameterTypeIndex::Matrix4},
+        TypeRule matrix_matrix = {RuleType::Matrix,
+                                  InputTypeMap{{FieldNames::A, ParameterTypeIndex::Matrix4},
                                                {FieldNames::B, ParameterTypeIndex::Matrix4}},
                                   OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Matrix4}}};
 
-        return {scalar_scalar,
-                vector_vector,
-                matrix_matrix,};
+        return {
+          scalar_scalar,
+          vector_vector,
+          matrix_matrix,
+        };
     }
 
     TypeRules functionRules()
     {
-        TypeRule scalar = {RuleType::Scalar, InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float}},
+        TypeRule scalar = {RuleType::Scalar,
+                           InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float}},
                            OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float}}};
 
-        TypeRule vector = {RuleType::Vector, InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float3}},
+        TypeRule vector = {RuleType::Vector,
+                           InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float3}},
                            OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float3}}};
 
         TypeRule matrix = {RuleType::Matrix,
@@ -49,11 +56,13 @@ namespace gladius::nodes
 
     TypeRules twoParameterFuncRules()
     {
-        TypeRule scalar_scalar = {RuleType::Scalar, InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float},
+        TypeRule scalar_scalar = {RuleType::Scalar,
+                                  InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float},
                                                {FieldNames::B, ParameterTypeIndex::Float}},
                                   OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float}}};
 
-        TypeRule vector_vector = {RuleType::Vector, InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float3},
+        TypeRule vector_vector = {RuleType::Vector,
+                                  InputTypeMap{{FieldNames::A, ParameterTypeIndex::Float3},
                                                {FieldNames::B, ParameterTypeIndex::Float3}},
                                   OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float3}}};
 
@@ -75,11 +84,10 @@ namespace gladius::nodes
                                              id,
                                              Category::Primitive)
     {
-        TypeRule rule = {RuleType::Default, InputTypeMap{{FieldNames::Pos, ParameterTypeIndex::Float3},
-                                      {FieldNames::Mesh, ParameterTypeIndex::ResourceId}
-                                      },
-                         OutputTypeMap{{FieldNames::Distance, ParameterTypeIndex::Float}
-                                      }};
+        TypeRule rule = {RuleType::Default,
+                         InputTypeMap{{FieldNames::Pos, ParameterTypeIndex::Float3},
+                                      {FieldNames::Mesh, ParameterTypeIndex::ResourceId}},
+                         OutputTypeMap{{FieldNames::Distance, ParameterTypeIndex::Float}}};
 
         m_typeRules = {rule};
         applyTypeRule(rule);
@@ -89,6 +97,9 @@ namespace gladius::nodes
 
         m_parameter[FieldNames::Start].hide();
         m_parameter[FieldNames::End].hide();
+
+        m_parameter[FieldNames::Start].setInputSourceRequired(false);
+        m_parameter[FieldNames::End].setInputSourceRequired(false);
 
         updateNodeIds();
     }
@@ -159,10 +170,11 @@ namespace gladius::nodes
 
     UnsignedDistanceToMesh::UnsignedDistanceToMesh(NodeId id)
         : ClonableNode<UnsignedDistanceToMesh>(NodeName("UnsignedDistanceToMesh"),
-                                             id,
-                                             Category::Primitive)
+                                               id,
+                                               Category::Primitive)
     {
-        TypeRule rule = {RuleType::Default, InputTypeMap{{FieldNames::Pos, ParameterTypeIndex::Float3},
+        TypeRule rule = {RuleType::Default,
+                         InputTypeMap{{FieldNames::Pos, ParameterTypeIndex::Float3},
                                       {FieldNames::Mesh, ParameterTypeIndex::ResourceId}},
                          OutputTypeMap{{FieldNames::Distance, ParameterTypeIndex::Float}}};
 
@@ -178,6 +190,9 @@ namespace gladius::nodes
         // m_parameter[FieldNames::Min].hide();
         // m_parameter[FieldNames::Max].hide();
 
+        m_parameter[FieldNames::Start].setInputSourceRequired(false);
+        m_parameter[FieldNames::End].setInputSourceRequired(false);
+
         updateNodeIds();
     }
 
@@ -191,11 +206,6 @@ namespace gladius::nodes
         {
             return;
         }
-
-        // if (!m_outputs.at(FieldNames::Distance).isUsed())
-        // {
-        //     return;
-        // }
 
         auto * sourcePort = sourceParameter.value().port;
         if (!sourcePort)
@@ -238,7 +248,6 @@ namespace gladius::nodes
             throw std::runtime_error("Invalid resource id");
         }
     }
-   
 
     void FunctionCall::updateInputsAndOutputs(Model & referencedModel)
     {
@@ -264,7 +273,6 @@ namespace gladius::nodes
             }
             m_parameter[name].marksAsArgument();
             m_parameter[name].setParentId(getId());
-
         }
 
         auto & outputs = referencedModel.getOutputs();

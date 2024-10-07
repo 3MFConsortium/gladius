@@ -52,7 +52,7 @@ namespace gladius_tests
     {
         auto core = load3mf("testdata/ImplicitGyroid.3mf");
         
-        auto const & payloadData = core->getPrimitves().data.getData();
+        auto const & payloadData = core->getPrimitives().data.getData();
         auto const payloadDataHash = helper::computeHash(payloadData.cbegin(), payloadData.cend());
         EXPECT_EQ(payloadDataHash, 9702363036366401599u);
 

@@ -60,7 +60,7 @@ namespace gladius
         bool setScreenResolution(size_t width, size_t height);
         bool setLowResPreviewResolution(size_t width, size_t height);
 
-        Primitives & getPrimitves() const;
+        Primitives & getPrimitives() const;
 
         ResourceContext & getResourceContext() const;
 

@@ -61,6 +61,7 @@ namespace gladius::nodes
         , m_isManaged(other.m_isManaged)
         , m_allInputReferencesAreValid(other.m_allInputReferencesAreValid)
         , m_nodesHaveBeenLayouted(other.m_nodesHaveBeenLayouted)
+        , m_isValid(other.m_isValid)
     {
         m_outPorts.clear();
         m_inputParameter.clear();
@@ -431,11 +432,6 @@ namespace gladius::nodes
         auto const isSourceSuccessor =
           isDependingOn(getGraph(), source.getParentId(), target.getParentId());
 
-        if (!isSourceSuccessor && m_logger)
-        {
-            m_logger->addEvent(
-              {"The link would create a cyclic dependency", events::Severity::Warning});
-        }
         return !isSourceSuccessor;
     }
 
@@ -688,6 +684,10 @@ namespace gladius::nodes
 
     bool Model::isValid()
     {
+        if (!m_isValid)
+        {
+            return false;
+        }
         if (!m_allInputReferencesAreValid)
         {
             if (m_logger)
@@ -808,6 +808,11 @@ namespace gladius::nodes
     bool Model::hasBeenLayouted() const
     {
         return m_nodesHaveBeenLayouted;
+    }
+
+    void Model::setIsValid(bool isValid)
+    {
+        m_isValid = isValid;
     }
 
 } // namespace gladius::nodes

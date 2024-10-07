@@ -321,11 +321,13 @@ namespace gladius::ui
                                         0.95f * winBgCol.y + 0.05f * nodeColor.y,
                                         0.95f * winBgCol.z + 0.05f * nodeColor.z,
                                         1.0f);
-                ImVec4 hoverColor = ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
-                ImVec4 borderColor = ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
-               
+                ImVec4 hoverColor =
+                  ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
+                ImVec4 borderColor =
+                  ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
+
                 PushStyleColor(ed::StyleColor_NodeBg, bgColor);
-                PushStyleColor(ed::StyleColor_NodeBorder, nodeColor );
+                PushStyleColor(ed::StyleColor_NodeBorder, nodeColor);
                 PushStyleColor(ed::StyleColor_HovNodeBorder, nodeColor);
 
                 ImGui::PushStyleColor(ImGuiCol_FrameBg, bgColor);
@@ -919,20 +921,33 @@ namespace gladius::ui
                 ImGui::PushID(parameter.second.getId()); // required for reusing the same labels
                                                          // (that are used as unique ids in ImgUI)
                 {
+                    bool const inputMissing = !parameter.second.getSource().has_value() &&
+                                              parameter.second.isInputSourceRequired();
+
                     ImGui::PushStyleColor(ImGuiCol_Text,
                                           typeToColor(parameter.second.getTypeIndex()));
                     const ed::PinId pinId = parameter.second.getId();
                     BeginPin(pinId, ed::PinKind::Input);
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {4, 0});
+
                     if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_CARET_RIGHT)))
                     {
                         showLinkAssignmentMenu(parameter);
                     }
+
                     ImGui::PopStyleVar();
                     ed::EndPin();
                     ImGui::TableNextColumn();
                     ImGui::SetNextItemWidth(70.f);
+                    if (inputMissing)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, LinkColors::ColorInvalid);
+                    }
                     ImGui::TextUnformatted((parameter.first).c_str());
+                    if (inputMissing)
+                    {
+                        ImGui::PopStyleColor();
+                    }
                     ImGui::PopStyleColor();
                 }
                 ImGui::PopID();

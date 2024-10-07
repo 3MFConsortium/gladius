@@ -52,6 +52,15 @@ namespace gladius::nodes
                     "are changing the coordinate system rather then the transformation of the "
                     "geometry itself."};
         }
+
+        // name does not match, but it is called when the model is updated
+        void updateMemoryOffsets(GeneratorContext &) override
+        {
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
+        }
     };
 
     class End : public ClonableNode<End>
@@ -81,6 +90,15 @@ namespace gladius::nodes
             return {"A End node consumes the calculated distance (shape) and color. \"End\" can be "
                     "seen as the end of a function."};
         }
+
+        // name does not match, but it is called when the model is updated
+        void updateMemoryOffsets(GeneratorContext &) override
+        {
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
+        }
     };
 
     class ConstantScalar : public ClonableNode<ConstantScalar>
@@ -99,6 +117,7 @@ namespace gladius::nodes
                             OutputTypeMap{{FieldNames::Value, ParameterTypeIndex::Float}}}};
             applyTypeRule(m_typeRules.front());
             updateNodeIds();
+            m_parameter.at(FieldNames::Value).setInputSourceRequired(false);
         }
 
         [[nodiscard]] float getValue() const
@@ -109,6 +128,15 @@ namespace gladius::nodes
                 return *val;
             }
             return 0.f;
+        }
+
+        // name does not match, but it is called when the model is updated
+        void updateMemoryOffsets(GeneratorContext &) override
+        {
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
         }
     };
 
@@ -131,6 +159,10 @@ namespace gladius::nodes
             m_typeRules = {rule};
             applyTypeRule(rule);
             updateNodeIds();
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
         }
 
         [[nodiscard]] float3 getValue() const
@@ -149,6 +181,15 @@ namespace gladius::nodes
                 }
             }
             return float3{};
+        }
+
+        // name does not match, but it is called when the model is updated
+        void updateMemoryOffsets(GeneratorContext &) override
+        {
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
         }
     };
 
@@ -185,6 +226,11 @@ namespace gladius::nodes
             m_typeRules = {rule};
             applyTypeRule(rule);
             updateNodeIds();
+
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
         }
 
         [[nodiscard]] Matrix4x4 getValue() const
@@ -203,6 +249,15 @@ namespace gladius::nodes
                 }
             }
             return mat;
+        }
+
+        // name does not match, but it is called when the model is updated
+        void updateMemoryOffsets(GeneratorContext &) override
+        {
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
         }
     };
 
@@ -416,6 +471,8 @@ namespace gladius::nodes
             applyTypeRule(rule);
 
             updateInternalOutputs();
+
+            m_parameter.at(FieldNames::FunctionId).setInputSourceRequired(false);
         }
 
         using ArgumentList =
@@ -1236,7 +1293,7 @@ namespace gladius::nodes
         }
 
         explicit Transformation(NodeId id)
-            : ClonableNode<Transformation>(NodeName("Transformation"), id, Category::Transformation)
+            : ClonableNode<Transformation>(NodeName("Transformation"), id, Category::Internal)
         {
             TypeRule vectorMatToVector = {
               RuleType::Default,
@@ -1248,6 +1305,17 @@ namespace gladius::nodes
             applyTypeRule(m_typeRules.front());
 
             updateNodeIds();
+
+            m_parameter.at(FieldNames::Transformation).setInputSourceRequired(false);
+        }
+
+        // name does not match, but it is called when the model is updated
+        void updateMemoryOffsets(GeneratorContext &) override
+        {
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
         }
 
       private:
@@ -1446,6 +1514,15 @@ namespace gladius::nodes
         [[nodiscard]] std::string getDescription() const override
         {
             return {"Returns the ResourceId of the Resource node"};
+        }
+
+        // name does not match, but it is called when the model is updated
+        void updateMemoryOffsets(GeneratorContext &) override
+        {
+            for (auto & param : m_parameter)
+            {
+                param.second.setInputSourceRequired(false);
+            }
         }
 
       private:

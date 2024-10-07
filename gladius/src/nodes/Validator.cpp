@@ -22,6 +22,7 @@ namespace gladius::nodes
     {
         model.updateGraphAndOrderIfNeeded();
         model.updateTypes();
+        model.setIsValid(true);
 
         auto const & graph = model.getGraph();
         bool const isCyclic = nodes::graph::isCyclic(graph);
@@ -30,6 +31,7 @@ namespace gladius::nodes
         {
             m_errors.push_back(
               {"Cyclic graph detected", model.getDisplayName().value_or("unknown"), "", "", ""});
+            model.setIsValid(false);
         }
 
         for (auto & [nodeId, node] : model)
@@ -42,6 +44,15 @@ namespace gladius::nodes
     {
         for (auto & [parameterName, parameter] : node.parameter())
         {
+            if (!parameter.getConstSource().has_value() && parameter.isInputSourceRequired())
+            {
+                m_errors.push_back(ValidationError{"Missing input",
+                                                   model.getDisplayName().value_or("unknown"),
+                                                   node.getDisplayName(),
+                                                   "unknown",
+                                                   parameterName});
+                model.setIsValid(false);
+            }
             if (parameter.getConstSource().has_value())
             {
                 auto const & source = parameter.getConstSource().value();
@@ -58,18 +69,20 @@ namespace gladius::nodes
                                       parameterName});                            // parameter
 
                     parameter.setValid(false);
+                    model.setIsValid(false);
                     continue;
                 }
 
                 if (parameter.getTypeIndex() != referendedPort->getTypeIndex())
                 {
                     m_errors.push_back(
-                      ValidationError{"Parameter type does not match port type",  // message
+                      ValidationError{"Datatype mismatch",  // message
                                       model.getDisplayName().value_or("unknown"), // model
                                       node.getDisplayName(),                      // node
                                       referendedPort->getUniqueName(),            // port
                                       parameterName});                            // parameter
                     parameter.setValid(false);
+                    model.setIsValid(false);
                 }
             }
         }

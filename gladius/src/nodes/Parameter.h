@@ -431,6 +431,16 @@ namespace gladius::nodes
             return m_isValid;
         }
 
+        void setInputSourceRequired(bool required)
+        {
+            m_inputSourceRequired = required;
+        }
+
+        [[nodiscard]] bool isInputSourceRequired() const
+        {
+            return m_inputSourceRequired;
+        }
+
       private:
         T m_value{};
         int m_lookUpIndex{}; // The location in the parameter buffer on the device
@@ -443,6 +453,7 @@ namespace gladius::nodes
           false}; // If true, this parameter is consumed by a function call
 
         bool m_isValid{true};
+        bool m_inputSourceRequired{true};
     };
 
     using VariantParameter = Parameter<VariantType>;

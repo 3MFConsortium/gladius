@@ -15,6 +15,7 @@
 #include "nodes/OptimizeOutputs.h"
 #include "nodes/ToCommandStreamVisitor.h"
 #include "nodes/ToOCLVisitor.h"
+#include "nodes/Validator.h"
 
 #include <chrono>
 #include <cmath>
@@ -115,12 +116,58 @@ namespace gladius
 
     void Document::updateFlatAssembly()
     {
-        nodes::Assembly flatAssembly = *m_assembly;
-        nodes::OptimizeOutputs optimizer{&flatAssembly};
+        using namespace gladius::events;
+        nodes::Assembly assemblyToFlat = *m_assembly;
+        nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();
 
-        nodes::GraphFlattener flattener(flatAssembly);
-        m_flatAssembly = std::make_shared<nodes::Assembly>(flattener.flatten());
+        nodes::GraphFlattener flattener(assemblyToFlat);
+        nodes::Validator validator;
+        auto logger = getSharedLogger();
+        if (!validator.validate(*m_assembly))
+        {
+
+            if (logger)
+            {
+                for (auto const & error : validator.getErrors())
+                {
+                    logger->addEvent({fmt::format("{}: Review parameter {} of node {} in model {}",
+                                                  error.message,
+                                                  error.parameter,
+                                                  error.node,
+                                                  error.model),
+                                      Severity::Error});
+                }
+            }
+            else
+            {
+                for (auto const & error : validator.getErrors())
+                {
+                    std::cerr << fmt::format("{}: Review parameter {} of node {} in model {}\n",
+                                             error.message,
+                                             error.parameter,
+                                             error.node,
+                                             error.model);
+                }
+            }
+            return;
+        }
+        try
+        {
+            m_flatAssembly = std::make_shared<nodes::Assembly>(flattener.flatten());
+        }
+        catch (std::exception const & e)
+        {
+            if (logger)
+            {
+                logger->addEvent(
+                  {"Error flattening assembly: " + std::string(e.what()), Severity::Error});
+            }
+            else
+            {
+                std::cerr << "Error flattening assembly: " << e.what() << "\n";
+            }
+        }
     }
 
     void Document::updateMemoryOffsets()
@@ -250,18 +297,47 @@ namespace gladius
         }
         try
         {
+            if (!m_core)
+            {
+                return;
+            }
+
             auto computeToken = m_core->requestComputeToken();
 
-            m_generatorContext->primitives = &m_core->getPrimitves();
+            if (!m_generatorContext)
+            {
+                return;
+            }
+
+            m_generatorContext->primitives = &m_core->getPrimitives();
+            if (!m_generatorContext->primitives)
+            {
+                return;
+            }
+
+            if (!m_assembly)
+            {
+                return;
+            }
+
             m_generatorContext->basePath = m_assembly->getFilename().remove_filename();
+
             m_generatorContext->computeContext = &m_core->getComputeContext();
+            if (!m_generatorContext->computeContext)
+            {
+                return;
+            }
+
             CL_ERROR(m_core->getComputeContext().GetQueue().finish());
 
             updateMemoryOffsets(); // determines which resources are needed
 
             if (m_primitiveDateNeedsUpdate)
             {
-                m_generatorContext->primitives->clear();
+                if (m_generatorContext->primitives)
+                {
+                    m_generatorContext->primitives->clear();
+                }
 
                 updateParameterRegistration();
                 for (auto & model : m_assembly->getFunctions())
@@ -272,7 +348,10 @@ namespace gladius
                     }
                     for (auto & node : *model.second)
                     {
-                        node.second->generate(*m_generatorContext);
+                        if (node.second)
+                        {
+                            node.second->generate(*m_generatorContext);
+                        }
                     }
                 }
 
