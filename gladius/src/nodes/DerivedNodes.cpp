@@ -106,6 +106,13 @@ namespace gladius::nodes
 
     void SignedDistanceToMesh::updateMemoryOffsets(GeneratorContext & generatorContext)
     {
+
+        m_parameter[FieldNames::Start].hide();
+        m_parameter[FieldNames::End].hide();
+
+        m_parameter[FieldNames::Start].setInputSourceRequired(false);
+        m_parameter[FieldNames::End].setInputSourceRequired(false);
+
         auto & resMan = generatorContext.resourceManager;
 
         auto meshParameter = m_parameter.at(FieldNames::Mesh);
@@ -187,9 +194,6 @@ namespace gladius::nodes
         m_parameter[FieldNames::Start].hide();
         m_parameter[FieldNames::End].hide();
 
-        // m_parameter[FieldNames::Min].hide();
-        // m_parameter[FieldNames::Max].hide();
-
         m_parameter[FieldNames::Start].setInputSourceRequired(false);
         m_parameter[FieldNames::End].setInputSourceRequired(false);
 
@@ -198,6 +202,12 @@ namespace gladius::nodes
 
     void UnsignedDistanceToMesh::updateMemoryOffsets(GeneratorContext & generatorContext)
     {
+        m_parameter[FieldNames::Start].hide();
+        m_parameter[FieldNames::End].hide();
+
+        m_parameter[FieldNames::Start].setInputSourceRequired(false);
+        m_parameter[FieldNames::End].setInputSourceRequired(false);
+
         auto & resMan = generatorContext.resourceManager;
 
         auto meshParameter = m_parameter.at(FieldNames::Mesh);

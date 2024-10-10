@@ -1554,10 +1554,7 @@ namespace gladius::nodes
                                           {FieldNames::Alpha, ParameterTypeIndex::Float}}}};
             applyTypeRule(m_typeRules.front());
 
-            m_parameter[FieldNames::Start].hide();
-            m_parameter[FieldNames::End].hide();
-            m_parameter[FieldNames::Dimensions].hide();
-
+            
             updateNodeIds();
         }
 
@@ -1680,6 +1677,20 @@ namespace gladius::nodes
             // {
             //     return;
             // }
+
+            m_parameter[FieldNames::Start].hide();
+            m_parameter[FieldNames::End].hide();
+            m_parameter[FieldNames::Dimensions].hide();
+
+            m_parameter[FieldNames::Start].setInputSourceRequired(false);
+            m_parameter[FieldNames::End].setInputSourceRequired(false);
+            m_parameter[FieldNames::Dimensions].setInputSourceRequired(false);
+
+            m_parameter[FieldNames::Filter].setInputSourceRequired(false);
+            m_parameter[FieldNames::TileStyleU].setInputSourceRequired(false);
+            m_parameter[FieldNames::TileStyleV].setInputSourceRequired(false);
+            m_parameter[FieldNames::TileStyleW].setInputSourceRequired(false);
+
             auto imageResourceId = getImageResourceId();
 
             auto key = ResourceKey{imageResourceId};
