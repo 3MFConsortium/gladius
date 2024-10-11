@@ -186,7 +186,7 @@ namespace gladius::nodes
                   if (!referencedModel)
                   {
                       throw std::runtime_error(
-                        fmt::format("{} references a function with the fucntion id {}, that could not be found found", functionCall.getDisplayName(), referencedId));
+                        fmt::format("{} references a function with the fucntion id {}, that could not be found", functionCall.getDisplayName(), referencedId));
                   }
 
                   functionCall.updateInputsAndOutputs(*referencedModel);
