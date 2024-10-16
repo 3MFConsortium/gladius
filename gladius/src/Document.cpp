@@ -619,7 +619,7 @@ namespace gladius
 
     void Document::loadImpl(const std::filesystem::path & filename)
     {
-        auto computeToken = m_core->requestComputeToken();
+        auto computeToken = m_core->waitForComputeToken();
         m_buildItems.clear();
 
         resetGeneratorContext();
@@ -690,5 +690,25 @@ namespace gladius
     {
         // auto * res = getGeneratorContext().resourceManager.getResourcePtr(key);
         // TODO: Implement
+    }
+
+    void Document::deleteFunction(ResourceId id)
+    {
+        m_assembly->deleteModel(id);
+
+        if (m_3mfmodel)
+        {
+            // NOTE: Keep in mind that id is a ModelResourceID, no a UniqueResourceID
+            auto resIter = m_3mfmodel->GetResources();
+            while (resIter->MoveNext())
+            {
+                auto resource = resIter->GetCurrent();
+                if (resource->GetModelResourceID() == id)
+                {
+                    m_3mfmodel->RemoveResource(resource);
+                    break;
+                }
+            }
+        }
     }
 }
