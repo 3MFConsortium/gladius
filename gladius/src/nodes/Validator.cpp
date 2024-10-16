@@ -8,7 +8,7 @@ namespace gladius::nodes
         m_errors.clear();
         for (auto & [name, function] : assembly.getFunctions())
         {
-            validateModel(*function);
+            validateModel(*function, assembly);
         }
         return m_errors.empty();
     }
@@ -18,7 +18,7 @@ namespace gladius::nodes
         return m_errors;
     }
 
-    void Validator::validateModel(Model & model)
+    void Validator::validateModel(Model & model, Assembly & assembly)
     {
         model.updateGraphAndOrderIfNeeded();
         model.updateTypes();
@@ -36,13 +36,18 @@ namespace gladius::nodes
 
         for (auto & [nodeId, node] : model)
         {
-            validateNode(*node, model);
+            validateNode(*node, model, assembly);
         }
     }
 
-    void Validator::validateNode(NodeBase & node, Model & model)
+    void Validator::validateNode(NodeBase & node, Model & model, Assembly & assembly)
     {
-        for (auto & [parameterName, parameter] : node.parameter())
+        validateNodeImpl(node, model);
+    }
+
+    void Validator::validateNodeImpl(NodeBase & node, Model & model)
+    {
+         for (auto & [parameterName, parameter] : node.parameter())
         {
             if (!parameter.getConstSource().has_value() && parameter.isInputSourceRequired())
             {
@@ -86,5 +91,24 @@ namespace gladius::nodes
                 }
             }
         }
+    }
+
+    void Validator::validateNode(FunctionCall & node, Model & model, Assembly & assembly)
+    {
+        validateNodeImpl(node, model);
+        node.resolveFunctionId();
+        auto referencedId = node.getFunctionId();
+        auto referencedModel = assembly.findModel(referencedId);
+        if (!referencedModel)
+        {
+            m_errors.push_back(ValidationError{"Function reference not found",
+                                               model.getDisplayName().value_or("unknown"),
+                                               node.getDisplayName(),
+                                               "unknown",
+                                               "FunctionId"});
+            model.setIsValid(false);
+        }
+        
+
     }
 }

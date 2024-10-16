@@ -158,6 +158,8 @@ namespace gladius
         [[nodiscard]] nodes::BuildItems const & getBuildItems() const;
 
         void replaceMeshResource(ResourceKey const & key, SharedMesh mesh);
+
+        void deleteFunction(ResourceId id);
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,

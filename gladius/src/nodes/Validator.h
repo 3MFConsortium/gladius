@@ -2,6 +2,7 @@
 
 #include "Assembly.h"
 #include "Parameter.h"
+#include "nodesfwd.h"
 
 namespace gladius::nodes
 {
@@ -27,8 +28,11 @@ namespace gladius::nodes
         [[nodiscard]] ValidationErrors const & getErrors() const;
 
       private:
-        void validateModel(Model & model);
-        void validateNode(NodeBase & node, Model & model);
+        void validateModel(Model & model, Assembly & assembly);
+        void validateNode(NodeBase & node, Model & model, Assembly & assembly);
+        void validateNodeImpl(NodeBase & node, Model & model);
+
+        void validateNode(FunctionCall & node, Model & model, Assembly & assembly);
         ValidationErrors m_errors;
     };
 }

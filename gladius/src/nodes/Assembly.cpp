@@ -32,6 +32,8 @@ namespace gladius::nodes
             return;
         }
         m_subModels.erase(modelToDeleteIter);
+
+        
     }
 
     bool Assembly::equals(Assembly const & other)

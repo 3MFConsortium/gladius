@@ -178,8 +178,7 @@ namespace gladius::ui
                 if (ImGui::MenuItem(
                       reinterpret_cast<const char *>(ICON_FA_MINUS "\tDelete Function")))
                 {
-
-                    m_assembly->deleteModel(m_currentModel->getResourceId());
+                    m_doc->deleteFunction(m_currentModel->getResourceId());
                     m_currentModel = m_assembly->assemblyModel();
                     m_dirty = true;
                 }

@@ -112,7 +112,8 @@ namespace gladius::io
         {
             return Lib3MF::eImplicitPortType::Matrix;
         }
-        else if ((typeIndex == gladius::nodes::ParameterTypeIndex::ResourceId) || (typeIndex == typeid(int)))
+        else if ((typeIndex == gladius::nodes::ParameterTypeIndex::ResourceId) ||
+                 (typeIndex == typeid(int)))
         {
             return Lib3MF::eImplicitPortType::ResourceID;
         }
@@ -282,7 +283,7 @@ namespace gladius::io
               node.getUniqueName(), node.getDisplayName(), node.getTag());
 
             initNode(node, functioncallNode);
-            
+
             auto & funcIdParam = node.parameter().at(nodes::FieldNames::FunctionId);
             if (!funcIdParam.getSource().has_value())
             {
@@ -336,14 +337,18 @@ namespace gladius::io
                     throw std::runtime_error(fmt::format(
                       "Could not add input {} to node {}", portName, node.getUniqueName()));
                 }
-                try 
+                try
                 {
                     input3mf->SetType(convertPortType(input.getTypeIndex()));
                 }
                 catch (std::exception & e)
                 {
-                    throw std::runtime_error(fmt::format(
-                      "Could not set type of input {} of node {}: {}\t typeindex:{}", portName, node.getUniqueName(), e.what(), input.getTypeIndex().name()));
+                    throw std::runtime_error(
+                      fmt::format("Could not set type of input {} of node {}: {}\t typeindex:{}",
+                                  portName,
+                                  node.getUniqueName(),
+                                  e.what(),
+                                  input.getTypeIndex().name()));
                 }
             }
 
@@ -544,6 +549,7 @@ namespace gladius::io
             return;
         }
 
+      
         for (auto & [name, model] : doc.getAssembly()->getFunctions())
         {
             if (model->isManaged())
@@ -560,7 +566,8 @@ namespace gladius::io
             }
             else
             {
-                addFunctionTo3mf(*model, model3mf);
+                throw std::runtime_error("Function not found in 3mf model");
+                // addFunctionTo3mf(*model, model3mf);
             }
         }
     }

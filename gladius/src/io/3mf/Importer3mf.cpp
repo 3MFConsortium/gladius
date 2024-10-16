@@ -565,7 +565,7 @@ namespace gladius::io
             if (!resourceNode3mf)
             {
                 throw std::runtime_error(
-                  fmt::format("Could not cast node {} to ResourceIdNode", node->getUniqueName()));
+                  fmt::format("Could not cast node {} to ResourceIdNode", node3mf.GetIdentifier()));
             }
             auto resourceNode = dynamic_cast<nodes::Resource *>(&*node);
             if (!resourceNode)
