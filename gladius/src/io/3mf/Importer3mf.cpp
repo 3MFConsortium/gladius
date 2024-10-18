@@ -1263,14 +1263,14 @@ namespace gladius::io
         {
             model3mf->MergeFromModel(modelToMerge.get());
 
-            loadImageStacks(filename, model3mf, doc);
+           loadImageStacks(filename, model3mf, doc);
            loadImplicitFunctions(model3mf, doc);
         }
         catch (Lib3MF::ELib3MFException const & e)
         {
             if (m_eventLogger)
             {
-                m_eventLogger->addEvent({fmt::format("Error #{} while reading 3mf file {}: {}",
+                m_eventLogger->addEvent({fmt::format("Error #{} while merging 3mf file {}: {}",
                                                      filename.string(),
                                                      e.getErrorCode(),
                                                      e.what()),
