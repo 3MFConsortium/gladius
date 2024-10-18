@@ -66,6 +66,7 @@ namespace gladius
         void initImgUI();
 
         void displayUI();
+        void determineUiScale();
 
         static void noOp()
         {
@@ -91,5 +92,8 @@ namespace gladius
         GLFWwindow* m_window{nullptr};
         bool m_isAnimationRunning = false;
         bool m_stateCloseRequested = false;
+
+        ImGuiStyle m_originalStyle;
+        float m_uiScale = 1.0f;
     };
 }

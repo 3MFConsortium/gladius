@@ -115,5 +115,7 @@ namespace gladius::ui
         std::chrono::time_point<std::chrono::steady_clock> m_lastUpateTime;
 
         Outline m_outline;
+
+        float m_uiScale = 1.f;
     };
 }

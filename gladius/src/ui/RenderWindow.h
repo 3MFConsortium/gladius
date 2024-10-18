@@ -72,5 +72,7 @@ namespace gladius::ui
         ImVec2 m_contentAreaMax;
 
         TimeStamp m_lastLowResRenderTime;
+
+        float m_uiScale = 1.0f;
     };
 }

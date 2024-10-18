@@ -2,9 +2,11 @@
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
 #include "../gpgpu.h"
 
- 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl2.h>
+#ifdef _WIN32
+#include <imgui_impl_win32.h>
+#endif
 #include "imgui.h"
 #include <GLFW/glfw3.h>
 
@@ -12,13 +14,13 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #endif
+#include "Profiling.h"
 #include <chrono>
 #include <filesystem>
 #include <fmt/format.h>
 #include <iostream>
 #include <sago/platform_folders.h>
 #include <thread>
-#include "Profiling.h"
 
 namespace gladius
 {
@@ -77,8 +79,6 @@ namespace gladius
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-      
-
         m_window = glfwCreateWindow(
           1920, 1080, "Gladius - Advanced Cheese Grater Creator", nullptr, nullptr);
 
@@ -88,11 +88,8 @@ namespace gladius
             return;
         }
 
-
-        static auto staticDropCallback = [this](GLFWwindow *window, int count, const char ** paths)
-        {
-            handleDropCallback(window, count, paths);
-        };
+        static auto staticDropCallback = [this](GLFWwindow * window, int count, const char ** paths)
+        { handleDropCallback(window, count, paths); };
 
         glfwSetDropCallback(m_window,
                             [](GLFWwindow * window, int count, const char ** paths)
@@ -106,6 +103,14 @@ namespace gladius
         }
         glShadeModel(GL_FLAT);
         initImgUI();
+
+        // determine hdpi scaling
+        determineUiScale();
+        static auto staticWindowSizeCallback = [this](GLFWwindow* window, int width, int height)
+        { determineUiScale(); };
+        glfwSetWindowSizeCallback(m_window, [](GLFWwindow* window, int width, int height)
+        { staticWindowSizeCallback(window, width, height); });
+
         applyFullscreenMode();
     }
 
@@ -162,7 +167,6 @@ namespace gladius
         ImGui::CreateContext();
         ImGuiIO & io = ImGui::GetIO();
 
-
         std::filesystem::path gladiusConfigDir =
           sago::getConfigHome() / std::filesystem::path{"gladius"};
         m_gladiusImgUiFilename = gladiusConfigDir / "ui.config";
@@ -206,6 +210,9 @@ namespace gladius
 
         io.FontGlobalScale /= font_scaling_factor;
 
+        // backup the style
+        m_originalStyle = ImGui::GetStyle();
+
         // Setup Platform/Renderer bindings
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
         ImGui_ImplOpenGL2_Init();
@@ -246,8 +253,20 @@ namespace gladius
                                                    ImGui::GetIO().Framerate)
                                          .c_str());
             }
+
+            // zoom / dpi scaling
+            ImGui::Text("UI Scaling");
+            ImGui::SliderFloat("UI Scaling", &m_uiScale, 0.1f, 5.0f);
+
             ImGui::End();
         }
+
+        // Set all scales in style to the same value
+        ImGui::GetIO().FontGlobalScale = m_uiScale * 0.5f;
+        ImGui::GetStyle() = m_originalStyle;
+        ImGuiStyle & style = ImGui::GetStyle();
+        style.ScaleAllSizes(m_uiScale);
+
         for (auto view : m_viewCallBacks)
         {
             view();
@@ -268,6 +287,29 @@ namespace gladius
             glfwMakeContextCurrent(backup_current_context);
         }
 #endif
+    }
+
+    void GLView::determineUiScale()
+    {
+#ifdef _WIN32
+        // Windows DPI scaling
+        HWND hwnd = glfwGetWin32Window(m_window);
+        if (hwnd)
+        {
+            m_uiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
+            return;
+        }
+
+        ImGui_ImplWin32_EnableDpiAwareness();
+#endif
+
+        int width, height;
+        glfwGetWindowSize(m_window, &width, &height);
+        int fbWidth, fbHeight;
+        glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
+        float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
+        float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
+        m_uiScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
     }
 
     void GLView::handleDropCallback(GLFWwindow *, int count, const char ** paths)
@@ -392,8 +434,10 @@ namespace gladius
     {
         auto lastAnimationTimePoint_ms = getTimeStamp_ms();
         auto lastFrame_ms = getTimeStamp_ms();
-        auto constexpr minFrameDurationAnimation = std::chrono::milliseconds{static_cast<int>(1000. / 120.)};
-        auto constexpr minFrameDurationStatic = std::chrono::milliseconds{static_cast<int>(1000. /  30.)};
+        auto constexpr minFrameDurationAnimation =
+          std::chrono::milliseconds{static_cast<int>(1000. / 120.)};
+        auto constexpr minFrameDurationStatic =
+          std::chrono::milliseconds{static_cast<int>(1000. / 30.)};
         while (!m_stateCloseRequested)
         {
             if (glfwWindowShouldClose(m_window))
@@ -404,7 +448,8 @@ namespace gladius
             }
 
             auto const durationSinceLastFrame_ms = getTimeStamp_ms() - lastFrame_ms;
-            auto const minFrameDuration = m_isAnimationRunning ? minFrameDurationAnimation : minFrameDurationStatic;
+            auto const minFrameDuration =
+              m_isAnimationRunning ? minFrameDurationAnimation : minFrameDurationStatic;
 
             auto const delay_ms =
               std::min(minFrameDuration, minFrameDuration - durationSinceLastFrame_ms);
@@ -468,13 +513,13 @@ namespace gladius
         m_isAnimationRunning = false;
     }
 
-//     HWND GLView::getNativeWindowHandle()
-//     {
-// #ifdef _WIN32
-//         return m_window ? glfwGetWin32Window(m_window) : nullptr;
-// #else
-//         return nullptr;
-// #endif
-//     }
+    //     HWND GLView::getNativeWindowHandle()
+    //     {
+    // #ifdef _WIN32
+    //         return m_window ? glfwGetWin32Window(m_window) : nullptr;
+    // #else
+    //         return nullptr;
+    // #endif
+    //     }
 
 }

@@ -132,6 +132,7 @@ namespace gladius::ui
         Outline m_outline;
 
         NodeTypeToColor m_nodeTypeToColor;
+        float m_uiScale = 1.0f;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

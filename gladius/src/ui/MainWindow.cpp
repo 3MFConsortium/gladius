@@ -170,6 +170,7 @@ namespace gladius::ui
     void MainWindow::render()
     {
         ProfileFunction;
+        m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
         if (!m_core->getComputeContext().isValid())
         {
             m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
@@ -203,7 +204,7 @@ namespace gladius::ui
                 renderSettingsDialog();
             }
 
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {20.f, 12.f});
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {20.f * m_uiScale, 12.f * m_uiScale});
             if (ImGui::BeginMainMenuBar())
             {
                 if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_BARS)))
@@ -449,7 +450,7 @@ namespace gladius::ui
         const auto menuBarHeight = ImGui::GetWindowHeight();
         ImGui::EndMainMenuBar();
         auto & io = ImGui::GetIO();
-        const auto menuWidth = 400.f;
+        const auto menuWidth = 400.f  * m_uiScale;
         auto closeMenu = [&]()
         {
             m_showMainMenu = false;
@@ -457,7 +458,7 @@ namespace gladius::ui
         };
 
         ImGui::SetNextWindowBgAlpha(0.9f);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {20, 20});
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {20 * m_uiScale, 20 * m_uiScale});
 
         ImGui::Begin("Menu", &m_showMainMenu, window_flags);
 

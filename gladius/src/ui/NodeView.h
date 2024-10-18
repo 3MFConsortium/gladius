@@ -40,6 +40,9 @@ namespace gladius::ui
         void setResourceNodesVisible(bool visible);
         [[nodiscard]] bool areResourceNodesVisible() const;
 
+        void setUiScale(float scale);
+        [[nodiscard]] float getUiScale() const;
+
       private:
         void show(nodes::NodeBase & node);
         void header(nodes::NodeBase & node);
@@ -104,5 +107,7 @@ namespace gladius::ui
         std::unordered_map<nodes::NodeId, NewChannelProperties> m_newOutputChannelProperties;
 
         NodeTypeToColor m_nodeTypeToColor;
+
+        float m_uiScale = 1.0f;
     };
 } // namespace gladius::ui

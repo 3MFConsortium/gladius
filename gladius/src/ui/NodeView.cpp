@@ -74,13 +74,15 @@ namespace gladius::ui
     void NodeView::visit(Begin & beginNode)
     {
         header(beginNode);
-        if (ImGui::BeginTable(
-              "beginNodeTable", 4, ImGuiTableFlags_SizingStretchProp, ImVec2(400, 100)))
+        if (ImGui::BeginTable("beginNodeTable",
+                              4,
+                              ImGuiTableFlags_SizingStretchProp,
+                              ImVec2(400 * m_uiScale, 100 * m_uiScale)))
         {
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None, 200.f);
-            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_None, 80.f);
-            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None, 100.f);
-            ImGui::TableSetupColumn("Pin", ImGuiTableColumnFlags_None, 20.f);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None, 200.f * m_uiScale);
+            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_None, 80.f * m_uiScale);
+            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None, 100.f * m_uiScale);
+            ImGui::TableSetupColumn("Pin", ImGuiTableColumnFlags_None, 20.f * m_uiScale);
 
             auto outputs = beginNode.getOutputs();
             for (auto & output : outputs)
@@ -88,7 +90,7 @@ namespace gladius::ui
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
                 std::string outputName = output.first;
-                ImGui::SetNextItemWidth(170.f);
+                ImGui::SetNextItemWidth(170.f * m_uiScale);
                 // ImGui::InputText("", &outputName);
                 ImGui::TextUnformatted(output.first.c_str());
                 ImGui::TableNextColumn();
@@ -114,12 +116,12 @@ namespace gladius::ui
 
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::SetNextItemWidth(200.f);
+            ImGui::SetNextItemWidth(200.f * m_uiScale * m_uiScale);
             if (ImGui::CollapsingHeader("Add Argument", ImGuiTreeNodeFlags_Framed))
             {
                 ImGui::PushID("AddArgument");
                 auto & newParameterName = m_newChannelProperties[beginNode.getId()].name;
-                ImGui::SetNextItemWidth(100.f);
+                ImGui::SetNextItemWidth(100.f * m_uiScale);
                 ImGui::InputText("name", &newParameterName);
                 // ImGui::SameLine();
                 std::type_index & typeIndex = m_newChannelProperties[beginNode.getId()].typeIndex;
@@ -146,13 +148,15 @@ namespace gladius::ui
     void NodeView::visit(nodes::End & endNode)
     {
         header(endNode);
-        if (ImGui::BeginTable(
-              "beginNodeTable", 4, ImGuiTableFlags_SizingStretchProp, ImVec2(400, 100)))
+        if (ImGui::BeginTable("beginNodeTable",
+                              4,
+                              ImGuiTableFlags_SizingStretchProp,
+                              ImVec2(400 * m_uiScale, 100 * m_uiScale)))
         {
-            ImGui::TableSetupColumn("Pin", ImGuiTableColumnFlags_None, 20.f);
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None, 200.f);
-            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_None, 80.f);
-            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None, 100.f);
+            ImGui::TableSetupColumn("Pin", ImGuiTableColumnFlags_None, 20.f * m_uiScale);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None, 200.f * m_uiScale);
+            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_None, 80.f * m_uiScale);
+            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None, 100.f * m_uiScale);
 
             for (auto & input : endNode.parameter())
             {
@@ -306,6 +310,8 @@ namespace gladius::ui
 
     void NodeView::header(NodeBase & baseNode)
     {
+        m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
+
         const auto styleIter = NodeColors.find(baseNode.getCategory());
         m_popStyle = false;
         if (styleIter != std::end(NodeColors))
@@ -356,7 +362,7 @@ namespace gladius::ui
         ed::BeginNode(baseNode.getId());
         ImGui::PushID(baseNode.getId());
 
-        ImGui::PushItemWidth(200);
+        ImGui::PushItemWidth(200 * m_uiScale);
         std::string displayName = baseNode.getDisplayName();
         if (ImGui::InputText("", &displayName))
         {
@@ -409,7 +415,7 @@ namespace gladius::ui
             const auto previousText = *name;
             val = *name;
             ImGui::SameLine();
-            ImGui::PushItemWidth(200);
+            ImGui::PushItemWidth(200 * m_uiScale);
 
             bool changed = ImGui::InputText("", name);
 
@@ -509,7 +515,7 @@ namespace gladius::ui
         {
             ImGui::TextUnformatted("Vector");
             bool changed = false;
-            ImGui::PushItemWidth(300);
+            ImGui::PushItemWidth(300 * m_uiScale);
             const auto increment = 0.1f;
             if (parameter.second.getContentType() == ContentType::Length)
             {
@@ -554,7 +560,7 @@ namespace gladius::ui
     {
         if (const auto pval = std::get_if<Matrix4x4>(&val))
         {
-            ImGui::PushItemWidth(300);
+            ImGui::PushItemWidth(300 * m_uiScale);
             bool const changed = matrixEdit("", *pval);
             ImGui::PopItemWidth();
 
@@ -577,8 +583,6 @@ namespace gladius::ui
         if (auto * pval = std::get_if<ResourceId>(&val))
         {
             ImGui::SameLine();
-            ImGui::PushItemWidth(200);
-            // ImGui::TextUnformatted(fmt::format("#{}", *pval).c_str());
             auto resId = static_cast<int>(*pval);
             if (ImGui::InputInt("ResourceId", &resId))
             {
@@ -699,7 +703,7 @@ namespace gladius::ui
             return;
         }
 
-        ImGui::Indent(20);
+        ImGui::Indent(20 * m_uiScale);
         if (parameter.first != FieldNames::Shape)
         {
             if (const auto pval = std::get_if<int>(&val))
@@ -743,7 +747,7 @@ namespace gladius::ui
             {
                 val = *name;
                 ImGui::SameLine();
-                ImGui::PushItemWidth(200);
+                ImGui::PushItemWidth(200 * m_uiScale);
                 if (ImGui::Button(name->c_str()))
                 {
                     m_showContextMenu = true;
@@ -786,7 +790,7 @@ namespace gladius::ui
 
                 ImGui::PopItemWidth();
             }
-            ImGui::Indent(-20);
+            ImGui::Indent(-20 * m_uiScale);
             return;
         }
 
@@ -835,7 +839,7 @@ namespace gladius::ui
                 ImGui::TextUnformatted(resKey->getDisplayName().c_str());
             }
         }
-        ImGui::Indent(-20);
+        ImGui::Indent(-20 * m_uiScale);
     }
 
     void NodeView::showLinkAssignmentMenu(ParameterMap::reference parameter)
@@ -872,11 +876,12 @@ namespace gladius::ui
         }
 
         if (ImGui::BeginTable(
-              "InputAndOutputs", 3, ImGuiTableFlags_SizingStretchProp, ImVec2(200, 0)))
+              "InputAndOutputs", 3, ImGuiTableFlags_SizingStretchProp, ImVec2(300 * m_uiScale, 0)))
         {
-            ImGui::TableSetupColumn("Inputs", ImGuiTableColumnFlags_WidthFixed, 80.f);
-            ImGui::TableSetupColumn("Seperation", ImGuiTableColumnFlags_WidthFixed, 30.f);
-            ImGui::TableSetupColumn("Outputs", ImGuiTableColumnFlags_WidthFixed, 80.f);
+            ImGui::TableSetupColumn("Inputs", ImGuiTableColumnFlags_WidthFixed, 140.f * m_uiScale);
+            ImGui::TableSetupColumn(
+              "Seperation", ImGuiTableColumnFlags_WidthFixed, 20.f * m_uiScale);
+            ImGui::TableSetupColumn("Outputs", ImGuiTableColumnFlags_WidthFixed, 140.f * m_uiScale);
 
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
@@ -891,10 +896,11 @@ namespace gladius::ui
     void NodeView::inputPins(nodes::NodeBase & node)
     {
         std::set<ParameterId> usedPins;
-        if (ImGui::BeginTable("table", 2, ImGuiTableFlags_SizingStretchProp, ImVec2(80, 0)))
+        if (ImGui::BeginTable(
+              "table", 2, ImGuiTableFlags_SizingStretchProp, ImVec2(140 * m_uiScale, 0)))
         {
-            ImGui::TableSetupColumn("InputPin", ImGuiTableColumnFlags_None, 10.f);
-            ImGui::TableSetupColumn("InputName", ImGuiTableColumnFlags_None, 70.f);
+            ImGui::TableSetupColumn("InputPin", ImGuiTableColumnFlags_None, 10.f * m_uiScale);
+            ImGui::TableSetupColumn("InputName", ImGuiTableColumnFlags_None, 120.f * m_uiScale);
 
             for (auto & parameter : node.parameter())
             {
@@ -928,7 +934,7 @@ namespace gladius::ui
                                           typeToColor(parameter.second.getTypeIndex()));
                     const ed::PinId pinId = parameter.second.getId();
                     BeginPin(pinId, ed::PinKind::Input);
-                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {4, 0});
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {4 * m_uiScale, 0});
 
                     if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_CARET_RIGHT)))
                     {
@@ -938,7 +944,7 @@ namespace gladius::ui
                     ImGui::PopStyleVar();
                     ed::EndPin();
                     ImGui::TableNextColumn();
-                    ImGui::SetNextItemWidth(70.f);
+                    ImGui::SetNextItemWidth(120.f * m_uiScale);
                     if (inputMissing)
                     {
                         ImGui::PushStyleColor(ImGuiCol_Text, LinkColors::ColorInvalid);
@@ -971,10 +977,11 @@ namespace gladius::ui
     void NodeView::outputPins(nodes::NodeBase & node)
     {
         std::set<ParameterId> usedPins;
-        if (ImGui::BeginTable("outputs", 2, ImGuiTableFlags_SizingStretchProp, ImVec2(80, 0)))
+        if (ImGui::BeginTable(
+              "outputs", 2, ImGuiTableFlags_SizingStretchProp, ImVec2(140 * m_uiScale, 0)))
         {
-            ImGui::TableSetupColumn("OutputName", ImGuiTableColumnFlags_None, 60.f);
-            ImGui::TableSetupColumn("OutputPin", ImGuiTableColumnFlags_None, 20.f);
+            ImGui::TableSetupColumn("OutputName", ImGuiTableColumnFlags_None, 120.f * m_uiScale);
+            ImGui::TableSetupColumn("OutputPin", ImGuiTableColumnFlags_None, 20.f * m_uiScale);
             for (auto & output : node.getOutputs())
             {
                 // check if output.second.getId() is already used as a pin
@@ -1021,10 +1028,11 @@ namespace gladius::ui
 
         ImGui::PushID(node.getId());
         if (ImGui::BeginTable(
-              "InputAndOutputs", 2, ImGuiTableFlags_SizingStretchProp, ImVec2(280, 0)))
+              "InputAndOutputs", 2, ImGuiTableFlags_SizingStretchProp, ImVec2(380 * m_uiScale, 0)))
         {
-            ImGui::TableSetupColumn("Parameter", ImGuiTableColumnFlags_WidthFixed, 200.f);
-            ImGui::TableSetupColumn("Outputs", ImGuiTableColumnFlags_WidthFixed, 80.f);
+            ImGui::TableSetupColumn(
+              "Parameter", ImGuiTableColumnFlags_WidthFixed, 240.f * m_uiScale);
+            ImGui::TableSetupColumn("Outputs", ImGuiTableColumnFlags_WidthFixed, 140.f * m_uiScale);
 
             ImGui::TableNextRow();
             ImGui::TableNextColumn();

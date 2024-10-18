@@ -18,6 +18,18 @@
     },
     {
         "name": "imgui",
+        "platform": "windows",
+        "features":
+        [
+          "docking-experimental",
+          "glfw-binding",
+          "opengl2-binding",
+          "win32-binding"
+        ]
+    },
+    {
+        "name": "imgui",
+        "platform": "!windows",
         "features":
         [
           "docking-experimental",

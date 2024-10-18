@@ -123,8 +123,8 @@ namespace gladius::ui
         ImGui::Begin("Tool Box");
 
         ImGui::SetWindowSize(ImVec2(350, ImGui::GetWindowHeight()));
-        auto const frameHeight = ImGui::GetWindowHeight() - 50.f;
-        auto const height = std::max(frameHeight, 150.f);
+        auto const frameHeight = ImGui::GetWindowHeight() - 50.f * m_uiScale;
+        auto const height = std::max(frameHeight, 150.f * m_uiScale);
 
         ImGui::BeginChildFrame(ImGui::GetID("Building blocks"),
                                ImVec2(300, height),
@@ -495,6 +495,7 @@ namespace gladius::ui
 
     auto ModelEditor::showAndEdit() -> bool
     {
+        m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
         if (!m_currentModel || !m_assembly)
         {
             return false;

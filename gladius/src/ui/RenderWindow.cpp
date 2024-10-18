@@ -144,9 +144,9 @@ namespace gladius::ui
             auto const contentWidth =
               ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
 
-            ImGui::SetCursorPosX(contentWidth - 260.f);
+            ImGui::SetCursorPosX(contentWidth - 260.f * m_uiScale);
             auto z = m_core->getSliceHeight();
-            ImGui::SetNextItemWidth(150.f);
+            ImGui::SetNextItemWidth(150.f * m_uiScale);
             bool zChanged = ImGui::InputFloat("  ", &z, 0.08f, 1.f, "%.2f mm");
 
             ImGui::SameLine();
@@ -437,6 +437,7 @@ namespace gladius::ui
     void RenderWindow::render(RenderWindowState & state)
     {
         ProfileFunction;
+        m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
 
         if (!m_core->isRendererReady() || m_core->isAnyCompilationInProgress())
         {
@@ -579,7 +580,7 @@ namespace gladius::ui
         auto const minZ =
           m_core->getBoundingBox().has_value() ? m_core->getBoundingBox()->min.z : 0.f;
         const bool zChanged = ImGui::VSliderFloat(
-          " ", ImVec2(15, m_contentAreaMax.y - m_contentAreaMin.y - 10.f), &z, minZ, maxZ, " ");
+          " ", ImVec2(15, m_contentAreaMax.y - m_contentAreaMin.y - 10.f * m_uiScale), &z, minZ, maxZ, " ");
 
         m_dirty = m_dirty || zChanged;
         m_renderWindowState.isMoving = m_renderWindowState.isMoving || zChanged;
