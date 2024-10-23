@@ -60,7 +60,6 @@ namespace gladius
 
         newModel();
         resetGeneratorContext();
-        refreshModelAsync();
     }
 
     void Document::refreshModelAsync()

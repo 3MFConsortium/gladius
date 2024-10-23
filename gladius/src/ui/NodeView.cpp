@@ -371,10 +371,6 @@ namespace gladius::ui
         }
         ImGui::PopItemWidth();
 
-        // ImGui::TextUnformatted(baseNode.getUniqueName().c_str());
-        // ImGui::TextUnformatted(fmt::format("Order id {}", baseNode.getOrder()).c_str());
-        // ImGui::TextUnformatted(fmt::format("Depth {}", baseNode.getDepth()).c_str());
-        // ImGui::TextUnformatted(fmt::format("Node id {}", baseNode.getId()).c_str());
         if (m_popStyle)
         {
             ImGui::PopStyleColor(2);
