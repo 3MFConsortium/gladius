@@ -41,7 +41,7 @@ set(DEPENDENCIES
     pugixml::pugixml
     ${OPENMESH_LIBRARIES}
     lib3mf::lib3mf
-    minizip::minizip
+    unofficial::minizip::minizip
     imgui::imgui
     unofficial::imgui-node-editor::imgui-node-editor
 )
