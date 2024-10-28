@@ -1,21 +1,23 @@
 #pragma once
 
 #include "BitmapChannel.h"
-#include "compute/ComputeCore.h"
 #include "Mesh.h"
+#include "compute/ComputeCore.h"
 #include "io/3mf/Importer3mf.h"
 #include "nodes/Assembly.h"
-#include "nodes/Model.h"
 #include "nodes/BuildItem.h"
+#include "nodes/Model.h"
 #include "ui/GLView.h"
-
 
 #include <atomic>
 #include <filesystem>
 
-
 namespace gladius
 {
+    namespace vdb
+    {
+        struct TriangleMesh;
+    }
     class ParameterNotFoundException : public std::exception
     {
       public:
@@ -71,8 +73,6 @@ namespace gladius
             return "The parameter could not be converted to a double";
         }
     };
-
-    
 
     class Document
     {
@@ -153,13 +153,19 @@ namespace gladius
 
         void injectSmoothingKernel(std::string const & kernel);
 
-        nodes::BuildItems::iterator addBuildItem(nodes::BuildItem&& item);
+        nodes::BuildItems::iterator addBuildItem(nodes::BuildItem && item);
 
         [[nodiscard]] nodes::BuildItems const & getBuildItems() const;
 
         void replaceMeshResource(ResourceKey const & key, SharedMesh mesh);
 
+        std::optional<ResourceKey> addMeshResource(std::filesystem::path const & filename);
+        ResourceKey addMeshResource(vdb::TriangleMesh && mesh);
+
+        void deleteResource(ResourceId id);
+
         void deleteFunction(ResourceId id);
+
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,
@@ -175,11 +181,9 @@ namespace gladius
 
         void updateMemoryOffsets();
 
-
         std::unique_ptr<nodes::GeneratorContext> m_generatorContext;
         nodes::SharedAssembly m_assembly;
         nodes::SharedAssembly m_flatAssembly;
-
 
         std::filesystem::path m_modelFileName;
         std::optional<std::filesystem::path> m_currentAssemblyFileName;

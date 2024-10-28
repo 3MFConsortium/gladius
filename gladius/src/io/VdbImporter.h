@@ -22,6 +22,8 @@ namespace gladius::vdb
         Representation representation = Representation::NearDistanceField;
     };
 
+
+
     struct TriangleMesh
     {
         std::vector<openvdb::Vec3s> vertices;
@@ -203,6 +205,11 @@ namespace gladius::vdb
         void writeMesh(gladius::PrimitiveBuffer & primitives) const;
 
         static void writeMesh(TriangleMesh const & mesh, gladius::PrimitiveBuffer & primitives);
+
+        [[nodiscard]] TriangleMesh const & getMesh() const
+        {
+            return m_mesh;
+        }
 
       private:
         static void importFromMesh(TriangleMesh const & mesh,

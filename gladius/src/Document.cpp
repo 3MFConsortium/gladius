@@ -7,9 +7,11 @@
 #include "ResourceManager.h"
 #include "TimeMeasurement.h"
 #include "compute/ComputeCore.h"
+#include "exceptions.h"
 #include "imguinodeeditor.h"
 #include "io/3mf/Writer3mf.h"
 #include "io/ImporterVdb.h"
+#include "io/VdbImporter.h"
 #include "nodes/GraphFlattener.h"
 #include "nodes/Model.h"
 #include "nodes/OptimizeOutputs.h"
@@ -689,6 +691,82 @@ namespace gladius
     {
         // auto * res = getGeneratorContext().resourceManager.getResourcePtr(key);
         // TODO: Implement
+    }
+
+     std::optional<ResourceKey> Document::addMeshResource(std::filesystem::path const & filename)
+    {
+        vdb::VdbImporter reader;
+        auto logger = getSharedLogger();
+        try
+        {
+            reader.loadStl(filename);
+            /* code */
+        }
+        catch (const std::exception & e)
+        {
+            // log
+            if (logger)
+            {
+                logger->addEvent({e.what(), events::Severity::Error});
+            }
+            else
+            {
+                std::cerr << e.what() << "\n";
+            }
+            return {};
+        }
+
+        auto mesh = reader.getMesh();
+        return addMeshResource(std::move(mesh));
+    }
+
+    ResourceKey Document::addMeshResource(vdb::TriangleMesh && mesh)
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3mf model loaded");
+        }
+
+        auto const new3mfMesh = m_3mfmodel->AddMeshObject();
+
+        for (auto & vertex : mesh.vertices)
+        {
+            new3mfMesh->AddVertex({vertex.x(), vertex.y(), vertex.z()});
+        }
+
+        for (auto & triangle : mesh.indices)
+        {
+            new3mfMesh->AddTriangle({triangle[0], triangle[1], triangle[2]});
+        }
+
+        auto & resourceManager = getGeneratorContext().resourceManager;
+
+        ResourceKey key = ResourceKey(new3mfMesh->GetModelResourceID());
+        resourceManager.addResource(key, std::move(mesh));
+
+        resourceManager.loadResources();
+
+        return key;
+    }
+
+    void Document::deleteResource(ResourceId id)
+    {
+        m_assembly->deleteModel(id); // will just return if not a function
+
+        if (m_3mfmodel)
+        {
+            // NOTE: Keep in mind that id is a ModelResourceID, no a UniqueResourceID
+            auto resIter = m_3mfmodel->GetResources();
+            while (resIter->MoveNext())
+            {
+                auto resource = resIter->GetCurrent();
+                if (resource->GetModelResourceID() == id)
+                {
+                    m_3mfmodel->RemoveResource(resource);
+                    break;
+                }
+            }
+        }
     }
 
     void Document::deleteFunction(ResourceId id)

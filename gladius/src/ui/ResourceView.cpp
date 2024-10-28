@@ -1,5 +1,6 @@
 #include "ResourceView.h"
 
+#include "FileChooser.h"
 #include "ImageStackResource.h"
 #include "MeshResource.h"
 #include "ResourceManager.h"
@@ -32,6 +33,10 @@ namespace gladius::ui
 
         if (ImGui::TreeNodeEx("mesh", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            if (ImGui::Button("add mesh"))
+            {
+                addMesh(document);
+            }
 
             for (auto const & [key, res] : resources)
             {
@@ -41,13 +46,15 @@ namespace gladius::ui
                     continue;
                 }
 
-                if (ImGui::TreeNodeEx(key.getDisplayName().c_str(), baseFlags))
+                auto name =
+                  fmt::format("{} #{}", key.getDisplayName(), key.getResourceId().value_or(-1));
+
+                if (ImGui::TreeNodeEx(name.c_str(), baseFlags))
                 {
                     auto const & meshData = mesh->getMesh();
 
-                    if (ImGui::TreeNodeEx(
-                          fmt::format("faces: {}", meshData.polygonCount()).c_str(),
-                          infoNodeFlags))
+                    if (ImGui::TreeNodeEx(fmt::format("faces: {}", meshData.polygonCount()).c_str(),
+                                          infoNodeFlags))
                     {
                         ImGui::TreePop();
                     }
@@ -62,11 +69,15 @@ namespace gladius::ui
                                             .c_str(),
                                           infoNodeFlags))
                     {
-                        // button to replace mesh with mesh from current bounding box
-                        // if (ImGui::Button("replace with bounding box"))
-                        // {
 
-                        // }
+                        if (ImGui::Button("delete"))
+                        {
+                            document->deleteResource(key.getResourceId().value());
+                            resourceManager.deleteResource(key);
+                        }
+                        ImGui::SameLine();
+                        // button to replace mesh with mesh from current bounding box
+                        if (ImGui::Button("replace with bounding box")) {}
                         ImGui::TreePop();
                     }
 
@@ -103,5 +114,24 @@ namespace gladius::ui
             }
             ImGui::TreePop();
         }
+    }
+
+    void ResourceView::addMesh(SharedDocument document) const
+    {
+        if (!document)
+        {
+            return;
+        }
+
+        const auto filename = queryLoadFilename({{"*.stl"}});
+        if (!filename.has_value())
+        {
+            return;
+        }
+        document->addMeshResource(filename.value());
+    }
+
+    void ResourceView::addBoundingBox(SharedDocument document)
+    {
     }
 }

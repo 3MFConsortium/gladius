@@ -158,6 +158,7 @@ namespace gladius
 
         bool hasResource(ResourceKey const & key) const;
 
+        void deleteResource(ResourceKey const & key);
       private:
         void increaseImageNumber();
 

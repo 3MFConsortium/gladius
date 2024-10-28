@@ -123,4 +123,17 @@ namespace gladius
     {
         return m_resources.find(key) != m_resources.end();
     }
+
+    void ResourceManager::deleteResource(ResourceKey const & key)
+    {
+        // find the resource
+        auto iter = m_resources.find(key);
+        if (iter == m_resources.end())
+        {
+            return;
+        }
+
+        // remove the resource
+        m_resources.erase(iter);
+    }
 }

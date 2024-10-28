@@ -10,5 +10,7 @@ namespace gladius::ui
         void render(SharedDocument document) const;
 
       private:
+       void addMesh(SharedDocument document) const;
+       void addBoundingBox(SharedDocument document);
     };
 }
