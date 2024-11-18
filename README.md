@@ -3,11 +3,11 @@
 
 [![Latest Release][def]](https://github.com/3MFConsortium/gladius/releases/latest) is available for download.
 
+
 <div align="center">
-  <a href="https://github.com/3MFConsortium/gladius/releases/latest">
-    <img src="https://img.shields.io/badge/Get%20it%20now%21-blue?style=for-the-badge" alt="Get it now!">
-  </a>
+  <a href="https://github.com/3MFConsortium/gladius/releases/latest" style="display: inline-block; padding: 20px 40px; font-size: 20px; font-weight: bold; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Get it now!</a>
 </div>
+
 
 # 
 ![Screencast of gladius](gladius/documentation/img/gladius_animation.gif "3mf with volumetric extension")
