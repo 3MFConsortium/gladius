@@ -1,5 +1,10 @@
 # Gladius
 
+
+[![Latest Release][def]](https://github.com/3MFConsortium/gladius/releases/latest)
+
+<a href="https://github.com/3MFConsortium/gladius/releases/latest" style="display: inline-block; padding: 15px 30px; font-size: 18px; font-weight: bold; color: white; background-color: #007bff; text-align: center; text-decoration: none; border-radius: 5px;">Get it now!</a>
+
 ![Screencast of gladius](gladius/documentation/img/gladius_animation.gif "3mf with volumetric extension")
 
 Gladius is a developement tool used as a playground for the Volumetric Extension of the 3MF file format. It is designed to be a base for processing implicit geometries, especially 3mf files with the volumetric extension, including the implicit namespace. See https://github.com/3MFConsortium/spec_volumetric for more information about the volumetric extension.
@@ -7,6 +12,9 @@ Gladius is a developement tool used as a playground for the Volumetric Extension
 Gladius can be uses as a library or as a standalone application. It offers a graphical programming interface for designing parts and a rendering engine for visualizing the results. The software is written in C++ and uses OpenCL for the computations. The rendering is done with OpenGL. The software is designed to be easily extensible and can be used as a base for other applications that need to process implicit geometries.
 
 Note: The software is still in an early stage and might contain bugs. The software is provided as is and without any warranty. Use at your own risk.
+
+
+
 
 # Features
 
@@ -107,3 +115,6 @@ The current version just takes the default GPU as OpenCL device or fallbacks to 
 Gladius allows the design of parts using a method that is called Constructive Solid Geometry (CSG). The main idea is to use a few primitives like spheres, cylinder, cubes etc. that you combine to complex parts. For that you use boolean operations like union, intersection and difference.
 
 
+
+
+[def]: https://img.shields.io/github/release/3MFConsortium/gladius.svg
