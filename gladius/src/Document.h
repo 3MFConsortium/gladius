@@ -160,7 +160,7 @@ namespace gladius
         void replaceMeshResource(ResourceKey const & key, SharedMesh mesh);
 
         std::optional<ResourceKey> addMeshResource(std::filesystem::path const & filename);
-        ResourceKey addMeshResource(vdb::TriangleMesh && mesh);
+        ResourceKey addMeshResource(vdb::TriangleMesh && mesh, std::string const & name);
 
         void deleteResource(ResourceId id);
 

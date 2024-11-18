@@ -717,10 +717,10 @@ namespace gladius
         }
 
         auto mesh = reader.getMesh();
-        return addMeshResource(std::move(mesh));
+        return addMeshResource(std::move(mesh), filename.filename().string());
     }
 
-    ResourceKey Document::addMeshResource(vdb::TriangleMesh && mesh)
+    ResourceKey Document::addMeshResource(vdb::TriangleMesh && mesh, std::string const & name)
     {
         if (!m_3mfmodel)
         {
@@ -728,6 +728,7 @@ namespace gladius
         }
 
         auto const new3mfMesh = m_3mfmodel->AddMeshObject();
+        new3mfMesh->SetName(name);
 
         for (auto & vertex : mesh.vertices)
         {
@@ -742,6 +743,7 @@ namespace gladius
         auto & resourceManager = getGeneratorContext().resourceManager;
 
         ResourceKey key = ResourceKey(new3mfMesh->GetModelResourceID());
+        key.setDisplayName(name);
         resourceManager.addResource(key, std::move(mesh));
 
         resourceManager.loadResources();
