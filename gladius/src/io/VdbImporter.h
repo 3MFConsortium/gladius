@@ -70,6 +70,21 @@ namespace gladius::vdb
             return gladius::nodes::float3(m_max.x(), m_max.y(), m_max.z());
         }
 
+        void updateBoundingBox()
+        {
+            m_min = openvdb::Vec3s{std::numeric_limits<float>::max(),
+                                   std::numeric_limits<float>::max(),
+                                   std::numeric_limits<float>::max()};
+            m_max = openvdb::Vec3s{-std::numeric_limits<float>::max(),
+                                   -std::numeric_limits<float>::max(),
+                                   -std::numeric_limits<float>::max()};
+
+            for (auto const & vertex : vertices)
+            {
+                updateMinMax(vertex);
+            }
+        }
+
       private:
         openvdb::Vec3s m_min{std::numeric_limits<float>::max(),
                              std::numeric_limits<float>::max(),

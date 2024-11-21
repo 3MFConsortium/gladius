@@ -249,6 +249,8 @@ namespace gladius::vdb
             stlFile.close();
         }
 
+        mesh.updateBoundingBox();
+
         return mesh;
     }
 

@@ -166,6 +166,8 @@ namespace gladius
 
         void deleteFunction(ResourceId id);
 
+        ResourceManager & getResourceManager();
+
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,

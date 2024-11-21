@@ -1,10 +1,5 @@
 
 
-#include "ModelEditor.h"
-#include "../IconFontCppHeaders/IconsFontAwesome5.h"
-#include "../nodes/Assembly.h"
-#include "../nodes/GraphFlattener.h"
-#include "../nodes/Model.h"
 #include <exception>
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
@@ -14,7 +9,13 @@
 #include <algorithm>
 
 #include "../CLMath.h"
+#include "../IconFontCppHeaders/IconsFontAwesome5.h"
+#include "../nodes/Assembly.h"
+#include "../nodes/GraphFlattener.h"
+#include "../nodes/Model.h"
 #include "Document.h"
+#include "MeshResource.h"
+#include "ModelEditor.h"
 #include "NodeView.h"
 #include "Port.h"
 #include "ResourceView.h"
@@ -134,6 +135,9 @@ namespace gladius::ui
         // we use a dummy position
         ImGui::TextUnformatted("Functions");
         functionToolBox(ImVec2(0, 0));
+
+        ImGui::TextUnformatted("Mesh Resources");
+        meshResourceToolBox(ImVec2(0, 0));
 
         ImGui::EndChildFrame();
         ImGui::End();
@@ -424,6 +428,7 @@ namespace gladius::ui
         if (ImGui::BeginPopup("Create Node"))
         {
             functionToolBox(mousePos);
+            meshResourceToolBox(mousePos);
 
             for (auto & [cat, catName] : nodes::CategoryNames)
             {
@@ -759,6 +764,41 @@ namespace gladius::ui
         }
     }
 
+    void ModelEditor::meshResourceToolBox(ImVec2 mousePos)
+    {
+        auto & resourceManager = m_doc->getResourceManager();
+
+        auto const & resources = resourceManager.getResourceMap();
+
+        for (auto const & [key, res] : resources)
+        {
+            auto const * mesh = dynamic_cast<MeshResource const *>(res.get());
+            if (!mesh)
+            {
+                continue;
+            }
+
+            if (ImGui::Button(key.getDisplayName().c_str()))
+            {
+                createUndoRestorePoint("Create node");
+                auto posOnCanvas = ed::ScreenToCanvas(mousePos);
+                auto createdNode = m_currentModel->create<nodes::Resource>();
+                createdNode->setResourceId(key.getResourceId().value());
+                ed::SetNodePosition(createdNode->getId(), posOnCanvas);
+
+                auto signedDistanceToMesh = m_currentModel->create<nodes::SignedDistanceToMesh>();
+                ImVec2 const posOnCanvasWithOffset = ImVec2(posOnCanvas.x + 400, posOnCanvas.y);
+                m_currentModel->addLink(createdNode->outputs().at("value").getId(),
+                                        signedDistanceToMesh->parameter().at("mesh").getId());
+
+                signedDistanceToMesh->setDisplayName("SD to " + key.getDisplayName());
+                ed::SetNodePosition(signedDistanceToMesh->getId(), posOnCanvasWithOffset);
+                
+                markModelAsModified();
+            }
+        }
+    }
+
     void ModelEditor::undo()
     {
         if (m_history.canUnDo())
@@ -907,8 +947,6 @@ namespace gladius::ui
         auto const beginId = currentModel()->getBeginNode()->getId();
         auto depthMap = determineDepth(graph, beginId);
 
-        
-       
         auto getDepth = [&](nodes::NodeId nodeId)
         {
             auto const depthIter = depthMap.find(nodeId);

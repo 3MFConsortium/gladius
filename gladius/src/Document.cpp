@@ -111,8 +111,10 @@ namespace gladius
         m_core->recompileBlockingNoLock();
         m_core->invalidatePreCompSdf();
         m_core->resetBoundingBox();
-        m_core->precomputeSdfForWholeBuildPlatform();
-        m_core->getMeshResourceState().signalCompilationFinished();
+        if (m_core->precomputeSdfForWholeBuildPlatform())
+        {
+            m_core->getMeshResourceState().signalCompilationFinished();
+        }
     }
 
     void Document::updateFlatAssembly()
@@ -693,7 +695,7 @@ namespace gladius
         // TODO: Implement
     }
 
-     std::optional<ResourceKey> Document::addMeshResource(std::filesystem::path const & filename)
+    std::optional<ResourceKey> Document::addMeshResource(std::filesystem::path const & filename)
     {
         vdb::VdbImporter reader;
         auto logger = getSharedLogger();
@@ -789,5 +791,9 @@ namespace gladius
                 }
             }
         }
+    }
+    ResourceManager & Document::getResourceManager()
+    {
+        return getGeneratorContext().resourceManager;
     }
 }

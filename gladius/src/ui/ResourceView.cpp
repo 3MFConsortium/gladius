@@ -38,6 +38,13 @@ namespace gladius::ui
                 addMesh(document);
             }
 
+            ImGui::SameLine();
+
+            if (ImGui::Button("add bounding box"))
+            {
+                addBoundingBox(document);
+            }
+
             for (auto const & [key, res] : resources)
             {
                 auto const * mesh = dynamic_cast<MeshResource const *>(res.get());
@@ -75,16 +82,9 @@ namespace gladius::ui
                             document->deleteResource(key.getResourceId().value());
                             resourceManager.deleteResource(key);
                         }
-                        ImGui::SameLine();
-                        // button to replace mesh with mesh from current bounding box
-                        if (ImGui::Button("replace with bounding box")) {}
+                       
                         ImGui::TreePop();
                     }
-
-                    // ImGui::SameLine();
-                    // ImGui::TextUnformatted(
-                    //   fmt::format(" Resource id: # {}",
-                    //   key.getResourceId().value_or(-1)).c_str());
                     ImGui::TreePop();
                 }
             }
@@ -131,7 +131,78 @@ namespace gladius::ui
         document->addMeshResource(filename.value());
     }
 
-    void ResourceView::addBoundingBox(SharedDocument document)
+    vdb::TriangleMesh createBoundingBox(SharedDocument document)
     {
+        auto bbox = document->computeBoundingBox();
+
+        // create mesh from bounding box
+        vdb::TriangleMesh mesh;
+
+        // Top
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.max.z},
+                         {bbox.max.x, bbox.min.y, bbox.max.z},
+                         {bbox.max.x, bbox.max.y, bbox.max.z});
+
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.max.z},
+                         {bbox.max.x, bbox.max.y, bbox.max.z},
+                         {bbox.min.x, bbox.max.y, bbox.max.z});
+
+        // Bottom
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.max.y, bbox.min.z});
+
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.max.y, bbox.min.z},
+                         {bbox.min.x, bbox.max.y, bbox.min.z});
+
+        // Front
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.min.y, bbox.max.z});
+
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.min.y, bbox.max.z},
+                         {bbox.min.x, bbox.min.y, bbox.max.z});
+
+        // Back
+        mesh.addTriangle({bbox.min.x, bbox.max.y, bbox.min.z},
+                         {bbox.max.x, bbox.max.y, bbox.min.z},
+                         {bbox.max.x, bbox.max.y, bbox.max.z});
+
+        mesh.addTriangle({bbox.min.x, bbox.max.y, bbox.min.z},
+                         {bbox.max.x, bbox.max.y, bbox.max.z},
+                         {bbox.min.x, bbox.max.y, bbox.max.z});
+
+        // Left
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
+                         {bbox.min.x, bbox.min.y, bbox.max.z},
+                         {bbox.min.x, bbox.max.y, bbox.max.z});
+
+        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
+                         {bbox.min.x, bbox.max.y, bbox.max.z},
+                         {bbox.min.x, bbox.max.y, bbox.min.z});
+
+        // Right
+        mesh.addTriangle({bbox.max.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.min.y, bbox.max.z},
+                         {bbox.max.x, bbox.max.y, bbox.max.z});
+
+        mesh.addTriangle({bbox.max.x, bbox.min.y, bbox.min.z},
+                         {bbox.max.x, bbox.max.y, bbox.max.z},
+                         {bbox.max.x, bbox.max.y, bbox.min.z});
+
+        return mesh;
+    }
+
+    void ResourceView::addBoundingBox(SharedDocument document) const
+    {
+        if (!document)
+        {
+            return;
+        }
+
+        auto mesh = createBoundingBox(document);
+        document->addMeshResource(std::move(mesh), "bounding box");
     }
 }

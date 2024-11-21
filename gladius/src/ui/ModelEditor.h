@@ -85,6 +85,7 @@ namespace gladius::ui
         void setAssembly(nodes::SharedAssembly assembly);
 
         void functionToolBox(ImVec2 mousePos);
+        void meshResourceToolBox(ImVec2 mousePos);
 
         void validate();
 
