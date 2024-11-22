@@ -42,7 +42,7 @@ namespace gladius::ui
 
             if (ImGui::Button("add bounding box"))
             {
-                addBoundingBox(document);
+                document->addBoundingBoxAsMesh();
             }
 
             for (auto const & [key, res] : resources)
@@ -82,7 +82,7 @@ namespace gladius::ui
                             document->deleteResource(key.getResourceId().value());
                             resourceManager.deleteResource(key);
                         }
-                       
+
                         ImGui::TreePop();
                     }
                     ImGui::TreePop();
@@ -129,80 +129,5 @@ namespace gladius::ui
             return;
         }
         document->addMeshResource(filename.value());
-    }
-
-    vdb::TriangleMesh createBoundingBox(SharedDocument document)
-    {
-        auto bbox = document->computeBoundingBox();
-
-        // create mesh from bounding box
-        vdb::TriangleMesh mesh;
-
-        // Top
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.max.z},
-                         {bbox.max.x, bbox.min.y, bbox.max.z},
-                         {bbox.max.x, bbox.max.y, bbox.max.z});
-
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.max.z},
-                         {bbox.max.x, bbox.max.y, bbox.max.z},
-                         {bbox.min.x, bbox.max.y, bbox.max.z});
-
-        // Bottom
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.max.y, bbox.min.z});
-
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.max.y, bbox.min.z},
-                         {bbox.min.x, bbox.max.y, bbox.min.z});
-
-        // Front
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.min.y, bbox.max.z});
-
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.min.y, bbox.max.z},
-                         {bbox.min.x, bbox.min.y, bbox.max.z});
-
-        // Back
-        mesh.addTriangle({bbox.min.x, bbox.max.y, bbox.min.z},
-                         {bbox.max.x, bbox.max.y, bbox.min.z},
-                         {bbox.max.x, bbox.max.y, bbox.max.z});
-
-        mesh.addTriangle({bbox.min.x, bbox.max.y, bbox.min.z},
-                         {bbox.max.x, bbox.max.y, bbox.max.z},
-                         {bbox.min.x, bbox.max.y, bbox.max.z});
-
-        // Left
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
-                         {bbox.min.x, bbox.min.y, bbox.max.z},
-                         {bbox.min.x, bbox.max.y, bbox.max.z});
-
-        mesh.addTriangle({bbox.min.x, bbox.min.y, bbox.min.z},
-                         {bbox.min.x, bbox.max.y, bbox.max.z},
-                         {bbox.min.x, bbox.max.y, bbox.min.z});
-
-        // Right
-        mesh.addTriangle({bbox.max.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.min.y, bbox.max.z},
-                         {bbox.max.x, bbox.max.y, bbox.max.z});
-
-        mesh.addTriangle({bbox.max.x, bbox.min.y, bbox.min.z},
-                         {bbox.max.x, bbox.max.y, bbox.max.z},
-                         {bbox.max.x, bbox.max.y, bbox.min.z});
-
-        return mesh;
-    }
-
-    void ResourceView::addBoundingBox(SharedDocument document) const
-    {
-        if (!document)
-        {
-            return;
-        }
-
-        auto mesh = createBoundingBox(document);
-        document->addMeshResource(std::move(mesh), "bounding box");
     }
 }

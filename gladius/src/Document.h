@@ -168,6 +168,8 @@ namespace gladius
 
         ResourceManager & getResourceManager();
 
+        void addBoundingBoxAsMesh();
+
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,
