@@ -1,5 +1,14 @@
 # Gladius
 
+
+[![Latest Release][def]](https://github.com/3MFConsortium/gladius/releases/latest) is available for download.
+
+<div align="center">
+  <a href="https://github.com/3MFConsortium/gladius/releases/latest">
+    <img src="https://img.shields.io/badge/Get%20it%20now%21-blue?style=for-the-badge" alt="Get it now!">
+  </a>
+</div>
+
 ![Screencast of gladius](gladius/documentation/img/gladius_animation.gif "3mf with volumetric extension")
 
 Gladius is a developement tool used as a playground for the Volumetric Extension of the 3MF file format. It is designed to be a base for processing implicit geometries, especially 3mf files with the volumetric extension, including the implicit namespace. See <https://github.com/3MFConsortium/spec_volumetric> for more information about the volumetric extension.
