@@ -1028,7 +1028,15 @@ namespace gladius::ui
                 auto nodeHeight = ed::GetNodeSize(node->getId()).y;
                 if (nodeWidth == 0.f || nodeHeight == 0.f)
                 {
-                    return;
+                    bool isResourceNode = dynamic_cast<nodes::Resource *>(node) != nullptr;
+                    if (isResourceNode)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
                 pos.x = layerX.at(depth);
                 pos.y = y;

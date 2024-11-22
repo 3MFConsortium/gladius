@@ -92,7 +92,7 @@ namespace gladius::ui
         bool m_showLinkAssignmentMenu{false};
         bool m_popStyle{false};
 
-        bool m_resoureIdNodesVisible{true};
+        bool m_resoureIdNodesVisible{false};
 
         struct NewChannelProperties
         {

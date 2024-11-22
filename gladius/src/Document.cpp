@@ -799,7 +799,7 @@ namespace gladius
 
     void Document::addBoundingBoxAsMesh()
     {
-        auto bbox = icomputeBoundingBox();
+        auto const bbox = computeBoundingBox();
 
         // create mesh from bounding box
         vdb::TriangleMesh mesh;
