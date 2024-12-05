@@ -65,6 +65,8 @@ Gladius is designed to run on Windows and Linux, but might run on other platform
 
 # Build
 
+Consider, that there are also binary packages avilable: [![Latest Release][def]](https://github.com/3MFConsortium/gladius/releases/latest)
+
 ## Windows
 
 - Install OpenCL SDK (see above)
