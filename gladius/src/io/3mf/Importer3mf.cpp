@@ -1018,7 +1018,7 @@ namespace gladius::io
         ProfileFunction auto image3dIterator = model->GetImage3Ds();
 
         ImageExtractor extractor;
-        if (!extractor.open(filename))
+        if (!extractor.loadFromArchive(filename))
         {
             throw std::runtime_error(fmt::format("Could not open file {}", filename.string()));
         }
@@ -1061,7 +1061,7 @@ namespace gladius::io
                     key.setDisplayName(image3d->GetName());
                     if (useVdb)
                     {
-                        auto grid = extractor.loadAsVdbGrid(fileList);
+                        auto grid = extractor.loadAsVdbGrid(fileList, FileLoaderType::Archive);
 
                         resMan.addResource(key, std::move(grid));
                     }

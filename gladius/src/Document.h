@@ -163,12 +163,15 @@ namespace gladius
         ResourceKey addMeshResource(vdb::TriangleMesh && mesh, std::string const & name);
 
         void deleteResource(ResourceId id);
+        void deleteResource(ResourceKey key);
 
         void deleteFunction(ResourceId id);
 
         ResourceManager & getResourceManager();
 
         void addBoundingBoxAsMesh();
+
+        ResourceKey addImageStackResource(std::filesystem::path const & path);
 
       private:
         [[nodiscard]] nodes::VariantParameter &

@@ -31,9 +31,10 @@ namespace gladius::ui
         ImGuiTreeNodeFlags nodeFlags = baseFlags | ImGuiTreeNodeFlags_Leaf;
         ImGuiTreeNodeFlags infoNodeFlags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_DefaultOpen;
 
-        if (ImGui::TreeNodeEx("mesh", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("mesh resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
-            if (ImGui::Button("add mesh"))
+            ImGui::Indent();
+            if (ImGui::Button("add"))
             {
                 addMesh(document);
             }
@@ -44,6 +45,8 @@ namespace gladius::ui
             {
                 document->addBoundingBoxAsMesh();
             }
+
+            ImGui::Unindent();
 
             for (auto const & [key, res] : resources)
             {
@@ -79,8 +82,7 @@ namespace gladius::ui
 
                         if (ImGui::Button("delete"))
                         {
-                            document->deleteResource(key.getResourceId().value());
-                            resourceManager.deleteResource(key);
+                            document->deleteResource(key);
                         }
 
                         ImGui::TreePop();
@@ -92,23 +94,63 @@ namespace gladius::ui
         }
 
         // image stack
-        if (ImGui::TreeNodeEx("image stack", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("image stacks", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            ImGui::Indent();
+            // import image stack
+            if (ImGui::Button("add"))
+            {
+                // query directory
+                const auto directory = queryDirectory();
+                if (!directory.has_value())
+                {
+                    return;
+                }
+
+                document->addImageStackResource(directory.value());
+            }
+
+            ImGui::Unindent();
 
             for (auto const & [key, res] : resources)
             {
                 auto const * stack = dynamic_cast<ImageStackResource const *>(res.get());
-                if (!stack)
+                auto const * grid = dynamic_cast<VdbResource const *>(res.get());
+                if (!stack && !grid)
                 {
                     continue;
                 }
 
-                if (ImGui::TreeNodeEx(key.getDisplayName().c_str(), nodeFlags))
+                if (ImGui::TreeNodeEx(key.getDisplayName().c_str(), baseFlags))
                 {
+                    if (ImGui::TreeNodeEx(fmt::format("# {} loaded as {}",
+                                                      key.getResourceId().value_or(-1),
+                                                      stack ? "image stack" : "vdb grid")
+                                            .c_str(),
+                                          infoNodeFlags))
+                    {
+                        ImGui::TreePop();
+                    }
 
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(
-                      fmt::format(" Resource id: # {}", key.getResourceId().value_or(-1)).c_str());
+                    if (grid)
+                    {
+                        auto dimensions = grid->getGridSize();
+                        if (ImGui::TreeNodeEx(
+                              fmt::format(
+                                "size: {}x{}x{}", dimensions.x, dimensions.y, dimensions.z)
+                                .c_str(),
+                              infoNodeFlags))
+                        {
+                            ImGui::TreePop();
+                        }
+                    }
+
+                    // delete image stack
+                    if (ImGui::Button("delete"))
+                    {
+                        document->deleteResource(key);
+                    }
+
                     ImGui::TreePop();
                 }
             }

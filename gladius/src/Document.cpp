@@ -9,6 +9,8 @@
 #include "compute/ComputeCore.h"
 #include "exceptions.h"
 #include "imguinodeeditor.h"
+#include "io/3mf/ImageStackCreator.h"
+#include "io/3mf/ImageExtractor.h"
 #include "io/3mf/Writer3mf.h"
 #include "io/ImporterVdb.h"
 #include "io/VdbImporter.h"
@@ -773,6 +775,19 @@ namespace gladius
         }
     }
 
+    void Document::deleteResource(ResourceKey key)
+    {
+        auto id = key.getResourceId();
+        if (!id)
+        {
+            return;
+        }
+        deleteResource(id.value());
+
+        auto & resourceManager = getGeneratorContext().resourceManager;
+        resourceManager.deleteResource(key);
+    }
+
     void Document::deleteFunction(ResourceId id)
     {
         m_assembly->deleteModel(id);
@@ -859,5 +874,35 @@ namespace gladius
                          {bbox.max.x, bbox.max.y, bbox.min.z});
 
         addMeshResource(std::move(mesh), "bounding box");
+    }
+
+    ResourceKey Document::addImageStackResource(std::filesystem::path const & path)
+    {
+        io::ImageStackCreator creator;
+        auto stack = creator.addImageStackFromDirectory(get3mfModel(), path);
+
+        if (!stack)
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("Failed to import image stack from directory: {}", path.string()),
+                   events::Severity::Error});
+            }
+
+            return ResourceKey{0};
+
+        }
+        auto & resourceManager = getGeneratorContext().resourceManager;
+        auto const key = ResourceKey{stack->GetModelResourceID()};
+
+        io::ImageExtractor extractor;
+
+        auto grid = extractor.loadAsVdbGrid(creator.getFiles(path), io::FileLoaderType::Filesystem);
+        resourceManager.addResource(key, std::move(grid));
+        resourceManager.loadResources();
+        return key;
+
     }
 }
