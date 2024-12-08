@@ -195,8 +195,7 @@ namespace gladius::ui
             }
 
             int const keyPressCountDown =
-              ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_DownArrow), deltaTime,
-              0.1f);
+              ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_DownArrow), deltaTime, 0.1f);
             if (keyPressCountDown > 0)
             {
                 value -= increment * keyPressCountDown;
@@ -205,5 +204,19 @@ namespace gladius::ui
         }
 
         return changed;
+    }
+
+    void frameOverlay(ImVec4 color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f))
+    {
+        ImVec2 rectMin = ImGui::GetItemRectMin();
+        ImVec2 rectMax = ImGui::GetItemRectMax();
+        rectMin.x += ImGui::GetStyle().FramePadding.x;
+        rectMax.x =
+          ImGui::GetContentRegionMax().x; // Expand to the right to the available content area
+
+        ImGui::GetWindowDrawList()->AddRectFilled(rectMin,
+                                                  rectMax,
+                                                  ImGui::ColorConvertFloat4ToU32(color),
+                                                  15.0f); // Gray color with rounded corners
     }
 }

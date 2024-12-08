@@ -191,34 +191,48 @@ namespace gladius::ui
             ImGui::EndMenuBar();
         }
 
+        m_outline.render();
+
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
 
+        ImGui::BeginGroup();
         if (ImGui::TreeNodeEx("resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("volumedata", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::TreePop();
+            }
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(1.0f, 0.0f, 1.0f, 0.1f));
+
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("levelset", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::TreePop();
+            }
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(1.0f, 1.0f, 0.0f, 0.1f));
+            
             resourceOutline();
 
+            ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("functions", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 functionOutline();
                 ImGui::TreePop();
             }
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(0.0f, 0.5f, 1.0f, 0.1f));
 
-            if (ImGui::TreeNodeEx("volumedata", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNodeEx("levelset", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::TreePop();
-            }
 
             ImGui::TreePop();
         }
 
-        m_outline.render();
+        ImGui::EndGroup();
+        frameOverlay(ImVec4(0.5f, 0.5f, 0.5f, 0.1f));
 
         ImGui::End();
     }
@@ -288,6 +302,8 @@ namespace gladius::ui
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.f, 0.f, 1.f));
             }
 
+            ImGui::BeginGroup();
+
             bool nodeOpen =
               ImGui::TreeNodeEx("",
                                 baseFlags | (isModelSelected ? ImGuiTreeNodeFlags_Selected : 0),
@@ -344,8 +360,13 @@ namespace gladius::ui
                         ImGui::TreePop();
                     }
                 }
+                // Empy line to separate the nodes from the function name
+                ImGui::TextUnformatted("");
                 ImGui::TreePop();
             }
+
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, isModelSelected ? 0.2f : 0.1f));
 
             ImGui::PopID();
         }
@@ -793,7 +814,7 @@ namespace gladius::ui
 
                 signedDistanceToMesh->setDisplayName("SD to " + key.getDisplayName());
                 ed::SetNodePosition(signedDistanceToMesh->getId(), posOnCanvasWithOffset);
-                
+
                 markModelAsModified();
             }
         }

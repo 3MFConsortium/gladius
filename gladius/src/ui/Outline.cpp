@@ -1,5 +1,6 @@
 #include "Outline.h"
 
+#include "Widgets.h"
 #include "nodes/BuildItem.h"
 #include "nodes/Components.h"
 #include "nodes/Object.h"
@@ -24,6 +25,7 @@ namespace gladius::ui
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
 
+        ImGui::BeginGroup();
         if (ImGui::TreeNodeEx("build items", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
             for (auto const & item : m_document->getBuildItems())
@@ -33,6 +35,9 @@ namespace gladius::ui
 
             ImGui::TreePop();
         }
+
+        ImGui::EndGroup();
+        frameOverlay(ImVec4(1.0f, 0.9f, 0.6f, 0.1f));
     }
 
     void Outline::renderBuildItem(gladius::nodes::BuildItem const & item) const
@@ -53,10 +58,14 @@ namespace gladius::ui
 
             for (auto const & component : item.getComponents())
             {
-               if (ImGui::TreeNodeEx(fmt::format("Component_{}", component.id).c_str(), baseFlags | ImGuiTreeNodeFlags_Leaf))
-               {
-                   ImGui::TreePop();
-               }
+                ImGui::BeginGroup();
+                if (ImGui::TreeNodeEx(fmt::format("Component_{}", component.id).c_str(),
+                                      baseFlags | ImGuiTreeNodeFlags_Leaf))
+                {
+                    ImGui::TreePop();
+                }
+                ImGui::EndGroup();
+                frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.1f));
             }
 
             ImGui::TreePop();

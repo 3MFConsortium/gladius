@@ -4,12 +4,14 @@
 
 namespace gladius::ui
 {
+
+
     class ResourceView
     {
       public:
         void render(SharedDocument document) const;
 
       private:
-       void addMesh(SharedDocument document) const;
+        void addMesh(SharedDocument document) const;
     };
 }
