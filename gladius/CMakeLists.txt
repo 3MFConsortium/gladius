@@ -158,6 +158,15 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(GLADIUSLOCATION GladiusLib)
 message("GLADIUSLOCATION=${GLADIUSLOCATION}")
 
+# Determine the installation directories based on the platform
+if(WIN32)
+    set(INSTALL_PREFIX .)
+else()
+    set(INSTALL_PREFIX /opt/gladius/${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
+    set(INSTALL_BIN_DIR ${INSTALL_PREFIX})
+    set(SYMLINK_BIN_DIR /usr/bin)
+endif()
+
 add_subdirectory(tests)
 add_subdirectory(src)
 add_subdirectory(src/compute)
@@ -181,26 +190,18 @@ configure_file(${CMAKE_SOURCE_DIR}/src/gladius.ico src/gladius.ico COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/src/gladius.rc src/gladius.rc COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/src/gladius.rc.res gladius.rc.res COPYONLY)
 
-configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py COPYONLY)
-configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/ToyTrack.py src/api/GladiusLib_component/Examples/Python/ToyTrack.py COPYONLY)
-configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Bindings/Python/GladiusLib.py src/api/GladiusLib_component/Examples/Python/GladiusLib.py COPYONLY)
+# currently out of date
+# configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py COPYONLY)
+# configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/ToyTrack.py src/api/GladiusLib_component/Examples/Python/ToyTrack.py COPYONLY)
+# configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Bindings/Python/GladiusLib.py src/api/GladiusLib_component/Examples/Python/GladiusLib.py COPYONLY)
 
-#configure_file(${CMAKE_SOURCE_DIR}/LICENSE src/copyright/LICENSE COPYONLY)
-#configure_file(${CMAKE_SOURCE_DIR}/url src/copyright/url COPYONLY)
 
 file(COPY examples DESTINATION "src/")
 
 file(COPY components/licenses DESTINATION "src/")
 
 
-# Determine the installation directories based on the platform
-if(WIN32)
-    set(INSTALL_PREFIX .)
-else()
-    set(INSTALL_PREFIX /opt/gladius/${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
-    set(INSTALL_BIN_DIR ${INSTALL_PREFIX})
-    set(SYMLINK_BIN_DIR /usr/bin)
-endif()
+
 
 # Install fonts
 install(DIRECTORY components/fonts/fontawesome-free-5.14.0-web/ DESTINATION ${INSTALL_PREFIX}/misc/fonts/)
@@ -214,8 +215,8 @@ install(FILES src/imgui.ini DESTINATION ${INSTALL_PREFIX})
 # Install icon
 install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${INSTALL_PREFIX}/share/pixmaps/)
 
-# Install documentation
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_PREFIX}/share/doc/)
+# Install documentation - not yet available
+# install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_PREFIX}/share/doc/)
 
 # Install examples
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION ${INSTALL_PREFIX}/examples/)
