@@ -195,46 +195,36 @@ file(COPY components/licenses DESTINATION "src/")
 
 # Determine the installation directories based on the platform
 if(WIN32)
-    set(INSTALL_BIN_DIR .)
-    set(INSTALL_LIB_DIR .)
-    set(INSTALL_INCLUDE_DIR .)
-    set(INSTALL_SHARE_DIR .)
-    set(INSTALL_DOC_DIR doc)  
-    set(INSTALL_ETC_DIR .)
-    set(INSTALL_PIXMAPS_DIR .)
+    set(INSTALL_PREFIX .)
 else()
-    set(INSTALL_BIN_DIR bin)
-    set(INSTALL_LIB_DIR lib/gladius)
-    set(INSTALL_INCLUDE_DIR include/gladius)
-    set(INSTALL_SHARE_DIR share/gladius)
-    set(INSTALL_DOC_DIR share/doc/gladius)
-    set(INSTALL_ETC_DIR etc/gladius)
+    set(INSTALL_PREFIX /opt/gladius/${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
 endif()
 
 # Install fonts
-install(DIRECTORY components/fonts/fontawesome-free-5.14.0-web/ DESTINATION ${INSTALL_SHARE_DIR}/fonts/)
+install(DIRECTORY components/fonts/fontawesome-free-5.14.0-web/ DESTINATION ${INSTALL_PREFIX}/misc/fonts/)
 
 # Install licenses
-install(DIRECTORY components/licenses DESTINATION ${INSTALL_DOC_DIR}/licenses/)
+install(DIRECTORY components/licenses DESTINATION ${INSTALL_PREFIX}/doc/licenses/)
 
 # Install imgui.ini
-install(FILES src/imgui.ini DESTINATION ${INSTALL_ETC_DIR}/)
+install(FILES src/imgui.ini DESTINATION ${INSTALL_PREFIX})
 
 # Install icon
-install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${INSTALL_PIXMAPS_DIR}/)
+install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${INSTALL_PREFIX}/share/pixmaps/)
 
 # Install documentation
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_DOC_DIR}/)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_PREFIX}/share/doc/)
 
 # Install examples
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION ${INSTALL_SHARE_DIR}/examples/)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION ${INSTALL_PREFIX}/examples/)
 
 # Install binaries and libraries
 install(
     DIRECTORY ${PROJECT_BINARY_DIR}/src/
-    DESTINATION ${INSTALL_LIB_DIR}
+    DESTINATION ${INSTALL_PREFIX}
     FILES_MATCHING 
     PATTERN "*.dll"
+    PATTERN "*.so.*"
     PATTERN "*.so"
     PATTERN "*.ttf"
     PATTERN "*.rtf"
