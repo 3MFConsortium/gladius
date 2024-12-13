@@ -198,6 +198,8 @@ if(WIN32)
     set(INSTALL_PREFIX .)
 else()
     set(INSTALL_PREFIX /opt/gladius/${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
+    set(INSTALL_BIN_DIR ${INSTALL_PREFIX})
+    set(SYMLINK_BIN_DIR /usr/bin)
 endif()
 
 # Install fonts
@@ -240,6 +242,11 @@ install(
     PATTERN "io" EXCLUDE
     PATTERN "kernel" EXCLUDE
 )
+
+# Create a symbolic link in /usr/bin
+if(UNIX)
+    install(CODE "execute_process(COMMAND ln -sf ${INSTALL_BIN_DIR}/gladius ${SYMLINK_BIN_DIR}/gladius)")
+endif()
 
 
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Gladius is a framework for processing 3MF files using the Volumetric and Implicit Extension.")
