@@ -907,6 +907,8 @@ namespace gladius::ui
         auto const beginId = currentModel()->getBeginNode()->getId();
         auto depthMap = determineDepth(graph, beginId);
 
+        
+       
         auto getDepth = [&](nodes::NodeId nodeId)
         {
             auto const depthIter = depthMap.find(nodeId);
@@ -917,12 +919,43 @@ namespace gladius::ui
             return 0;
         };
 
+        auto getDepthCloseToSuccessor = [&](nodes::NodeId nodeId)
+        {
+            auto successsor = graph::determineSuccessor(graph, nodeId);
+            // find  lowest depth of the successor
+            int lowestDepth = std::numeric_limits<int>::max();
+            for (auto const succ : successsor)
+            {
+                auto const depthIter = depthMap.find(succ);
+                if (depthIter != std::end(depthMap))
+                {
+                    lowestDepth = std::min(lowestDepth, depthIter->second);
+                }
+            }
+
+            if (lowestDepth != std::numeric_limits<int>::max())
+            {
+                return lowestDepth - 1;
+            }
+            return 0;
+        };
+
+        auto determineDepth = [&](nodes::NodeId nodeId)
+        {
+            auto const depth = getDepth(nodeId);
+            if (depth == 0)
+            {
+                return getDepthCloseToSuccessor(nodeId);
+            }
+            return depth;
+        };
+
         // Step 1: Assign Layers
         std::map<int, std::vector<nodes::NodeBase *>> layers;
         std::map<int, float> layersWidth;
         for (auto & [id, node] : *currentModel())
         {
-            auto const depth = (id == beginId) ? 0 : getDepth(id);
+            auto const depth = (id == beginId) ? 0 : determineDepth(id);
             layers[depth].push_back(node.get());
             auto const nodeWidth = ed::GetNodeSize(node->getId()).x;
             layersWidth[depth] = std::max(layersWidth[depth], nodeWidth);
@@ -946,8 +979,6 @@ namespace gladius::ui
         }
 
         // Step 3: Assign Coordinates
-
-        bool success = true;
         for (auto & [depth, nodes] : layers)
         {
             // substract distance from every second layer to create a zigzag pattern

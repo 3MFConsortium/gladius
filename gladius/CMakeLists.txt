@@ -126,7 +126,7 @@ find_package(ZLIB REQUIRED)
 find_package(lodepng CONFIG REQUIRED)
 find_package(pugixml CONFIG REQUIRED)
 find_package(lib3mf CONFIG REQUIRED)
-find_package(minizip CONFIG REQUIRED)
+find_package(unofficial-minizip CONFIG REQUIRED)
 if (ENABLE_TRACY)
   find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -158,6 +158,15 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(GLADIUSLOCATION GladiusLib)
 message("GLADIUSLOCATION=${GLADIUSLOCATION}")
 
+# Determine the installation directories based on the platform
+if(WIN32)
+    set(INSTALL_PREFIX .)
+else()
+    set(INSTALL_PREFIX /opt/gladius/${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
+    set(INSTALL_BIN_DIR ${INSTALL_PREFIX})
+    set(SYMLINK_BIN_DIR /usr/bin)
+endif()
+
 add_subdirectory(tests)
 add_subdirectory(src)
 add_subdirectory(src/compute)
@@ -181,32 +190,44 @@ configure_file(${CMAKE_SOURCE_DIR}/src/gladius.ico src/gladius.ico COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/src/gladius.rc src/gladius.rc COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/src/gladius.rc.res gladius.rc.res COPYONLY)
 
-configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py COPYONLY)
-configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/ToyTrack.py src/api/GladiusLib_component/Examples/Python/ToyTrack.py COPYONLY)
-configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Bindings/Python/GladiusLib.py src/api/GladiusLib_component/Examples/Python/GladiusLib.py COPYONLY)
+# currently out of date
+# configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py src/api/GladiusLib_component/Examples/Python/GladiusLib_Example.py COPYONLY)
+# configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Examples/Python/ToyTrack.py src/api/GladiusLib_component/Examples/Python/ToyTrack.py COPYONLY)
+# configure_file(${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Bindings/Python/GladiusLib.py src/api/GladiusLib_component/Examples/Python/GladiusLib.py COPYONLY)
 
-#configure_file(${CMAKE_SOURCE_DIR}/LICENSE src/copyright/LICENSE COPYONLY)
-#configure_file(${CMAKE_SOURCE_DIR}/url src/copyright/url COPYONLY)
 
 file(COPY examples DESTINATION "src/")
 
 file(COPY components/licenses DESTINATION "src/")
 
 
-install(DIRECTORY components/fonts/fontawesome-free-5.14.0-web/ DESTINATION misc/fonts/)
-install(DIRECTORY components/licenses DESTINATION .)
-install(FILES src/imgui.ini DESTINATION .)
-install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION .)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION documentation)
 
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION examples/)
+# Install fonts
+install(DIRECTORY components/fonts/fontawesome-free-5.14.0-web/ DESTINATION ${INSTALL_PREFIX}/misc/fonts/)
 
+# Install licenses
+install(DIRECTORY components/licenses DESTINATION ${INSTALL_PREFIX}/doc/licenses/)
+
+# Install imgui.ini
+install(FILES src/imgui.ini DESTINATION ${INSTALL_PREFIX})
+
+# Install icon
+install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${INSTALL_PREFIX}/share/pixmaps/)
+
+# Install documentation - not yet available
+# install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_PREFIX}/share/doc/)
+
+# Install examples
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION ${INSTALL_PREFIX}/examples/)
+
+# Install binaries and libraries
 install(
     DIRECTORY ${PROJECT_BINARY_DIR}/src/
-    DESTINATION .
+    DESTINATION ${INSTALL_PREFIX}
     FILES_MATCHING 
     PATTERN "*.dll"
+    PATTERN "*.so.*"
     PATTERN "*.so"
     PATTERN "*.ttf"
     PATTERN "*.rtf"
@@ -222,6 +243,11 @@ install(
     PATTERN "io" EXCLUDE
     PATTERN "kernel" EXCLUDE
 )
+
+# Create a symbolic link in /usr/bin
+if(UNIX)
+    install(CODE "execute_process(COMMAND ln -sf ${INSTALL_BIN_DIR}/gladius ${SYMLINK_BIN_DIR}/gladius)")
+endif()
 
 
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Gladius is a framework for processing 3MF files using the Volumetric and Implicit Extension.")

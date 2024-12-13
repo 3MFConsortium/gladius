@@ -53,4 +53,4 @@ target_include_directories(gladiuslib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stub)
 target_include_directories(gladiuslib PUBLIC ${AdditionalIncludes} ${STB_INCLUDE_DIRS})
 target_link_libraries(gladiuslib PUBLIC gladius_lib)
 
-install(TARGETS gladiuslib DESTINATION /)
+install(TARGETS gladiuslib DESTINATION ${INSTALL_PREFIX}/)
