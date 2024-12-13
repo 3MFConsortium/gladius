@@ -193,18 +193,46 @@ file(COPY examples DESTINATION "src/")
 file(COPY components/licenses DESTINATION "src/")
 
 
-install(DIRECTORY components/fonts/fontawesome-free-5.14.0-web/ DESTINATION misc/fonts/)
-install(DIRECTORY components/licenses DESTINATION .)
-install(FILES src/imgui.ini DESTINATION .)
-install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION .)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION documentation)
+# Determine the installation directories based on the platform
+if(WIN32)
+    set(INSTALL_BIN_DIR .)
+    set(INSTALL_LIB_DIR .)
+    set(INSTALL_INCLUDE_DIR .)
+    set(INSTALL_SHARE_DIR .)
+    set(INSTALL_DOC_DIR doc)  
+    set(INSTALL_ETC_DIR .)
+    set(INSTALL_PIXMAPS_DIR .)
+else()
+    set(INSTALL_BIN_DIR bin)
+    set(INSTALL_LIB_DIR lib/gladius)
+    set(INSTALL_INCLUDE_DIR include/gladius)
+    set(INSTALL_SHARE_DIR share/gladius)
+    set(INSTALL_DOC_DIR share/doc/gladius)
+    set(INSTALL_ETC_DIR etc/gladius)
+endif()
 
+# Install fonts
+install(DIRECTORY components/fonts/fontawesome-free-5.14.0-web/ DESTINATION ${INSTALL_SHARE_DIR}/fonts/)
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION examples/)
+# Install licenses
+install(DIRECTORY components/licenses DESTINATION ${INSTALL_DOC_DIR}/licenses/)
 
+# Install imgui.ini
+install(FILES src/imgui.ini DESTINATION ${INSTALL_ETC_DIR}/)
+
+# Install icon
+install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${INSTALL_PIXMAPS_DIR}/)
+
+# Install documentation
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_DOC_DIR}/)
+
+# Install examples
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION ${INSTALL_SHARE_DIR}/examples/)
+
+# Install binaries and libraries
 install(
     DIRECTORY ${PROJECT_BINARY_DIR}/src/
-    DESTINATION .
+    DESTINATION ${INSTALL_LIB_DIR}
     FILES_MATCHING 
     PATTERN "*.dll"
     PATTERN "*.so"
