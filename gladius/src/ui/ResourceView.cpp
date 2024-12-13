@@ -42,8 +42,6 @@ namespace gladius::ui
                 addMesh(document);
             }
 
-            ImGui::SameLine();
-
             if (ImGui::Button("add current bounding box"))
             {
                 document->addBoundingBoxAsMesh();
