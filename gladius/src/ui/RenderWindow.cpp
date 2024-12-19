@@ -83,10 +83,8 @@ namespace gladius::ui
                   ImGui::CheckboxFlags("Cut Off Object", &renderingFlags, RF_CUT_OFF_OBJECT);
                 flagsChanged |= ImGui::CheckboxFlags("Show Field", &renderingFlags, RF_SHOW_FIELD);
                 flagsChanged |= ImGui::CheckboxFlags("Show Stack", &renderingFlags, RF_SHOW_STACK);
-                flagsChanged |= ImGui::CheckboxFlags("Show Coordinate System",
-                                                     &renderingFlags,
-                                                     RF_SHOW_COORDINATE_SYSTEM);
-
+                flagsChanged |= ImGui::CheckboxFlags(
+                  "Show Coordinate System", &renderingFlags, RF_SHOW_COORDINATE_SYSTEM);
 
                 ImGui::EndMenu();
             }
@@ -443,7 +441,8 @@ namespace gladius::ui
         {
             m_view->startAnimationMode();
             state.isRendering = false;
-            state.renderQualityWhileMoving = 1.0f;
+            state.renderQualityWhileMoving = 0.1f;
+            state.renderingStepSize = 1;
             invalidateViewDuetoModelUpdate();
             return;
         }
@@ -505,12 +504,25 @@ namespace gladius::ui
             invalidateView();
         }
 
-        m_core->setLowResPreviewResolution(
-          static_cast<int>(
-            std::clamp(m_renderWindowSize_px.x * state.renderQualityWhileMoving, 1.f, 16000.f)),
-          static_cast<int>(
-            std::clamp(m_renderWindowSize_px.y * state.renderQualityWhileMoving, 1.f, 16000.f)));
+        bool previewResolutionChanged = false;
 
+        std::pair<int, int> const lowResPreviewResolution = m_core->getLowResPreviewResolution();
+
+        int newWidth = static_cast<int>(
+          std::clamp(m_renderWindowSize_px.x * state.renderQualityWhileMoving, 1.f, 16000.f));
+        int newHeight = static_cast<int>(
+          std::clamp(m_renderWindowSize_px.y * state.renderQualityWhileMoving, 1.f, 16000.f));
+
+        float widthChangePercent = std::abs(newWidth - lowResPreviewResolution.first) /
+                                   static_cast<float>(lowResPreviewResolution.first) * 100.0f;
+        float heightChangePercent = std::abs(newHeight - lowResPreviewResolution.second) /
+                                    static_cast<float>(lowResPreviewResolution.second) * 100.0f;
+
+        if (widthChangePercent > 20.0f || heightChangePercent > 20.0f)
+        {
+            m_core->setLowResPreviewResolution(newWidth, newHeight);
+            previewResolutionChanged = true;
+        }
         state.isRendering = true;
         auto const renderFrame = [&]()
         {
@@ -521,28 +533,39 @@ namespace gladius::ui
             img->unbind();
         };
 
+        // PID controller parameters
+        float constexpr kp = 0.00005f;  // Proportional gain
+        float constexpr ki = 0.000005f;  // Integral gain
+        float constexpr kd = 0.000001f; // Derivative gain
+
         auto const executionDuration_ms =
           measure<std::chrono::milliseconds>::execution(renderFrame);
 
-        auto constexpr previewTargetRenderTime_ms = 15;
         auto constexpr progressiveTargetRenderTime_ms = 50;
         auto constexpr tolerance_ms = 5;
-        if (state.isMoving || m_core->isAnyCompilationInProgress())
+        auto constexpr targetFrameTime_ms = 50; // Target frame time for 60 FPS
+        // Calculate the error
+        float error = targetFrameTime_ms - executionDuration_ms;
+        if (!previewResolutionChanged && (state.isMoving || m_core->isAnyCompilationInProgress()) &&
+            executionDuration_ms > 0 && fabs(error) > tolerance_ms)
         {
-            if (executionDuration_ms > previewTargetRenderTime_ms + tolerance_ms)
-            {
-                state.renderQualityWhileMoving *= 0.8f;
-            }
+            state.fpsIntegral *= 0.9f;
+            // Update integral and derivative
+            state.fpsIntegral += error;
 
-            if (executionDuration_ms < previewTargetRenderTime_ms - tolerance_ms)
-            {
-                state.renderQualityWhileMoving *= 1.5f;
-            }
+            float derivative = error - state.fpsPreviousError;
 
+            // Calculate the adjustment using PID formula
+            float adjustment = kp * error + ki * state.fpsIntegral + kd * derivative;
+
+            // Adjust render quality
+            state.renderQualityWhileMoving += adjustment;
+
+            // Clamp the render quality to valid range
             state.renderQualityWhileMoving =
-              std::clamp(state.renderQualityWhileMoving, 0.05f, state.renderQuality);
+               std::clamp(state.renderQualityWhileMoving, 0.05f, state.renderQuality);
         }
-        else
+        if (!state.isMoving && !m_core->isAnyCompilationInProgress())
         {
             if (executionDuration_ms > progressiveTargetRenderTime_ms + tolerance_ms)
             {
@@ -580,7 +603,12 @@ namespace gladius::ui
         auto const minZ =
           m_core->getBoundingBox().has_value() ? m_core->getBoundingBox()->min.z : 0.f;
         const bool zChanged = ImGui::VSliderFloat(
-          " ", ImVec2(15, m_contentAreaMax.y - m_contentAreaMin.y - 10.f * m_uiScale), &z, minZ, maxZ, " ");
+          " ",
+          ImVec2(15, m_contentAreaMax.y - m_contentAreaMin.y - 10.f * m_uiScale),
+          &z,
+          minZ,
+          maxZ,
+          " ");
 
         m_dirty = m_dirty || zChanged;
         m_renderWindowState.isMoving = m_renderWindowState.isMoving || zChanged;

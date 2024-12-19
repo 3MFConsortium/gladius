@@ -16,11 +16,15 @@ namespace gladius::ui
     {
         TimeStamp timeLastMove = std::chrono::system_clock::now();
         float renderQuality = 1.2f;
-        float renderQualityWhileMoving = 0.2f;
+        float renderQualityWhileMoving = 0.02f;
         bool isRendering = false;
         bool isMoving = false;
         size_t currentLine = 0;
         size_t renderingStepSize = 5;
+
+        
+        float fpsPreviousError = 0.0f;
+        float fpsIntegral = 0.0f;
     };
 
     class RenderWindow

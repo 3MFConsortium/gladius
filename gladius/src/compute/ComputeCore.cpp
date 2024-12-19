@@ -935,6 +935,15 @@ namespace gladius
         return true;
     }
 
+    std::pair<int, int> ComputeCore::getLowResPreviewResolution() const
+    {
+        if (!m_lowResPreviewImage)
+        {
+            return {0, 0};
+        }
+        return {m_lowResPreviewImage->getWidth(), m_lowResPreviewImage->getHeight()};
+    }
+
     Primitives & ComputeCore::getPrimitives() const
     {
         return *m_primitives;
