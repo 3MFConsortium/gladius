@@ -215,7 +215,7 @@ namespace gladius::ui
             }
             ImGui::EndGroup();
             frameOverlay(ImVec4(1.0f, 1.0f, 0.0f, 0.1f));
-            
+
             resourceOutline();
 
             ImGui::BeginGroup();
@@ -226,7 +226,6 @@ namespace gladius::ui
             }
             ImGui::EndGroup();
             frameOverlay(ImVec4(0.0f, 0.5f, 1.0f, 0.1f));
-
 
             ImGui::TreePop();
         }
@@ -644,6 +643,7 @@ namespace gladius::ui
                 m_nodeViewVisitor.setModelEditor(this);
                 if (m_currentModel)
                 {
+                    m_nodeWidthsInitialized = m_nodeViewVisitor.columnWidthsAreInitialized();
                     m_currentModel->visitNodes(m_nodeViewVisitor);
                 }
                 onCreateNode();
@@ -685,7 +685,7 @@ namespace gladius::ui
             std::cerr << e.what() << "\n";
         }
 
-        if (!m_currentModel->hasBeenLayouted())
+        if (!m_currentModel->hasBeenLayouted() && m_nodeWidthsInitialized)
         {
             autoLayout(m_nodeDistance);
         }
@@ -947,6 +947,11 @@ namespace gladius::ui
     void ModelEditor::autoLayout(float distance)
     {
         if (currentModel() == nullptr)
+        {
+            return;
+        }
+
+        if (!m_nodeWidthsInitialized)
         {
             return;
         }

@@ -103,6 +103,7 @@ namespace gladius::ui
         bool m_nodePositionsNeedUpdate{false};
         float m_nodeDistance = 50.f;
         float m_scale = 0.5f;
+        bool m_nodeWidthsInitialized = false;
 
         std::string m_newModelName{"New_Part"};
         bool m_showAddModel{false};

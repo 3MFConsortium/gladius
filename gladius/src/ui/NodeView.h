@@ -5,12 +5,17 @@
 
 #include "imgui.h"
 #include <map>
+#include <optional>
+#include <typeindex>
+#include <typeinfo>
+#include <unordered_map>
 
 namespace gladius::ui
 {
     class ModelEditor;
 
     std::string typeToString(std::type_index typeIndex);
+    using ColumnWidths = std::array<float, 8>;
 
     class NodeView : public nodes::Visitor
     {
@@ -42,6 +47,8 @@ namespace gladius::ui
 
         void setUiScale(float scale);
         [[nodiscard]] float getUiScale() const;
+
+        bool columnWidthsAreInitialized() const;
 
       private:
         void show(nodes::NodeBase & node);
@@ -109,5 +116,9 @@ namespace gladius::ui
         NodeTypeToColor m_nodeTypeToColor;
 
         float m_uiScale = 1.0f;
+
+        std::unordered_map<nodes::NodeId, ColumnWidths> m_columnWidths;
+
+        ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };
 } // namespace gladius::ui
