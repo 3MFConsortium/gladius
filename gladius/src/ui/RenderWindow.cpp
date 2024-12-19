@@ -442,7 +442,7 @@ namespace gladius::ui
             m_view->startAnimationMode();
             state.isRendering = false;
             state.renderQualityWhileMoving = 0.1f;
-            state.renderingStepSize = 1;
+            
             invalidateViewDuetoModelUpdate();
             return;
         }
@@ -534,20 +534,20 @@ namespace gladius::ui
         };
 
         // PID controller parameters
-        float constexpr kp = 0.00005f;  // Proportional gain
-        float constexpr ki = 0.000005f;  // Integral gain
+        float constexpr kp = 0.0001f;   // Proportional gain
+        float constexpr ki = 0.00001f;  // Integral gain
         float constexpr kd = 0.000001f; // Derivative gain
 
         auto const executionDuration_ms =
           measure<std::chrono::milliseconds>::execution(renderFrame);
 
-        auto constexpr progressiveTargetRenderTime_ms = 50;
-        auto constexpr tolerance_ms = 5;
+        auto constexpr progressiveTargetRenderTime_ms = 100;
+        auto constexpr tolerance_ms = 1;
         auto constexpr targetFrameTime_ms = 50; // Target frame time for 60 FPS
         // Calculate the error
         float error = targetFrameTime_ms - executionDuration_ms;
         if (!previewResolutionChanged && (state.isMoving || m_core->isAnyCompilationInProgress()) &&
-            executionDuration_ms > 0 && fabs(error) > tolerance_ms)
+            executionDuration_ms > 0 && fabs(error) > 0)
         {
             state.fpsIntegral *= 0.9f;
             // Update integral and derivative
@@ -563,9 +563,9 @@ namespace gladius::ui
 
             // Clamp the render quality to valid range
             state.renderQualityWhileMoving =
-               std::clamp(state.renderQualityWhileMoving, 0.05f, state.renderQuality);
+              std::clamp(state.renderQualityWhileMoving, 0.05f, state.renderQuality);
         }
-        if (!state.isMoving && !m_core->isAnyCompilationInProgress())
+        if (!state.isMoving && !m_core->isAnyCompilationInProgress() && executionDuration_ms > 0)
         {
             if (executionDuration_ms > progressiveTargetRenderTime_ms + tolerance_ms)
             {
@@ -579,7 +579,7 @@ namespace gladius::ui
             if (executionDuration_ms < progressiveTargetRenderTime_ms - tolerance_ms)
             {
                 state.renderingStepSize =
-                  std::clamp(static_cast<size_t>(state.renderingStepSize * 1.5 + 1),
+                  std::clamp(static_cast<size_t>(state.renderingStepSize * 2. + 1),
                              size_t{1},
                              m_core->getResultImage()->getHeight());
             }
