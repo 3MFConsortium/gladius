@@ -41,7 +41,7 @@ set(DEPENDENCIES
     pugixml::pugixml
     ${OPENMESH_LIBRARIES}
     lib3mf::lib3mf
-    minizip::minizip
+    unofficial::minizip::minizip
     imgui::imgui
     unofficial::imgui-node-editor::imgui-node-editor
 )
@@ -60,4 +60,4 @@ endif()
 target_link_libraries(${BINARY}_lib PUBLIC ${DEPENDENCIES})
 target_link_libraries(${BINARY} PUBLIC ${BINARY}_lib)
 
-install(TARGETS ${BINARY} RUNTIME DESTINATION .)
+install(TARGETS ${BINARY} RUNTIME DESTINATION ${INSTALL_PREFIX}/)
