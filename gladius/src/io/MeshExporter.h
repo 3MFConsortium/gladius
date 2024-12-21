@@ -39,9 +39,9 @@ namespace gladius::vdb
         void finalize() override;
         [[nodiscard]] double getProgress() const override;
 
-        void finalizeExportVdb() const;
-        void finalizeExportNanoVdb() const;
-        void finalizeExportSTL(ComputeCore & core) const;
+        void finalizeExportVdb();
+        void finalizeExportNanoVdb();
+        void finalizeExportSTL(ComputeCore & core) ;
 
         void setQualityLevel(size_t qualityLevel);
 
@@ -50,12 +50,13 @@ namespace gladius::vdb
         std::filesystem::path m_fileName;
         std::ofstream m_file;
         openvdb::FloatGrid::Ptr m_grid;
-        float m_layerIncrement_mm = 0.1f;
+        double m_layerIncrement_mm = 0.1f;
         float m_bandwidth_mm = m_layerIncrement_mm * 2.f;
         size_t m_qualityLevel = 2; // 3 = best quality, but insane high memory usage
         double m_progress = 0.;
-        float m_startHeight_mm = 0.f;
-        float m_endHeight_mm = 0.f;
+        double m_startHeight_mm = 0.;
+        double m_endHeight_mm = 0.;
+        double m_currentHeight_mm = 0.;
     };
 
 }

@@ -332,6 +332,11 @@ namespace gladius::vdb
         return mesh;
     }
 
+    double alignToLayer(double value, double increment)
+    {
+        return std::floor(value / increment) * increment;
+    }
+
     void MeshExporter::beginExport(const std::filesystem::path & fileName, ComputeCore & generator)
     {
         m_fileName = fileName;
@@ -343,8 +348,12 @@ namespace gladius::vdb
         const auto bb = generator.getBoundingBox();
         generator.updateClippingAreaWithPadding();
 
-        m_startHeight_mm = bb->min.z;
-        m_endHeight_mm = bb->max.z;
+        m_startHeight_mm = alignToLayer(bb->min.z - m_layerIncrement_mm, m_layerIncrement_mm);
+        m_endHeight_mm = alignToLayer(bb->max.z + m_layerIncrement_mm, m_layerIncrement_mm);
+        m_currentHeight_mm = m_startHeight_mm;
+        m_currentHeight_mm = alignToLayer(m_currentHeight_mm, m_layerIncrement_mm);
+
+        const auto z = static_cast<int>(std::floor(m_currentHeight_mm));
 
         generator.getResourceContext().requestDistanceMaps();
 
@@ -354,7 +363,7 @@ namespace gladius::vdb
                               generator.getResourceContext().getClippingArea().x;
         const auto voxelSize = width_mm / static_cast<float>(resX);
         setLayerIncrement(voxelSize);
-        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
+        generator.setSliceHeight(m_currentHeight_mm);
 
         std::cout << "Voxel size = " << voxelSize << "\n";
 
@@ -374,8 +383,9 @@ namespace gladius::vdb
 
         openvdb::FloatGrid::Accessor accessor = m_grid->getAccessor();
 
-        const auto z =
-          static_cast<int>(std::floor(generator.getSliceHeight() / m_layerIncrement_mm));
+        const auto z = static_cast<int>(std::floor(m_currentHeight_mm / m_layerIncrement_mm));
+
+        m_currentHeight_mm = alignToLayer(m_currentHeight_mm, m_layerIncrement_mm);
 
         for (int y = 0; y < static_cast<int>(distmap.getHeight()); ++y)
         {
@@ -390,19 +400,22 @@ namespace gladius::vdb
         }
 
         m_grid->pruneGrid();
+        m_currentHeight_mm += m_layerIncrement_mm;
+        m_currentHeight_mm = alignToLayer(m_currentHeight_mm, m_layerIncrement_mm);
 
-        generator.setSliceHeight(generator.getSliceHeight() + m_layerIncrement_mm);
+        generator.setSliceHeight(m_currentHeight_mm);
 
-        m_progress = static_cast<double>((generator.getSliceHeight() - m_startHeight_mm) /
-                                         (m_endHeight_mm - m_startHeight_mm));
+        m_progress =
+          ((generator.getSliceHeight() - m_startHeight_mm) / (m_endHeight_mm - m_startHeight_mm));
         return generator.getSliceHeight() < generator.getBoundingBox()->max.z + m_layerIncrement_mm;
     }
 
     void MeshExporter::finalize()
     {
+        m_grid.reset();
     }
 
-    void MeshExporter::finalizeExportVdb() const
+    void MeshExporter::finalizeExportVdb()
     {
         openvdb::io::File file(m_fileName.string());
         openvdb::GridPtrVec grids;
@@ -411,16 +424,18 @@ namespace gladius::vdb
 
         file.write(grids);
         file.close();
+        m_grid.reset();
     }
 
-    void MeshExporter::finalizeExportSTL(ComputeCore & core) const
+    void MeshExporter::finalizeExportSTL(ComputeCore & core)
     {
         auto mesh = gridToMesh(m_grid, core.getComputeContext());
         // core.adoptVertexOfMeshToSurface(mesh.getVertices());
         exportMeshToSTL(mesh, m_fileName);
+        m_grid.reset();
     }
 
-    void MeshExporter::finalizeExportNanoVdb() const
+    void MeshExporter::finalizeExportNanoVdb()
     {
         try
         {
@@ -434,6 +449,7 @@ namespace gladius::vdb
             std::cerr << "Writing of nanovdb failed with the following exception:" << e.what()
                       << "\n";
         }
+        m_grid.reset();
     }
 
     double MeshExporter::getProgress() const
