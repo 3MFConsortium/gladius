@@ -213,7 +213,7 @@ namespace gladius
 
                 if (varParam == nullptr)
                 {
-                    throw std::runtime_error("Invalid parameter type");
+                    return false;
                 }
 
                 if (varParam && !varParam->getSource().has_value())
