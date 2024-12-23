@@ -2,23 +2,23 @@
 
 #include "NodeView.h"
 
+#include "Assembly.h"
+#include "FileChooser.h"
 #include "InputList.h"
+#include "LinkColors.h"
 #include "ModelEditor.h"
 #include "Parameter.h"
 #include "Style.h"
 #include "Widgets.h"
-#include "imguinodeeditor.h"
-
-#include <components/IconFontCppHeaders/IconsFontAwesome5.h>
-#include <filesystem>
-
-#include <imgui_stdlib.h>
-
-#include "Assembly.h"
-#include "FileChooser.h"
-#include "imgui.h"
 #include "nodesfwd.h"
 
+#include "imguinodeeditor.h"
+#include <components/IconFontCppHeaders/IconsFontAwesome5.h>
+
+#include <imgui.h>
+#include <imgui_stdlib.h>
+
+#include <filesystem>
 #include <fmt/format.h>
 #include <set>
 
@@ -26,17 +26,6 @@ namespace ed = ax::NodeEditor;
 
 namespace gladius::ui
 {
-    struct LinkColors
-    {
-        static constexpr ImVec4 ColorFloat = {0.6f, 0.6f, 1.f, 1.f};
-        static constexpr ImVec4 ColorFloat3 = {0.6f, 1.f, 0.6f, 1.f};
-        static constexpr ImVec4 ColorMatrix = {1.f, 0.6f, 0.6f, 1.f};
-        static constexpr ImVec4 ColorResource = {1.f, 1.f, 0.6f, 1.f};
-        static constexpr ImVec4 ColorString = {1.f, 0.6f, 1.f, 1.f};
-        static constexpr ImVec4 ColorInt = {0.6f, 1.f, 1.f, 1.f};
-        static constexpr ImVec4 ColorInvalid = {1.f, 0.f, 0.f, 1.f};
-    };
-
     using namespace nodes;
 
     std::string typeToString(std::type_index typeIndex)
@@ -783,7 +772,7 @@ namespace gladius::ui
                   return;
               }
 
-              const auto newSource = inputMenu(*model, parameter.second.getId());
+              const auto newSource = inputMenu(*model, parameter.second, parameter.first);
               if (newSource.has_value())
               {
                   model->addLink(newSource.value(), parameter.second.getId());
@@ -1071,7 +1060,7 @@ namespace gladius::ui
         return it->second;
     }
 
-     bool NodeView::columnWidthsAreInitialized() const
+    bool NodeView::columnWidthsAreInitialized() const
     {
         return !m_columnWidths.empty();
     }

@@ -130,6 +130,11 @@ namespace gladius::nodes
             return 0.f;
         }
 
+        [[nodiscard]] Port & getValueOutputPort()
+        {
+            return m_outputs.at(FieldNames::Value);
+        }
+
         // name does not match, but it is called when the model is updated
         void updateMemoryOffsets(GeneratorContext &) override
         {
@@ -190,6 +195,11 @@ namespace gladius::nodes
             {
                 param.second.setInputSourceRequired(false);
             }
+        }
+
+        [[nodiscard]] Port & getVectorOutputPort()
+        {
+            return m_outputs.at(FieldNames::Vector);
         }
     };
 
@@ -258,6 +268,11 @@ namespace gladius::nodes
             {
                 param.second.setInputSourceRequired(false);
             }
+        }
+
+        [[nodiscard]] Port & getMatrixOutputPort()
+        {
+            return m_outputs.at(FieldNames::Matrix);
         }
     };
 

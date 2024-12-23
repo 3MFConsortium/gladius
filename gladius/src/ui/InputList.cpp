@@ -1,13 +1,17 @@
 #include "InputList.h"
 #include "Style.h"
+#include "LinkColors.h"
 #include "graph/GraphAlgorithms.h"
 #include <imguinodeeditor.h>
 
+namespace ed = ax::NodeEditor;
+
 namespace gladius::ui
 {
-    OptionalPortId inputMenu(nodes::Model & nodes, nodes::ParameterId targetId)
+    OptionalPortId inputMenu(nodes::Model & nodes, gladius::nodes::VariantParameter const & targetParameter, std::string const & targetName)
     {
         const auto & ports = nodes.getPortRegistry();
+        nodes::ParameterId targetId = targetParameter.getId();
 
         const auto targetIter = nodes.getParameterRegistry().find(targetId);
         if (targetIter == std::end(nodes.getParameterRegistry()))
@@ -18,8 +22,66 @@ namespace gladius::ui
         const auto isSuccessor = [&](nodes::NodeId nodeId)
         { return isDependingOn(nodes.getGraph(), nodeId, targetIter->second->getParentId()); };
 
+        auto const currentMousePos = ImGui::GetMousePos();
+        auto posOnCanvas = ed::ScreenToCanvas(currentMousePos);
+        posOnCanvas.x -= 400;
+
+
         if (ImGui::BeginPopup("Ports"))
         {
+            // Button for creating a new node of (Constant, Vector, Matrix, Resource) depending on the type of the target parameter
+            // and use the new node as input
+            if (targetParameter.getTypeIndex() == nodes::ParameterTypeIndex::Float)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, LinkColors::DarkColorFloat); // Set button color to blue
+                if (ImGui::Button("New Scalar Node"))
+                {
+                    nodes::ConstantScalar * newNode = nodes.create<nodes::ConstantScalar>();
+                    newNode->setDisplayName(targetName);
+                    ed::SetNodePosition(newNode->getId(), posOnCanvas);
+
+                    ImGui::CloseCurrentPopup();
+                    ImGui::EndPopup();
+                    return {newNode->getValueOutputPort().getId()};
+                    
+                }
+                ImGui::PopStyleColor();
+            }
+
+            if (targetParameter.getTypeIndex() == nodes::ParameterTypeIndex::Float3)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, LinkColors::DarkColorFloat3); // Set button color to green
+                if (ImGui::Button("New Vector Node"))
+                {
+                    nodes::ConstantVector * newNode = nodes.create<nodes::ConstantVector>();
+                    newNode->setDisplayName(targetName);
+                    ed::SetNodePosition(newNode->getId(), posOnCanvas);
+
+                    ImGui::CloseCurrentPopup();
+                    ImGui::EndPopup();
+                    return {newNode->getVectorOutputPort().getId()};
+                }
+                ImGui::PopStyleColor();
+            }
+
+            if (targetParameter.getTypeIndex() == nodes::ParameterTypeIndex::Matrix4)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, LinkColors::DarkColorMatrix); // Set button color to red
+                if (ImGui::Button("New Matrix Node"))
+                {
+                    nodes::ConstantMatrix * newNode = nodes.create<nodes::ConstantMatrix>();
+                    newNode->setDisplayName(targetName);
+                    ed::SetNodePosition(newNode->getId(), posOnCanvas);
+
+                    ImGui::CloseCurrentPopup();
+                    ImGui::EndPopup();
+                    return {newNode->getMatrixOutputPort().getId()};
+                }
+                ImGui::PopStyleColor();
+            }
+           
+
+
             for (const auto & port : ports)
             {
                 auto sourceNode = nodes.getNode(port.second->getParentId());
