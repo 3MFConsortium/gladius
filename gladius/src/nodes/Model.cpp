@@ -502,7 +502,7 @@ namespace gladius::nodes
 
         if (!skipCheck)
         {
-            updateTypes();
+           return updateTypes();
         }
 
         return true;

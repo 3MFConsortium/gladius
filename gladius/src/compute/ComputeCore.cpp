@@ -646,27 +646,6 @@ namespace gladius
             return;
         }
 
-        nodes::Validator validator;
-
-        if (!validator.validate(*assembly))
-        {
-            for (auto const & error : validator.getErrors())
-            {
-                logMsg(fmt::format("{}: Review parameter {} of node {} in model {}",
-                                   error.message,
-                                   error.parameter,
-                                   error.node,
-                                   error.model));
-            }
-            return;
-        }
-
-        if (!assembly->isValid())
-        {
-            logMsg("Assembly is not valid");
-            return;
-        }
-
         m_boundingBox.reset();
         invalidatePreCompSdf();
 
