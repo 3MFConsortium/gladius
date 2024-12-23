@@ -484,11 +484,6 @@ namespace gladius::ui
             case ContentType::Length:
             {
                 std::string formatString{"%.3f "};
-                if (parameter.first == FieldNames::RadPerMM)
-                {
-                    increment = 0.0001f;
-                    formatString = "%.6f rad/mm";
-                }
                 changed = ui::floatEdit(parameter.first, *pval);
                 // changed = ImGui::DragFloat(parameter.first.c_str(), pval, increment);
                 break;
@@ -752,60 +747,6 @@ namespace gladius::ui
         if (m_modelEditor == nullptr)
         {
             throw std::runtime_error("NodeView: ModelEditor has to be set");
-        }
-
-        if (parameter.second.getContentType() == ContentType::Part && (m_assembly != nullptr) &&
-            (m_modelEditor != nullptr))
-        {
-            if (const auto name = std::get_if<std::string>(&val))
-            {
-                val = *name;
-                ImGui::SameLine();
-                ImGui::PushItemWidth(200 * m_uiScale);
-                if (ImGui::Button(name->c_str()))
-                {
-                    m_showContextMenu = true;
-                    m_modelEditor->showPopupMenu(
-                      [&]()
-                      {
-                          if (m_showContextMenu)
-                          {
-                              ImGui::OpenPopup("Parts");
-                              m_showContextMenu = false;
-                          }
-
-                          if (ImGui::BeginPopup("Parts"))
-                          {
-                              auto const selfId = m_currentModel->getResourceId();
-
-                              for (auto & [id, model] : m_assembly->getFunctions())
-                              {
-                                  if (m_currentModel &&
-                                      id != selfId) // TODO create a dependency graph for all
-                                                    // sub models and check which ones can be
-                                                    // used without circular dependency
-                                  {
-                                      if (ImGui::Button(model->getDisplayName()
-                                                          .value_or(fmt::format("# {}", id))
-                                                          .c_str()))
-                                      {
-                                          m_modelEditor->currentModel()->updatePartArguments(
-                                            node.getId(), *model, parameter.first);
-                                          m_parameterChanged = true;
-                                          m_modelEditor->markModelAsModified();
-                                          m_modelEditor->closePopupMenu();
-                                      }
-                                  }
-                              }
-                              ImGui::EndPopup();
-                          }
-                      });
-                }
-
-                ImGui::PopItemWidth();
-            }
-            ImGui::Indent(-20 * m_uiScale);
-            return;
         }
 
         if (viewString(node, parameter, val))
