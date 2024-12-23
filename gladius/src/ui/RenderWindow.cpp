@@ -522,7 +522,12 @@ namespace gladius::ui
         float heightChangePercent = std::abs(newHeight - lowResPreviewResolution.second) /
                                     static_cast<float>(lowResPreviewResolution.second) * 100.0f;
 
-        if (widthChangePercent > 20.0f || heightChangePercent > 20.0f)
+        float currentAspectRatio =
+          static_cast<float>(lowResPreviewResolution.first) / lowResPreviewResolution.second;
+        float newAspectRatio = static_cast<float>(newWidth) / newHeight;
+
+        if (widthChangePercent > 20.0f || heightChangePercent > 20.0f ||
+            std::abs(currentAspectRatio - newAspectRatio) > 0.01f)
         {
             m_core->setLowResPreviewResolution(newWidth, newHeight);
             previewResolutionChanged = true;
