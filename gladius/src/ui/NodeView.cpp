@@ -757,39 +757,6 @@ namespace gladius::ui
 
         if (const auto resKey = std::get_if<ResourceKey>(&val))
         {
-            // TODO: create proper Resource Selection Widget
-
-            if (resKey->getFilename().has_value())
-            {
-                auto name = resKey->getFilename().value().string();
-
-                ImGui::InputText("", &name);
-
-                ImGui::SameLine();
-                const auto baseDir = m_assembly->getFilename().remove_filename();
-                if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN)))
-                {
-
-                    const auto queriedFilename = queryLoadFilename({{"*.stl"}}, baseDir);
-
-                    if (queriedFilename && queriedFilename->has_filename())
-                    {
-                        const std::filesystem::path filename{queriedFilename.value()};
-
-                        name = filename.string();
-                        m_modelEditor->invalidatePrimitiveData();
-                        m_modelEditor->markModelAsModified();
-                        m_parameterChanged = true;
-                        val = ResourceKey{filename};
-                    }
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Make relative"))
-                {
-                    const std::filesystem::path filename{name};
-                    const auto relativePath = relative(filename, baseDir);
-                }
-            }
             if (resKey->getResourceId().has_value())
             {
                 ImGui::TextUnformatted(resKey->getDisplayName().c_str());
