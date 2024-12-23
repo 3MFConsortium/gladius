@@ -1,12 +1,12 @@
 ﻿#pragma once
 
-#include <set>
+#include <unordered_set>
 #include <vector>
 
 namespace gladius::nodes::graph
 {
     using Identifier = int;
-    using DependencySet = std::set<Identifier>;
+    using DependencySet = std::unordered_set<Identifier>;
     using VertexList = std::vector<Identifier>;
 
     class IDirectedGraph

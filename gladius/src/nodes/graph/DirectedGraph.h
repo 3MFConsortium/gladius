@@ -24,7 +24,7 @@ namespace gladius::nodes::graph
         std::vector<bool> m_graphData;
         std::size_t m_size;
 
-        DependencySet m_vertices; // Possible performance improvement: We could try out a std::set
+        DependencySet m_vertices;
 
         using PredecessorList = std::vector<std::size_t>;
         std::vector<PredecessorList> m_predecessors;
