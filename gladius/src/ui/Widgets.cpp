@@ -175,6 +175,8 @@ namespace gladius::ui
         int digitCount = (value != 0.0f) ? (int) log10(fabs(value)) + 3 : 3;
         float const increment = std::max(powf(10, round(log10(fabs(value)))) * 0.01f, 0.1f);
         std::string format = "%." + std::to_string(digitCount) + "f";
+
+        ImGui::SetNextItemWidth(100.f);
         bool changed = ImGui::DragFloat(label.c_str(),
                                         &value,
                                         0.1f,
