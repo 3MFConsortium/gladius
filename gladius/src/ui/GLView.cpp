@@ -438,7 +438,7 @@ namespace gladius
         auto constexpr minFrameDurationAnimation =
           std::chrono::milliseconds{static_cast<int>(1000. / 120.)};
         auto constexpr minFrameDurationStatic =
-          std::chrono::milliseconds{static_cast<int>(1000. / 30.)};
+          std::chrono::milliseconds{static_cast<int>(1000. / 60.)};
         while (!m_stateCloseRequested)
         {
             if (glfwWindowShouldClose(m_window))
