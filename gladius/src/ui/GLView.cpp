@@ -185,6 +185,7 @@ namespace gladius
 #ifdef IMGUI_HAS_DOCK
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 #endif
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
         // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         io.ConfigInputTrickleEventQueue = true;
