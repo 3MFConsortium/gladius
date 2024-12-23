@@ -394,40 +394,44 @@ namespace gladius::ui
     void RenderWindow::handleKeyInput()
     {
         float deltaTime = ImGui::GetIO().DeltaTime;
+        float amount = 5.f * deltaTime;
 
-        int key_press_count_up =
-          ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_UpArrow), deltaTime, 0.01f);
+        int key_press_count_up = ImGui::GetKeyPressedAmount((ImGuiKey_UpArrow), deltaTime, 0.01f);
         if (key_press_count_up > 0)
         {
+            ImGui::SetKeyboardFocusHere();
             // rotate up
-            m_camera.rotate(0.1f * key_press_count_up, 0.0f);
+            m_camera.rotate(amount * key_press_count_up, 0.0f);
             invalidateView();
         }
 
         int key_press_count_down =
-          ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_DownArrow), deltaTime, 0.01f);
+          ImGui::GetKeyPressedAmount((ImGuiKey_DownArrow), deltaTime, 0.01f);
         if (key_press_count_down > 0)
         {
+            ImGui::SetKeyboardFocusHere();
             // rotate down
-            m_camera.rotate(-0.1f * key_press_count_down, 0.0f);
+            m_camera.rotate(-1.f * amount * key_press_count_down, 0.0f);
             invalidateView();
         }
 
         int key_press_count_left =
-          ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_LeftArrow), deltaTime, 0.01f);
+          ImGui::GetKeyPressedAmount((ImGuiKey_LeftArrow), deltaTime, 0.01f);
         if (key_press_count_left > 0)
         {
+            ImGui::SetKeyboardFocusHere();
             // rotate left
-            m_camera.rotate(0.0f, -0.1f * key_press_count_left);
+            m_camera.rotate(0.0f, -1.f * amount * key_press_count_left);
             invalidateView();
         }
 
         int key_press_count_right =
-          ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_RightArrow), deltaTime, 0.01f);
+          ImGui::GetKeyPressedAmount((ImGuiKey_RightArrow), deltaTime, 0.01f);
         if (key_press_count_right > 0)
         {
+            ImGui::SetKeyboardFocusHere();
             // rotate right
-            m_camera.rotate(0.0f, 0.1f * key_press_count_right);
+            m_camera.rotate(0.0f, amount * key_press_count_right);
             invalidateView();
         }
     }
@@ -442,7 +446,7 @@ namespace gladius::ui
             m_view->startAnimationMode();
             state.isRendering = false;
             state.renderQualityWhileMoving = 0.1f;
-            
+
             invalidateViewDuetoModelUpdate();
             return;
         }
