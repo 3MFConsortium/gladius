@@ -880,17 +880,17 @@ namespace gladius
 
     bool ComputeCore::setScreenResolution(size_t width, size_t height)
     {
+        if (m_resultImage && (width == m_resultImage->getWidth()) &&
+            (height == m_resultImage->getHeight()))
+        {
+            return false;
+        }
         if (!m_computeMutex.try_lock())
         {
             return false;
         }
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex, std::adopt_lock);
 
-        if (m_resultImage && (width == m_resultImage->getWidth()) &&
-            (height == m_resultImage->getHeight()))
-        {
-            return false;
-        }
         m_resultImage = std::make_unique<GLImageBuffer>(*m_ComputeContext, width, height);
         m_resultImage->allocateOnDevice();
         return true;
@@ -898,17 +898,17 @@ namespace gladius
 
     bool ComputeCore::setLowResPreviewResolution(size_t width, size_t height)
     {
+        if (m_lowResPreviewImage && (width == m_lowResPreviewImage->getWidth()) &&
+            (height == m_lowResPreviewImage->getHeight()))
+        {
+            return false;
+        }
         if (!m_computeMutex.try_lock())
         {
             return false;
         }
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex, std::adopt_lock);
 
-        if (m_lowResPreviewImage && (width == m_lowResPreviewImage->getWidth()) &&
-            (height == m_lowResPreviewImage->getHeight()))
-        {
-            return false;
-        }
         m_lowResPreviewImage = std::make_unique<GLImageBuffer>(*m_ComputeContext, width, height);
         m_lowResPreviewImage->allocateOnDevice();
         return true;
