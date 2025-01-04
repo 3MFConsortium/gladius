@@ -67,7 +67,9 @@ namespace gladius::io
          * @param filename The path to the output 3MF file.
          * @param doc The document to be saved.
          */
-        void save(std::filesystem::path const & filename, Document const & doc);
+        void save(std::filesystem::path const & filename,
+                  Document const & doc,
+                  bool writeThumbnail = true);
 
         /**
          * @brief Saves the function to a 3MF file with the specified filename.
@@ -114,8 +116,11 @@ namespace gladius::io
      * @brief Saves the document to a 3MF file with the specified filename.
      * @param filename The path to the output 3MF file.
      * @param doc The document to be saved.
+     * @param writeThumbnail Whether to write the thumbnail or not.
      */
-    void saveTo3mfFile(std::filesystem::path const & filename, Document const & doc);
+    void saveTo3mfFile(std::filesystem::path const & filename,
+                       Document const & doc,
+                       bool writeThumbnail = true);
 
     /**
      * @brief Saves the function to a 3MF file with the specified filename.

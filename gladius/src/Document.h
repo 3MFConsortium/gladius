@@ -84,7 +84,7 @@ namespace gladius
         void load(std::filesystem::path filename);
         void loadNonBlocking(std::filesystem::path filename);
         void merge(std::filesystem::path filename);
-        void saveAs(std::filesystem::path filename);
+        void saveAs(std::filesystem::path filename, bool writeThumbnail = true);
 
         void newModel();
         void newEmptyModel();
@@ -188,6 +188,8 @@ namespace gladius
 
         void updateMemoryOffsets();
 
+        void saveBackup();
+
         std::unique_ptr<nodes::GeneratorContext> m_generatorContext;
         nodes::SharedAssembly m_assembly;
         nodes::SharedAssembly m_flatAssembly;
@@ -208,6 +210,9 @@ namespace gladius
         std::future<void> m_futureMeshLoading;
 
         nodes::BuildItems m_buildItems;
+
+        // last backup time
+        std::chrono::time_point<std::chrono::system_clock> m_lastBackupTime;
     };
 
     using SharedDocument = std::shared_ptr<Document>;

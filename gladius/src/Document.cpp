@@ -74,6 +74,7 @@ namespace gladius
         }
 
         m_futureMeshLoading = std::async(std::launch::async, [&]() { refreshWorker(); });
+        saveBackup();
     }
 
     void Document::loadAllMeshResources()
@@ -117,7 +118,7 @@ namespace gladius
         {
             m_core->getMeshResourceState().signalCompilationFinished();
         }
-    }
+        }
 
     void Document::updateFlatAssembly()
     {
@@ -192,6 +193,30 @@ namespace gladius
                 node.second->updateMemoryOffsets(*m_generatorContext);
             }
         }
+    }
+
+    void Document::saveBackup()
+    {
+        // skip back up, if the last backup is less than 1 minutes ago
+        if (m_lastBackupTime.time_since_epoch().count() > 0 &&
+            std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now() -
+                                                             m_lastBackupTime)
+                .count() < 1)
+        {
+            return;
+        }
+
+        // save a backup of the current model in temp directory
+        auto tempDir = std::filesystem::temp_directory_path();
+        auto backupDir = tempDir / "gladius";
+        if (!std::filesystem::exists(backupDir))
+        {
+            std::filesystem::create_directory(backupDir);
+        }
+
+        auto backupFile = backupDir / "backup.3mf";
+        saveAs(backupFile, false);
+        m_lastBackupTime = std::chrono::system_clock::now();
     }
 
     bool Document::refreshModelIfNoCompilationIsRunning()
@@ -393,6 +418,8 @@ namespace gladius
         }
         m_core->compileSlicerProgramBlocking();
         updateParameter();
+
+        saveBackup();
     }
 
     void Document::exportAsStl(std::filesystem::path const & filename)
@@ -437,11 +464,11 @@ namespace gladius
         refreshModelAsync();
     }
 
-    void Document::saveAs(std::filesystem::path filename)
+    void Document::saveAs(std::filesystem::path filename, bool writeThumbnail)
     {
         if (filename.extension() == ".3mf")
         {
-            io::saveTo3mfFile(filename, *this);
+            io::saveTo3mfFile(filename, *this, writeThumbnail);
         }
 
         m_fileChanged = false;

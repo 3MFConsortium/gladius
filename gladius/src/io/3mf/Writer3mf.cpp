@@ -500,7 +500,9 @@ namespace gladius::io
         }
     }
 
-    void Writer3mf::save(std::filesystem::path const & filename, Document const & doc)
+    void Writer3mf::save(std::filesystem::path const & filename,
+                         Document const & doc,
+                         bool writeThumbnail)
     {
         auto model = doc.get3mfModel();
 
@@ -526,7 +528,10 @@ namespace gladius::io
         }
 
         updateModel(doc);
-        updateThumbnail(const_cast<Document &>(doc));
+        if (writeThumbnail)
+        {
+            updateThumbnail(const_cast<Document &>(doc));
+        }
 
         try
         {
@@ -549,7 +554,6 @@ namespace gladius::io
             return;
         }
 
-      
         for (auto & [name, model] : doc.getAssembly()->getFunctions())
         {
             if (model->isManaged())
@@ -651,10 +655,11 @@ namespace gladius::io
         writer->WriteToFile(filename.string().c_str());
     }
 
-    void saveTo3mfFile(std::filesystem::path const & filename, Document const & doc)
+    void
+    saveTo3mfFile(std::filesystem::path const & filename, Document const & doc, bool writeThumbnail)
     {
         Writer3mf writer(doc.getSharedLogger());
-        writer.save(filename, doc);
+        writer.save(filename, doc, writeThumbnail);
     }
 
     void saveFunctionTo3mfFile(std::filesystem::path const & filename,
