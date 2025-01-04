@@ -767,7 +767,7 @@ namespace gladius::ui
                   m_showLinkAssignmentMenu = false;
               }
               const auto model = m_modelEditor->currentModel();
-              if (model == nullptr)
+              if (!model)
               {
                   return;
               }

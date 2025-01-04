@@ -558,7 +558,7 @@ namespace gladius::ui
         if (!previewResolutionChanged && (state.isMoving || m_core->isAnyCompilationInProgress()) &&
             executionDuration_ms > 0 && fabs(error) > 0)
         {
-            state.fpsIntegral *= 0.9f;
+            state.fpsIntegral *= 0.8f;
             // Update integral and derivative
             state.fpsIntegral += error;
 
@@ -581,14 +581,14 @@ namespace gladius::ui
                 auto const fraction = m_preComputedSdfDirty ? 0.1f : 0.5f;
                 state.renderingStepSize =
                   std::clamp(static_cast<size_t>(state.renderingStepSize * fraction),
-                             size_t{1},
+                             size_t{2},
                              m_core->getResultImage()->getHeight());
             }
 
             if (executionDuration_ms < progressiveTargetRenderTime_ms - tolerance_ms)
             {
                 state.renderingStepSize =
-                  std::clamp(static_cast<size_t>(state.renderingStepSize * 2. + 1),
+                  std::clamp(static_cast<size_t>(state.renderingStepSize * 1.5 + 1),
                              size_t{1},
                              m_core->getResultImage()->getHeight());
             }

@@ -5,5 +5,5 @@
 namespace gladius::ui
 {
     using OptionalPortId = std::optional<nodes::PortId>;
-    auto inputMenu(nodes::Model & nodes, gladius::nodes::VariantParameter const & targetParameter, std::string const & targetName) -> OptionalPortId;
+    auto inputMenu(nodes::Model & nodes, gladius::nodes::VariantParameter targetParameter, std::string targetName) -> OptionalPortId;
 } // namespace gladius::ui

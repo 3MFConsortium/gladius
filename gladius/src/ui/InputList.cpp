@@ -8,7 +8,7 @@ namespace ed = ax::NodeEditor;
 
 namespace gladius::ui
 {
-    OptionalPortId inputMenu(nodes::Model & nodes, gladius::nodes::VariantParameter const & targetParameter, std::string const & targetName)
+    OptionalPortId inputMenu(nodes::Model & nodes, gladius::nodes::VariantParameter targetParameter, std::string targetName)
     {
         const auto & ports = nodes.getPortRegistry();
         nodes::ParameterId targetId = targetParameter.getId();
