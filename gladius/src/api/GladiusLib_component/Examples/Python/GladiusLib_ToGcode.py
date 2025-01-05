@@ -4,6 +4,8 @@ import sys
 import wx
 import pyclipr
 import numpy as np
+from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+
 
 sys.path.append(
     os.path.join(
@@ -201,6 +203,70 @@ def generate_perimeters(polygons, extrusion_width, num_perimeters, perimeter_ove
     return perimeters
 
 
+def reduce_travel_moves(polygons):
+    # Extract the first vertex of each polygon
+    vertices = [polygon[0] for polygon in polygons]
+
+    # Compute the distance matrix
+    num_vertices = len(vertices)
+    distance_matrix = [
+        [
+            math.sqrt(
+                (vertices[i][0] - vertices[j][0]) ** 2
+                + (vertices[i][1] - vertices[j][1]) ** 2
+            )
+            * 1e5
+            for j in range(num_vertices)
+        ]
+        for i in range(num_vertices)
+    ]
+
+    # Create the routing index manager
+    manager = pywrapcp.RoutingIndexManager(num_vertices, 1, 0)
+
+    # Create Routing Model
+    routing = pywrapcp.RoutingModel(manager)
+
+    def distance_callback(from_index, to_index):
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return round(distance_matrix[from_node][to_node])
+
+    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    # Allow to start and end at arbitrary locations
+    for node in range(num_vertices):
+        routing.AddVariableMinimizedByFinalizer(routing.NextVar(node))
+
+    # Set parameters
+    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+    search_parameters.first_solution_strategy = (
+        routing_enums_pb2.FirstSolutionStrategy.AUTOMATIC
+    )
+
+    search_parameters.time_limit.seconds = 30
+
+    # Solve the problem
+    solution = routing.SolveWithParameters(search_parameters)
+
+    # Extract the solution
+    if solution:
+        index = routing.Start(0)
+        permutation = []
+        while not routing.IsEnd(index):
+            permutation.append(manager.IndexToNode(index))
+            index = solution.Value(routing.NextVar(index))
+
+        # Reorder the polygons according to the TSP solution
+        ordered_polygons = [polygons[i] for i in permutation]
+
+        return ordered_polygons
+    else:
+        print("No solution found!")
+        return polygons
+
+
 def main():
     app = wx.App(False)
     scriptpath = os.path.dirname(os.path.realpath(__file__))
@@ -304,7 +370,8 @@ def main():
                 num_perimeters=slicing_params.num_perimeters,
                 perimeter_overlap=slicing_params.perimeter_overlap,
             )
-            gcode_writer.addPolygons(perimeter, layer_height)
+            sorted_perimeter = reduce_travel_moves(perimeter)
+            gcode_writer.addPolygons(sorted_perimeter, layer_height)
 
             gcode_writer.setExtruderTemperature()  # Set the extruder temperature for the next layer, for the first layer this is done in the start gcode
 
