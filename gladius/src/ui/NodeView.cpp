@@ -866,6 +866,13 @@ namespace gladius::ui
                     continue;
                 }
 
+                // show resource id pins only if the flag is set
+                if (!m_resoureIdNodesVisible &&
+                    parameter.second.getTypeIndex() == ParameterTypeIndex::ResourceId)
+                {
+                    continue;
+                }
+
                 ImGui::PushID(parameter.second.getId()); // required for reusing the same labels
                                                          // (that are used as unique ids in ImgUI)
                 {
