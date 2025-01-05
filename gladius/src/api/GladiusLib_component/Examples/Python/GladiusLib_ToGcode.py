@@ -1,33 +1,211 @@
+import math
 import os
 import sys
 import wx
+import pyclipr
+import numpy as np
 
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "Bindings", "Python"))
+sys.path.append(
+    os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "..", "..", "Bindings", "Python"
+    )
+)
 import GladiusLib
 
+
+class SlicingParameters:
+    def __init__(
+        self,
+        first_layer_height,
+        layer_height,
+        num_perimeters,
+        volume_rate_mm3_per_s,
+        extrusion_width=0.6,
+        nozzle_diameter=0.6,
+        nozzle_temperature=200,
+        travel_speed=250,
+        perimeter_overlap=0.15,
+    ):
+        self.first_layer_height = first_layer_height  # mm
+        self.layer_height = layer_height  # mm
+        self.num_perimeters = num_perimeters
+        self.volume_rate_mm3_per_s = volume_rate_mm3_per_s  # mm^3/s
+        self.extrusion_width = extrusion_width  # mm
+        self.nozzle_diameter = nozzle_diameter  # mm
+        self.nozzle_temperature = nozzle_temperature  # C
+        self.travel_speed = travel_speed  # mm/s
+        self.perimeter_overlap = perimeter_overlap
+
+
 def select_file():
-    dialog = wx.FileDialog(None, "Select 3MF file", wildcard="*.3mf", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+    dialog = wx.FileDialog(
+        None,
+        "Select 3MF file",
+        wildcard="*.3mf",
+        style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+    )
     if dialog.ShowModal() == wx.ID_CANCEL:
         return None
     return dialog.GetPath()
+
 
 def select_gcode_start(default_dir):
-    dialog = wx.FileDialog(None, "Select start gcode for your printer", wildcard="*.gcode", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST, defaultDir=default_dir)
+    dialog = wx.FileDialog(
+        None,
+        "Select start gcode for your printer",
+        wildcard="*.gcode",
+        style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        defaultDir=default_dir,
+    )
     if dialog.ShowModal() == wx.ID_CANCEL:
         return None
     return dialog.GetPath()
 
+
 def save_file(default_dir, default_filename):
-    dialog = wx.FileDialog(None, "Save G-code file", wildcard="*.gcode", style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT, defaultDir=default_dir, defaultFile=default_filename)
+    dialog = wx.FileDialog(
+        None,
+        "Save G-code file",
+        wildcard="*.gcode",
+        style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        defaultDir=default_dir,
+        defaultFile=default_filename,
+    )
     if dialog.ShowModal() == wx.ID_CANCEL:
         return None
     return dialog.GetPath()
+
+
+class GcodeWriter:
+    def __init__(self, file, slicing_params):
+        self.file = file
+        self.slicing_params = slicing_params
+        self.extruder_position = 0.0  # Initialize the extruder position, mm
+
+    def enableAbsolutePositioning(self):
+        self.file.write("\nG90\n")
+        # also force the extruder to be in absolute mode
+        self.file.write("M82\n")
+
+    def setExtruderTemperature(self):
+        self.file.write(f"M104 S{self.slicing_params.nozzle_temperature}\n")
+        self.file.write(
+            f"M109 S{self.slicing_params.nozzle_temperature}\
+            ; wait for nozzle temperature to be reached\n"
+        )
+
+    def layerChange(self, z_height, layer_height):
+        self.file.write(f";LAYER_CHANGE\n")
+        self.file.write(f";Z:{z_height:.2f}\n")
+        self.file.write(f";HEIGHT:{layer_height:.2f}\n")
+        self.file.write(f";BEFORE_LAYER_CHANGE\n")
+        self.file.write(f";{z_height:.2f}\n")
+
+        self.file.write(f"G1 Z{z_height:.2f}\n")
+
+    def addPolygons(self, polygons, layer_height):
+        track_area_mm2 = (
+            self.slicing_params.extrusion_width - layer_height
+        ) * layer_height + layer_height * layer_height * 0.25 * np.pi
+
+        feedrate_mm_per_s = self.slicing_params.volume_rate_mm3_per_s / track_area_mm2
+        feedrate_mm_per_min = feedrate_mm_per_s * 60.0
+
+        nozzle_area = np.pi * (self.slicing_params.nozzle_diameter * 0.5) ** 2
+        extrusion_per_extruded_mm = track_area_mm2 / nozzle_area * 0.1
+
+        for polygon in polygons:
+            if len(polygon) == 0:
+                continue
+            previous_vertex = polygon[0]
+            # Move to the first vertex of the polygon without extruding
+            self.file.write(
+                f"G1 X{previous_vertex[0]:.4f} Y{previous_vertex[1]:.4f} F{self.slicing_params.travel_speed:.4f}\n"
+            )
+
+            self.file.write(f";TYPE:Perimeter\n")
+            self.file.write(f";WIDTH:{self.slicing_params.extrusion_width:.6f}\n")
+
+            # just for debugging
+            # extrusion_per_extruded_mm
+
+            self.file.write(f";EXTRUSION:{extrusion_per_extruded_mm:.6f}\n")
+            self.file.write(f";FEEDRATE:{feedrate_mm_per_min:.4f}\n")
+            self.file.write(f";nozzle_area:{nozzle_area:.6f}\n")
+            self.file.write(f";track_area_mm2:{track_area_mm2:.6f}\n")
+
+            # Write feedrate
+            self.file.write(f"G1 F{feedrate_mm_per_min:.4f}\n")
+            # Add the first vertex to the end of the polygon to close it
+            polygon = np.vstack([polygon, polygon[0]])
+
+            for vertex in polygon:
+                currentVertex = vertex
+                # Calculate the distance between the previous vertex and the current vertex
+                distance = math.sqrt(
+                    (currentVertex[0] - previous_vertex[0]) ** 2
+                    + (currentVertex[1] - previous_vertex[1]) ** 2
+                )
+                extruder_distance = distance * extrusion_per_extruded_mm
+
+                self.extruder_position += extruder_distance
+
+                self.file.write(
+                    f"G1 X{currentVertex[0]:.4f} Y{currentVertex[1]:.4f} E{self.extruder_position:.5f}\n"
+                )
+                previous_vertex = currentVertex
+
+
+def process_polygon(polygon):
+    vertices = []
+    while polygon.GetSize() > 0:
+        vertex = polygon.GetCurrentVertex()
+        vertices.append((vertex.Coordinates[0], vertex.Coordinates[1]))
+        if not polygon.Next():
+            break
+    # Close the polygon
+    vertices.append(vertices[0])
+    return vertices
+
+
+def process_contour(contour):
+    polygons = []
+    while contour.GetSize() > 0:
+        polygon = contour.GetCurrentPolygon()
+        vertices = process_polygon(polygon)
+        polygons.append(vertices)
+        if not contour.Next():
+            break
+    return polygons
+
+
+def generate_perimeters(polygons, extrusion_width, num_perimeters, perimeter_overlap):
+
+    perimeters = []
+    po = pyclipr.ClipperOffset()
+    po.scaleFactor = int(1e4)
+    for polygon in polygons:
+        po.addPaths([polygon], pyclipr.JoinType.Miter, pyclipr.EndType.Polygon)
+
+    offset_distance = 0.5 * extrusion_width
+
+    for i in range(num_perimeters):
+        offsetted_polygons = po.execute(-offset_distance)
+        if len(offsetted_polygons) == 0:
+            break
+        # Append the offsetted polygons to the perimeters
+        perimeters.extend(offsetted_polygons)
+
+        offset_distance += extrusion_width * (1 - perimeter_overlap)
+
+    return perimeters
+
 
 def main():
     app = wx.App(False)
     scriptpath = os.path.dirname(os.path.realpath(__file__))
     wrapper = GladiusLib.Wrapper(libraryName=os.path.join(scriptpath, "gladiuslib"))
-    
+
     major, minor, micro = wrapper.GetVersion()
     print("GladiusLib version: {:d}.{:d}.{:d}".format(major, minor, micro), end="")
     print("")
@@ -42,7 +220,7 @@ def main():
     if not gcode_start:
         print("No start gcode selected.")
         return
-    
+
     default_dir = os.path.dirname(input_file)
     default_filename = os.path.splitext(os.path.basename(input_file))[0] + ".gcode"
     output_file = save_file(default_dir, default_filename)
@@ -50,46 +228,88 @@ def main():
         print("No output file selected.")
         return
 
-    gladius.LoadAssembly(input_file)
-    
-    bounding_box = gladius.ComputeBoundingBox()
-    print("Bounding box: [{:.2f}, {:.2f}, {:.2f}] x [{:.2f}, {:.2f}, {:.2f}]".format(
-        bounding_box.GetMin().Coordinates[0], bounding_box.GetMin().Coordinates[1], bounding_box.GetMin().Coordinates[2],
-        bounding_box.GetMax().Coordinates[0], bounding_box.GetMax().Coordinates[1], bounding_box.GetMax().Coordinates[2]
-    ))
+    slicing_params = SlicingParameters(
+        first_layer_height=0.3,
+        layer_height=0.2,
+        num_perimeters=10,
+        volume_rate_mm3_per_s=10.0,
+        extrusion_width=0.6,
+        nozzle_diameter=0.6,
+        nozzle_temperature=200,
+        travel_speed=250,
+        perimeter_overlap=0.15,
+    )
 
-    # Generate contours at 0.2 mm intervals, starting from the bottom of the bounding box, moveing everything down to z=0
+    gladius.LoadAssembly(input_file)
+
+    bounding_box = gladius.ComputeBoundingBox()
+    print(
+        "Bounding box: [{:.2f}, {:.2f}, {:.2f}] x [{:.2f}, {:.2f}, {:.2f}]".format(
+            bounding_box.GetMin().Coordinates[0],
+            bounding_box.GetMin().Coordinates[1],
+            bounding_box.GetMin().Coordinates[2],
+            bounding_box.GetMax().Coordinates[0],
+            bounding_box.GetMax().Coordinates[1],
+            bounding_box.GetMax().Coordinates[2],
+        )
+    )
+
+    # Generate contours at slicing_params.layer_height intervals, starting from the bottom of the bounding box, moveing everything down to z=0
     z_min = bounding_box.GetMin().Coordinates[2]
     z_max = bounding_box.GetMax().Coordinates[2] - z_min
-    z_step = 0.2
+    z_step = slicing_params.layer_height
 
     z_range = range(0, int(z_max * 1000), int(z_step * 1000))
     total_steps = len(z_range)
 
-    progress_dialog = wx.ProgressDialog("Generating Contours", "Progress", maximum=total_steps, parent=None, style=wx.PD_AUTO_HIDE | wx.PD_APP_MODAL)
+    progress_dialog = wx.ProgressDialog(
+        "Generating Contours",
+        "Progress",
+        maximum=total_steps,
+        parent=None,
+        style=wx.PD_AUTO_HIDE | wx.PD_APP_MODAL,
+    )
 
-    with open(output_file, 'w') as f:
-        with open(gcode_start, 'r') as start_file:
+    previous_z = 0.0
+    with open(output_file, "w") as f:
+        with open(gcode_start, "r") as start_file:
             f.write(start_file.read())
-            
+
+        gcode_writer = GcodeWriter(f, slicing_params)
+        gcode_writer.enableAbsolutePositioning()
+
         for i, z_height in enumerate(z_range):
-            z_height_mm = z_height / 1000.0
+            z_height_mm = slicing_params.first_layer_height + z_height / 1000.0
             z_height_in_model = z_height_mm + z_min
+            layer_height = z_height_mm - previous_z
+            previous_z = z_height_mm
+
+            gcode_writer.layerChange(z_height_mm, layer_height)
+
             contour = gladius.GenerateContour(z_height_in_model, 0.0)
-            print("Contours at Z={:.2f} mm: Number of polygons in contour: {}".format(z_height_in_model, contour.GetSize()))
-            progress_dialog.Update(i + 1, f"Generating contours at Z={z_height_mm:.2f} mm")
-            # Write the contour data to the G-code file
-            f.write(f"; Contours at Z={z_height_mm:.2f} mm\n")
-            contour.Begin()
-            while (contour.Next()):
-                if contour.GetSize() == 0:
-                    continue
-                polygon = contour.GetCurrentPolygon()
-                while (polygon.Next()):
-                    vertex = polygon.GetCurrentVertex()
-                    f.write(f"G1 X{vertex.Coordinates[0]:.2f} Y{vertex.Coordinates[1]:.2f} Z{z_height_mm:.2f}\n")
-                        
+            print(
+                "Contours at Z={:.2f} mm: Number of polygons in contour: {}".format(
+                    z_height_in_model, contour.GetSize()
+                )
+            )
+            progress_dialog.Update(
+                i + 1, f"Generating contours at Z={z_height_mm:.2f} mm"
+            )
+            # Convert contour to pyclipr format
+            polygons = process_contour(contour)
+
+            perimeter = generate_perimeters(
+                polygons=polygons,
+                extrusion_width=slicing_params.extrusion_width,
+                num_perimeters=slicing_params.num_perimeters,
+                perimeter_overlap=slicing_params.perimeter_overlap,
+            )
+            gcode_writer.addPolygons(perimeter, layer_height)
+
+            gcode_writer.setExtruderTemperature()  # Set the extruder temperature for the next layer, for the first layer this is done in the start gcode
+
     progress_dialog.Destroy()
+
 
 if __name__ == "__main__":
     try:
