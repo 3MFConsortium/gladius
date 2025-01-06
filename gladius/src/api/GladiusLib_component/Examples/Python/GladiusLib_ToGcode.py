@@ -5,6 +5,8 @@ import wx
 import pyclipr
 import numpy as np
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 
 sys.path.append(
@@ -209,17 +211,23 @@ def reduce_travel_moves(polygons):
 
     # Compute the distance matrix
     num_vertices = len(vertices)
-    distance_matrix = [
-        [
-            math.sqrt(
-                (vertices[i][0] - vertices[j][0]) ** 2
-                + (vertices[i][1] - vertices[j][1]) ** 2
-            )
-            * 1e5
-            for j in range(num_vertices)
-        ]
-        for i in range(num_vertices)
-    ]
+    if num_vertices == 0:
+        return polygons
+
+    start_time = time.time()
+
+    # Convert vertices to a NumPy array
+    vertices_array = np.array(vertices)
+
+    # Compute the distance matrix using broadcasting
+    diff = vertices_array[:, np.newaxis, :] - vertices_array[np.newaxis, :, :]
+    squared_diff = np.sum(diff**2, axis=-1)
+    distance_matrix = np.round(np.sqrt(squared_diff) * 1e4).astype(int)
+
+    end_time = time.time()
+    print(
+        f"Time taken to calculate the distance matrix: {end_time - start_time} seconds"
+    )
 
     # Create the routing index manager
     manager = pywrapcp.RoutingIndexManager(num_vertices, 1, 0)
@@ -242,10 +250,10 @@ def reduce_travel_moves(polygons):
     # Set parameters
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.AUTOMATIC
+        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
     )
 
-    search_parameters.time_limit.seconds = 30
+    search_parameters.time_limit.seconds = 1
 
     # Solve the problem
     solution = routing.SolveWithParameters(search_parameters)
