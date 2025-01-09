@@ -885,10 +885,10 @@ namespace gladius::ui
                     BeginPin(pinId, ed::PinKind::Input);
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8 * m_uiScale, 0});
 
-                    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 1.5); // Scale the button width
+                    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 1.5f); // Scale the button width
                     if (ImGui::Button(
                           reinterpret_cast<const char *>(ICON_FA_CARET_RIGHT),
-                          ImVec2(ImGui::GetFontSize() * 1.5, ImGui::GetFontSize() * 1.5)))
+                          ImVec2(ImGui::GetFontSize() * 1.5f, ImGui::GetFontSize() * 1.5f)))
                     {
                         columnWidths[1] = std::max(columnWidths[1], ImGui::GetItemRectSize().x);
                         showLinkAssignmentMenu(parameter);

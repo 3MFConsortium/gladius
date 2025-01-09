@@ -914,11 +914,11 @@ namespace gladius
         return true;
     }
 
-    std::pair<int, int> ComputeCore::getLowResPreviewResolution() const
+    std::pair<size_t, size_t> ComputeCore::getLowResPreviewResolution() const
     {
         if (!m_lowResPreviewImage)
         {
-            return {0, 0};
+            return {0u, 0u};
         }
         return {m_lowResPreviewImage->getWidth(), m_lowResPreviewImage->getHeight()};
     }

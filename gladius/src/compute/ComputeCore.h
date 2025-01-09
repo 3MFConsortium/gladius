@@ -60,7 +60,7 @@ namespace gladius
         bool setScreenResolution(size_t width, size_t height);
         bool setLowResPreviewResolution(size_t width, size_t height);
 
-        [[nodiscard]] std::pair<int, int> getLowResPreviewResolution() const;
+        [[nodiscard]] std::pair<size_t, size_t> getLowResPreviewResolution() const;
 
         Primitives & getPrimitives() const;
 
