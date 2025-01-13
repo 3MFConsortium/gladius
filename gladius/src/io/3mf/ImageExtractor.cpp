@@ -190,6 +190,7 @@ namespace gladius::io
             }
 
             Image img{std::move(image), width, height};
+            img.swapXYData();
             m_pngInfo = lodepng::getPNGHeaderInfo(fileContents);
             img.setFormat(fromPngColorType(m_pngInfo.color));
             img.setBitDepth(m_pngInfo.color.bitdepth);
@@ -228,6 +229,11 @@ namespace gladius::io
         auto const pngInfo = lodepng::getPNGHeaderInfo(fileContents);
         auto const pixelFormat = fromPngColorType(pngInfo.color);
 
+        if (image.size() % (width * height) != 0)
+        {
+            throw std::runtime_error("Error: image data size is not a multiple of width * height");
+        }
+
         Image img{std::move(image), width, height};
         img.setFormat(pixelFormat);
         img.setBitDepth(pngInfo.color.bitdepth);
@@ -238,19 +244,21 @@ namespace gladius::io
               "Error: only grayscale 8 bit images are supported for VDB import");
         }
         {
-            openvdb::FloatGrid::Ptr grid = openvdb::FloatGrid::create();
+            openvdb::FloatGrid::Ptr grid = openvdb::FloatGrid::create(0.);
 
             const auto transform = openvdb::math::Transform::createLinearTransform(1.);
             grid->setTransform(transform);
             grid->setName("sdf");
+
             auto accessor = grid->getAccessor();
+
             auto zIndex = 0;
             for (auto & filename : filenames)
             {
 
                 auto const fileContents = fileLoaderType == FileLoaderType::Archive
-                                          ? loadFileFromArchive(filename)
-                                          : loadFileFromFilesystem(filename);
+                                            ? loadFileFromArchive(filename)
+                                            : loadFileFromFilesystem(filename);
                 if (fileContents.empty())
                 {
                     zIndex++;
@@ -274,13 +282,16 @@ namespace gladius::io
                 img.setFormat(fromPngColorType(pngInfoCurrent.color));
                 img.setBitDepth(pngInfoCurrent.color.bitdepth);
 
+                unsigned int const numChannels =
+                  img.getData().size() / (img.getWidth() * img.getHeight());
+
                 for (unsigned int y = 0; y < img.getHeight(); ++y)
                 {
                     for (unsigned int x = 0; x < img.getWidth(); ++x)
                     {
-                        unsigned int index = ((img.getHeight() - y - 1) * img.getWidth() + x) * 4;
+                        unsigned int index = (y * img.getWidth() + x) * numChannels;
                         float value = img.getData()[index] / 255.0f;
-                        accessor.setValue(openvdb::Coord(x, y, zIndex), value);
+                        accessor.setValue(openvdb::Coord(img.getWidth() - x - 1, y, zIndex), value);
                     }
                 }
 
@@ -328,5 +339,5 @@ namespace gladius::io
     {
         return m_pngInfo;
     }
-
 } // namespace gladius::io
+
