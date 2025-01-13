@@ -629,6 +629,29 @@ namespace gladius::ui
         }
     }
 
+    void NodeView::viewInt(nodes::NodeBase const & node,
+                           nodes::ParameterMap::reference parameter,
+                           nodes::VariantType & val)
+    {
+        if (const auto pval = std::get_if<int>(&val))
+        {
+            ImGui::SameLine();
+            ImGui::PushItemWidth(200 * m_uiScale);
+            bool changed = ImGui::DragInt("", pval);
+            ImGui::PopItemWidth();
+
+            bool const modifiable = parameter.second.isModifiable();
+
+            if (changed && !modifiable)
+            {
+                parameter.second.setModifiable(true);
+                m_modelEditor->markModelAsModified();
+            }
+
+            m_parameterChanged |= changed;
+        }
+    }
+
     bool NodeView::typeControl(std::string const & label, std::type_index & typeIndex)
     {
         static std::vector<std::pair<std::string, std::type_index>> const types = {
@@ -700,12 +723,10 @@ namespace gladius::ui
         ImGui::Indent(20 * m_uiScale);
         if (parameter.first != FieldNames::Shape)
         {
-            if (const auto pval = std::get_if<int>(&val))
+            if (parameter.second.getTypeIndex() == ParameterTypeIndex::Int)
             {
-                ImGui::SameLine();
-                m_parameterChanged |= ImGui::DragInt("", pval);
+                viewInt(node, parameter, val);
             }
-
             if (parameter.second.getTypeIndex() == ParameterTypeIndex::Float)
             {
                 viewFloat(node, parameter, val);

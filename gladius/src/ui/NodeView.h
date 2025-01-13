@@ -84,6 +84,10 @@ namespace gladius::ui
                           nodes::ParameterMap::reference parameter,
                           nodes::VariantType & val);
 
+        void viewInt(nodes::NodeBase const & node,
+                     nodes::ParameterMap::reference parameter,
+                     nodes::VariantType & val);
+
         bool typeControl(std::string const & label, std::type_index & typeIndex);
 
         int m_currentLinkId = 0;
