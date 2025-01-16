@@ -28,3 +28,4 @@ gladius/out/
 *.stl
 gladius/components/lib3mf/Examples/CSharp/obj/*
 gladius/examples/implicit/*.gcode
+gladius/src/api/GladiusLib_component/Examples/CSharp/obj/
