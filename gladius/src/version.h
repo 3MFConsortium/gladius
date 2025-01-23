@@ -6,6 +6,6 @@ namespace gladius
     {
         static int constexpr major = 1;
         static int constexpr minor = 2;
-        static int constexpr revision = 10;
+        static int constexpr revision = 11;
     };
 }
