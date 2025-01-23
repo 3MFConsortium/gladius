@@ -261,8 +261,7 @@ namespace gladius::io
         ImageData swappedData;
         swappedData.resize(data.size());
 
-        size_t const numChannels = 1;
-       // data.size() / (width * height);
+        size_t const numChannels = data.size() / (width * height);
 
         for (int y = 0; y < height; y++)
         {
