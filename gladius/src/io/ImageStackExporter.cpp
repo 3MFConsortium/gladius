@@ -166,9 +166,9 @@ namespace gladius::io
         m_sheetcount =
           static_cast<Lib3MF_uint32>(ceil(m_endHeight_mm - m_startHeight_mm) / m_layerIncrement_mm);
         auto & distmap = *(generator.getResourceContext().getDistanceMipMaps()[m_qualityLevel]);
-        m_columnCount = distmap.getWidth();
-        m_rowCount = distmap.getHeight();
-        m_imageStack = m_model3mf->AddImageStack(m_columnCount, m_rowCount, m_sheetcount);
+        m_columnCountWorld = distmap.getWidth();
+        m_rowCountWorld = distmap.getHeight();
+        m_imageStack = m_model3mf->AddImageStack(m_columnCountWorld, m_rowCountWorld, m_sheetcount);
 
         m_progress = 0.;
 
@@ -209,6 +209,77 @@ namespace gladius::io
         }
     }
 
+    using ImageData = std::vector<Lib3MF_uint8>;
+
+    void flipXY(ImageData & data, size_t width, size_t height)
+    {
+        ImageData flippedData;
+        flippedData.resize(data.size());
+
+        size_t const numChannels = data.size() / (width * height);
+
+        for (size_t y = 0; y < height; y++)
+        {
+            for (size_t x = 0; x < width; x++)
+            {
+                for (size_t c = 0; c < numChannels; c++)
+                {
+                    flippedData[c + (width - x - 1) * numChannels +
+                                (height - y - 1) * width * numChannels] =
+                      data[c + x * numChannels + (height - y - 1) * width * numChannels];
+                }
+            }
+        }
+
+        data = flippedData;
+    }
+
+    void swapXY(ImageData & data, size_t width, size_t height)
+    {
+        ImageData swappedData;
+        swappedData.resize(data.size());
+
+        size_t const numChannels = data.size() / (width * height);
+
+        for (size_t y = 0; y < height; y++)
+        {
+            for (size_t x = 0; x < width; x++)
+            {
+                for (size_t c = 0; c < numChannels; c++)
+                {
+                    swappedData[c + y * numChannels + x * height * numChannels] =
+                      data[c + x * numChannels + y * width * numChannels];
+                }
+            }
+        }
+
+        data = swappedData;
+    }
+
+    void swapAndFlipXY(ImageData & data, size_t width, size_t height)
+    {
+        ImageData swappedData;
+        swappedData.resize(data.size());
+
+        size_t const numChannels = 1;
+       // data.size() / (width * height);
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0 ; x < width; x++)
+            {
+                unsigned int indexTarget = (y * width + x) * numChannels;
+                unsigned int indexSource = ((height - y - 1) * width + x) * numChannels;
+                for (unsigned int i = 0; i < numChannels; ++i)
+                {
+                    swappedData[indexTarget + i] = data[indexSource + i];
+                }
+            }
+        }
+       
+        data =  std::move(swappedData);
+    }
+
     bool ImageStackExporter::advanceExport(ComputeCore & generator)
     {
 
@@ -222,6 +293,11 @@ namespace gladius::io
         std::vector<Lib3MF_uint8> inputData;
 
         inputData.resize(distmap.getData().size());
+        if (inputData.size() != m_columnCountWorld * m_rowCountWorld)
+        {
+            throw std::runtime_error("Size of input data does not match the size of the image");
+        }
+
         for (size_t i = 0; i < distmap.getData().size(); i++)
         {
             auto const value = distmap.getData()[i].x;
@@ -231,10 +307,12 @@ namespace gladius::io
             inputData[i] = val;
         }
 
+        swapAndFlipXY(inputData, m_columnCountWorld, m_rowCountWorld);
+
         std::vector<Lib3MF_uint8> imgPng;
 
         auto const error =
-          lodepng::encode(imgPng, inputData, m_columnCount, m_rowCount, LCT_GREY, 8);
+          lodepng::encode(imgPng, inputData, getColumnCountPng(), getRowCountPng(), LCT_GREY, 8);
         if (error)
         {
             throw std::runtime_error("Error while saving image: " + std::to_string(error));
@@ -259,5 +337,15 @@ namespace gladius::io
         // write the 3mf file
         auto writer = m_model3mf->QueryWriter("3mf");
         writer->WriteToFile(m_outputFilename.string());
+    }
+
+    Lib3MF_uint32 ImageStackExporter::getColumnCountPng() const
+    {
+        return m_rowCountWorld;
+    }
+
+    Lib3MF_uint32 ImageStackExporter::getRowCountPng() const
+    {
+        return m_columnCountWorld;
     }
 }

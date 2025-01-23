@@ -11,6 +11,11 @@
 
 namespace gladius::io
 {
+
+
+
+
+
     class ImageStackExporter : public IExporter
     {
       public:
@@ -28,6 +33,9 @@ namespace gladius::io
       private:
         void setLayerIncrement(float increment_mm);
 
+        Lib3MF_uint32 getColumnCountPng() const;
+        Lib3MF_uint32 getRowCountPng() const;
+
         std::filesystem::path m_outputFilename{};
 
         float m_layerIncrement_mm = 0.1f;
@@ -43,8 +51,10 @@ namespace gladius::io
         Lib3MF::PModel m_model3mf;
         Lib3MF::PImageStack m_imageStack;
         Lib3MF_uint32 m_sheetcount = 0u;
-        Lib3MF_uint32 m_columnCount = 0u;
-        Lib3MF_uint32 m_rowCount = 0u;
+        Lib3MF_uint32 m_columnCountWorld = 0u;
+        Lib3MF_uint32 m_rowCountWorld = 0u;
+
+
 
         events::SharedLogger m_logger;
     };
