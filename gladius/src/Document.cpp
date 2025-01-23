@@ -448,6 +448,8 @@ namespace gladius
     void Document::load(std::filesystem::path filename)
     {
         loadImpl(filename);
+        // reset back up time
+        m_lastBackupTime = std::chrono::system_clock::now();
         refreshModelBlocking();
         m_core->updateBBox();
     }

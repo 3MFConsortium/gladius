@@ -138,7 +138,7 @@ namespace gladius_integration_tests
         gladius->LoadAssembly("NonExistingFile");
 
         auto const detailedErrorAccessor = gladius->GetDetailedErrorAccessor();
-        EXPECT_GT(detailedErrorAccessor->GetSize(), 0u);
+        EXPECT_GT(detailedErrorAccessor->GetSize(), 1u);
     }
 
     /// Loop over all DetailedErrorAccessor entries and check if they are valid using next() in a
