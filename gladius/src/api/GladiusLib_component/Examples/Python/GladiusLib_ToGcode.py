@@ -41,12 +41,13 @@ class SlicingParameters:
         self.perimeter_overlap = perimeter_overlap
 
 
-def select_file():
+def select_file(default_dir):
     dialog = wx.FileDialog(
         None,
         "Select 3MF file",
         wildcard="*.3mf",
         style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        defaultDir=default_dir,
     )
     if dialog.ShowModal() == wx.ID_CANCEL:
         return None
@@ -106,6 +107,10 @@ class GcodeWriter:
         self.file.write(f";{z_height:.2f}\n")
 
         self.file.write(f"G1 Z{z_height:.2f}\n")
+
+        # reset the extruder position
+        self.extruder_position = 0.0
+        self.file.write(f"G92 E0\n")
 
     def addPolygons(self, polygons, layer_height):
         track_area_mm2 = (
@@ -169,6 +174,10 @@ def process_polygon(polygon):
             break
     # Close the polygon
     vertices.append(vertices[0])
+
+    area = polygon.GetArea()
+    if area < 0:
+        vertices = vertices[::-1]
     return vertices
 
 
@@ -176,7 +185,9 @@ def process_contour(contour):
     polygons = []
     while contour.GetSize() > 0:
         polygon = contour.GetCurrentPolygon()
+        area = polygon.GetArea()
         vertices = process_polygon(polygon)
+
         polygons.append(vertices)
         if not contour.Next():
             break
@@ -186,21 +197,30 @@ def process_contour(contour):
 def generate_perimeters(polygons, extrusion_width, num_perimeters, perimeter_overlap):
 
     perimeters = []
-    po = pyclipr.ClipperOffset()
-    po.scaleFactor = int(1e4)
-    for polygon in polygons:
-        po.addPaths([polygon], pyclipr.JoinType.Miter, pyclipr.EndType.Polygon)
 
     offset_distance = 0.5 * extrusion_width
 
-    for i in range(num_perimeters):
-        offsetted_polygons = po.execute(-offset_distance)
-        if len(offsetted_polygons) == 0:
-            break
-        # Append the offsetted polygons to the perimeters
-        perimeters.extend(offsetted_polygons)
+    po = pyclipr.ClipperOffset()
+    po.scaleFactor = int(1e5)
 
-        offset_distance += extrusion_width * (1 - perimeter_overlap)
+    for polygon in polygons:
+        po.addPaths([polygon], pyclipr.JoinType.Miter, pyclipr.EndType.Polygon)
+
+    for i in range(num_perimeters):
+
+        offsetted_polygons = po.execute(-offset_distance)
+
+        offset_distance += extrusion_width * (1.0 - perimeter_overlap)
+
+        # clip the offsetted polygons by the original polygons
+        clipper = pyclipr.Clipper()
+        clipper.scaleFactor = int(1e4)
+        clipper.addPaths(offsetted_polygons, pyclipr.Subject)
+        clipper.addPaths(polygons, pyclipr.Clip)
+        result = clipper.execute(pyclipr.ClipType.Intersection)
+
+        # Append the offsetted polygons to the perimeters
+        perimeters.extend(result)
 
     return perimeters
 
@@ -214,8 +234,6 @@ def reduce_travel_moves(polygons):
     if num_vertices == 0:
         return polygons
 
-    start_time = time.time()
-
     # Convert vertices to a NumPy array
     vertices_array = np.array(vertices)
 
@@ -223,11 +241,6 @@ def reduce_travel_moves(polygons):
     diff = vertices_array[:, np.newaxis, :] - vertices_array[np.newaxis, :, :]
     squared_diff = np.sum(diff**2, axis=-1)
     distance_matrix = np.round(np.sqrt(squared_diff) * 1e4).astype(int)
-
-    end_time = time.time()
-    print(
-        f"Time taken to calculate the distance matrix: {end_time - start_time} seconds"
-    )
 
     # Create the routing index manager
     manager = pywrapcp.RoutingIndexManager(num_vertices, 1, 0)
@@ -285,7 +298,7 @@ def main():
     print("")
 
     gladius = wrapper.CreateGladius()
-    input_file = select_file()
+    input_file = select_file("/home/jan/projects/gadgets/slicingtest")
     if not input_file:
         print("No file selected.")
         return
@@ -305,7 +318,7 @@ def main():
     slicing_params = SlicingParameters(
         first_layer_height=0.3,
         layer_height=0.2,
-        num_perimeters=10,
+        num_perimeters=100,
         volume_rate_mm3_per_s=10.0,
         extrusion_width=0.6,
         nozzle_diameter=0.6,
