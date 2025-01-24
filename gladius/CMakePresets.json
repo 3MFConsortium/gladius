@@ -6,7 +6,7 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "installDir": "$env{CML}/gladius/gladius-1.2.9",
+            "installDir": "$env{CML}/gladius/gladius-1.2.10",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",

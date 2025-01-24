@@ -513,6 +513,12 @@ namespace gladius::io
         }
         auto metaDataGroup = model->GetMetaDataGroup();
 
+        if (!metaDataGroup)
+        {
+            m_logger->addEvent({"No metadata group found.", events::Severity::Warning});
+            return;
+        }
+
         try
         {
             auto constexpr metaKeyApp = "Application";

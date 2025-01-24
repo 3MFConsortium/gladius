@@ -894,7 +894,7 @@ namespace gladius::ui
             return;
         }
 
-        auto constexpr windowTitle = "Do you want to save before closing the MainWindow?";
+        auto constexpr windowTitle = "Do you want to save before leaving Gladius?";
         if (!ImGui::IsPopupOpen(windowTitle))
         {
             ImGui::OpenPopup(windowTitle);
