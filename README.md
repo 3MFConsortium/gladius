@@ -99,6 +99,11 @@ During the configuration process CMake will download and compile the dependencie
 
 - Install a OpenCL SDK (see above), some distributions provide OpenCL as a package or as part of the display driver
 - Install vcpkg (<https://github.com/Microsoft/vcpkg>)
+  For debian based distros like Ubuntu you can do
+  `apt install git curl zip unzip pkgconfig`
+  `git clone https://github.com/microsoft/vcpkg.git`
+  `cd vcpkg && ./bootstrap-vcpkg.sh`
+  For other distros consult <https://learn.microsoft.com/en-us/vcpkg/concepts/supported-hosts>
 - Install CMake and Ninja
 - clone this repository and update the submodules:
 
