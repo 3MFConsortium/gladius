@@ -38,7 +38,7 @@ namespace gladius::io
 
         std::filesystem::path m_outputFilename{};
 
-        float m_layerIncrement_mm = 0.1f;
+        float m_layerIncrement_mm = 0.04f;
         float m_bandwidth_mm = m_layerIncrement_mm * 2.f;
         size_t m_qualityLevel = 1; // 3 = best quality, but insane high memory usage
         double m_progress = 0.;
