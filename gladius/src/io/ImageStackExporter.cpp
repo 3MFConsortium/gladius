@@ -267,7 +267,7 @@ namespace gladius::io
         {
             for (int x = 0 ; x < width; x++)
             {
-                unsigned int indexTarget = (y * width + x) * numChannels;
+                unsigned int indexTarget = (y * width + width - x - 1) * numChannels;
                 unsigned int indexSource = ((height - y - 1) * width + x) * numChannels;
                 for (unsigned int i = 0; i < numChannels; ++i)
                 {
@@ -340,11 +340,13 @@ namespace gladius::io
 
     Lib3MF_uint32 ImageStackExporter::getColumnCountPng() const
     {
-        return m_rowCountWorld;
+       // return m_rowCountWorld;
+        return m_columnCountWorld;
     }
 
     Lib3MF_uint32 ImageStackExporter::getRowCountPng() const
     {
-        return m_columnCountWorld;
+       // return m_columnCountWorld;
+        return m_rowCountWorld;
     }
 }
