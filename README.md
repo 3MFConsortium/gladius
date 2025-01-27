@@ -111,7 +111,8 @@ git submodule update --init --recursive
 * configure and build the project with cmake:
 
 ```
-cd gladius
+# you need to cd again to get into gladius/gladius
+cd gladius 
 mkdir build
 cd build
 cmake --preset linux-release -S ../
