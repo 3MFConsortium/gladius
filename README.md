@@ -121,7 +121,7 @@ cd gladius
 mkdir build
 cd build
 cmake --preset linux-release -S ../
-cmake --build .
+cmake --build ../out/build/linux-release/
 ```
 
 # Troubleshooting and known Issues
