@@ -227,7 +227,7 @@ install(
     DESTINATION ${INSTALL_PREFIX}
     FILES_MATCHING 
     PATTERN "*.dll"
-    PATTERN "*.so.*"
+    REGEX ".*\\.so\\.[0-9]+"
     PATTERN "*.so"
     PATTERN "*.ttf"
     PATTERN "*.rtf"
