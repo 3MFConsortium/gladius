@@ -37,15 +37,4 @@ file(GLOB FONT_FILES
 )
 file(COPY ${FONT_FILES}  DESTINATION "misc/fonts/")
 
-# if(WIN32 AND NOT UNIX)
-# configure_file(${CMAKE_SOURCE_DIR}/components/lib3mf/Bin/lib3mf.dll lib3mf.dll COPYONLY)
-# endif()
-
-# if(WIN32 AND NOT UNIX)
-# configure_file(${CMAKE_SOURCE_DIR}/components/lib3mf/Bin/lib3mf.dll src/lib3mf.dll COPYONLY)
-# else()
-# configure_file(${CMAKE_SOURCE_DIR}/components/lib3mf/Bin/lib3mf.so src/lib3mf.so COPYONLY)
-# configure_file(${CMAKE_SOURCE_DIR}/components/lib3mf/Bin/lib3mf.so src/lib3mf.so.2 COPYONLY)
-# endif()
-
 gtest_add_tests(TARGET ${BINARY})
