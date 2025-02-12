@@ -23,18 +23,29 @@ namespace gladius::io
         auto v6 = mesh->AddVertex({bb.max.x, bb.max.y, bb.max.z});
         auto v7 = mesh->AddVertex({bb.min.x, bb.max.y, bb.max.z});
 
-        mesh->AddTriangle({v0, v1, v2});
-        mesh->AddTriangle({v0, v2, v3});
+        // Bottom face
+        mesh->AddTriangle({v0, v2, v1});
+        mesh->AddTriangle({v0, v3, v2});
+
+        // Top face
         mesh->AddTriangle({v4, v5, v6});
         mesh->AddTriangle({v4, v6, v7});
-        mesh->AddTriangle({v0, v4, v7});
-        mesh->AddTriangle({v0, v7, v3});
-        mesh->AddTriangle({v1, v5, v6});
-        mesh->AddTriangle({v1, v6, v2});
-        mesh->AddTriangle({v0, v1, v5});
+
+        // Front face
         mesh->AddTriangle({v0, v5, v4});
-        mesh->AddTriangle({v3, v7, v6});
+        mesh->AddTriangle({v0, v1, v5});
+
+        // Back face
         mesh->AddTriangle({v3, v6, v2});
+        mesh->AddTriangle({v3, v7, v6});
+
+        // Left face
+        mesh->AddTriangle({v0, v7, v3});
+        mesh->AddTriangle({v0, v4, v7});
+
+        // Right face
+        mesh->AddTriangle({v1, v6, v5});
+        mesh->AddTriangle({v1, v2, v6});
 
         mesh->SetName("Bounding Box");
 
@@ -265,7 +276,7 @@ namespace gladius::io
 
         for (int y = 0; y < height; y++)
         {
-            for (int x = 0 ; x < width; x++)
+            for (int x = 0; x < width; x++)
             {
                 unsigned int indexTarget = (y * width + width - x - 1) * numChannels;
                 unsigned int indexSource = ((height - y - 1) * width + x) * numChannels;
@@ -275,8 +286,8 @@ namespace gladius::io
                 }
             }
         }
-       
-        data =  std::move(swappedData);
+
+        data = std::move(swappedData);
     }
 
     bool ImageStackExporter::advanceExport(ComputeCore & generator)
@@ -340,13 +351,13 @@ namespace gladius::io
 
     Lib3MF_uint32 ImageStackExporter::getColumnCountPng() const
     {
-       // return m_rowCountWorld;
+        // return m_rowCountWorld;
         return m_columnCountWorld;
     }
 
     Lib3MF_uint32 ImageStackExporter::getRowCountPng() const
     {
-       // return m_columnCountWorld;
+        // return m_columnCountWorld;
         return m_rowCountWorld;
     }
 }
