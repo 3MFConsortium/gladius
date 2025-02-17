@@ -21,6 +21,8 @@ namespace gladius
             return 3;
         case io::PixelFormat::GRAYSCALE_16BIT:
         case io::PixelFormat::GRAYSCALE_8BIT:
+        case io::PixelFormat::GRAYSCALE_2BIT:
+        case io::PixelFormat::GRAYSCALE_1BIT:
             return 1;
         case io::PixelFormat::GRAYSCALE_ALPHA_16BIT:
         case io::PixelFormat::GRAYSCALE_ALPHA_8BIT:

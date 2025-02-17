@@ -9,6 +9,7 @@ namespace gladius::io
     enum class PixelFormat
     {
         GRAYSCALE_1BIT,
+        GRAYSCALE_2BIT,
         RGBA_8BIT,
         RGB_8BIT,
         GRAYSCALE_8BIT,

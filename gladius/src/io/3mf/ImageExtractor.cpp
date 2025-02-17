@@ -150,6 +150,10 @@ namespace gladius::io
         {
             return PixelFormat::GRAYSCALE_1BIT;
         }
+        if (colorMode.bitdepth == 2)
+        {
+            return PixelFormat::GRAYSCALE_8BIT;
+        }
         if (colorMode.bitdepth == 4 || colorMode.bitdepth == 8)
         {
             switch (colorMode.colortype)
