@@ -15,6 +15,7 @@
 #include <Eigen/src/Core/Matrix.h>
 #include <Eigen/src/Core/util/Constants.h>
 #include <fmt/format.h>
+#include <clipper2/clipper.h>
 
 #include "Contour.h"
 #include "ContourValidator.h"
@@ -75,6 +76,7 @@ namespace gladius
     void ContourExtractor::runPostProcessing()
     {
         simplify();
+        calcSign();
         updateContourMode();
         measureQuality();
     }
@@ -542,6 +544,133 @@ namespace gladius
         {
             polyline.area = calcArea(polyline);
         }
+    }
+
+    // using Vector2 = Eigen::Vector2f;
+
+    bool pointInPolygon(const Vector2 & pt, const PolyLine & poly)
+    {
+        // Note: assumes polygon.vertices is a closed loop.
+        bool inside = false;
+        size_t numVertices = poly.vertices.size();
+        for (size_t i = 0, j = numVertices - 1; i < numVertices; j = i++)
+        {
+            const auto & vi = poly.vertices[i];
+            const auto & vj = poly.vertices[j];
+            // Check if point lies between the y-coordinates of the edge
+            bool intersect =
+              ((vi.y() > pt.y()) != (vj.y() > pt.y())) &&
+              (pt.x() <
+               (vj.x() - vi.x()) * (pt.y() - vi.y()) / (vj.y() - vi.y() + FLT_EPSILON) + vi.x());
+            if (intersect)
+                inside = !inside;
+        }
+        return inside;
+    }
+
+    bool isClockwise(const PolyLine & polyline)
+    {
+        if (polyline.vertices.size() < 3)
+        {
+            throw std::invalid_argument("Polygon must have at least 3 vertices.");
+        }
+
+        float sum = 0.0f;
+        for (size_t i = 0; i < polyline.vertices.size(); ++i)
+        {
+            const auto & current = polyline.vertices[i];
+            const auto & next = polyline.vertices[(i + 1) % polyline.vertices.size()];
+            sum += (next.x() - current.x()) * (next.y() + current.y());
+        }
+
+        return sum > 0.0f;
+    }
+
+    void reversePolyline(PolyLine & polyline)
+    {
+        std::reverse(std::begin(polyline.vertices), std::end(polyline.vertices));
+    }
+
+    void ContourExtractor::calcSign()
+    {
+
+        // Loop over all closed contours and determine the sign based on containment.
+        // For each contour, count how many other contours contain the first point of the contour.
+        for (auto & poly : m_closedContours)
+        {
+            if (poly.vertices.empty())
+            {
+                continue;
+            }
+            // Use the firt point of the polyline as a sample point.
+            Vector2 samplePoint = poly.vertices.front();
+            unsigned int containmentCount = 0;
+            for (auto const & candidate : m_closedContours)
+            {
+                // Do not test against itself.
+                if (&candidate == &poly)
+                    continue;
+                // If the candidate contour contains the sample point then increase the counter.
+                if (pointInPolygon(samplePoint, candidate))
+                {
+                    containmentCount++;
+                }
+            }
+            // If the number of surrounding contours is odd, consider the polyline a hole.
+            // We then set the sign of its area to be negative.
+            // Otherwise, the contour is outer and the area remains positive.
+            bool const isClockwise = poly.area > 0;
+
+
+            if (containmentCount % 2 == 1)
+            {
+                poly.area = -fabs(poly.area);
+                if (isClockwise)
+                {
+                    reversePolyline(poly);
+                }
+
+            }
+            else
+            {
+                poly.area = fabs(poly.area);
+                if (!isClockwise)
+                {
+                    reversePolyline(poly);
+                }
+            }
+        }
+    }
+
+    PolyLines ContourExtractor::generateOffsetContours(float offset, PolyLines const & contours) const
+    {
+        using namespace Clipper2Lib;
+
+        PathsD inputPaths;
+        for (const auto & polyline : contours)
+        {
+            PathD path;
+            for (const auto & vertex : polyline.vertices)
+            {
+                path.push_back(PointD(vertex.x(), vertex.y()));
+            }
+            inputPaths.push_back(path);
+        }
+
+        auto solutionPaths = InflatePaths(inputPaths, offset, JoinType::Round, EndType::Polygon);
+        PolyLines offsetContours;
+        for (const auto & path : solutionPaths)
+        {
+            PolyLine polyline;
+            for (const auto & point : path)
+            {
+                polyline.vertices.push_back(Vector2(point.x, point.y));
+            }
+            polyline.isClosed = true;
+            offsetContours.push_back(std::move(polyline));
+        }
+
+        return offsetContours;
     }
 
     void ContourExtractor::updateContourMode()

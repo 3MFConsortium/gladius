@@ -36,7 +36,7 @@ namespace gladius::events
     class Logger
     {
       public:
-        void addEvent(Event const & event);
+        virtual void addEvent(Event const & event);
 
         void clear();
 

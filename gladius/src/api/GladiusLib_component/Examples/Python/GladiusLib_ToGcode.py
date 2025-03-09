@@ -23,15 +23,15 @@ class SlicingParameters:
         self,
         first_layer_height,
         layer_height,
-        num_perimeters,
-        volume_rate_mm3_per_s,
-        extrusion_width=0.6,
+        num_perimeters = 10,
+        volume_rate_mm3_per_s = 10.0,
+        extrusion_width=0.8,
         nozzle_diameter=0.6,
         nozzle_temperature=200,
         travel_speed=250,
         perimeter_overlap=0.15,
         fan_speed=255,
-        acceleration=1000,
+        acceleration=5000,
         brim_width=5.0,
     ):
         self.first_layer_height = first_layer_height  # mm
@@ -100,7 +100,6 @@ class GcodeWriter:
         self.file.write("M82\n")
 
     def setExtruderTemperature(self):
-        self.file.write(f"M104 S{self.slicing_params.nozzle_temperature}\n")
         self.file.write(
             f"M109 S{self.slicing_params.nozzle_temperature}\
             ; wait for nozzle temperature to be reached\n"
@@ -111,11 +110,11 @@ class GcodeWriter:
 
     # Set the fan speed in the range 0-255
     def setFanSpeed(self, speed):
-        self.file.write(f" S{speed}\nM106")
+        self.file.write(f"M106 S{speed}\n")
 
     def setAcceleration(self):
         self.file.write(
-            f"M201 X{self.slicing_params.acceleration} Y{self.slicing_params.acceleration} Z{self.slicing_params.acceleration} E{self.slicing_params.acceleration}\n"
+            f"M204 S{self.slicing_params.acceleration}\n"
         )
 
     def layerChange(self, z_height, layer_height):
@@ -147,8 +146,9 @@ class GcodeWriter:
                 continue
             previous_vertex = polygon[0]
             # Move to the first vertex of the polygon without extruding
+            travelSpeed_mm_per_min = self.slicing_params.travel_speed * 60.0
             self.file.write(
-                f"G1 X{previous_vertex[0]:.4f} Y{previous_vertex[1]:.4f} F{self.slicing_params.travel_speed:.4f}\n"
+                f"G1 X{previous_vertex[0]:.4f} Y{previous_vertex[1]:.4f} F{travelSpeed_mm_per_min:.4f}\n"
             )
 
             self.file.write(f";TYPE:Perimeter\n")
@@ -183,6 +183,11 @@ class GcodeWriter:
                 )
                 previous_vertex = currentVertex
 
+    def endPrint(self):
+        self.file.write("M104 S0\n")
+        self.file.write("M140 S0\n")
+        self.file.write("END_PRINT\n")
+
 
 def process_polygon(polygon):
     vertices = []
@@ -193,10 +198,6 @@ def process_polygon(polygon):
             break
     # Close the polygon
     vertices.append(vertices[0])
-
-    area = polygon.GetArea()
-    if area < 0:
-        vertices = vertices[::-1]
     return vertices
 
 
@@ -204,73 +205,12 @@ def process_contour(contour):
     polygons = []
     while contour.GetSize() > 0:
         polygon = contour.GetCurrentPolygon()
-        area = polygon.GetArea()
         vertices = process_polygon(polygon)
 
         polygons.append(vertices)
         if not contour.Next():
             break
     return polygons
-
-
-def generate_perimeters(polygons, extrusion_width, num_perimeters, perimeter_overlap):
-
-    perimeters = []
-
-    offset_distance = 0.5 * extrusion_width
-
-    po = pyclipr.ClipperOffset()
-    po.scaleFactor = int(1e5)
-
-    for polygon in polygons:
-        po.addPaths([polygon], pyclipr.JoinType.Miter, pyclipr.EndType.Polygon)
-
-    for i in range(num_perimeters):
-
-        offsetted_polygons = po.execute(-offset_distance)
-
-        offset_distance += extrusion_width * (1.0 - perimeter_overlap)
-
-        # clip the offsetted polygons by the original polygons
-        clipper = pyclipr.Clipper()
-        clipper.scaleFactor = int(1e4)
-        clipper.addPaths(offsetted_polygons, pyclipr.Subject)
-        clipper.addPaths(polygons, pyclipr.Clip)
-        result = clipper.execute(pyclipr.ClipType.Intersection)
-
-        # Append the offsetted polygons to the perimeters
-        perimeters.extend(result)
-
-    return perimeters
-
-
-def generate_perimeters_with_brims(
-    polygons, extrusion_width, num_perimeters, perimeter_overlap, brim_width
-):
-    import math
-    import pyclipr
-
-    brim_polygons = []
-    # Compute the number of brim contours needed to fill the entire brim_width.
-    num_brim_lines = int(math.ceil(brim_width / extrusion_width))
-    # Generate each brim contour with an increasing offset.
-    for i in range(1, num_brim_lines + 1):
-        # Reinitialize the clipper for each offset to avoid state carryover.
-        po = pyclipr.ClipperOffset()
-        po.scaleFactor = int(1e5)
-        for polygon in polygons:
-            po.addPaths([polygon], pyclipr.JoinType.Miter, pyclipr.EndType.Polygon)
-        current_offset = extrusion_width * i
-        brim_line = po.execute(current_offset)
-        brim_polygons.extend(brim_line)
-
-    # Generate internal perimeters (inward offsets)
-    perimeters = generate_perimeters(
-        polygons, extrusion_width, num_perimeters, perimeter_overlap
-    )
-
-    # Combine brim contours (external) with the internal perimeters.
-    return brim_polygons + perimeters
 
 
 def reduce_travel_moves(polygons):
@@ -365,12 +305,12 @@ def main():
 
     slicing_params = SlicingParameters(
         first_layer_height=0.3,
-        layer_height=0.2,
-        num_perimeters=100,
+        layer_height=0.3,
+        num_perimeters=50,
         volume_rate_mm3_per_s=10.0,
-        extrusion_width=0.6,
+        extrusion_width=0.8,
         nozzle_diameter=0.6,
-        nozzle_temperature=200,
+        nozzle_temperature=195,
         travel_speed=250,
         perimeter_overlap=0.05,
     )
@@ -422,42 +362,51 @@ def main():
             previous_z = z_height_mm
 
             gcode_writer.layerChange(z_height_mm, layer_height)
+            gcode_writer.setAcceleration()
 
-            contour = gladius.GenerateContour(z_height_in_model, 0.0)
+            offset = -slicing_params.extrusion_width * 0.5
+            contour = gladius.GenerateContour(z_height_in_model, offset)
+            # Convert contour to pyclipr format
+            polygons = process_contour(contour)
+            sorted_perimeter = reduce_travel_moves(polygons)
+            gcode_writer.addPolygons(sorted_perimeter, layer_height)
+
+            polygons = []
+
+            # loop through the requested perimeters
+            offsetRange = range(0, slicing_params.num_perimeters)
+
+            # Add brim for the first layer additional to the perimeters
+            # brim_width = slicing_params.brim_width
+            # extend the offset range by the number of brim lines
+            if i == 0:
+                num_brim_lines = int(math.ceil(slicing_params.brim_width / slicing_params.extrusion_width))
+                offsetRange = range(-num_brim_lines, slicing_params.num_perimeters)
+
+
+            for j in offsetRange:
+                contour = gladius.GenerateContour(z_height_in_model, offset)
+                # Convert contour to pyclipr format and append to polygons
+                polygons.extend(process_contour(contour))
+                offset -= (math.copysign(1, j) * slicing_params.extrusion_width * (1.0 - slicing_params.perimeter_overlap))
+                
+            progress_dialog.Update(
+                i + 1, f"Generating contours at Z={z_height_mm:.2f} mm"
+            )
+
+            sorted_perimeter = reduce_travel_moves(polygons)
+
+            gcode_writer.addPolygons(sorted_perimeter, layer_height)
+            gcode_writer.setExtruderTemperatureWithoutWait()
+
             print(
                 "Contours at Z={:.2f} mm: Number of polygons in contour: {}".format(
                     z_height_in_model, contour.GetSize()
                 )
             )
-            progress_dialog.Update(
-                i + 1, f"Generating contours at Z={z_height_mm:.2f} mm"
-            )
-
-            # Convert contour to pyclipr format
-            polygons = process_contour(contour)
-
-            # Choose perimeter generation function based on the layer index
-            if i == 0:
-                perimeter_generator = generate_perimeters_with_brims
-                extra_kwargs = {"brim_width": slicing_params.brim_width}
-            else:
-                perimeter_generator = generate_perimeters
-                extra_kwargs = {}
-
-            # Generate perimeters with the chosen function
-            perimeter = perimeter_generator(
-                polygons=polygons,
-                extrusion_width=slicing_params.extrusion_width,
-                num_perimeters=slicing_params.num_perimeters,
-                perimeter_overlap=slicing_params.perimeter_overlap,
-                **extra_kwargs,
-            )
-            sorted_perimeter = reduce_travel_moves(perimeter)
-            gcode_writer.setAcceleration()
-            gcode_writer.addPolygons(sorted_perimeter, layer_height)
-
             gcode_writer.setExtruderTemperatureWithoutWait()  # Set temperature for next layer
             gcode_writer.setFanSpeed(slicing_params.fan_speed)
+        gcode_writer.endPrint()
     progress_dialog.Destroy()
 
 

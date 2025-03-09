@@ -44,6 +44,7 @@ set(DEPENDENCIES
     unofficial::minizip::minizip
     imgui::imgui
     unofficial::imgui-node-editor::imgui-node-editor
+    PkgConfig::Clipper2
 )
 
 if (WIN32)

@@ -548,9 +548,18 @@ namespace gladius
 
     PolyLines Document::generateContour(float z, nodes::SliceParameter const & sliceParameter) const
     {
-        m_core->setSliceHeight(z);
-        m_core->requestContourUpdate(sliceParameter);
-        return m_core->getContour().getContour();
+        if (z != m_core->getSliceHeight())
+        {
+            m_core->setSliceHeight(z);
+            m_core->requestContourUpdate(sliceParameter);
+        }
+
+        PolyLines contours = m_core->getContour().getContour();
+        if (sliceParameter.offset != 0.f)
+        {
+            return m_core->getContour().generateOffsetContours(sliceParameter.offset, contours);
+        }
+        return contours;
     }
 
     BoundingBox Document::computeBoundingBox() const
