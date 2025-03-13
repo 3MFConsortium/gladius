@@ -2,6 +2,7 @@
 #include "IExporter.h"
 
 #include "EventLogger.h"
+#include "kernel/types.h"
 
 #include <filesystem>
 #include <lib3mf/Cpp/lib3mf_implicit.hpp>
@@ -11,16 +12,13 @@
 
 namespace gladius::io
 {
-
-
-
-
+    Lib3MF::PMeshObject addBoundingBoxAsMesh(Lib3MF::PModel model, BoundingBox const & bb);
 
     class ImageStackExporter : public IExporter
     {
       public:
         explicit ImageStackExporter(events::SharedLogger logger);
-        
+
         void beginExport(const std::filesystem::path & fileName, ComputeCore & generator) override;
         bool advanceExport(ComputeCore & generator) override;
 
@@ -38,7 +36,7 @@ namespace gladius::io
 
         std::filesystem::path m_outputFilename{};
 
-        float m_layerIncrement_mm = 0.1f;
+        float m_layerIncrement_mm = 0.04f;
         float m_bandwidth_mm = m_layerIncrement_mm * 2.f;
         size_t m_qualityLevel = 1; // 3 = best quality, but insane high memory usage
         double m_progress = 0.;
@@ -53,8 +51,6 @@ namespace gladius::io
         Lib3MF_uint32 m_sheetcount = 0u;
         Lib3MF_uint32 m_columnCountWorld = 0u;
         Lib3MF_uint32 m_rowCountWorld = 0u;
-
-
 
         events::SharedLogger m_logger;
     };

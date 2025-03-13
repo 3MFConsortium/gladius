@@ -9,7 +9,7 @@ namespace gladius_tests
 
     struct TestFiles
     {
-        static auto constexpr Boundary3mf = "testdata/Boundary.3mf";
+        static auto constexpr Volumetric3mf = "testdata/box.imagestack.3mf";
     };
 
     TEST(ImageExtractor, Open_Valid3mfFile_ReturnsTrue)
@@ -18,7 +18,7 @@ namespace gladius_tests
         io::ImageExtractor extractor;
 
         // act
-        auto const result = extractor.loadFromArchive(TestFiles::Boundary3mf);
+        auto const result = extractor.loadFromArchive(TestFiles::Volumetric3mf);
 
         // assert
         EXPECT_TRUE(result);
@@ -37,10 +37,17 @@ namespace gladius_tests
     {
         // arrange
         io::ImageExtractor extractor;
-        extractor.loadFromArchive(TestFiles::Boundary3mf);
+
+        std::filesystem::path currentPath = std::filesystem::current_path();
+        std::cout << "Current path is: " << currentPath << std::endl;
+        auto const completeFilePath = currentPath / TestFiles::Volumetric3mf;
+        std::cout << "Complete file path is: " << completeFilePath << std::endl;
+        ASSERT_TRUE(std::filesystem::exists(completeFilePath));
+
+        extractor.loadFromArchive(TestFiles::Volumetric3mf);
 
         // act
-        auto const result = extractor.loadFileFromArchive("volume/layer_01.png");
+        auto const result = extractor.loadFileFromArchive("volume/1/layer_001.png");
 
         // assert
         EXPECT_FALSE(result.empty());
@@ -63,16 +70,16 @@ namespace gladius_tests
     {
         // arrange
         io::ImageExtractor extractor;
-        extractor.loadFromArchive(TestFiles::Boundary3mf);
+        extractor.loadFromArchive(TestFiles::Volumetric3mf);
 
         // act
-        io::ImageStack const imgStack = extractor.loadImageStack({"volume/layer_01.png"});
+        io::ImageStack const imgStack = extractor.loadImageStack({"volume/1/layer_001.png"});
         auto firstImage = imgStack.front();
         auto pngInfo = extractor.getPNGInfo();
 
         constexpr auto numChannels = 4; // lodepng always decodes to RGBA
         auto numPixels = firstImage.getWidth() * firstImage.getHeight();
-        auto numBytes = numPixels * numChannels * pngInfo.color.bitdepth / 8;
+        auto numBytes = numPixels * numChannels;
         // assert
         EXPECT_EQ(firstImage.getData().size(), numBytes);
     }

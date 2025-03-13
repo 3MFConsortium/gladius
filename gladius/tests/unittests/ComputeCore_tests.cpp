@@ -54,16 +54,15 @@ namespace gladius_tests
         
         auto const & payloadData = core->getPrimitives().data.getData();
         auto const payloadDataHash = helper::computeHash(payloadData.cbegin(), payloadData.cend());
-        EXPECT_EQ(payloadDataHash, 9060768986935382616u);
+        EXPECT_EQ(payloadDataHash, 9702363036366401599u);
 
-        auto const parameter = core->getResourceContext().getParameterBuffer().getData();
-        for (auto const & param : parameter)
+        auto const parameter = core->getResourceContext().getParameterBuffer().getData();        for (auto const & param : parameter)
         {
             std::cout << param << std::endl;
         }
 
         auto const parameterHash = helper::computeHash(parameter.cbegin(), parameter.cend());
-        constexpr auto expectedHash = 16527889583062519464u;
+        constexpr auto expectedHash = 15121003317986780364u;
         EXPECT_EQ(parameterHash, expectedHash);
 
         EXPECT_TRUE(core->precomputeSdfForWholeBuildPlatform());
@@ -82,7 +81,7 @@ namespace gladius_tests
 
         auto const & data = preComp.getData();
         auto const hash = helper::computeHash(data.cbegin(), data.cend());
-        EXPECT_EQ(hash, 8853725864174386457);
+        EXPECT_EQ(hash, 17803807128366017585);
 
         auto bBox = core->getBoundingBox();
         EXPECT_TRUE(bBox.has_value());

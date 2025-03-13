@@ -125,13 +125,36 @@ namespace gladius::io
         return fileContents;
     }
 
+    std::string colorTypeToString(LodePNGColorType colorType)
+    {
+        switch (colorType)
+        {
+        case LCT_GREY:
+            return "LCT_GREY";
+        case LCT_RGB:
+            return "LCT_RGB";
+        case LCT_PALETTE:
+            return "LCT_PALETTE";
+        case LCT_GREY_ALPHA:
+            return "LCT_GREY_ALPHA";
+        case LCT_RGBA:
+            return "LCT_RGBA";
+        default:
+            return "unknown";
+        }
+    }
+
     PixelFormat fromPngColorType(LodePNGColorMode const & colorMode)
     {
         if (colorMode.bitdepth == 1)
         {
             return PixelFormat::GRAYSCALE_1BIT;
         }
-        if (colorMode.bitdepth == 8)
+        if (colorMode.bitdepth == 2)
+        {
+            return PixelFormat::GRAYSCALE_8BIT;
+        }
+        if (colorMode.bitdepth == 4 || colorMode.bitdepth == 8)
         {
             switch (colorMode.colortype)
             {
@@ -143,8 +166,10 @@ namespace gladius::io
                 return PixelFormat::RGB_8BIT;
             case LCT_RGBA:
                 return PixelFormat::RGBA_8BIT;
+            case LCT_PALETTE:
+                return PixelFormat::RGBA_8BIT;
             default:
-                throw std::runtime_error("Error: unsupported PNG color type");
+                throw std::runtime_error(fmt::format("Error: unsupported PNG color type {}", colorTypeToString(colorMode.colortype)));
             }
         }
         if (colorMode.bitdepth == 16)
@@ -159,12 +184,14 @@ namespace gladius::io
                 return PixelFormat::RGB_16BIT;
             case LCT_RGBA:
                 return PixelFormat::RGBA_16BIT;
+            case LCT_PALETTE:
+                return PixelFormat::RGBA_16BIT;
             default:
-                throw std::runtime_error("Error: unsupported PNG color type");
+                throw std::runtime_error(fmt::format("Error: unsupported PNG color type {}", colorTypeToString(colorMode.colortype)));
             }
         }
 
-        throw std::runtime_error("Error: unsupported PNG bit depth");
+        throw std::runtime_error(fmt::format("Error: unsupported PNG bit depth {}", colorMode.bitdepth));
     }
 
     ImageStack ImageExtractor::loadImageStack(FileList const & filenames)
