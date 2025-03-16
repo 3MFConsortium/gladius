@@ -145,6 +145,7 @@ IContourAccessor * CGladius::GenerateContour(const GladiusLib_single fZ,
 {
     gladius::nodes::SliceParameter sliceParameter;
     sliceParameter.zHeight_mm = fZ;
+    sliceParameter.offset = fOffset;
     auto contour = std::make_shared<gladius::PolyLines>(m_doc->generateContour(fZ, sliceParameter));
     auto * const contourAccessor = new CContourAccessor();
     contourAccessor->setContour(std::move(contour));

@@ -8,7 +8,7 @@ namespace gladius::ui
     void MeshExportDialog::beginExport(std::filesystem::path stlFilename, ComputeCore & core)
     {
         m_visible = true;
-        m_exporter.setQualityLevel(2);
+        m_exporter.setQualityLevel(1);
         m_exporter.beginExport(stlFilename, core);
     }
 

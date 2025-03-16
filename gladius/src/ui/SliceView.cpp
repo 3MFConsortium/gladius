@@ -191,6 +191,7 @@ namespace gladius::ui
                 ImGuiCol const red = IM_COL32(255, 0, 0, 255);
                 ImGuiCol const yellow = IM_COL32(255, 255, 55, 64);
                 ImGuiCol const darkRed = IM_COL32(128, 0, 0, 64);
+                ImGuiCol const greenish = IM_COL32(55, 255, 155, 255);
                 for (auto const & line : lines)
                 {
                     if (line.vertices.size() < 4)
@@ -210,6 +211,12 @@ namespace gladius::ui
                          ++iter)
                     {
                         auto actualColor = color;
+
+                        if (line.area < 0.f)
+                        {
+                            actualColor = greenish;
+                        }
+
                         if (m_showSelfIntersections && line.hasIntersections)
                         {
                             actualColor = yellow;

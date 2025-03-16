@@ -46,7 +46,8 @@
     "pugixml",
     "lib3mf",
     "minizip",
-    "tracy"
+    "tracy",
+    "clipper2"
   ],
   "overrides": [
     {
