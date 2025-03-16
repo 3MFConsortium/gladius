@@ -305,14 +305,15 @@ def main():
 
     slicing_params = SlicingParameters(
         first_layer_height=0.3,
-        layer_height=0.3,
+        layer_height=0.1,
         num_perimeters=50,
         volume_rate_mm3_per_s=10.0,
-        extrusion_width=0.8,
+        extrusion_width=0.7,
         nozzle_diameter=0.6,
-        nozzle_temperature=195,
+        nozzle_temperature=200,
         travel_speed=250,
-        perimeter_overlap=0.05,
+        perimeter_overlap=0.15,
+        brim_width=0.0
     )
 
     gladius.LoadAssembly(input_file)
@@ -354,6 +355,7 @@ def main():
         gcode_writer.enableAbsolutePositioning()
 
         gcode_writer.setAcceleration()
+        gcode_writer.setExtruderTemperatureWithoutWait()
 
         for i, z_height in enumerate(z_range):
             z_height_mm = slicing_params.first_layer_height + z_height / 1000.0
@@ -397,14 +399,13 @@ def main():
             sorted_perimeter = reduce_travel_moves(polygons)
 
             gcode_writer.addPolygons(sorted_perimeter, layer_height)
-            gcode_writer.setExtruderTemperatureWithoutWait()
 
             print(
                 "Contours at Z={:.2f} mm: Number of polygons in contour: {}".format(
                     z_height_in_model, contour.GetSize()
                 )
             )
-            gcode_writer.setExtruderTemperatureWithoutWait()  # Set temperature for next layer
+          
             gcode_writer.setFanSpeed(slicing_params.fan_speed)
         gcode_writer.endPrint()
     progress_dialog.Destroy()
