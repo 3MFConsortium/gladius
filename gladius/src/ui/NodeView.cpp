@@ -13,7 +13,7 @@
 #include "nodesfwd.h"
 
 #include "imguinodeeditor.h"
-#include <components/IconFontCppHeaders/IconsFontAwesome5.h>
+#include <IconFontCppHeaders/IconsFontAwesome5.h>
 
 #include <imgui.h>
 #include <imgui_stdlib.h>

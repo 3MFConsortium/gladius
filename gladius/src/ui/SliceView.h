@@ -3,7 +3,7 @@
 #include "compute/ComputeCore.h"
  
 #include "imgui.h"
-#include "src/Contour.h"
+#include "Contour.h"
 #include <optional>
 
 namespace gladius

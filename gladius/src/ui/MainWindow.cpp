@@ -16,7 +16,7 @@
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
 #include "../TimeMeasurement.h"
 #include "../io/MeshExporter.h"
-#include "../nodes/ToCommandStreamVisitor.h"
+#include <nodes/ToCommandStreamVisitor.h>
 #include "AboutDialog.h"
 #include "FileChooser.h"
 #include "FileSystemUtils.h"

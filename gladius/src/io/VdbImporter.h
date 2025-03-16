@@ -1,7 +1,7 @@
 #pragma once
 #include "Parameter.h"
-#include "src/Primitives.h"
-#include "src/Profiling.h"
+#include "Primitives.h"
+#include "Profiling.h"
 #include "vdb.h"
 #include <filesystem>
 #include <nanovdb/util/HostBuffer.h>

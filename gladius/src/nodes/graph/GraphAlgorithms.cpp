@@ -1,6 +1,6 @@
 ﻿#include "GraphAlgorithms.h"
 #include "graph/IDirectedGraph.h"
-#include "src/Profiling.h"
+#include "Profiling.h"
 
 #include <list>
 #include <queue>

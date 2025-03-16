@@ -9,13 +9,13 @@
 #include <fmt/format.h>
 #include <limits>
 #include <map>
-#include <src/Primitives.h>
+#include "Primitives.h"
 
-#include "src/ImageStackResource.h"
-#include "src/ResourceContext.h"
-#include "src/ResourceKey.h"
-#include "src/ResourceManager.h"
-#include "src/VdbResource.h"
+#include "ImageStackResource.h"
+#include "ResourceContext.h"
+#include "ResourceKey.h"
+#include "ResourceManager.h"
+#include "VdbResource.h"
 
 namespace gladius::nodes
 {

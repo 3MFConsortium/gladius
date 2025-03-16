@@ -5,7 +5,7 @@
 
 #include "GLView.h"
 #include "Widgets.h"
-#include "src/ContourExtractor.h"
+#include "ContourExtractor.h"
 
 namespace gladius
 {

@@ -1,4 +1,3 @@
-
 set(BINARY ${CMAKE_PROJECT_NAME})
 file(GLOB SOURCES LIST_DIRECTORIES true *.h *.cpp)
 
@@ -12,11 +11,22 @@ else()
     add_executable(${BINARY} ${SOURCES} )
 endif()
 
+# Add include paths
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/IconFontCppHeaders
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/psimpl/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/nodes
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/compute
+)
+
 set (INCLUDE_PATHS
-    ../
-    ../components/IconFontCppHeaders
-    ../components/psimpl/lib
-    ${STB_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/IconFontCppHeaders
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${OPENMESH_INCLUDE_DIRS}
     ${AdditionalIncludes}
 )

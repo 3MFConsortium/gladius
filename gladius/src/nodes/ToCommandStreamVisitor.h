@@ -12,7 +12,7 @@
 #include "Port.h"
 #include "Visitor.h"
 #include "nodesfwd.h"
-#include "src/ResourceContext.h"
+#include "ResourceContext.h"
 
 namespace gladius::nodes
 {

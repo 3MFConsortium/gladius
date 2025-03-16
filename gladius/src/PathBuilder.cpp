@@ -1,7 +1,7 @@
 #include "PathBuilder.h"
 #include "CLMath.h"
 #include "contour/ContourValidator.h"
-#include "src/Contour.h"
+#include "Contour.h"
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4244)
@@ -11,7 +11,7 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
-#include <psimpl.h>
+#include <psimpl/lib/psimpl.h>
 
 #ifdef __clang__
 #pragma clang diagnostic pop

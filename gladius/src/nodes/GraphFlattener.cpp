@@ -1,5 +1,5 @@
 #include "GraphFlattener.h"
-#include "src/Profiling.h"
+#include "Profiling.h"
 #include <fmt/format.h>
 
 namespace gladius::nodes

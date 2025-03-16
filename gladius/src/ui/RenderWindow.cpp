@@ -12,7 +12,7 @@
 #include "../ImageRGBA.h"
 #include "../TimeMeasurement.h"
 #include "../io/MeshExporter.h"
-#include "../nodes/Model.h"
+#include <nodes/Model.h>
 #include "GLView.h"
 #include "Profiling.h"
 #include "Widgets.h"

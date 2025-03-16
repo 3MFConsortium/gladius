@@ -10,9 +10,9 @@
 
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
-#include "../nodes/Assembly.h"
-#include "../nodes/GraphFlattener.h"
-#include "../nodes/Model.h"
+#include <nodes/Assembly.h>
+#include <nodes/GraphFlattener.h>
+#include <nodes/Model.h>
 #include "Document.h"
 #include "MeshResource.h"
 #include "ModelEditor.h"

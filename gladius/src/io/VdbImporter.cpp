@@ -2,12 +2,12 @@
 
 #include "nodes/Assembly.h"
 #include "nodes/Model.h"
-#include "src/Document.h"
-#include "src/Primitives.h"
-#include "src/Profiling.h"
-#include "src/ResourceContext.h"
-#include "src/exceptions.h"
-#include "src/types.h"
+#include "Document.h"
+#include "Primitives.h"
+#include "Profiling.h"
+#include "ResourceContext.h"
+#include "exceptions.h"
+#include "types.h"
 #include "vdb.h"
 
 #include <cstring>

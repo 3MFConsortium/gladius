@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ImageStack.h"
-#include "src/io/vdb.h"
+#include "io/vdb.h"
 
 #include <filesystem>
 #include <lodepng.h>

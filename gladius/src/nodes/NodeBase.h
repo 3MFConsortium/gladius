@@ -10,7 +10,7 @@
 #include "Parameter.h"
 #include "Port.h"
 #include "nodesfwd.h"
-#include "src/Primitives.h"
+#include "Primitives.h"
 
 namespace gladius
 {

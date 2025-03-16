@@ -10,7 +10,7 @@
 #include <fmt/format.h>
 
 #include "Widgets.h"
-#include "src/version.h"
+#include "version.h"
 #include "wordwarp.h"
 
 namespace gladius::ui

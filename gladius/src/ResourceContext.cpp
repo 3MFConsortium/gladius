@@ -1,8 +1,8 @@
 #include "ResourceContext.h"
 #include "ResourceManager.h"
 #include "gpgpu.h"
-#include "src/ImageRGBA.h"
-#include "src/Profiling.h"
+#include "ImageRGBA.h"
+#include "Profiling.h"
 
 #include <algorithm>
 #include <cassert>
