@@ -33,6 +33,7 @@ class SlicingParameters:
         fan_speed=255,
         acceleration=5000,
         brim_width=5.0,
+        bed_temperature=60,
     ):
         self.first_layer_height = first_layer_height  # mm
         self.layer_height = layer_height  # mm
@@ -46,6 +47,7 @@ class SlicingParameters:
         self.fan_speed = fan_speed
         self.acceleration = acceleration  # mm/s^2
         self.brim_width = brim_width  # mm
+        self.bed_temperature = bed_temperature
 
 
 def select_file(default_dir):
@@ -183,10 +185,43 @@ class GcodeWriter:
                 )
                 previous_vertex = currentVertex
 
+    def addPause(self):
+        self.file.write("PAUSE\n")
+
+    def setBedTemperature(self):
+        self.file.write(
+            f"M190 S{self.slicing_params.bed_temperature}\
+            ; wait for bed temperature to be reached\n"
+        )
+
     def endPrint(self):
         self.file.write("M104 S0\n")
         self.file.write("M140 S0\n")
         self.file.write("END_PRINT\n")
+
+    def startPrint(self):
+        self.file.write("M73 P0 R30\n")
+        self.file.write(f"M190 S{self.slicing_params.bed_temperature} ; set bed temperature and wait for it to be reached\n")
+        self.file.write(f"M104 S{self.slicing_params.nozzle_temperature} ; set temperature\n")
+        self.file.write(";TYPE:Custom\n")
+        self.file.write("SET_FAN_SPEED FAN=nevermore1 SPEED=1\n")
+        self.file.write("SET_FAN_SPEED FAN=nevermore2 SPEED=1\n")
+        self.file.write("MMU__MOTORS_OFF\n")
+        self.file.write("MMU ENABLE=0\n")
+        self.file.write(f"START_PRINT REFERENCED_TOOLS=!referenced_tools! INITIAL_TOOL=0 EXTRUDER_TEMP={self.slicing_params.nozzle_temperature} BED_TEMP={self.slicing_params.bed_temperature}\n")
+        self.file.write(";SET_SKEW XY=AC,BD,AD\n")
+        self.file.write("SET_SKEW XY=140.8,141.0,99.7\n")
+        self.file.write("MMU__MOTORS_OFF\n")
+        self.file.write("MMU ENABLE=0\n")
+        self.file.write(f"M109 S{self.slicing_params.nozzle_temperature} ; set temperature and wait for it to be reached\n")
+        self.file.write("G21 ; set units to millimeters\n")
+        self.file.write("G90 ; use absolute coordinates\n")
+        self.file.write("M83 ; use relative distances for extrusion\n")
+        self.file.write("; Filament gcode\n")
+        self.file.write("SET_GCODE_OFFSET Z=0\n")
+        self.file.write("SET_PRESSURE_ADVANCE ADVANCE=0.00\n")
+        self.file.write("SET_PRESSURE_ADVANCE EXTRUDER=extruder SMOOTH_TIME=0.02\n")
+        self.file.write("M107\n")
 
 
 def process_polygon(polygon):
@@ -291,11 +326,6 @@ def main():
         print("No file selected.")
         return
 
-    gcode_start = select_gcode_start(os.path.join(scriptpath, "profiles"))
-    if not gcode_start:
-        print("No start gcode selected.")
-        return
-
     default_dir = os.path.dirname(input_file)
     default_filename = os.path.splitext(os.path.basename(input_file))[0] + ".gcode"
     output_file = save_file(default_dir, default_filename)
@@ -308,13 +338,17 @@ def main():
         layer_height=0.1,
         num_perimeters=50,
         volume_rate_mm3_per_s=10.0,
-        extrusion_width=0.7,
+        extrusion_width=0.6,
         nozzle_diameter=0.6,
-        nozzle_temperature=200,
+        nozzle_temperature=230,
         travel_speed=250,
         perimeter_overlap=0.15,
-        brim_width=0.0
+        brim_width=5.0,
+        bed_temperature=100,
     )
+
+    list_of_pause_zheights = [6.0]
+    pause_triggered = {pause: False for pause in list_of_pause_zheights}
 
     gladius.LoadAssembly(input_file)
 
@@ -348,14 +382,14 @@ def main():
 
     previous_z = 0.0
     with open(output_file, "w") as f:
-        with open(gcode_start, "r") as start_file:
-            f.write(start_file.read())
 
         gcode_writer = GcodeWriter(f, slicing_params)
+        gcode_writer.startPrint()
         gcode_writer.enableAbsolutePositioning()
 
         gcode_writer.setAcceleration()
         gcode_writer.setExtruderTemperatureWithoutWait()
+        gcode_writer.setBedTemperature()
 
         for i, z_height in enumerate(z_range):
             z_height_mm = slicing_params.first_layer_height + z_height / 1000.0
@@ -400,11 +434,12 @@ def main():
 
             gcode_writer.addPolygons(sorted_perimeter, layer_height)
 
-            print(
-                "Contours at Z={:.2f} mm: Number of polygons in contour: {}".format(
-                    z_height_in_model, contour.GetSize()
-                )
-            )
+            for pause in list_of_pause_zheights:
+                if (not pause_triggered[pause]) and (z_height_mm > pause):
+                    gcode_writer.addPause()
+                    pause_triggered[pause] = True
+                    # caveman debugging
+                    print(f"Pause at Z={z_height_mm:.2f} mm")
           
             gcode_writer.setFanSpeed(slicing_params.fan_speed)
         gcode_writer.endPrint()
