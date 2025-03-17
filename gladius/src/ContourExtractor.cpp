@@ -670,6 +670,12 @@ namespace gladius
             offsetContours.push_back(std::move(polyline));
         }
 
+        // simplify the offset contours
+        for (auto & polyline : offsetContours)
+        {
+            simplifyPolyline(polyline, m_simplificationTolerance);
+        }
+
         return offsetContours;
     }
 
