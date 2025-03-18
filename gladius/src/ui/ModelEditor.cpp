@@ -1,5 +1,3 @@
-
-
 #include <exception>
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
@@ -243,10 +241,19 @@ namespace gladius::ui
 
     void ModelEditor::functionOutline()
     {
-
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
+
+        ImGui::Indent();
+
+        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_PLUS "\tNew Function")))
+        {
+            ImGui::OpenPopup("Add Function");
+            m_showAddModel = true;
+        }
+
+        ImGui::Unindent();
 
         for (auto & model : m_assembly->getFunctions())
         {
@@ -359,8 +366,17 @@ namespace gladius::ui
                         ImGui::TreePop();
                     }
                 }
-                // Empy line to separate the nodes from the function name
-                ImGui::TextUnformatted("");
+
+                if (!isAssembly || model.second->isManaged())
+                {
+                    if (ImGui::Button("delete"))
+                    {
+                        m_doc->deleteFunction(model.second->getResourceId());
+                        m_currentModel = m_assembly->assemblyModel();
+                        m_dirty = true;
+                    }
+                }
+
                 ImGui::TreePop();
             }
 
@@ -368,42 +384,6 @@ namespace gladius::ui
             frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, isModelSelected ? 0.2f : 0.1f));
 
             ImGui::PopID();
-        }
-    }
-
-    void ModelEditor::newModelDialog()
-    {
-        if (m_showAddModel)
-        {
-            ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f,
-                                ImGui::GetIO().DisplaySize.y * 0.5f);
-            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-            ImGui::OpenPopup("Add Function");
-            if (ImGui::BeginPopupModal(
-                  "Add Function", &m_showAddModel, ImGuiWindowFlags_AlwaysAutoResize))
-            {
-                ImGui::Text("Please enter the name of the new function");
-                ImGui::Separator();
-
-                ImGui::InputText("function name", &m_newModelName);
-                if (ImGui::Button("OK", ImVec2(120, 0)))
-                {
-                    auto & newModel = m_doc->createNewFunction();
-                    newModel.setDisplayName(m_newModelName);
-                    switchModel();
-
-                    m_showAddModel = false;
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::SetItemDefaultFocus();
-                ImGui::SameLine();
-                if (ImGui::Button("Cancel", ImVec2(120, 0)))
-                {
-                    ImGui::CloseCurrentPopup();
-                    m_showAddModel = false;
-                }
-                ImGui::EndPopup();
-            }
         }
     }
 
