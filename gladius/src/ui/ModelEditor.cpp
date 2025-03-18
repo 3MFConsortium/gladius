@@ -163,32 +163,6 @@ namespace gladius::ui
         }
 
         ImGui::Begin("Outline", nullptr, ImGuiWindowFlags_MenuBar);
-
-        if (ImGui::BeginMenuBar())
-        {
-            if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_PLUS "\tNew Function")))
-            {
-                ImGui::OpenPopup("Add Function");
-                m_showAddModel = true;
-            }
-
-            auto resId = m_currentModel->getResourceId();
-            auto const isAssembly = resId == m_assembly->assemblyModel()->getResourceId();
-
-            if (!isAssembly || m_currentModel->isManaged())
-            {
-                if (ImGui::MenuItem(
-                      reinterpret_cast<const char *>(ICON_FA_MINUS "\tDelete Function")))
-                {
-                    m_doc->deleteFunction(m_currentModel->getResourceId());
-                    m_currentModel = m_assembly->assemblyModel();
-                    m_dirty = true;
-                }
-            }
-
-            ImGui::EndMenuBar();
-        }
-
         m_outline.render();
 
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
@@ -384,6 +358,42 @@ namespace gladius::ui
             frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, isModelSelected ? 0.2f : 0.1f));
 
             ImGui::PopID();
+        }
+    }
+
+    void ModelEditor::newModelDialog()
+    {
+        if (m_showAddModel)
+        {
+            ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f,
+                                ImGui::GetIO().DisplaySize.y * 0.5f);
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            ImGui::OpenPopup("Add Function");
+            if (ImGui::BeginPopupModal(
+                  "Add Function", &m_showAddModel, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Please enter the name of the new function");
+                ImGui::Separator();
+
+                ImGui::InputText("function name", &m_newModelName);
+                if (ImGui::Button("OK", ImVec2(120, 0)))
+                {
+                    auto & newModel = m_doc->createNewFunction();
+                    newModel.setDisplayName(m_newModelName);
+                    switchModel();
+
+                    m_showAddModel = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SetItemDefaultFocus();
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel", ImVec2(120, 0)))
+                {
+                    ImGui::CloseCurrentPopup();
+                    m_showAddModel = false;
+                }
+                ImGui::EndPopup();
+            }
         }
     }
 
