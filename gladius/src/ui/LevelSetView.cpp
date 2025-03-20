@@ -80,6 +80,9 @@ namespace gladius::ui
                 // Display function selection dropdown
                 renderFunctionDropdown(document, model3mf, levelSet, function);
                 
+                // Display channel selection dropdown
+                renderChannelDropdown(document, model3mf, levelSet);
+
                 ImGui::Text("Channel: %s", levelSet->GetChannelName().c_str());
                 ImGui::Text("Min Feature Size: %f", levelSet->GetMinFeatureSize());
                 ImGui::Text("Mesh BBox Only: %s", levelSet->GetMeshBBoxOnly() ? "true" : "false");
@@ -180,6 +183,46 @@ namespace gladius::ui
                 }
             }
             
+            ImGui::EndCombo();
+        }
+    }
+
+    void LevelSetView::renderChannelDropdown(
+        SharedDocument document,
+        Lib3MF::PModel model3mf,
+        Lib3MF::PLevelSet levelSet) const
+    {
+        auto function = levelSet->GetFunction();
+        if (!function)
+        {
+            return;
+        }
+
+        auto functionModel = document->getAssembly()->findModel(io::uniqueResourceIdToResourceId(model3mf, function->GetResourceID()));
+        if (!functionModel)
+        {
+            return;
+        }
+
+        auto& endNodeParameters = functionModel->getOutputs();
+
+        if (ImGui::BeginCombo("Channel", levelSet->GetChannelName().c_str()))
+        {
+            for (const auto& [paramName, param] : endNodeParameters)
+            {
+                bool isSelected = (paramName == levelSet->GetChannelName());
+                if (ImGui::Selectable(paramName.c_str(), isSelected))
+                {
+                    levelSet->SetChannelName(paramName);
+                    document->markFileAsChanged();
+                }
+
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
             ImGui::EndCombo();
         }
     }

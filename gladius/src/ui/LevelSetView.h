@@ -25,5 +25,18 @@ namespace gladius::ui
             Lib3MF::PModel model3mf, 
             Lib3MF::PLevelSet levelSet, 
             Lib3MF::PFunction function) const;
+
+        /**
+         * @brief Renders the channel selection dropdown for a level set
+         * 
+         * @param document The document containing the functions
+         * @param model3mf The 3MF model containing the resources
+         * @param levelSet The level set to modify
+         */
+
+        void renderChannelDropdown(
+            SharedDocument document,
+            Lib3MF::PModel model3mf,
+            Lib3MF::PLevelSet levelSet) const;
     };
 }

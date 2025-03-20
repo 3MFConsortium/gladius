@@ -20,6 +20,12 @@ namespace gladius::nodes
             return false;
         }
 
+        // Check if the "pos" port is the only output port
+        if (outputs.size() != 1)
+        {
+            return false;
+        }
+
         // Check for End node with at least one float parameter
         End* endNode = model.getEndNode();
         if (!endNode)
