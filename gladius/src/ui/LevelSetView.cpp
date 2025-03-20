@@ -2,6 +2,7 @@
 
 #include "Document.h"
 #include "Widgets.h"
+#include <io/3mf/ResourceIdUtil.h>
 
 namespace gladius::ui
 {
@@ -92,15 +93,24 @@ namespace gladius::ui
                             
                             // Get display name or model name as fallback
                             std::string displayName = functionModel->getDisplayName().value_or(functionModel->getModelName());
+
                             
-                            bool isSelected = (functionId == function->GetResourceID());
+
+                            // find the unique resource id of the function in 3MF model
+                            auto uniqueFunctionResourceId = gladius::io::resourceIdToUniqueResourceId(model3mf, functionId);
+                            if (uniqueFunctionResourceId == 0)
+                            {
+                                continue;
+                            }
+                            
+                            bool isSelected = (uniqueFunctionResourceId == function->GetResourceID());
                             if (ImGui::Selectable(fmt::format("#{} - {}", functionId, displayName).c_str(), isSelected))
                             {
                                 // Update the function in the levelset
                                 try
                                 {
                                     // Find the model in the 3MF
-                                    auto resource = model3mf->GetResourceByID(functionId);
+                                    auto resource = model3mf->GetResourceByID(uniqueFunctionResourceId);
 
                                     // try to cast it to a function
                                     auto functionResource = dynamic_cast<Lib3MF::CFunction *>(resource.get());
