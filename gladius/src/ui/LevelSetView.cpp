@@ -34,7 +34,7 @@ namespace gladius::ui
                 continue;
             }
 
-            auto levelSet = dynamic_cast<Lib3MF::CLevelSet *>(resource.get());
+            Lib3MF::PLevelSet levelSet = std::dynamic_pointer_cast<Lib3MF::CLevelSet>(resource);
             if (!levelSet)
             {
                 continue;
@@ -42,6 +42,8 @@ namespace gladius::ui
 
             // Try to get a name for the levelset from metadata
             std::string levelSetName = "";
+            // Check if the level set has a metadata group
+            // and try to find the name in it
             try
             {
                 auto metaDataGroup = levelSet->GetMetaDataGroup();
@@ -76,79 +78,7 @@ namespace gladius::ui
                 auto function = levelSet->GetFunction();
                
                 // Display function selection dropdown
-                if (ImGui::BeginCombo("Function", function->GetDisplayName().c_str()))
-                {
-                    // Get available functions from the document's assembly
-                    auto assembly = document->getAssembly();
-                    if (assembly)
-                    {
-                        auto& functions = assembly->getFunctions();
-                        
-                        // Iterate through available functions/models
-                        for (auto& [functionId, functionModel] : functions)
-                        {
-                            if (!functionModel)
-                            {
-                                continue;
-                            }
-
-                            // Skip the assembly model
-                            if (functionModel->getResourceId() == assembly->assemblyModel()->getResourceId())
-                            {
-                                continue;
-                            }
-
-                            // Skip functions that are not qualified as level sets
-                            if (!nodes::isQualifiedForLevelset(*functionModel))
-                            {
-                                continue;
-                            }
-                            
-                            // Get display name or model name as fallback
-                            std::string displayName = functionModel->getDisplayName().value_or(functionModel->getModelName());
-
-                            
-
-                            // find the unique resource id of the function in 3MF model
-                            auto uniqueFunctionResourceId = gladius::io::resourceIdToUniqueResourceId(model3mf, functionId);
-                            if (uniqueFunctionResourceId == 0)
-                            {
-                                continue;
-                            }
-                            
-                            bool isSelected = (uniqueFunctionResourceId == function->GetResourceID());
-                            if (ImGui::Selectable(fmt::format("#{} - {}", functionId, displayName).c_str(), isSelected))
-                            {
-                                // Update the function in the levelset
-                                try
-                                {
-                                    // Find the model in the 3MF
-                                    auto resource = model3mf->GetResourceByID(uniqueFunctionResourceId);
-
-                                    // try to cast it to a function
-                                    auto functionResource = dynamic_cast<Lib3MF::CFunction *>(resource.get());
-                                    if (functionResource)
-                                    {
-                                        levelSet->SetFunction(functionResource);
-                                        document->markFileAsChanged();
-                                    }
-                                }
-                                catch (...)
-                                {
-                                    // Handle errors silently
-                                }
-                            }
-                            
-                            // Set the initial focus when opening the combo
-                            if (isSelected)
-                            {
-                                ImGui::SetItemDefaultFocus();
-                            }
-                        }
-                    }
-                    
-                    ImGui::EndCombo();
-                }
+                renderFunctionDropdown(document, model3mf, levelSet, function);
                 
                 ImGui::Text("Channel: %s", levelSet->GetChannelName().c_str());
                 ImGui::Text("Min Feature Size: %f", levelSet->GetMinFeatureSize());
@@ -172,6 +102,85 @@ namespace gladius::ui
             }
             ImGui::EndGroup();
             frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
+        }
+    }
+
+    void LevelSetView::renderFunctionDropdown(
+        SharedDocument document, 
+        Lib3MF::PModel model3mf, 
+        Lib3MF::PLevelSet levelSet, 
+        Lib3MF::PFunction function) const
+    {
+        if (ImGui::BeginCombo("Function", function->GetDisplayName().c_str()))
+        {
+            // Get available functions from the document's assembly
+            auto assembly = document->getAssembly();
+            if (assembly)
+            {
+                auto& functions = assembly->getFunctions();
+                
+                // Iterate through available functions/models
+                for (auto& [functionId, functionModel] : functions)
+                {
+                    if (!functionModel)
+                    {
+                        continue;
+                    }
+
+                    // Skip the assembly model
+                    if (functionModel->getResourceId() == assembly->assemblyModel()->getResourceId())
+                    {
+                        continue;
+                    }
+
+                    // Skip functions that are not qualified as level sets
+                    if (!nodes::isQualifiedForLevelset(*functionModel))
+                    {
+                        continue;
+                    }
+                    
+                    // Get display name or model name as fallback
+                    std::string displayName = functionModel->getDisplayName().value_or(functionModel->getModelName());
+
+                    // find the unique resource id of the function in 3MF model
+                    auto uniqueFunctionResourceId = gladius::io::resourceIdToUniqueResourceId(model3mf, functionId);
+                    if (uniqueFunctionResourceId == 0)
+                    {
+                        continue;
+                    }
+                    
+                    bool isSelected = (uniqueFunctionResourceId == function->GetResourceID());
+                    if (ImGui::Selectable(fmt::format("#{} - {}", functionId, displayName).c_str(), isSelected))
+                    {
+                        // Update the function in the levelset
+                        try
+                        {
+                            // Find the model in the 3MF
+                            auto resource = model3mf->GetResourceByID(uniqueFunctionResourceId);
+
+                            // try to cast it to a function
+                            auto functionResource = dynamic_cast<Lib3MF::CFunction*>(resource.get());
+                            if (functionResource)
+                            {
+                                levelSet->SetFunction(functionResource);
+                                document->markFileAsChanged();
+                            }
+                        }
+                        catch (...)
+                        {
+                            // Handle errors silently
+                        }
+                    }
+                    
+                    // Set the initial focus when opening the combo
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+            }
+            
+            ImGui::EndCombo();
         }
     }
 }
