@@ -3,6 +3,7 @@
 #include "Document.h"
 #include "Widgets.h"
 #include <io/3mf/ResourceIdUtil.h>
+#include <nodes/ModelUtils.h>
 
 namespace gladius::ui
 {
@@ -84,9 +85,21 @@ namespace gladius::ui
                         auto& functions = assembly->getFunctions();
                         
                         // Iterate through available functions/models
-                        for (const auto& [functionId, functionModel] : functions)
+                        for (auto& [functionId, functionModel] : functions)
                         {
                             if (!functionModel)
+                            {
+                                continue;
+                            }
+
+                            // Skip the assembly model
+                            if (functionModel->getResourceId() == assembly->assemblyModel()->getResourceId())
+                            {
+                                continue;
+                            }
+
+                            // Skip functions that are not qualified as level sets
+                            if (!nodes::isQualifiedForLevelset(*functionModel))
                             {
                                 continue;
                             }
