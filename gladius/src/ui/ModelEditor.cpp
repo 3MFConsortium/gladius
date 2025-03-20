@@ -21,6 +21,7 @@
 #include "Widgets.h"
 #include "imgui.h"
 #include "nodesfwd.h"
+#include "ui/LevelSetView.h"
 
 namespace gladius::ui
 {
@@ -176,13 +177,14 @@ namespace gladius::ui
             if (ImGui::TreeNodeEx("volumedata", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 ImGui::TreePop();
-            }
-            ImGui::EndGroup();
+            }            ImGui::EndGroup();
             frameOverlay(ImVec4(1.0f, 0.0f, 1.0f, 0.1f));
 
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("levelset", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
+                LevelSetView levelSetView;
+                levelSetView.render(m_doc);
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
@@ -238,6 +240,11 @@ namespace gladius::ui
 
             auto const isAssembly =
               model.second->getResourceId() == m_assembly->assemblyModel()->getResourceId();
+
+            if (isAssembly)
+            {
+                continue;
+            }
 
             auto & modelName = model.first;
             auto uid = &modelName;
