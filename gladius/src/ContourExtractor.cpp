@@ -644,6 +644,11 @@ namespace gladius
 
     PolyLines ContourExtractor::generateOffsetContours(float offset, PolyLines const & contours) const
     {
+
+        if (fabs(offset) < FLT_EPSILON)
+        {
+            return contours;
+        }
         using namespace Clipper2Lib;
 
         PathsD inputPaths;
@@ -657,6 +662,20 @@ namespace gladius
             inputPaths.push_back(path);
         }
 
+        // Simplyfy the input paths using Clipper2Lib as recommended in the documentation.
+        for (auto & polyline : inputPaths)
+        {
+            auto result = Clipper2Lib::SimplifyPath(polyline,
+                                                     m_simplificationTolerance);
+            if (result.empty())
+            {
+                m_logger->addEvent(
+                {fmt::format("Self-intersection detected in polygon. Ignoring offset."),
+                events::Severity::Warning});
+                continue;
+            }
+            polyline = result;
+        }
         auto solutionPaths = InflatePaths(inputPaths, offset, JoinType::Round, EndType::Polygon);
         PolyLines offsetContours;
         for (const auto & path : solutionPaths)
