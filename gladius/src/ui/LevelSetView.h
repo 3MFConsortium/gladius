@@ -38,5 +38,17 @@ namespace gladius::ui
             SharedDocument document,
             Lib3MF::PModel model3mf,
             Lib3MF::PLevelSet levelSet) const;
+
+        /**
+         * @brief Renders the mesh selection dropdown for a level set
+         * 
+         * @param document The document containing the meshes
+         * @param model3mf The 3MF model containing the resources
+         * @param levelSet The level set to modify
+         */
+        void renderMeshDropdown(
+            SharedDocument document,
+            Lib3MF::PModel model3mf,
+            Lib3MF::PLevelSet levelSet) const;
     };
 }
