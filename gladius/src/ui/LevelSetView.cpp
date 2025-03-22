@@ -1,17 +1,86 @@
 #include "LevelSetView.h"
 
 #include "Document.h"
-#include "Widgets.h"
-#include <io/3mf/ResourceIdUtil.h>
-#include <nodes/ModelUtils.h>
 #include "MeshResource.h"
 #include "ResourceManager.h"
+#include "Widgets.h"
 #include "imgui.h"
+#include <io/3mf/ResourceIdUtil.h>
 #include <lib3mf/Cpp/lib3mf_implicit.hpp>
-
+#include <nodes/ModelUtils.h>
 
 namespace gladius::ui
 {
+    namespace
+    {
+        std::string getLevelSetName(const Lib3MF::PLevelSet & levelSet)
+        {
+            try
+            {
+                auto metaDataGroup = levelSet->GetMetaDataGroup();
+                if (metaDataGroup)
+                {
+                    auto count = metaDataGroup->GetMetaDataCount();
+                    for (Lib3MF_uint32 i = 0; i < count; i++)
+                    {
+                        auto metaData = metaDataGroup->GetMetaData(i);
+                        if (metaData->GetName() == "name")
+                        {
+                            return metaData->GetValue();
+                        }
+                    }
+                }
+            }
+            catch (...)
+            {
+                // Ignore metadata errors
+            }
+            return "";
+        }
+
+        void renderLevelSetProperties(const Lib3MF::PLevelSet & levelSet,
+                                      SharedDocument document,
+                                      Lib3MF::PModel model3mf)
+        {
+            if (ImGui::BeginTable(
+                  "LevelSetProperties", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+            {
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Function:");
+                ImGui::TableNextColumn();
+                LevelSetView::renderFunctionDropdown(
+                  document, model3mf, levelSet, levelSet->GetFunction());
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Channel:");
+                ImGui::TableNextColumn();
+                LevelSetView::renderChannelDropdown(document, model3mf, levelSet);
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Min Feature Size:");
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(fmt::format("{}", levelSet->GetMinFeatureSize()).c_str());
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Mesh BBox Only:");
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(levelSet->GetMeshBBoxOnly() ? "true" : "false");
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Fallback Value:");
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(fmt::format("{}", levelSet->GetFallBackValue()).c_str());
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Mesh:");
+                ImGui::TableNextColumn();
+                LevelSetView::renderMeshDropdown(document, model3mf, levelSet);
+
+                ImGui::EndTable();
+            }
+        }
+    }
+
     void LevelSetView::render(SharedDocument document) const
     {
         if (!document)
@@ -45,33 +114,7 @@ namespace gladius::ui
                 continue;
             }
 
-            // Try to get a name for the levelset from metadata
-            std::string levelSetName = "";
-            // Check if the level set has a metadata group
-            // and try to find the name in it
-            try
-            {
-                auto metaDataGroup = levelSet->GetMetaDataGroup();
-                if (metaDataGroup)
-                {
-                    auto count = metaDataGroup->GetMetaDataCount();
-                    for (Lib3MF_uint32 i = 0; i < count; i++)
-                    {
-                        auto metaData = metaDataGroup->GetMetaData(i);
-                        if (metaData->GetName() == "name")
-                        {
-                            levelSetName = metaData->GetValue();
-                            break;
-                        }
-                    }
-                }
-            }
-            catch (...)
-            {
-                // Ignore metadata errors
-            }
-
-            // Create display name with both name and ID
+            std::string levelSetName = getLevelSetName(levelSet);
             auto name =
               levelSetName.empty()
                 ? fmt::format("LevelSet #{}", levelSet->GetResourceID())
@@ -80,71 +123,7 @@ namespace gladius::ui
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx(name.c_str(), baseFlags))
             {
-                // Get the function resource
-                auto function = levelSet->GetFunction();
-
-                if (ImGui::BeginTable(
-                      "LevelSetProperties", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
-                {
-
-                    ImGui::TableNextColumn();
-                    // Display function selection dropdown
-                    ImGui::TextUnformatted("Function:");
-                    ImGui::TableNextColumn();
-                    renderFunctionDropdown(document, model3mf, levelSet, function);
-
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted("Channel:");
-                    ImGui::TableNextColumn();
-
-                    // Display channel selection dropdown
-                    renderChannelDropdown(document, model3mf, levelSet);
-
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted("Min Feature Size:");
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted(
-                      fmt::format("{}", levelSet->GetMinFeatureSize()).c_str());
-
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted("Mesh BBox Only:");
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted(levelSet->GetMeshBBoxOnly() ? "true" : "false");
-
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted("Fallback Value:");
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted(fmt::format("{}", levelSet->GetFallBackValue()).c_str());
-
-                    // Display mesh information
-                    try
-                    {
-                        auto mesh = levelSet->GetMesh();
-                        if (mesh)
-                        {
-                            ImGui::TableNextColumn();
-                            ImGui::TextUnformatted("Mesh ID:");
-                            ImGui::TableNextColumn();
-                            ImGui::Text(" #%u", mesh->GetResourceID());
-                        }
-                    }
-                    catch (...)
-                    {
-                        ImGui::TableNextColumn();
-                        ImGui::TextUnformatted("Mesh:");
-                        ImGui::TableNextColumn();
-                        ImGui::TextUnformatted("Not available");
-                    }
-
-                    // Display mesh dropdown
-                    ImGui::TableNextColumn();
-                    ImGui::TextUnformatted("Mesh:");
-                    ImGui::TableNextColumn();
-                    renderMeshDropdown(document, model3mf, levelSet);
-
-                    ImGui::EndTable();
-                }
-
+                renderLevelSetProperties(levelSet, document, model3mf);
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
@@ -155,7 +134,7 @@ namespace gladius::ui
     void LevelSetView::renderFunctionDropdown(SharedDocument document,
                                               Lib3MF::PModel model3mf,
                                               Lib3MF::PLevelSet levelSet,
-                                              Lib3MF::PFunction function) const
+                                              Lib3MF::PFunction function)
     {
         ImGui::PushID("FunctionDropdown");
         if (ImGui::BeginCombo("", function->GetDisplayName().c_str()))
@@ -239,7 +218,7 @@ namespace gladius::ui
 
     void LevelSetView::renderChannelDropdown(SharedDocument document,
                                              Lib3MF::PModel model3mf,
-                                             Lib3MF::PLevelSet levelSet) const
+                                             Lib3MF::PLevelSet levelSet)
     {
         auto function = levelSet->GetFunction();
         if (!function)
@@ -279,33 +258,37 @@ namespace gladius::ui
         ImGui::PopID();
     }
 
-    void LevelSetView::renderMeshDropdown(SharedDocument document, Lib3MF::PModel model3mf, Lib3MF::PLevelSet levelSet) const
+    void LevelSetView::renderMeshDropdown(SharedDocument document,
+                                          Lib3MF::PModel model3mf,
+                                          Lib3MF::PLevelSet levelSet)
     {
         ImGui::PushID("MeshDropdown");
         auto currentMesh = levelSet->GetMesh();
-        std::string currentMeshName = currentMesh ? fmt::format("Mesh #{}", currentMesh->GetModelResourceID()) : "None";
+        std::string currentMeshName =
+          currentMesh ? fmt::format("Mesh #{}", currentMesh->GetModelResourceID()) : "None";
 
         if (ImGui::BeginCombo("", currentMeshName.c_str()))
         {
             // Iterate through available meshes in the document's resource manager
-            auto &resourceManager = document->getResourceManager();
-            for (auto const &[key, resource] : resourceManager.getResourceMap())
+            auto & resourceManager = document->getResourceManager();
+            for (auto const & [key, resource] : resourceManager.getResourceMap())
             {
-                auto const *meshResource = dynamic_cast<MeshResource const *>(resource.get());
+                auto const * meshResource = dynamic_cast<MeshResource const *>(resource.get());
                 if (!meshResource)
                 {
                     continue;
                 }
 
                 auto meshName = fmt::format("Mesh #{}", key.getResourceId().value_or(-1));
-                bool isSelected = (currentMesh && key.getResourceId() == currentMesh->GetResourceID());
+                bool isSelected =
+                  (currentMesh && key.getResourceId() == currentMesh->GetResourceID());
 
                 if (ImGui::Selectable(meshName.c_str(), isSelected))
                 {
                     try
                     {
-                        auto lib3mfUniqueResourceId =
-                          gladius::io::resourceIdToUniqueResourceId(model3mf, key.getResourceId().value());
+                        auto lib3mfUniqueResourceId = gladius::io::resourceIdToUniqueResourceId(
+                          model3mf, key.getResourceId().value());
 
                         auto mesh = model3mf->GetResourceByID(lib3mfUniqueResourceId);
                         auto meshResource = dynamic_cast<Lib3MF::CMeshObject *>(mesh.get());
