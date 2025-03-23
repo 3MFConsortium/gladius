@@ -48,10 +48,13 @@ namespace gladius::io
          */
         void loadMeshes(Lib3MF::PModel model, Document & doc);
 
-      private:
-        void logWarnings(std::filesystem::path const & filename, Lib3MF::PReader reader);
-
-        void loadComponentObjects(Lib3MF::PModel model, Document & doc);
+        /**
+         * @brief Loads all build items from a 3MF model and adds them to the document.
+         *
+         * @param model The 3MF model to load the build items from.
+         * @param doc The document to add the loaded build items to.
+         */
+        void loadBuildItems(Lib3MF::PModel model, Document & doc);
 
         /**
          * @brief Loads all implicit functions from a 3MF model and adds them to the document.
@@ -60,6 +63,17 @@ namespace gladius::io
          * @param doc The document to add the loaded implicit functions to.
          */
         void loadImplicitFunctions(Lib3MF::PModel model, Document & doc);
+
+        /**
+         * @brief Loads all component objects from a 3MF model and adds them to the document.
+         *
+         * @param model The 3MF model to load the component objects from.
+         * @param doc The document to add the loaded component objects to.
+         */
+
+        void loadComponentObjects(Lib3MF::PModel model, Document & doc);
+      private:
+        void logWarnings(std::filesystem::path const & filename, Lib3MF::PReader reader);
 
         nodes::Port * resolveInput(nodes::Model & model, Lib3MF::PImplicitPort & input);
 
@@ -95,7 +109,7 @@ namespace gladius::io
                              Lib3MF::PModel model,
                              Document & doc);
 
-        void loadBuildItems(Lib3MF::PModel model, Document & doc);
+
 
         void createObject(Lib3MF::CObject & objectRes,
                           Lib3MF::PModel & model,

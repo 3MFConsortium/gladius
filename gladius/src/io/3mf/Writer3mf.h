@@ -83,15 +83,17 @@ namespace gladius::io
          * @param doc The document whose thumbnail will be updated.
          */
         void updateThumbnail(Document & doc);
-      private:
-        events::SharedLogger m_logger;
-        Lib3MF::PWrapper m_wrapper{};
 
         /**
          * @brief Updates the 3MF model based on the document.
          * @param doc The document to be updated.
          */
         void updateModel(Document const & doc);
+      private:
+        events::SharedLogger m_logger;
+        Lib3MF::PWrapper m_wrapper{};
+
+
 
         /**
          * @brief Adds the function to the 3MF model.

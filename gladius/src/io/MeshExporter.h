@@ -52,7 +52,7 @@ namespace gladius::vdb
         openvdb::FloatGrid::Ptr m_grid;
         double m_layerIncrement_mm = 0.1f;
         float m_bandwidth_mm = m_layerIncrement_mm * 2.f;
-        size_t m_qualityLevel = 2; // 3 = best quality, but insane high memory usage
+        size_t m_qualityLevel = 3; // 3 = best quality, but insane high memory usage
         double m_progress = 0.;
         double m_startHeight_mm = 0.;
         double m_endHeight_mm = 0.;
