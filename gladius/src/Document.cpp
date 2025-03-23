@@ -729,6 +729,14 @@ namespace gladius
         return m_buildItems;
     }
 
+    void Document::clearBuildItems()
+    {
+        m_buildItems.clear();
+        m_assembly->assemblyModel()->clear();
+        m_assembly->assemblyModel()->createBeginEndWithDefaultInAndOuts();
+        m_assembly->assemblyModel()->setManaged(true);
+    }
+
     void Document::replaceMeshResource(ResourceKey const & key, SharedMesh mesh)
     {
         // auto * res = getGeneratorContext().resourceManager.getResourcePtr(key);
@@ -942,5 +950,31 @@ namespace gladius
         resourceManager.loadResources();
         return key;
 
+    }
+
+    void Document::update3mfModel()
+    {
+        io::Writer3mf writer(getSharedLogger());
+        writer.updateModel(*this);
+    }
+
+    void Document::updateDocumenFrom3mfModel()
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3MF model available to update the document.");
+        }
+
+        io::Importer3mf importer{getSharedLogger()};
+        
+        // Load build items from the 3MF model
+        clearBuildItems();
+        importer.loadBuildItems(m_3mfmodel, *this);
+
+        // Load implicit functions from the 3MF model
+        importer.loadImplicitFunctions(m_3mfmodel, *this);
+
+        // Update the assembly inputs and outputs
+        m_assembly->updateInputsAndOutputs();
     }
 }

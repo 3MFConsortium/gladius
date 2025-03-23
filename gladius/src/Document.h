@@ -156,6 +156,7 @@ namespace gladius
         nodes::BuildItems::iterator addBuildItem(nodes::BuildItem && item);
 
         [[nodiscard]] nodes::BuildItems const & getBuildItems() const;
+        void clearBuildItems();
 
         void replaceMeshResource(ResourceKey const & key, SharedMesh mesh);
 
@@ -173,6 +174,19 @@ namespace gladius
 
         ResourceKey addImageStackResource(std::filesystem::path const & path);
 
+        // syncing of the 3MF model with the document
+
+        /**
+         * @brief Updates the 3MF model with the current state of the document.
+         * 
+         */
+        void update3mfModel();
+
+        /**
+         * @brief Updates the document from the 3MF model.
+         * 
+         */
+        void updateDocumenFrom3mfModel();
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,
