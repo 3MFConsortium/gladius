@@ -1,11 +1,10 @@
 #include "Outline.h"
-
 #include "Widgets.h"
 #include "nodes/BuildItem.h"
 #include "nodes/Components.h"
 #include "nodes/Object.h"
-
 #include "imgui.h"
+#include "BuildItemView.h"
 
 namespace gladius::ui
 {
@@ -28,9 +27,12 @@ namespace gladius::ui
         ImGui::BeginGroup();
         if (ImGui::TreeNodeEx("build items", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
-            for (auto const & item : m_document->getBuildItems())
+            // Replace direct rendering with BuildItemView
+            BuildItemView buildItemView;
+            if (buildItemView.render(m_document))
             {
-                renderBuildItem(item);
+                // If build items were modified, mark the document as changed
+                m_document->markFileAsChanged();
             }
 
             ImGui::TreePop();
@@ -42,6 +44,8 @@ namespace gladius::ui
 
     void Outline::renderBuildItem(gladius::nodes::BuildItem const & item) const
     {
+        // This method is now deprecated in favor of the BuildItemView class
+        // Keeping it for backward compatibility
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -55,7 +59,6 @@ namespace gladius::ui
 
         if (ImGui::TreeNodeEx(item.getName().c_str(), nodeFlags))
         {
-
             for (auto const & component : item.getComponents())
             {
                 ImGui::BeginGroup();
@@ -67,7 +70,7 @@ namespace gladius::ui
                 ImGui::EndGroup();
                 frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.1f));
             }
-
+            
             ImGui::TreePop();
         }
     }

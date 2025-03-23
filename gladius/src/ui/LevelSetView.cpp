@@ -139,6 +139,8 @@ namespace gladius::ui
             }
         }
 
+        ImGui::Unindent();
+
         auto resourceIterator = model3mf->GetResources();
 
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
