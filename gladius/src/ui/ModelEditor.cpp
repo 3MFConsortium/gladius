@@ -184,7 +184,10 @@ namespace gladius::ui
             if (ImGui::TreeNodeEx("levelset", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 LevelSetView levelSetView;
-                levelSetView.render(m_doc);
+                if (levelSetView.render(m_doc))
+                {
+                    markModelAsModified();
+                }
                 ImGui::TreePop();
             }
             ImGui::EndGroup();

@@ -38,23 +38,25 @@ namespace gladius::ui
             return "";
         }
 
-        void renderLevelSetProperties(const Lib3MF::PLevelSet & levelSet,
+        bool renderLevelSetProperties(const Lib3MF::PLevelSet & levelSet,
                                       SharedDocument document,
                                       Lib3MF::PModel model3mf)
         {
+            bool propertiesChanged = false;
+
             if (ImGui::BeginTable(
                   "LevelSetProperties", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
             {
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Function:");
                 ImGui::TableNextColumn();
-                LevelSetView::renderFunctionDropdown(
+                propertiesChanged |= LevelSetView::renderFunctionDropdown(
                   document, model3mf, levelSet, levelSet->GetFunction());
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Channel:");
                 ImGui::TableNextColumn();
-                LevelSetView::renderChannelDropdown(document, model3mf, levelSet);
+                propertiesChanged |= LevelSetView::renderChannelDropdown(document, model3mf, levelSet);
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Min Feature Size:");
@@ -74,24 +76,26 @@ namespace gladius::ui
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Mesh:");
                 ImGui::TableNextColumn();
-                LevelSetView::renderMeshDropdown(document, model3mf, levelSet);
+                propertiesChanged |= LevelSetView::renderMeshDropdown(document, model3mf, levelSet);
 
                 ImGui::EndTable();
             }
+
+            return propertiesChanged;
         }
     }
 
-    void LevelSetView::render(SharedDocument document) const
+    bool LevelSetView::render(SharedDocument document) const
     {
         if (!document)
         {
-            return;
+            return false;
         }
 
         auto model3mf = document->get3mfModel();
         if (!model3mf)
         {
-            return;
+            return false;
         }
 
         auto resourceIterator = model3mf->GetResources();
@@ -99,6 +103,8 @@ namespace gladius::ui
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
+
+        bool propertiesChanged = false;
 
         while (resourceIterator->MoveNext())
         {
@@ -123,19 +129,24 @@ namespace gladius::ui
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx(name.c_str(), baseFlags))
             {
-                renderLevelSetProperties(levelSet, document, model3mf);
+                bool currentPropertiesChanged = renderLevelSetProperties(levelSet, document, model3mf);
+                propertiesChanged = propertiesChanged || currentPropertiesChanged;
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
             frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
         }
+
+        return propertiesChanged;
     }
 
-    void LevelSetView::renderFunctionDropdown(SharedDocument document,
+    bool LevelSetView::renderFunctionDropdown(SharedDocument document,
                                               Lib3MF::PModel model3mf,
                                               Lib3MF::PLevelSet levelSet,
                                               Lib3MF::PFunction function)
     {
+        bool propertiesChanged = false;
+
         ImGui::PushID("FunctionDropdown");
         if (ImGui::BeginCombo("", function->GetDisplayName().c_str()))
         {
@@ -188,6 +199,7 @@ namespace gladius::ui
                                 levelSet->SetFunction(functionResource);
                                 document->markFileAsChanged();
                                 document->updateDocumenFrom3mfModel();
+                                propertiesChanged = true;
                             }
                         }
                         catch (...)
@@ -206,23 +218,27 @@ namespace gladius::ui
             ImGui::EndCombo();
         }
         ImGui::PopID();
+
+        return propertiesChanged;
     }
 
-    void LevelSetView::renderChannelDropdown(SharedDocument document,
+    bool LevelSetView::renderChannelDropdown(SharedDocument document,
                                              Lib3MF::PModel model3mf,
                                              Lib3MF::PLevelSet levelSet)
     {
+        bool propertiesChanged = false;
+
         auto function = levelSet->GetFunction();
         if (!function)
         {
-            return;
+            return propertiesChanged;
         }
 
         auto functionModel = document->getAssembly()->findModel(
           io::uniqueResourceIdToResourceId(model3mf, function->GetResourceID()));
         if (!functionModel)
         {
-            return;
+            return propertiesChanged;
         }
 
         auto & endNodeParameters = functionModel->getOutputs();
@@ -241,6 +257,7 @@ namespace gladius::ui
                         levelSet->SetChannelName(paramName);
                         document->markFileAsChanged();
                         document->updateDocumenFrom3mfModel();
+                        propertiesChanged = true;
                     }
                     catch (...)
                     {
@@ -257,12 +274,16 @@ namespace gladius::ui
             ImGui::EndCombo();
         }
         ImGui::PopID();
+
+        return propertiesChanged;
     }
 
-    void LevelSetView::renderMeshDropdown(SharedDocument document,
+    bool LevelSetView::renderMeshDropdown(SharedDocument document,
                                           Lib3MF::PModel model3mf,
                                           Lib3MF::PLevelSet levelSet)
     {
+        bool propertiesChanged = false;
+
         ImGui::PushID("MeshDropdown");
         auto currentMesh = levelSet->GetMesh();
         std::string currentMeshName =
@@ -299,6 +320,7 @@ namespace gladius::ui
                             levelSet->SetMesh(meshResource);
                             document->markFileAsChanged();
                             document->updateDocumenFrom3mfModel();
+                            propertiesChanged = true;
                         }
                     }
                     catch (...)
@@ -316,5 +338,7 @@ namespace gladius::ui
             ImGui::EndCombo();
         }
         ImGui::PopID();
+
+        return propertiesChanged;
     }
 }
