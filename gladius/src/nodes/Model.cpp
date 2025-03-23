@@ -815,4 +815,24 @@ namespace gladius::nodes
         m_isValid = isValid;
     }
 
+    void Model::clear()
+    {
+        m_nodes.clear();
+        m_outPorts.clear();
+        m_inputParameter.clear();
+        m_beginNode = nullptr;
+        m_endNode = nullptr;
+        m_lastParameterId = {};
+        m_lastId = 1;
+        m_graph = graph::DirectedGraph(0);
+        m_outputOrder.clear();
+        m_graphRequiresUpdate = true;
+        m_displayName.reset();
+        m_resourceId = 0;
+        m_isManaged = false;
+        m_allInputReferencesAreValid = false;
+        m_nodesHaveBeenLayouted = false;
+        m_isValid = true;
+    }
+
 } // namespace gladius::nodes

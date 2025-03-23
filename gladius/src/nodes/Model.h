@@ -236,6 +236,12 @@ namespace gladius::nodes
         [[nodiscard]] bool hasBeenLayouted() const;
 
         void setIsValid(bool isValid);
+
+        /**
+         * @brief Clears the Model, resetting it to its initial state.
+         */
+        void clear();
+        
       private:
         void updateOrder();
         auto buildGraph() -> graph::DirectedGraph &;
