@@ -61,17 +61,38 @@ namespace gladius::ui
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Min Feature Size:");
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(fmt::format("{}", levelSet->GetMinFeatureSize()).c_str());
+                {
+                    float minFeatureSize = levelSet->GetMinFeatureSize();
+                    if (ImGui::InputFloat("##MinFeatureSize", &minFeatureSize))
+                    {
+                        levelSet->SetMinFeatureSize(minFeatureSize);
+                        propertiesChanged = true;
+                    }
+                }
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Mesh BBox Only:");
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(levelSet->GetMeshBBoxOnly() ? "true" : "false");
+                {
+                    bool meshBBoxOnly = levelSet->GetMeshBBoxOnly();
+                    if (ImGui::Checkbox("##MeshBBoxOnly", &meshBBoxOnly))
+                    {
+                        levelSet->SetMeshBBoxOnly(meshBBoxOnly);
+                        propertiesChanged = true;
+                    }
+                }
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Fallback Value:");
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(fmt::format("{}", levelSet->GetFallBackValue()).c_str());
+                {
+                    float fallbackValue = levelSet->GetFallBackValue();
+                    if (ImGui::InputFloat("##FallbackValue", &fallbackValue))
+                    {
+                        levelSet->SetFallBackValue(fallbackValue);
+                        propertiesChanged = true;
+                    }
+                }
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Mesh:");
