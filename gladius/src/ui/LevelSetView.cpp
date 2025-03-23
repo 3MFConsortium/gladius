@@ -71,7 +71,7 @@ namespace gladius::ui
                 }
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Mesh BBox Only:");
+                ImGui::TextUnformatted("Use Mesh only as Bounding Box:");
                 ImGui::TableNextColumn();
                 {
                     bool meshBBoxOnly = levelSet->GetMeshBBoxOnly();
@@ -119,13 +119,31 @@ namespace gladius::ui
             return false;
         }
 
+        bool propertiesChanged = false;
+
+        ImGui::Indent();
+        // Add "Add Levelset" button
+        if (ImGui::Button("Add Levelset"))
+        {
+            try
+            {
+                document->update3mfModel();
+                auto newLevelSet = model3mf->AddLevelSet();
+                
+                document->updateDocumenFrom3mfModel();
+                propertiesChanged = true;
+            }
+            catch (...)
+            {
+                // Handle errors silently
+            }
+        }
+
         auto resourceIterator = model3mf->GetResources();
 
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
-
-        bool propertiesChanged = false;
 
         while (resourceIterator->MoveNext())
         {
@@ -169,7 +187,9 @@ namespace gladius::ui
         bool propertiesChanged = false;
 
         ImGui::PushID("FunctionDropdown");
-        if (ImGui::BeginCombo("", function->GetDisplayName().c_str()))
+        std::string functionDisplayName =
+          function ? function->GetDisplayName() : "Please select";
+        if (ImGui::BeginCombo("", functionDisplayName.c_str()))
         {
             auto assembly = document->getAssembly();
             if (assembly)
@@ -204,7 +224,11 @@ namespace gladius::ui
                         continue;
                     }
 
-                    bool isSelected = (uniqueFunctionResourceId == function->GetResourceID());
+                    bool isSelected = function ? (uniqueFunctionResourceId == function->GetResourceID()) : false;
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
                     if (ImGui::Selectable(fmt::format("#{} - {}", functionId, displayName).c_str(),
                                           isSelected))
                     {
@@ -306,9 +330,19 @@ namespace gladius::ui
         bool propertiesChanged = false;
 
         ImGui::PushID("MeshDropdown");
-        auto currentMesh = levelSet->GetMesh();
+        Lib3MF::PMeshObject currentMesh;
+        try
+        {
+            currentMesh = levelSet->GetMesh();
+        }
+        catch (...)
+        {
+            // Handle errors silently
+        }
+
+
         std::string currentMeshName =
-          currentMesh ? fmt::format("Mesh #{}", currentMesh->GetModelResourceID()) : "None";
+          currentMesh ? fmt::format("Mesh #{}", currentMesh->GetModelResourceID()) : "Please select";
 
         if (ImGui::BeginCombo("", currentMeshName.c_str()))
         {
