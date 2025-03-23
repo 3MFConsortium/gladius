@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include <io/3mf/Writer3mf.h>
 #include "imgui.h"
 #include <lib3mf/Cpp/lib3mf_implicit.hpp>
 

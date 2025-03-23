@@ -139,13 +139,11 @@ namespace gladius::ui
         ImGui::PushID("FunctionDropdown");
         if (ImGui::BeginCombo("", function->GetDisplayName().c_str()))
         {
-            // Get available functions from the document's assembly
             auto assembly = document->getAssembly();
             if (assembly)
             {
                 auto & functions = assembly->getFunctions();
 
-                // Iterate through available functions/models
                 for (auto & [functionId, functionModel] : functions)
                 {
                     if (!functionModel)
@@ -153,24 +151,20 @@ namespace gladius::ui
                         continue;
                     }
 
-                    // Skip the assembly model
                     if (functionModel->getResourceId() ==
                         assembly->assemblyModel()->getResourceId())
                     {
                         continue;
                     }
 
-                    // Skip functions that are not qualified as level sets
                     if (!nodes::isQualifiedForLevelset(*functionModel))
                     {
                         continue;
                     }
 
-                    // Get display name or model name as fallback
                     std::string displayName =
                       functionModel->getDisplayName().value_or(functionModel->getModelName());
 
-                    // find the unique resource id of the function in 3MF model
                     auto uniqueFunctionResourceId =
                       gladius::io::resourceIdToUniqueResourceId(model3mf, functionId);
                     if (uniqueFunctionResourceId == 0)
@@ -182,19 +176,18 @@ namespace gladius::ui
                     if (ImGui::Selectable(fmt::format("#{} - {}", functionId, displayName).c_str(),
                                           isSelected))
                     {
-                        // Update the function in the levelset
                         try
                         {
-                            // Find the model in the 3MF
-                            auto resource = model3mf->GetResourceByID(uniqueFunctionResourceId);
+                            document->update3mfModel();
 
-                            // try to cast it to a function
+                            auto resource = model3mf->GetResourceByID(uniqueFunctionResourceId);
                             auto functionResource =
                               dynamic_cast<Lib3MF::CFunction *>(resource.get());
                             if (functionResource)
                             {
                                 levelSet->SetFunction(functionResource);
                                 document->markFileAsChanged();
+                                document->updateDocumenFrom3mfModel();
                             }
                         }
                         catch (...)
@@ -203,7 +196,6 @@ namespace gladius::ui
                         }
                     }
 
-                    // Set the initial focus when opening the combo
                     if (isSelected)
                     {
                         ImGui::SetItemDefaultFocus();
@@ -243,8 +235,17 @@ namespace gladius::ui
                 bool isSelected = (paramName == levelSet->GetChannelName());
                 if (ImGui::Selectable(paramName.c_str(), isSelected))
                 {
-                    levelSet->SetChannelName(paramName);
-                    document->markFileAsChanged();
+                    try
+                    {
+                        document->update3mfModel();
+                        levelSet->SetChannelName(paramName);
+                        document->markFileAsChanged();
+                        document->updateDocumenFrom3mfModel();
+                    }
+                    catch (...)
+                    {
+                        // Handle errors silently
+                    }
                 }
 
                 if (isSelected)
@@ -269,7 +270,6 @@ namespace gladius::ui
 
         if (ImGui::BeginCombo("", currentMeshName.c_str()))
         {
-            // Iterate through available meshes in the document's resource manager
             auto & resourceManager = document->getResourceManager();
             for (auto const & [key, resource] : resourceManager.getResourceMap())
             {
@@ -287,6 +287,8 @@ namespace gladius::ui
                 {
                     try
                     {
+                        document->update3mfModel();
+
                         auto lib3mfUniqueResourceId = gladius::io::resourceIdToUniqueResourceId(
                           model3mf, key.getResourceId().value());
 
@@ -296,6 +298,7 @@ namespace gladius::ui
                         {
                             levelSet->SetMesh(meshResource);
                             document->markFileAsChanged();
+                            document->updateDocumenFrom3mfModel();
                         }
                     }
                     catch (...)
