@@ -34,15 +34,15 @@ namespace gladius::ui
         ImGuiTreeNodeFlags infoNodeFlags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_DefaultOpen;
 
         ImGui::BeginGroup();
-        if (ImGui::TreeNodeEx("mesh resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Mesh Resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::Indent();
-            if (ImGui::Button("import STL"))
+            if (ImGui::Button("Import STL"))
             {
                 addMesh(document);
             }
 
-            if (ImGui::Button("add current bounding box"))
+            if (ImGui::Button("Add current bounding box"))
             {
                 document->addBoundingBoxAsMesh();
             }
@@ -51,6 +51,10 @@ namespace gladius::ui
 
             for (auto const & [key, res] : resources)
             {
+                if (!res)
+                {
+                    continue;
+                }
                 auto const * mesh = dynamic_cast<MeshResource const *>(res.get());
                 if (!mesh)
                 {
@@ -68,12 +72,12 @@ namespace gladius::ui
                           "MeshData", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
                     {
                         ImGui::TableNextColumn();
-                        ImGui::TextUnformatted("Faces:");
+                        ImGui::TextUnformatted("Faces");
                         ImGui::TableNextColumn();
                         ImGui::TextUnformatted(fmt::format("{}", meshData.polygonCount()).c_str());
 
                         ImGui::TableNextColumn();
-                        ImGui::TextUnformatted("Min:");
+                        ImGui::TextUnformatted("Min");
                         ImGui::TableNextColumn();
                         ImGui::TextUnformatted(fmt::format("({}, {}, {})",
                                                            meshData.getMin().x,
@@ -82,7 +86,7 @@ namespace gladius::ui
                                                  .c_str());
 
                         ImGui::TableNextColumn();
-                        ImGui::TextUnformatted("Max:");
+                        ImGui::TextUnformatted("Max");
                         ImGui::TableNextColumn();
                         ImGui::TextUnformatted(fmt::format("({}, {}, {})",
                                                            meshData.getMax().x,
@@ -93,7 +97,7 @@ namespace gladius::ui
                         ImGui::EndTable();
                     }
 
-                    if (ImGui::Button("delete"))
+                    if (ImGui::Button("Delete"))
                     {
                         document->deleteResource(key);
                     }
@@ -111,11 +115,11 @@ namespace gladius::ui
 
         // image stack
         ImGui::BeginGroup();
-        if (ImGui::TreeNodeEx("image stacks", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Image Stacks", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::Indent();
             // import image stack
-            if (ImGui::Button("import from directory"))
+            if (ImGui::Button("Import from directory"))
             {
                 // query directory
                 const auto directory = queryDirectory();
@@ -151,7 +155,7 @@ namespace gladius::ui
                         auto dimensions = grid->getGridSize();
                         if (ImGui::TreeNodeEx(
                               fmt::format(
-                                "size: {}x{}x{}", dimensions.x, dimensions.y, dimensions.z)
+                                "Size: {}x{}x{}", dimensions.x, dimensions.y, dimensions.z)
                                 .c_str(),
                               infoNodeFlags))
                         {
@@ -160,7 +164,7 @@ namespace gladius::ui
                     }
 
                     // delete image stack
-                    if (ImGui::Button("delete"))
+                    if (ImGui::Button("Delete"))
                     {
                         document->deleteResource(key);
                     }

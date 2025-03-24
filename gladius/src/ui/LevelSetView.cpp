@@ -48,18 +48,18 @@ namespace gladius::ui
                   "LevelSetProperties", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
             {
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Function:");
+                ImGui::TextUnformatted("Function");
                 ImGui::TableNextColumn();
                 propertiesChanged |= LevelSetView::renderFunctionDropdown(
                   document, model3mf, levelSet, levelSet->GetFunction());
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Channel:");
+                ImGui::TextUnformatted("Channel");
                 ImGui::TableNextColumn();
                 propertiesChanged |= LevelSetView::renderChannelDropdown(document, model3mf, levelSet);
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Min Feature Size:");
+                ImGui::TextUnformatted("Min Feature Size");
                 ImGui::TableNextColumn();
                 {
                     float minFeatureSize = levelSet->GetMinFeatureSize();
@@ -71,7 +71,7 @@ namespace gladius::ui
                 }
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Use Mesh only as Bounding Box:");
+                ImGui::TextUnformatted("Use Mesh only as Bounding Box");
                 ImGui::TableNextColumn();
                 {
                     bool meshBBoxOnly = levelSet->GetMeshBBoxOnly();
@@ -83,7 +83,7 @@ namespace gladius::ui
                 }
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Fallback Value:");
+                ImGui::TextUnformatted("Fallback Value");
                 ImGui::TableNextColumn();
                 {
                     float fallbackValue = levelSet->GetFallBackValue();
@@ -95,7 +95,7 @@ namespace gladius::ui
                 }
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Mesh:");
+                ImGui::TextUnformatted("Mesh");
                 ImGui::TableNextColumn();
                 propertiesChanged |= LevelSetView::renderMeshDropdown(document, model3mf, levelSet);
 

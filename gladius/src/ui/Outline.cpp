@@ -13,11 +13,11 @@ namespace gladius::ui
         m_document = std::move(document);
     }
 
-    void Outline::render() const
+    bool Outline::render() const
     {
         if (!m_document)
         {
-            return;
+            return false;
         }
 
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
@@ -25,14 +25,15 @@ namespace gladius::ui
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
 
         ImGui::BeginGroup();
-        if (ImGui::TreeNodeEx("build items", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        bool propertiesChanged = false;
+        if (ImGui::TreeNodeEx("Build Items", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
             // Replace direct rendering with BuildItemView
             BuildItemView buildItemView;
             if (buildItemView.render(m_document))
             {
                 // If build items were modified, mark the document as changed
-                m_document->markFileAsChanged();
+                propertiesChanged = true;
             }
 
             ImGui::TreePop();
@@ -40,6 +41,7 @@ namespace gladius::ui
 
         ImGui::EndGroup();
         frameOverlay(ImVec4(1.0f, 0.9f, 0.6f, 0.1f));
+        return propertiesChanged;
     }
 
     void Outline::renderBuildItem(gladius::nodes::BuildItem const & item) const

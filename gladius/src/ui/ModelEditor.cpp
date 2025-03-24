@@ -164,24 +164,27 @@ namespace gladius::ui
         }
 
         ImGui::Begin("Outline", nullptr, ImGuiWindowFlags_MenuBar);
-        m_outline.render();
+        if (m_outline.render())
+        {
+            markModelAsModified();
+        }
 
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
 
         ImGui::BeginGroup();
-        if (ImGui::TreeNodeEx("resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::TreeNodeEx("Resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::BeginGroup();
-            if (ImGui::TreeNodeEx("volumedata", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::TreeNodeEx("VolumeData", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 ImGui::TreePop();
             }            ImGui::EndGroup();
             frameOverlay(ImVec4(1.0f, 0.0f, 1.0f, 0.1f));
 
             ImGui::BeginGroup();
-            if (ImGui::TreeNodeEx("levelset", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::TreeNodeEx("LevelSet", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 LevelSetView levelSetView;
                 if (levelSetView.render(m_doc))
@@ -196,7 +199,7 @@ namespace gladius::ui
             resourceOutline();
 
             ImGui::BeginGroup();
-            if (ImGui::TreeNodeEx("functions", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::TreeNodeEx("Functions", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 functionOutline();
                 ImGui::TreePop();
@@ -226,7 +229,7 @@ namespace gladius::ui
 
         ImGui::Indent();
 
-        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_PLUS "\tNew Function")))
+        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_PLUS "\tAdd function")))
         {
             ImGui::OpenPopup("Add Function");
             m_showAddModel = true;
@@ -353,7 +356,7 @@ namespace gladius::ui
 
                 if (!isAssembly || model.second->isManaged())
                 {
-                    if (ImGui::Button("delete"))
+                    if (ImGui::Button("Delete"))
                     {
                         m_doc->deleteFunction(model.second->getResourceId());
                         m_currentModel = m_assembly->assemblyModel();
@@ -385,7 +388,7 @@ namespace gladius::ui
                 ImGui::Text("Please enter the name of the new function");
                 ImGui::Separator();
 
-                ImGui::InputText("function name", &m_newModelName);
+                ImGui::InputText("Function name", &m_newModelName);
                 if (ImGui::Button("OK", ImVec2(120, 0)))
                 {
                     auto & newModel = m_doc->createNewFunction();

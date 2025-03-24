@@ -209,7 +209,6 @@ namespace gladius::ui
                 if (ImGui::TreeNodeEx(buildItemName.c_str(), baseFlags))
                 {
                     // Delete button
-                    ImGui::SameLine(ImGui::GetWindowWidth() - 60);
                     if (ImGui::Button("Delete"))
                     {
                         try

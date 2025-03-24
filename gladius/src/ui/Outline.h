@@ -20,7 +20,7 @@ namespace gladius::ui
 
         void setDocument(SharedDocument document);
 
-        void render() const;
+        bool render() const;
         void renderBuildItem(gladius::nodes::BuildItem  const & item) const;
 
       private:
