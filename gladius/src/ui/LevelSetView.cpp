@@ -129,6 +129,9 @@ namespace gladius::ui
             {
                 document->update3mfModel();
                 auto newLevelSet = model3mf->AddLevelSet();
+                newLevelSet->SetMeshBBoxOnly(true);
+                newLevelSet->SetMinFeatureSize(0.1f);
+                newLevelSet->SetFallBackValue(0.0f);
                 
                 document->updateDocumenFrom3mfModel();
                 propertiesChanged = true;

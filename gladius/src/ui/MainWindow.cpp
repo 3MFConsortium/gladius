@@ -816,7 +816,8 @@ namespace gladius::ui
             saveAs();
             return;
         }
-        m_doc->saveAs(m_currentAssemblyFileName.value());
+        bool writeThumbnail = m_core->isRendererReady();
+        m_doc->saveAs(m_currentAssemblyFileName.value(), writeThumbnail);
         m_renderWindow.invalidateViewDuetoModelUpdate();
         m_fileChanged = false;
     }
