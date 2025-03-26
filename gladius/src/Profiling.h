@@ -3,6 +3,8 @@
 #include <iostream>
 #include <thread>
 #include <tracy/Tracy.hpp>
+#include <chrono>
+#include <string>
 
 namespace gladius
 {
