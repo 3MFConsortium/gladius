@@ -6,7 +6,7 @@
 #include "Widgets.h"
 #include "imgui.h"
 #include <io/3mf/ResourceIdUtil.h>
-#include <lib3mf/Cpp/lib3mf_implicit.hpp>
+#include <lib3mf_implicit.hpp>
 #include <nodes/ModelUtils.h>
 
 namespace gladius::ui

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Document.h"
-#include <lib3mf/Cpp/lib3mf_implicit.hpp>
+#include <lib3mf_implicit.hpp>
 
 namespace gladius::ui
 {

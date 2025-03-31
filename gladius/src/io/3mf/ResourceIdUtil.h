@@ -1,7 +1,7 @@
 #pragma once
 
-#include <lib3mf/Cpp/lib3mf_types.hpp>
-#include <lib3mf/Cpp/lib3mf_implicit.hpp>
+#include <lib3mf_types.hpp>
+#include <lib3mf_implicit.hpp>
 #include "types.h"
 
 namespace gladius::io

@@ -8,9 +8,9 @@
 #include "nodes/Parameter.h"
 #include "nodes/Visitor.h"
 
-#include <lib3mf/Cpp/lib3mf_abi.hpp>
-#include <lib3mf/Cpp/lib3mf_implicit.hpp>
-#include <lib3mf/Cpp/lib3mf_types.hpp>
+#include <lib3mf_abi.hpp>
+#include <lib3mf_implicit.hpp>
+#include <lib3mf_types.hpp>
 
 #include <unordered_map>
 
