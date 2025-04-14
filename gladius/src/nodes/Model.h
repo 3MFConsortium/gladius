@@ -211,6 +211,7 @@ namespace gladius::nodes
 
         bool updateTypes();
         [[nodiscard]] bool isValid(); // Not const because it might update the graph
+        void updateValidityState(); // Updates the m_isValid state based on the graph validation
 
         void setDisplayName(std::string const & name);
         [[nodiscard]] std::optional<std::string> getDisplayName() const;

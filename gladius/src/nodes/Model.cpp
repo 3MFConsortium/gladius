@@ -684,10 +684,14 @@ namespace gladius::nodes
 
     bool Model::isValid()
     {
-        if (!m_isValid)
-        {
-            return false;
-        }
+        return m_isValid;
+    }
+
+    void Model::updateValidityState()
+    {
+        // Reset to true initially, then accumulate validation results
+        m_isValid = true;
+        
         if (!m_allInputReferencesAreValid)
         {
             if (m_logger)
@@ -695,7 +699,8 @@ namespace gladius::nodes
                 m_logger->addEvent(
                   events::Event{"Not all input references are valid", events::Severity::Error});
             }
-            return false;
+            m_isValid = false;
+            return;
         }
 
         if (graph::isCyclic(m_graph))
@@ -704,10 +709,11 @@ namespace gladius::nodes
             {
                 m_logger->addEvent(events::Event{"Graph is cyclic", events::Severity::Error});
             }
-            return false;
+            m_isValid = false;
+            return;
         }
 
-        return updateTypes();
+        m_isValid = updateTypes();
     }
 
     void Model::setDisplayName(std::string const & name)
