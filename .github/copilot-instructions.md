@@ -33,9 +33,16 @@
 ## Performance
 - **Inline Functions**: Use `inline` for small functions.
 - **Const Correctness**: Use `const` wherever possible.
+- **East-side const**: Place `const` on the right of the type being qualified (e.g., `int const*` rather than `const int*`).
 
 ## Testing
-- **Unit Tests**: Use GTest/GMock, follow `[UnitOfWork_StateUnderTest_ExpectedBehavior]` naming.
+- **Unit Tests**: Use GTest/GMock.
+- **Test Naming**: Follow `[UnitOfWork_StateUnderTest_ExpectedBehavior]` naming convention:
+  - **UnitOfWork**: The method or function being tested
+  - **StateUnderTest**: The inputs or conditions being tested
+  - **ExpectedBehavior**: The expected outcome
+  - Example: `RenderProgram_WithNullBuffer_ThrowsException`, `MeshResource_AfterLoading_ContainsCorrectVertexCount`
+- **Test Implementation**: Each test should follow Arrange-Act-Assert pattern.
 - **Namespaces**: Place tests in `namespace::tests`.
 
 ## Code Layout
