@@ -68,7 +68,7 @@ namespace gladius_tests
         std::unordered_map<Lib3MF_uint32, std::unordered_set<Lib3MF_uint32>> m_expectedDependencies;
     };
 
-    TEST_F(ResourceDependencyGraphTest, EmptyModel_NoVerticesInGraph)
+    TEST_F(ResourceDependencyGraphTest, BuildGraph_EmptyModel_NoVerticesInGraph)
     {
         // Arrange
         io::ResourceDependencyGraph dependencyGraph(m_model);
@@ -81,7 +81,7 @@ namespace gladius_tests
         EXPECT_EQ(graph.getVertices().size(), 0);
     }
 
-    TEST_F(ResourceDependencyGraphTest, ModelWithResources_VerticesAddedToGraph)
+    TEST_F(ResourceDependencyGraphTest, BuildGraph_ModelWithResources_VerticesAddedToGraph)
     {
         // Arrange
         createTestModel();
@@ -102,7 +102,7 @@ namespace gladius_tests
         }
     }
 
-    TEST_F(ResourceDependencyGraphTest, ComponentsObjectDependsOnMeshObject)
+    TEST_F(ResourceDependencyGraphTest, BuildGraph_ComponentsObjectDependsOnMeshObject_DependencyExists)
     {
         // Arrange
         createTestModel();
@@ -125,7 +125,7 @@ namespace gladius_tests
         }
     }
 
-    TEST_F(ResourceDependencyGraphTest, NullModel_GraphRemainsEmpty)
+    TEST_F(ResourceDependencyGraphTest, BuildGraph_NullModel_GraphRemainsEmpty)
     {
         // Arrange
         Lib3MF::PModel nullModel = nullptr;
@@ -139,7 +139,7 @@ namespace gladius_tests
         EXPECT_EQ(graph.getVertices().size(), 0);
     }
 
-    TEST_F(ResourceDependencyGraphTest, ComplexDependencyChain)
+    TEST_F(ResourceDependencyGraphTest, BuildGraph_ComplexDependencyChain_TransitiveDependenciesExist)
     {
         // This test would create a more complex chain of dependencies
         // For example: LevelSet -> Function -> VolumeData -> Function
@@ -184,7 +184,7 @@ namespace gladius_tests
             << "Parent should transitively depend on mesh";
     }
 
-    TEST_F(ResourceDependencyGraphTest, GraphAlgorithmsIntegration)
+    TEST_F(ResourceDependencyGraphTest, GraphAlgorithmsIntegration_ModelWithComponentAndMesh_GraphAlgorithmsReturnCorrectDependencies)
     {
         // Arrange
         createTestModel();
