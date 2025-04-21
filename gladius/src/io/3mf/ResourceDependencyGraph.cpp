@@ -100,6 +100,35 @@ namespace gladius::io
         return *m_graph;
     }
 
+    std::vector<Lib3MF::PResource> ResourceDependencyGraph::getAllRequiredResources(Lib3MF::PResource resource) const
+    {
+        std::vector<Lib3MF::PResource> requiredResources;
+        if (!resource || !m_model || !m_graph)
+        {
+            return requiredResources;
+        }
+
+        Lib3MF_uint32 resourceId = resource->GetResourceID();
+        // Get all dependencies (resource IDs) for the given resource
+        auto dependencies = gladius::nodes::graph::determineAllDependencies(*m_graph, resourceId);
+        if (dependencies.empty())
+        {
+            return requiredResources;
+        }
+
+        // Map resource IDs back to PResource using the model's resource iterator
+        Lib3MF::PResourceIterator resourceIterator = m_model->GetResources();
+        while (resourceIterator->MoveNext())
+        {
+            Lib3MF::PResource res = resourceIterator->GetCurrent();
+            if (dependencies.find(res->GetResourceID()) != dependencies.end())
+            {
+                requiredResources.push_back(res);
+            }
+        }
+        return requiredResources;
+    }
+
     void ResourceDependencyGraph::processLevelSet(Lib3MF::PLevelSet levelSet)
     {
         if (!levelSet)

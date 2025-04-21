@@ -42,6 +42,13 @@ namespace gladius::io
          */
         [[nodiscard]] const nodes::graph::IDirectedGraph& getGraph() const;
 
+        /**
+         * @brief Get all resources required for a given resource.
+         * @param resource The resource whose dependencies are to be queried.
+         * @return Vector of Lib3MF::PResource representing all required resources.
+         */
+        [[nodiscard]] std::vector<Lib3MF::PResource> getAllRequiredResources(Lib3MF::PResource resource) const;
+
     private:
         /**
          * @brief Process a LevelSet resource and add its dependencies to the graph
