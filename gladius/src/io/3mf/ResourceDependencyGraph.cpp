@@ -147,6 +147,46 @@ namespace gladius::io
         return matchingItems;
     }
 
+    CanResourceBeRemovedResult ResourceDependencyGraph::checkResourceRemoval(Lib3MF::PResource resourceToBeRemoved) const
+    {
+        CanResourceBeRemovedResult result;
+        result.canBeRemoved = true; // Assume removable until proven otherwise
+
+        if (!resourceToBeRemoved || !m_model || !m_graph)
+        {
+            result.canBeRemoved = false; // Cannot determine without valid input
+            return result;
+        }
+
+        Lib3MF_uint32 resourceIdToRemove = resourceToBeRemoved->GetResourceID();
+
+        // 1. Check for dependent resources
+        Lib3MF::PResourceIterator resourceIterator = m_model->GetResources();
+        while (resourceIterator->MoveNext())
+        {
+            Lib3MF::PResource currentResource = resourceIterator->GetCurrent();
+            if (currentResource && currentResource->GetResourceID() != resourceIdToRemove)
+            {
+                Lib3MF_uint32 currentResourceId = currentResource->GetResourceID();
+                // Check if currentResource directly depends on resourceIdToRemove
+                if (m_graph->isDirectlyDependingOn(currentResourceId, resourceIdToRemove))
+                {
+                    result.dependentResources.push_back(currentResource);
+                    result.canBeRemoved = false;
+                }
+            }
+        }
+
+        // 2. Check for dependent build items
+        result.dependentBuildItems = findBuildItemsReferencingResource(resourceToBeRemoved);
+        if (!result.dependentBuildItems.empty())
+        {
+            result.canBeRemoved = false;
+        }
+
+        return result;
+    }
+
     void ResourceDependencyGraph::processLevelSet(Lib3MF::PLevelSet levelSet)
     {
         if (!levelSet)

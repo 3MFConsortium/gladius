@@ -5,9 +5,23 @@
 #include <lib3mf_abi.hpp>
 #include <lib3mf_implicit.hpp>
 #include <memory>
+#include <vector> // Added for std::vector
 
 namespace gladius::io
 {
+    /**
+     * @brief Structure to hold the results of a resource removal check.
+     */
+    struct CanResourceBeRemovedResult
+    {
+        /** @brief True if the resource can be safely removed, false otherwise. */
+        bool canBeRemoved;
+        /** @brief List of resources that directly depend on the checked resource. */
+        std::vector<Lib3MF::PResource> dependentResources;
+        /** @brief List of build items that directly reference the checked resource. */
+        std::vector<Lib3MF::PBuildItem> dependentBuildItems;
+    };
+
     /**
      * @brief Class for building a dependency graph of all resources in a 3MF model
      * 
@@ -55,6 +69,15 @@ namespace gladius::io
          * @return Vector of PBuildItem referencing the resource.
          */
         std::vector<Lib3MF::PBuildItem> findBuildItemsReferencingResource(Lib3MF::PResource resource) const;
+
+        /**
+         * @brief Checks if a resource can be safely removed.
+         * 
+         * A resource can be removed if no other resource or build item directly depends on it.
+         * @param resourceToBeRemoved The resource to check.
+         * @return A struct containing the check result, dependent resources, and dependent build items.
+         */
+        [[nodiscard]] CanResourceBeRemovedResult checkResourceRemoval(Lib3MF::PResource resourceToBeRemoved) const;
 
     private:
         /**
