@@ -290,4 +290,55 @@ namespace gladius_tests
         // Assert
         EXPECT_TRUE(requiredResources.empty()) << "Mesh object with no dependencies should return empty vector";
     }
+
+    TEST_F(ResourceDependencyGraphTest, FindBuildItemsReferencingResource_WithBuildItem_ReturnsMatchingItem)
+    {
+        // Arrange: create a mesh object and add a build item referencing it
+        Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
+        Lib3MF::PObject objectResource = std::static_pointer_cast<Lib3MF::CObject>(meshObject);
+        Lib3MF::sTransform transform = {}; // initialize identity matrix
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                transform.m_Fields[i][j] = (i == j) ? 1.0f : 0.0f;
+            }
+        }
+        Lib3MF::PBuildItem buildItem = m_model->AddBuildItem(objectResource, transform);
+
+        // Act
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+        auto items = dependencyGraph.findBuildItemsReferencingResource(meshObject);
+
+        // Assert: should find the one build item referencing the mesh object
+        ASSERT_EQ(items.size(), 1u) << "Should find one build item referencing the mesh object";
+        EXPECT_EQ(items[0]->GetObjectResourceID(), meshObject->GetResourceID());
+    }
+
+    TEST_F(ResourceDependencyGraphTest, FindBuildItemsReferencingResource_WithNoBuildItems_ReturnsEmpty)
+    {
+        // Arrange: new model with a mesh but no build items
+        m_model = m_wrapper->CreateModel();
+        Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto items = dependencyGraph.findBuildItemsReferencingResource(meshObject);
+
+        // Assert
+        EXPECT_TRUE(items.empty()) << "No build items exist, should return empty vector";
+    }
+
+    TEST_F(ResourceDependencyGraphTest, FindBuildItemsReferencingResource_WithNullResource_ReturnsEmpty)
+    {
+        // Arrange
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto items = dependencyGraph.findBuildItemsReferencingResource(nullptr);
+
+        // Assert
+        EXPECT_TRUE(items.empty()) << "Null resource should yield empty build items";
+    }
 }
