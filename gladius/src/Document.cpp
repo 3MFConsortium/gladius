@@ -20,6 +20,8 @@
 #include "nodes/ToCommandStreamVisitor.h"
 #include "nodes/ToOCLVisitor.h"
 #include "nodes/Validator.h"
+#include "io/3mf/ResourceDependencyGraph.h"
+#include "io/3mf/ResourceIdUtil.h"  // for resourceIdToUniqueResourceId
 
 #include <chrono>
 #include <cmath>
@@ -976,5 +978,31 @@ namespace gladius
 
         // Update the assembly inputs and outputs
         m_assembly->updateInputsAndOutputs();
+    }
+
+    io::CanResourceBeRemovedResult Document::safeDeleteResource(ResourceKey key)
+    {
+        io::CanResourceBeRemovedResult result;
+        result.canBeRemoved = false;
+
+        if (!m_3mfmodel)
+        {
+            return result;
+        }
+
+        auto modelResIdOpt = key.getResourceId();
+        if (!modelResIdOpt)
+        {
+            return result;
+        }
+
+        // (Re)build dependency graph for current model
+        m_resourceDependencyGraph = std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel);
+        m_resourceDependencyGraph->buildGraph();
+
+        // map model ResourceId to UniqueResourceID for graph lookup
+        Lib3MF_uint32 uniqueResId = io::resourceIdToUniqueResourceId(m_3mfmodel, modelResIdOpt.value());
+        auto resource = m_3mfmodel->GetResourceByID(uniqueResId);
+        return m_resourceDependencyGraph->checkResourceRemoval(resource);
     }
 }

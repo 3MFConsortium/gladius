@@ -8,6 +8,7 @@
 #include "nodes/BuildItem.h"
 #include "nodes/Model.h"
 #include "ui/GLView.h"
+#include "io/3mf/ResourceDependencyGraph.h"
 
 #include <atomic>
 #include <filesystem>
@@ -187,6 +188,14 @@ namespace gladius
          * 
          */
         void updateDocumenFrom3mfModel();
+
+        /**
+         * @brief Checks if a resource can be safely deleted, without dependencies.
+         * @param key The key of the resource to check.
+         * @return Result containing removal possibility and dependent items.
+         */
+        gladius::io::CanResourceBeRemovedResult safeDeleteResource(ResourceKey key);
+
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,
@@ -227,6 +236,9 @@ namespace gladius
 
         // last backup time
         std::chrono::time_point<std::chrono::system_clock> m_lastBackupTime;
+
+        /// Dependency graph for resource removal checks
+        std::unique_ptr<gladius::io::ResourceDependencyGraph> m_resourceDependencyGraph;
     };
 
     using SharedDocument = std::shared_ptr<Document>;
