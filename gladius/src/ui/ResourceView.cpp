@@ -100,7 +100,7 @@ namespace gladius::ui
                     }
 
                     // always show delete button, but indicate dependencies
-                    auto safeResult = document->safeDeleteResource(key);
+                    auto safeResult = document->isItSafeToDeleteResource(key);
                     if (ImGui::Button("Delete"))
                     {
                         if (safeResult.canBeRemoved)
@@ -190,7 +190,7 @@ namespace gladius::ui
                     }
 
                     // delete image stack
-                    auto safeResult = document->safeDeleteResource(key);
+                    auto safeResult = document->isItSafeToDeleteResource(key);
                     if (ImGui::Button("Delete"))
                     {
                         if (safeResult.canBeRemoved)

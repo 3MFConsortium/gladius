@@ -194,7 +194,7 @@ namespace gladius
          * @param key The key of the resource to check.
          * @return Result containing removal possibility and dependent items.
          */
-        gladius::io::CanResourceBeRemovedResult safeDeleteResource(ResourceKey key);
+        gladius::io::CanResourceBeRemovedResult isItSafeToDeleteResource(ResourceKey key);
 
       private:
         [[nodiscard]] nodes::VariantParameter &
@@ -208,6 +208,14 @@ namespace gladius
         void loadAllMeshResources();
         void refreshWorker();
         void updateFlatAssembly();
+        
+        /**
+         * @brief Rebuilds the dependency graph for the current 3MF model
+         * 
+         * Creates a new ResourceDependencyGraph and builds the graph for the currently loaded 3MF model.
+         * This is used to track dependencies between resources for safe resource deletion.
+         */
+        void rebuildResourceDependencyGraph();
 
         void updateMemoryOffsets();
 

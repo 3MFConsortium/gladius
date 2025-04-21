@@ -356,11 +356,36 @@ namespace gladius::ui
 
                 if (!isAssembly || model.second->isManaged())
                 {
+                    // Check if function can be safely deleted
+                    auto safeResult = m_doc->isItSafeToDeleteResource(ResourceKey(model.second->getResourceId()));
                     if (ImGui::Button("Delete"))
                     {
-                        m_doc->deleteFunction(model.second->getResourceId());
-                        m_currentModel = m_assembly->assemblyModel();
-                        m_dirty = true;
+                        if (safeResult.canBeRemoved)
+                        {
+                            m_doc->deleteFunction(model.second->getResourceId());
+                            m_currentModel = m_assembly->assemblyModel();
+                            m_dirty = true;
+                        }
+                    }
+                    
+                    // Display tooltip with dependency information if function cannot be deleted
+                    if (!safeResult.canBeRemoved)
+                    {
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                                              "Cannot delete, the function is referenced by another item:");
+                            for (auto const & depRes : safeResult.dependentResources)
+                            {
+                                ImGui::BulletText("Resource ID: %u", depRes->GetModelResourceID());
+                            }
+                            for (auto const & depItem : safeResult.dependentBuildItems)
+                            {
+                                ImGui::BulletText("Build item: %u", depItem->GetObjectResourceID());
+                            }
+                            ImGui::EndTooltip();
+                        }
                     }
                 }
 

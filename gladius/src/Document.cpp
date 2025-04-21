@@ -9,8 +9,10 @@
 #include "compute/ComputeCore.h"
 #include "exceptions.h"
 #include "imguinodeeditor.h"
-#include "io/3mf/ImageStackCreator.h"
 #include "io/3mf/ImageExtractor.h"
+#include "io/3mf/ImageStackCreator.h"
+#include "io/3mf/ResourceDependencyGraph.h"
+#include "io/3mf/ResourceIdUtil.h" // for resourceIdToUniqueResourceId
 #include "io/3mf/Writer3mf.h"
 #include "io/ImporterVdb.h"
 #include "io/VdbImporter.h"
@@ -20,8 +22,6 @@
 #include "nodes/ToCommandStreamVisitor.h"
 #include "nodes/ToOCLVisitor.h"
 #include "nodes/Validator.h"
-#include "io/3mf/ResourceDependencyGraph.h"
-#include "io/3mf/ResourceIdUtil.h"  // for resourceIdToUniqueResourceId
 
 #include <chrono>
 #include <cmath>
@@ -54,15 +54,15 @@ namespace gladius
     Document::Document(std::shared_ptr<ComputeCore> core)
         : m_core(std::move(core))
     {
-        m_channels.push_back(BitmapChannel{"DownSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateDownSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"DownSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateDownSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
-        m_channels.push_back(BitmapChannel{"UpSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateUpSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"UpSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateUpSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
         newModel();
         resetGeneratorContext();
@@ -112,6 +112,10 @@ namespace gladius
         m_contoursDirty = true;
 
         updateFlatAssembly();
+
+        // Rebuild resource dependency graph
+        rebuildResourceDependencyGraph();
+
         m_core->refreshProgram(m_flatAssembly);
         m_core->recompileBlockingNoLock();
         m_core->invalidatePreCompSdf();
@@ -120,7 +124,7 @@ namespace gladius
         {
             m_core->getMeshResourceState().signalCompilationFinished();
         }
-        }
+    }
 
     void Document::updateFlatAssembly()
     {
@@ -940,7 +944,6 @@ namespace gladius
             }
 
             return ResourceKey{0};
-
         }
         auto & resourceManager = getGeneratorContext().resourceManager;
         auto const key = ResourceKey{stack->GetModelResourceID()};
@@ -951,7 +954,6 @@ namespace gladius
         resourceManager.addResource(key, std::move(grid));
         resourceManager.loadResources();
         return key;
-
     }
 
     void Document::update3mfModel()
@@ -968,7 +970,7 @@ namespace gladius
         }
 
         io::Importer3mf importer{getSharedLogger()};
-        
+
         // Load build items from the 3MF model
         clearBuildItems();
         importer.loadBuildItems(m_3mfmodel, *this);
@@ -980,7 +982,18 @@ namespace gladius
         m_assembly->updateInputsAndOutputs();
     }
 
-    io::CanResourceBeRemovedResult Document::safeDeleteResource(ResourceKey key)
+    void Document::rebuildResourceDependencyGraph()
+    {
+        if (!m_3mfmodel)
+        {
+            return;
+        }
+
+        m_resourceDependencyGraph = std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel);
+        m_resourceDependencyGraph->buildGraph();
+    }
+
+    io::CanResourceBeRemovedResult Document::isItSafeToDeleteResource(ResourceKey key)
     {
         io::CanResourceBeRemovedResult result;
         result.canBeRemoved = false;
@@ -996,13 +1009,23 @@ namespace gladius
             return result;
         }
 
-        // (Re)build dependency graph for current model
-        m_resourceDependencyGraph = std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel);
-        m_resourceDependencyGraph->buildGraph();
-
         // map model ResourceId to UniqueResourceID for graph lookup
-        Lib3MF_uint32 uniqueResId = io::resourceIdToUniqueResourceId(m_3mfmodel, modelResIdOpt.value());
-        auto resource = m_3mfmodel->GetResourceByID(uniqueResId);
-        return m_resourceDependencyGraph->checkResourceRemoval(resource);
+        Lib3MF_uint32 uniqueResId =
+          io::resourceIdToUniqueResourceId(m_3mfmodel, modelResIdOpt.value());
+        try
+        {
+            auto resource = m_3mfmodel->GetResourceByID(uniqueResId);
+            result.dependentBuildItems =
+              m_resourceDependencyGraph->checkResourceRemoval(resource).dependentBuildItems;
+            return result;
+        }
+        catch (const Lib3MF::ELib3MFException & e)
+        {
+
+            // Resource not found, return empty result
+            return result;
+        }
+
+        return result;
     }
 }
