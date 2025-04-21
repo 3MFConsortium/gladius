@@ -1,4 +1,6 @@
 #include "ResourceView.h"
+#include "io/3mf/ResourceDependencyGraph.h"
+#include "io/3mf/ResourceIdUtil.h"
 
 #include "FileChooser.h"
 #include "ImageStackResource.h"
@@ -97,9 +99,38 @@ namespace gladius::ui
                         ImGui::EndTable();
                     }
 
+                    // always show delete button, but indicate dependencies
+                    auto safeResult = document->safeDeleteResource(key);
+                    if (!safeResult.canBeRemoved)
+                    {
+                        ImGui::BeginDisabled();
+                    }
                     if (ImGui::Button("Delete"))
                     {
-                        document->deleteResource(key);
+                        if (safeResult.canBeRemoved)
+                        {
+                            document->deleteResource(key);
+                        }
+                    }
+
+                    if (!safeResult.canBeRemoved)
+                    {
+                        ImGui::EndDisabled();
+                    }
+
+                    if (!safeResult.canBeRemoved)
+                    {
+                        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                                           "Cannot delete, the resource is referenced by another item:\n");
+                        for (auto const & depRes : safeResult.dependentResources)
+                        {
+                            ImGui::BulletText("Resource ID: %u", depRes->GetModelResourceID());
+                        }
+                        for (auto const & depItem : safeResult.dependentBuildItems)
+                        {
+                            ImGui::BulletText("Build item: %u",
+                                              depItem->GetObjectResourceID());
+                        }
                     }
 
                     ImGui::TreePop();
