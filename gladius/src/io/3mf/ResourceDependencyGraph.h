@@ -49,6 +49,13 @@ namespace gladius::io
          */
         [[nodiscard]] std::vector<Lib3MF::PResource> getAllRequiredResources(Lib3MF::PResource resource) const;
 
+        /**
+         * @brief Get all 3MF build items that reference the specified resource.
+         * @param resource The resource whose build item references to find.
+         * @return Vector of PBuildItem referencing the resource.
+         */
+        std::vector<Lib3MF::PBuildItem> findBuildItemsReferencingResource(Lib3MF::PResource resource) const;
+
     private:
         /**
          * @brief Process a LevelSet resource and add its dependencies to the graph

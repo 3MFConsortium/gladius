@@ -129,6 +129,24 @@ namespace gladius::io
         return requiredResources;
     }
 
+    std::vector<Lib3MF::PBuildItem> ResourceDependencyGraph::findBuildItemsReferencingResource(Lib3MF::PResource resource) const
+    {
+        std::vector<Lib3MF::PBuildItem> matchingItems;
+        if (!resource || !m_model) {
+            return matchingItems;
+        }
+        Lib3MF_uint32 targetId = resource->GetResourceID();
+        Lib3MF::PBuildItemIterator buildItemIterator = m_model->GetBuildItems();
+        while (buildItemIterator->MoveNext())
+        {
+            Lib3MF::PBuildItem buildItem = buildItemIterator->GetCurrent();
+            if (buildItem && buildItem->GetObjectResourceID() == targetId) {
+                matchingItems.push_back(buildItem);
+            }
+        }
+        return matchingItems;
+    }
+
     void ResourceDependencyGraph::processLevelSet(Lib3MF::PLevelSet levelSet)
     {
         if (!levelSet)
