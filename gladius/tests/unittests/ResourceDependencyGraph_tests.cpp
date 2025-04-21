@@ -341,4 +341,77 @@ namespace gladius_tests
         // Assert
         EXPECT_TRUE(items.empty()) << "Null resource should yield empty build items";
     }
+
+    TEST_F(ResourceDependencyGraphTest, CheckResourceRemoval_NullResource_ReturnsFalse)
+    {
+        // Arrange
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto result = dependencyGraph.checkResourceRemoval(nullptr);
+
+        // Assert
+        EXPECT_FALSE(result.canBeRemoved) << "Null resource should not be removable";
+        EXPECT_TRUE(result.dependentResources.empty()) << "dependentResources should be empty for null resource";
+        EXPECT_TRUE(result.dependentBuildItems.empty()) << "dependentBuildItems should be empty for null resource";
+    }
+
+    TEST_F(ResourceDependencyGraphTest, CheckResourceRemoval_NoDependencies_ReturnsTrue)
+    {
+        // Arrange
+        Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto result = dependencyGraph.checkResourceRemoval(meshObject);
+
+        // Assert
+        EXPECT_TRUE(result.canBeRemoved) << "Mesh object with no dependencies should be removable";
+        EXPECT_TRUE(result.dependentResources.empty()) << "dependentResources should be empty when no dependencies";
+        EXPECT_TRUE(result.dependentBuildItems.empty()) << "dependentBuildItems should be empty when no build items";
+    }
+
+    TEST_F(ResourceDependencyGraphTest, CheckResourceRemoval_WithDependentResource_ReturnsFalse)
+    {
+        // Arrange
+        Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
+        Lib3MF::PComponentsObject componentsObject = m_model->AddComponentsObject();
+        componentsObject->AddComponent(meshObject.get(), Lib3MF::sTransform());
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+        Lib3MF_uint32 compId = componentsObject->GetResourceID();
+
+        // Act
+        auto result = dependencyGraph.checkResourceRemoval(meshObject);
+
+        // Assert
+        EXPECT_FALSE(result.canBeRemoved) << "Mesh object with dependent resource should not be removable";
+        ASSERT_EQ(result.dependentResources.size(), 1u);
+        EXPECT_EQ(result.dependentResources[0]->GetResourceID(), compId);
+        EXPECT_TRUE(result.dependentBuildItems.empty());
+    }
+
+    TEST_F(ResourceDependencyGraphTest, CheckResourceRemoval_WithDependentBuildItem_ReturnsFalse)
+    {
+        // Arrange
+        Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
+        // Create a build item referencing the mesh object
+        Lib3MF::PBuildItem buildItem = m_model->AddBuildItem(
+            std::static_pointer_cast<Lib3MF::CObject>(meshObject),
+            Lib3MF::sTransform());
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+        Lib3MF_uint32 meshId = meshObject->GetResourceID();
+
+        // Act
+        auto result = dependencyGraph.checkResourceRemoval(meshObject);
+
+        // Assert
+        EXPECT_FALSE(result.canBeRemoved) << "Mesh object with dependent build item should not be removable";
+        EXPECT_TRUE(result.dependentResources.empty());
+        ASSERT_EQ(result.dependentBuildItems.size(), 1u);
+        EXPECT_EQ(result.dependentBuildItems[0]->GetObjectResourceID(), meshId);
+    }
 }
