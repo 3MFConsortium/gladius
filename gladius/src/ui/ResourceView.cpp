@@ -190,9 +190,32 @@ namespace gladius::ui
                     }
 
                     // delete image stack
+                    auto safeResult = document->safeDeleteResource(key);
                     if (ImGui::Button("Delete"))
                     {
-                        document->deleteResource(key);
+                        if (safeResult.canBeRemoved)
+                        {
+                            document->deleteResource(key);
+                        }
+                    }
+
+                    if (!safeResult.canBeRemoved)
+                    {
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                                               "Cannot delete, the resource is referenced by another item:");
+                            for (auto const & depRes : safeResult.dependentResources)
+                            {
+                                ImGui::BulletText("Resource ID: %u", depRes->GetModelResourceID());
+                            }
+                            for (auto const & depItem : safeResult.dependentBuildItems)
+                            {
+                                ImGui::BulletText("Build item: %u", depItem->GetObjectResourceID());
+                            }
+                            ImGui::EndTooltip();
+                        }
                     }
 
                     ImGui::TreePop();
