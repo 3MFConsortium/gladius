@@ -224,4 +224,70 @@ namespace gladius_tests
         EXPECT_TRUE(std::find(successors.begin(), successors.end(), rootId) != successors.end())
             << "Root node should be a successor of leaf node";
     }
+
+    TEST_F(ResourceDependencyGraphTest, GetAllRequiredResources_WithComponentObject_ReturnsDependencies)
+    {
+        // Arrange
+        createTestModel();
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+
+        // Find the components object
+        Lib3MF::PResourceIterator resourceIterator = m_model->GetResources();
+        Lib3MF::PResource componentsResource = nullptr;
+        while (resourceIterator->MoveNext())
+        {
+            Lib3MF::PResource res = resourceIterator->GetCurrent();
+            if (std::dynamic_pointer_cast<Lib3MF::CComponentsObject>(res))
+            {
+                componentsResource = res;
+                break;
+            }
+        }
+        ASSERT_TRUE(componentsResource) << "No components object found in test model";
+
+        // Act
+        auto requiredResources = dependencyGraph.getAllRequiredResources(componentsResource);
+
+        // Assert
+        // Should contain the mesh referenced by the component
+        bool foundMesh = false;
+        for (const auto& res : requiredResources)
+        {
+            if (std::dynamic_pointer_cast<Lib3MF::CMeshObject>(res))
+            {
+                foundMesh = true;
+                break;
+            }
+        }
+        EXPECT_TRUE(foundMesh) << "Required resources should include the mesh object referenced by the component object";
+    }
+
+    TEST_F(ResourceDependencyGraphTest, GetAllRequiredResources_WithNullResource_ReturnsEmpty)
+    {
+        // Arrange
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto requiredResources = dependencyGraph.getAllRequiredResources(nullptr);
+
+        // Assert
+        EXPECT_TRUE(requiredResources.empty()) << "Should return empty vector for null resource input";
+    }
+
+    TEST_F(ResourceDependencyGraphTest, GetAllRequiredResources_WithNoDependencies_ReturnsEmpty)
+    {
+        // Arrange
+        m_model = m_wrapper->CreateModel();
+        Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
+        io::ResourceDependencyGraph dependencyGraph(m_model);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto requiredResources = dependencyGraph.getAllRequiredResources(meshObject);
+
+        // Assert
+        EXPECT_TRUE(requiredResources.empty()) << "Mesh object with no dependencies should return empty vector";
+    }
 }
