@@ -103,27 +103,27 @@ namespace gladius::io
     std::vector<Lib3MF::PResource> ResourceDependencyGraph::getAllRequiredResources(Lib3MF::PResource resource) const
     {
         std::vector<Lib3MF::PResource> requiredResources;
-        if (!resource || !m_model || !m_graph)
-        {
+        if (!resource || !m_model || !m_graph) {
             return requiredResources;
         }
 
         Lib3MF_uint32 resourceId = resource->GetResourceID();
-        // Get all dependencies (resource IDs) for the given resource
         auto dependencies = gladius::nodes::graph::determineAllDependencies(*m_graph, resourceId);
-        if (dependencies.empty())
-        {
-            return requiredResources;
-        }
+        requiredResources.reserve(dependencies.size());
 
-        // Map resource IDs back to PResource using the model's resource iterator
-        Lib3MF::PResourceIterator resourceIterator = m_model->GetResources();
-        while (resourceIterator->MoveNext())
+        for (auto depId : dependencies)
         {
-            Lib3MF::PResource res = resourceIterator->GetCurrent();
-            if (dependencies.find(res->GetResourceID()) != dependencies.end())
+            try
             {
-                requiredResources.push_back(res);
+                Lib3MF::PResource res = m_model->GetResourceByID(depId);
+                if (res)
+                {
+                    requiredResources.push_back(res);
+                }
+            }
+            catch (const std::exception&)
+            {
+                // Skip missing resource
             }
         }
         return requiredResources;
