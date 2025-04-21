@@ -996,7 +996,7 @@ namespace gladius
     io::CanResourceBeRemovedResult Document::isItSafeToDeleteResource(ResourceKey key)
     {
         io::CanResourceBeRemovedResult result;
-        result.canBeRemoved = false;
+        result.canBeRemoved = true;
 
         if (!m_3mfmodel)
         {
@@ -1015,8 +1015,7 @@ namespace gladius
         try
         {
             auto resource = m_3mfmodel->GetResourceByID(uniqueResId);
-            result.dependentBuildItems =
-              m_resourceDependencyGraph->checkResourceRemoval(resource).dependentBuildItems;
+            result = m_resourceDependencyGraph->checkResourceRemoval(resource);
             return result;
         }
         catch (const Lib3MF::ELib3MFException & e)

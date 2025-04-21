@@ -44,7 +44,7 @@ namespace gladius::ui
 
         if (it == types.end())
         {
-            return "Unknown";
+            return "any";
         }
 
         return it->first;
@@ -363,6 +363,12 @@ namespace gladius::ui
             baseNode.setDisplayName(displayName);
         }
         ImGui::PopItemWidth();
+
+        ImGui::Indent(20.f * m_uiScale);
+        ImGui::SetWindowFontScale(0.8f);
+        ImGui::TextUnformatted(baseNode.name().c_str());
+        ImGui::SetWindowFontScale(1.f);
+        ImGui::Unindent(20.f * m_uiScale);
 
         if (m_popStyle)
         {
@@ -926,9 +932,28 @@ namespace gladius::ui
                     }
                     ImGui::TextUnformatted((parameter.first).c_str());
                     columnWidths[2] = std::max(columnWidths[2], ImGui::GetItemRectSize().x);
+
+                    // Add a label below the button with the type name
+                    if (!inputMissing)
+                    {
+                        // decreaes font size
+                        ImGui::SetWindowFontScale(0.5f);
+                        ImGui::TextUnformatted(
+                          typeToString(parameter.second.getTypeIndex()).c_str());
+                        columnWidths[2] = std::max(columnWidths[2], ImGui::GetItemRectSize().x);
+                        ImGui::SetWindowFontScale(1.0f);
+                    }
                     if (inputMissing)
                     {
+                        // decreaes font size
+                        ImGui::SetWindowFontScale(0.5f);
+                        ImGui::TextUnformatted(
+                          fmt::format("Add a input of {} type",
+                                      typeToString(parameter.second.getTypeIndex()))
+                            .c_str());
                         ImGui::PopStyleColor();
+                        columnWidths[2] = std::max(columnWidths[2], ImGui::GetItemRectSize().x);
+                        ImGui::SetWindowFontScale(1.0f);
                     }
                     ImGui::PopStyleColor();
                 }
@@ -992,6 +1017,14 @@ namespace gladius::ui
                     ImGui::TextUnformatted((output.first).c_str());
                     columnWidths[6] = std::max(columnWidths[6], ImGui::GetItemRectSize().x);
 
+                    // Add a label below the button with the type name
+
+                    ImGui::SetWindowFontScale(0.5f);
+
+                    ImGui::TextUnformatted(typeToString(output.second.getTypeIndex()).c_str());
+                    ImGui::SetWindowFontScale(1.0f);
+                    columnWidths[6] = std::max(columnWidths[6], ImGui::GetItemRectSize().x);
+
                     ImGui::TableNextColumn();
 
                     const ed::PinId pinId = output.second.getId();
@@ -1000,6 +1033,7 @@ namespace gladius::ui
                     ImGui::TextUnformatted(reinterpret_cast<const char *>(ICON_FA_CARET_RIGHT));
                     columnWidths[7] = std::max(columnWidths[7], ImGui::GetItemRectSize().x);
                     ImGui::SetWindowFontScale(1.0f); // Reset the font scale to default
+
                     ed::EndPin();
 
                     columnWidths[7] = std::max(columnWidths[7], ImGui::GetItemRectSize().x);

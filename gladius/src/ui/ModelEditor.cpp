@@ -387,6 +387,34 @@ namespace gladius::ui
                             ImGui::EndTooltip();
                         }
                     }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Rename"))
+                    {
+                        m_outlineRenaming = true;
+                        ImGui::SetKeyboardFocusHere();
+                        ImGui::OpenPopup("Rename");
+                        m_newModelName = model.second->getDisplayName().value_or("New function");
+                    }
+
+
+                    if (ImGui::BeginPopup("Rename"))
+                    {
+                        ImGui::InputText("New Name", &m_newModelName);
+                        if (ImGui::Button("Confirm"))
+                        {
+                            model.second->setDisplayName(m_newModelName);
+                            m_outlineRenaming = false;
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Cancel"))
+                        {
+                            m_outlineRenaming = false;
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::EndPopup();
+                    }
                 }
 
                 ImGui::TreePop();
