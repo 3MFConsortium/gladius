@@ -24,6 +24,8 @@ namespace gladius_tests
             // Create a model
             m_model = m_wrapper->CreateModel();
             ASSERT_TRUE(m_model) << "Failed to create 3MF model";
+
+            m_logger = gladius::events::SharedLogger();
         }
 
         void TearDown() override
@@ -66,12 +68,14 @@ namespace gladius_tests
         Lib3MF::PModel m_model;
         std::vector<Lib3MF_uint32> m_resourceIds;
         std::unordered_map<Lib3MF_uint32, std::unordered_set<Lib3MF_uint32>> m_expectedDependencies;
+        //logger
+        gladius::events::SharedLogger m_logger;
     };
 
     TEST_F(ResourceDependencyGraphTest, BuildGraph_EmptyModel_NoVerticesInGraph)
     {
         // Arrange
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         
         // Act
         dependencyGraph.buildGraph();
@@ -85,7 +89,7 @@ namespace gladius_tests
     {
         // Arrange
         createTestModel();
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         
         // Act
         dependencyGraph.buildGraph();
@@ -106,7 +110,7 @@ namespace gladius_tests
     {
         // Arrange
         createTestModel();
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         
         // Act
         dependencyGraph.buildGraph();
@@ -129,7 +133,7 @@ namespace gladius_tests
     {
         // Arrange
         Lib3MF::PModel nullModel = nullptr;
-        io::ResourceDependencyGraph dependencyGraph(nullModel);
+        io::ResourceDependencyGraph dependencyGraph(nullModel, m_logger);
         
         // Act
         dependencyGraph.buildGraph();
@@ -163,7 +167,7 @@ namespace gladius_tests
         Lib3MF::PComponent parentComponent = parentObject->AddComponent(componentsObject.get(), Lib3MF::sTransform());
         Lib3MF_uint32 parentId = parentObject->GetResourceID();
         
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         
         // Act
         dependencyGraph.buildGraph();
@@ -188,7 +192,7 @@ namespace gladius_tests
     {
         // Arrange
         createTestModel();
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
         const auto& graph = dependencyGraph.getGraph();
         
@@ -229,7 +233,7 @@ namespace gladius_tests
     {
         // Arrange
         createTestModel();
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
 
         // Find the components object
@@ -266,7 +270,7 @@ namespace gladius_tests
     TEST_F(ResourceDependencyGraphTest, GetAllRequiredResources_WithNullResource_ReturnsEmpty)
     {
         // Arrange
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
 
         // Act
@@ -281,7 +285,7 @@ namespace gladius_tests
         // Arrange
         m_model = m_wrapper->CreateModel();
         Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
 
         // Act
@@ -305,7 +309,7 @@ namespace gladius_tests
         Lib3MF::PBuildItem buildItem = m_model->AddBuildItem(objectResource, transform);
 
         // Act
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
         auto items = dependencyGraph.findBuildItemsReferencingResource(meshObject);
 
@@ -319,9 +323,8 @@ namespace gladius_tests
         // Arrange: new model with a mesh but no build items
         m_model = m_wrapper->CreateModel();
         Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
-
         // Act
         auto items = dependencyGraph.findBuildItemsReferencingResource(meshObject);
 
@@ -332,7 +335,7 @@ namespace gladius_tests
     TEST_F(ResourceDependencyGraphTest, FindBuildItemsReferencingResource_WithNullResource_ReturnsEmpty)
     {
         // Arrange
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
 
         // Act
@@ -345,7 +348,7 @@ namespace gladius_tests
     TEST_F(ResourceDependencyGraphTest, CheckResourceRemoval_NullResource_ReturnsFalse)
     {
         // Arrange
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
 
         // Act
@@ -361,7 +364,7 @@ namespace gladius_tests
     {
         // Arrange
         Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
 
         // Act
@@ -379,7 +382,7 @@ namespace gladius_tests
         Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
         Lib3MF::PComponentsObject componentsObject = m_model->AddComponentsObject();
         componentsObject->AddComponent(meshObject.get(), Lib3MF::sTransform());
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
         Lib3MF_uint32 compId = componentsObject->GetResourceID();
 
@@ -401,7 +404,8 @@ namespace gladius_tests
         Lib3MF::PBuildItem buildItem = m_model->AddBuildItem(
             std::static_pointer_cast<Lib3MF::CObject>(meshObject),
             Lib3MF::sTransform());
-        io::ResourceDependencyGraph dependencyGraph(m_model);
+        
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
         dependencyGraph.buildGraph();
         Lib3MF_uint32 meshId = meshObject->GetResourceID();
 
