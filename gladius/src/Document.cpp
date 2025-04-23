@@ -138,29 +138,17 @@ namespace gladius
         auto logger = getSharedLogger();
         if (!validator.validate(*m_assembly))
         {
-
-            if (logger)
+            auto logger = getSharedLogger();
+            for (auto const & error : validator.getErrors())
             {
-                for (auto const & error : validator.getErrors())
-                {
-                    logger->addEvent({fmt::format("{}: Review parameter {} of node {} in model {}",
-                                                  error.message,
-                                                  error.parameter,
-                                                  error.node,
-                                                  error.model),
-                                      Severity::Error});
-                }
-            }
-            else
-            {
-                for (auto const & error : validator.getErrors())
-                {
-                    std::cerr << fmt::format("{}: Review parameter {} of node {} in model {}\n",
-                                             error.message,
-                                             error.parameter,
-                                             error.node,
-                                             error.model);
-                }
+                if (logger)
+                    logger->addEvent({
+                        fmt::format("{}: Review parameter {} of node {} in model {}",
+                                    error.message,
+                                    error.parameter,
+                                    error.node,
+                                    error.model),
+                        Severity::Error});
             }
             return;
         }
@@ -170,15 +158,9 @@ namespace gladius
         }
         catch (std::exception const & e)
         {
+            auto logger = getSharedLogger();
             if (logger)
-            {
-                logger->addEvent(
-                  {"Error flattening assembly: " + std::string(e.what()), Severity::Error});
-            }
-            else
-            {
-                std::cerr << "Error flattening assembly: " << e.what() << "\n";
-            }
+                logger->addEvent({"Error flattening assembly: " + std::string(e.what()), Severity::Error});
         }
     }
 
@@ -402,7 +384,9 @@ namespace gladius
         }
         catch (std::exception const & e)
         {
-            std::cerr << "unhandled exception: " << e.what() << "\n";
+            auto logger = getSharedLogger();
+            if (logger)
+                logger->addEvent({std::string("unhandled exception: ") + e.what(), events::Severity::Error});
         }
     }
 
@@ -420,7 +404,9 @@ namespace gladius
         }
         catch (std::future_error const & e)
         {
-            std::cerr << "future error: " << e.what() << "\n";
+            auto logger = getSharedLogger();
+            if (logger)
+                logger->addEvent({std::string("future error: ") + e.what(), events::Severity::Error});
         }
         m_core->compileSlicerProgramBlocking();
         updateParameter();
@@ -434,9 +420,11 @@ namespace gladius
 
         vdb::MeshExporter exporter;
         exporter.beginExport(filename, *m_core);
+        auto logger = getSharedLogger();
         while (exporter.advanceExport(*m_core))
         {
-            std::cout << " Processing layer with z = " << m_core->getSliceHeight() << "\n";
+            if (logger)
+                logger->addEvent({fmt::format("Processing layer with z = {}", m_core->getSliceHeight()), events::Severity::Info});
         }
         exporter.finalizeExportSTL(*m_core);
     }
@@ -698,12 +686,9 @@ namespace gladius
             }
             catch (std::exception const & e)
             {
-                std::cerr << "unhandled exception: " << e.what() << "\n";
                 auto logger = getSharedLogger();
                 if (logger)
-                {
-                    logger->addEvent(events::Event{e.what(), events::Severity::Error});
-                }
+                    logger->addEvent({std::string("unhandled exception: ") + e.what(), events::Severity::Error});
                 newModel();
                 return;
             }
@@ -760,15 +745,9 @@ namespace gladius
         }
         catch (const std::exception & e)
         {
-            // log
+            auto logger = getSharedLogger();
             if (logger)
-            {
-                logger->addEvent({e.what(), events::Severity::Error});
-            }
-            else
-            {
-                std::cerr << e.what() << "\n";
-            }
+                logger->addEvent({std::string("STL load error: ") + e.what(), events::Severity::Error});
             return {};
         }
 
