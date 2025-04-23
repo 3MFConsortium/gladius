@@ -109,13 +109,33 @@ namespace gladius::ui
                 break;
             default:;
             }
-        }
-
-        if (fatalErrorCount > 0)
+        }        if (fatalErrorCount > 0)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.f, 1.0f));
             ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION " Fatal Errors: %zu"), fatalErrorCount);
             ImGui::PopStyleColor();
+            
+            // Show tooltip with all fatal error messages when hovering
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 50.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.f, 1.0f));
+                ImGui::TextUnformatted("Fatal Errors:");
+                ImGui::PopStyleColor();
+                ImGui::Separator();
+                
+                for (auto iter = eventsBegin; iter != eventsEnd; ++iter)
+                {
+                    if (iter->getSeverity() == events::Severity::FatalError)
+                    {
+                        ImGui::TextUnformatted(iter->getMessage().c_str());
+                        ImGui::Separator();
+                    }
+                }
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
             ImGui::SameLine();
         }
 
@@ -124,6 +144,28 @@ namespace gladius::ui
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
             ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION_TRIANGLE " Errors: %zu"), errorCount);
             ImGui::PopStyleColor();
+            
+            // Show tooltip with all error messages when hovering
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 50.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
+                ImGui::TextUnformatted("Errors:");
+                ImGui::PopStyleColor();
+                ImGui::Separator();
+                
+                for (auto iter = eventsBegin; iter != eventsEnd; ++iter)
+                {
+                    if (iter->getSeverity() == events::Severity::Error)
+                    {
+                        ImGui::TextUnformatted(iter->getMessage().c_str());
+                        ImGui::Separator();
+                    }
+                }
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
             ImGui::SameLine();
         }
 
@@ -132,10 +174,38 @@ namespace gladius::ui
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.f, 1.0f));
             ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION_CIRCLE " Warnings: %zu"), warningCount);
             ImGui::PopStyleColor();
+            
+            // Show tooltip with all warning messages when hovering
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 50.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.f, 1.0f));
+                ImGui::TextUnformatted("Warnings:");
+                ImGui::PopStyleColor();
+                ImGui::Separator();
+                
+                for (auto iter = eventsBegin; iter != eventsEnd; ++iter)
+                {
+                    if (iter->getSeverity() == events::Severity::Warning)
+                    {
+                        ImGui::TextUnformatted(iter->getMessage().c_str());
+                        ImGui::Separator();
+                    }
+                }
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
             ImGui::SameLine();
         }
+
+        if (ImGui::Button("Clear"))
+        {
+            logger.clear();
+            hide();
+        }
          
-        if (ImGui::Button("Details"))
+        if (ImGui::Button("Show Log"))
         {
             m_collapsed = false;
             // Force update of cache when switching view modes

@@ -21,7 +21,7 @@ namespace gladius::ui
         void renderCollapsedView(events::Logger & logger);
         void renderExpandedView(events::Logger & logger);
 
-        bool m_visible = true;
+        bool m_visible = false;
         bool m_autoScroll = true;
         bool m_collapsed = true;
         ImGuiTextFilter m_filter;
