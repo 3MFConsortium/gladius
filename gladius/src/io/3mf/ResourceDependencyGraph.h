@@ -6,6 +6,7 @@
 #include <lib3mf_implicit.hpp>
 #include <memory>
 #include <vector> // Added for std::vector
+#include "EventLogger.h"
 
 namespace gladius::io
 {
@@ -34,8 +35,9 @@ namespace gladius::io
         /**
          * @brief Constructor 
          * @param model Smart pointer to a 3MF model
+         * @param logger Shared logger for event handling
          */
-        explicit ResourceDependencyGraph(Lib3MF::PModel model);
+        explicit ResourceDependencyGraph(Lib3MF::PModel model, gladius::events::SharedLogger logger);
         
         /**
          * @brief Destructor
@@ -122,5 +124,8 @@ namespace gladius::io
         
         /** @brief The directed graph representing resource dependencies */
         std::unique_ptr<nodes::graph::IDirectedGraph> m_graph;
+
+        /** @brief Shared logger for event handling */
+        gladius::events::SharedLogger m_logger;
     };
 } // namespace gladius::io

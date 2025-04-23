@@ -354,7 +354,7 @@ namespace gladius::ui
                     }
                 }
 
-                if (!isAssembly || model.second->isManaged())
+                if (!isAssembly && !model.second->isManaged())
                 {
                     // Check if function can be safely deleted
                     auto safeResult = m_doc->isItSafeToDeleteResource(ResourceKey(model.second->getResourceId()));

@@ -1,19 +1,28 @@
 #include "ResourceDependencyGraph.h"
 #include "nodes/graph/DirectedGraph.h"
 #include "nodes/graph/GraphAlgorithms.h"
+#include "EventLogger.h"
 #include <exception>
+#include <fmt/format.h>
 
 namespace gladius::io
 {
-    ResourceDependencyGraph::ResourceDependencyGraph(Lib3MF::PModel model)
-        : m_model(model), m_graph(std::make_unique<nodes::graph::DirectedGraph>(100))
+    ResourceDependencyGraph::ResourceDependencyGraph(Lib3MF::PModel model, gladius::events::SharedLogger logger)
+        : m_model(model), m_graph(std::make_unique<nodes::graph::DirectedGraph>(100)), m_logger(std::move(logger))
     {
+        if (m_logger)
+            m_logger->addEvent({"Initialized ResourceDependencyGraph", gladius::events::Severity::Info});
     }
 
     void ResourceDependencyGraph::buildGraph()
     {
+        if (m_logger)
+            m_logger->addEvent({"Building resource dependency graph", gladius::events::Severity::Info});
+
         if (!m_model)
         {
+            if (m_logger)
+                m_logger->addEvent({"No model available for dependency graph", gladius::events::Severity::Error});
             return;
         }
 
@@ -89,10 +98,13 @@ namespace gladius::io
             }
             catch (const std::exception& e)
             {
-                // Log error and continue with next resource
-                // We don't want to halt the entire process if one resource fails
+                if (m_logger)
+                    m_logger->addEvent({fmt::format("Error processing resource {}: {}", resourceId, e.what()), gladius::events::Severity::Error});
             }
         }
+
+        if (m_logger)
+            m_logger->addEvent({"Completed building resource dependency graph", gladius::events::Severity::Info});
     }
 
     const nodes::graph::IDirectedGraph& ResourceDependencyGraph::getGraph() const
@@ -208,7 +220,7 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            
         }
 
         // LevelSet may depend on a mesh

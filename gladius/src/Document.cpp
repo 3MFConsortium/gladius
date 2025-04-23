@@ -968,7 +968,7 @@ namespace gladius
             return;
         }
 
-        m_resourceDependencyGraph = std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel);
+        m_resourceDependencyGraph = std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel, getSharedLogger());
         m_resourceDependencyGraph->buildGraph();
     }
 
