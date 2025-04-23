@@ -639,9 +639,24 @@ namespace gladius::ui
                       {reinterpret_cast<const char *>(ICON_FA_ROBOT "\tCompile automatically")},
                       &m_autoCompile);
 
-                    if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_HAMMER "\tCompile")))
+
+                    if (!m_autoCompile)
                     {
-                        m_isManualCompileRequested = true;
+                        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_HAMMER "\tCompile")))
+                        {
+                            m_isManualCompileRequested = true;
+                        }
+                    }
+
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted("Compile the model");
+                        ImGui::Separator();
+                        ImGui::TextUnformatted(
+                          "If this option is enabled, the model will be compiled automatically when it is modified.\n"
+                          "If this option is disabled, you have to compile the model manually.");
+                        ImGui::EndTooltip();
                     }
 
                     auto core = m_doc->getCore();
@@ -665,6 +680,17 @@ namespace gladius::ui
                     toggleButton(
                       {reinterpret_cast<const char *>(ICON_FA_BOXES "\tAuto update bounding box")},
                       &autoUpdateBoundingBox);
+                    // Tooltip for auto update bounding box
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted("Auto update bounding box");
+                        ImGui::Separator();
+                        ImGui::TextUnformatted(
+                          "If enabled, the bounding box will be updated automatically when the model is modified.\n"
+                          "Deactivate this option to speed up the preview of parameter changes.");
+                        ImGui::EndTooltip();
+                    }
                     core->setAutoUpdateBoundingBox(autoUpdateBoundingBox);
 
                     if (!autoUpdateBoundingBox)
