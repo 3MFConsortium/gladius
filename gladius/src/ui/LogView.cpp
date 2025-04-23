@@ -33,8 +33,11 @@ namespace gladius::ui
         }
         else
         {
-             ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
-             
+            // we need at least 400px height to show the toolbar and the log
+   
+            ImGui::SetNextWindowSizeConstraints(ImVec2(-1, 400), ImVec2(-1, FLT_MAX)); // Min height of 400px, no max height constraint
+            ImGui::SetNextWindowSize(ImVec2(0, 400));
+
              ImGui::Begin("Events", &m_visible);
             // Top toolbar
             ImGui::Checkbox("Auto-scroll", &m_autoScroll);
@@ -73,7 +76,10 @@ namespace gladius::ui
     {
         auto const & eventsBegin = m_filter.IsActive() ? m_filteredEvents.cbegin() : logger.cbegin();
         auto const & eventsEnd = m_filter.IsActive() ? m_filteredEvents.cend() : logger.cend();
-        ImGui::SetNextWindowSize(ImVec2(500, 50), ImGuiCond_FirstUseEver);
+
+        // remove window size constraints to allow resizing
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(-1, FLT_MAX)); // No min/max constraints
+        ImGui::SetNextWindowSize(ImVec2(500, 50));
              
         ImGui::Begin("Events", &m_visible);
         
@@ -129,14 +135,6 @@ namespace gladius::ui
             ImGui::SameLine();
         }
          
-        if (infoCount > 0)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.2f, 1.f, 1.0f));
-            ImGui::Text(reinterpret_cast<const char*>(ICON_FA_INFO " Info: %zu"), infoCount);
-            ImGui::PopStyleColor();
-            ImGui::SameLine();
-        }
-
         if (ImGui::Button("Details"))
         {
             m_collapsed = false;
