@@ -220,7 +220,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing LevelSet function dependency {}: {}", levelSetId, e.what()), gladius::events::Severity::Error});
         }
 
         // LevelSet may depend on a mesh
@@ -235,7 +236,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing LevelSet mesh dependency {}: {}", levelSetId, e.what()), gladius::events::Severity::Error});
         }
 
         // LevelSet may have volume data
@@ -250,7 +252,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing LevelSet volume data dependency {}: {}", levelSetId, e.what()), gladius::events::Severity::Error});
         }
     }
 
@@ -320,14 +323,16 @@ namespace gladius::io
                         }
                         catch (const std::exception& e)
                         {
-                            // Handle error getting function ID
+                            if (m_logger)
+                                m_logger->addEvent({fmt::format("Error processing FunctionCallNode in function {}: {}", functionId, e.what()), gladius::events::Severity::Error});
                         }
                     }
                 }
             }
             catch (const std::exception& e)
             {
-                // Handle error
+                if (m_logger)
+                    m_logger->addEvent({fmt::format("Error processing ImplicitFunction {}: {}", functionId, e.what()), gladius::events::Severity::Error});
             }
         }
 
@@ -346,7 +351,8 @@ namespace gladius::io
             }
             catch (const std::exception& e)
             {
-                // Handle error
+                if (m_logger)
+                    m_logger->addEvent({fmt::format("Error processing FunctionFromImage3D {}: {}", functionId, e.what()), gladius::events::Severity::Error});
             }
         }
     }
@@ -376,7 +382,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing ComponentsObject {}: {}", componentsObjectId, e.what()), gladius::events::Severity::Error});
         }
     }
 
@@ -402,7 +409,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing MeshObject property {}: {}", meshObjectId, e.what()), gladius::events::Severity::Error});
         }
 
         // Check for beam lattice and its properties
@@ -429,7 +437,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing MeshObject BeamLattice {}: {}", meshObjectId, e.what()), gladius::events::Severity::Error});
         }
 
         // Check for volume data
@@ -444,7 +453,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing MeshObject VolumeData {}: {}", meshObjectId, e.what()), gladius::events::Severity::Error});
         }
     }
 
@@ -468,7 +478,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing VolumeData color {}: {}", volumeDataId, e.what()), gladius::events::Severity::Error});
         }
 
         // Process composite material data
@@ -499,7 +510,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing VolumeData composite {}: {}", volumeDataId, e.what()), gladius::events::Severity::Error});
         }
 
         // Process property functions
@@ -517,7 +529,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing VolumeData properties {}: {}", volumeDataId, e.what()), gladius::events::Severity::Error});
         }
     }
 
@@ -538,7 +551,8 @@ namespace gladius::io
         }
         catch (const std::exception& e)
         {
-            // Handle error
+            if (m_logger)
+                m_logger->addEvent({fmt::format("Error processing FunctionReference for resource {}: {}", resourceId, e.what()), gladius::events::Severity::Error});
         }
     }
 } // namespace gladius::io
