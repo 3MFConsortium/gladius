@@ -5,15 +5,14 @@
 #include "nodes/Object.h"
 #include "imgui.h"
 #include "BuildItemView.h"
+#include "ComponentsObjectView.h"
 
 namespace gladius::ui
 {
     void Outline::setDocument(SharedDocument document)
     {
         m_document = std::move(document);
-    }
-
-    bool Outline::render() const
+    }    bool Outline::render() const
     {
         if (!m_document)
         {
@@ -33,6 +32,19 @@ namespace gladius::ui
             if (buildItemView.render(m_document))
             {
                 // If build items were modified, mark the document as changed
+                propertiesChanged = true;
+            }
+
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Components Objects", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            // Use ComponentsObjectView to render components objects
+            ComponentsObjectView componentsObjectView;
+            if (componentsObjectView.render(m_document))
+            {
+                // If components objects were modified, mark the document as changed
                 propertiesChanged = true;
             }
 
