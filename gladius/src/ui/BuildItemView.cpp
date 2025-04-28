@@ -29,11 +29,6 @@ namespace gladius::ui
                         return fmt::format("{} (BuildItem #{})", 
                             partName, buildItem->GetObjectResourceID());
                     }
-                    else if (!partNumber.empty())
-                    {
-                        return fmt::format("PN:{} (BuildItem #{})", 
-                            partNumber, buildItem->GetObjectResourceID());
-                    }
                 }
                 return fmt::format("BuildItem #{}", buildItem->GetObjectResourceID());
             }
@@ -82,8 +77,8 @@ namespace gladius::ui
                                 document->update3mfModel();
                                 object->SetPartNumber(partNumber);
                                 document->markFileAsChanged();
-                                document->updateDocumenFrom3mfModel();
-                                propertiesChanged = true;
+
+                               // propertiesChanged = true;
                             }
                             catch (...)
                             {

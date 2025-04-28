@@ -187,7 +187,7 @@ namespace gladius
          * @brief Updates the document from the 3MF model.
          * 
          */
-        void updateDocumenFrom3mfModel();
+        void updateDocumenFrom3mfModel(bool skipImplicitFunctions = false);
 
         /**
          * @brief Checks if a resource can be safely deleted, without dependencies.

@@ -142,13 +142,12 @@ namespace gladius
             for (auto const & error : validator.getErrors())
             {
                 if (logger)
-                    logger->addEvent({
-                        fmt::format("{}: Review parameter {} of node {} in model {}",
-                                    error.message,
-                                    error.parameter,
-                                    error.node,
-                                    error.model),
-                        Severity::Error});
+                    logger->addEvent({fmt::format("{}: Review parameter {} of node {} in model {}",
+                                                  error.message,
+                                                  error.parameter,
+                                                  error.node,
+                                                  error.model),
+                                      Severity::Error});
             }
             return;
         }
@@ -160,7 +159,8 @@ namespace gladius
         {
             auto logger = getSharedLogger();
             if (logger)
-                logger->addEvent({"Error flattening assembly: " + std::string(e.what()), Severity::Error});
+                logger->addEvent(
+                  {"Error flattening assembly: " + std::string(e.what()), Severity::Error});
         }
     }
 
@@ -386,7 +386,8 @@ namespace gladius
         {
             auto logger = getSharedLogger();
             if (logger)
-                logger->addEvent({std::string("unhandled exception: ") + e.what(), events::Severity::Error});
+                logger->addEvent(
+                  {std::string("unhandled exception: ") + e.what(), events::Severity::Error});
         }
     }
 
@@ -406,7 +407,8 @@ namespace gladius
         {
             auto logger = getSharedLogger();
             if (logger)
-                logger->addEvent({std::string("future error: ") + e.what(), events::Severity::Error});
+                logger->addEvent(
+                  {std::string("future error: ") + e.what(), events::Severity::Error});
         }
         m_core->compileSlicerProgramBlocking();
         updateParameter();
@@ -424,7 +426,9 @@ namespace gladius
         while (exporter.advanceExport(*m_core))
         {
             if (logger)
-                logger->addEvent({fmt::format("Processing layer with z = {}", m_core->getSliceHeight()), events::Severity::Info});
+                logger->addEvent(
+                  {fmt::format("Processing layer with z = {}", m_core->getSliceHeight()),
+                   events::Severity::Info});
         }
         exporter.finalizeExportSTL(*m_core);
     }
@@ -688,7 +692,8 @@ namespace gladius
             {
                 auto logger = getSharedLogger();
                 if (logger)
-                    logger->addEvent({std::string("unhandled exception: ") + e.what(), events::Severity::Error});
+                    logger->addEvent(
+                      {std::string("unhandled exception: ") + e.what(), events::Severity::Error});
                 newModel();
                 return;
             }
@@ -747,7 +752,8 @@ namespace gladius
         {
             auto logger = getSharedLogger();
             if (logger)
-                logger->addEvent({std::string("STL load error: ") + e.what(), events::Severity::Error});
+                logger->addEvent(
+                  {std::string("STL load error: ") + e.what(), events::Severity::Error});
             return {};
         }
 
@@ -941,7 +947,7 @@ namespace gladius
         writer.updateModel(*this);
     }
 
-    void Document::updateDocumenFrom3mfModel()
+    void Document::updateDocumenFrom3mfModel(bool skipImplicitFunctions)
     {
         if (!m_3mfmodel)
         {
@@ -955,10 +961,13 @@ namespace gladius
         importer.loadBuildItems(m_3mfmodel, *this);
 
         // Load implicit functions from the 3MF model
-        importer.loadImplicitFunctions(m_3mfmodel, *this);
+        if (!skipImplicitFunctions)
+        {
+            importer.loadImplicitFunctions(m_3mfmodel, *this);
+            m_assembly->updateInputsAndOutputs();
+        }
 
         // Update the assembly inputs and outputs
-        m_assembly->updateInputsAndOutputs();
     }
 
     void Document::rebuildResourceDependencyGraph()
@@ -968,7 +977,8 @@ namespace gladius
             return;
         }
 
-        m_resourceDependencyGraph = std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel, getSharedLogger());
+        m_resourceDependencyGraph =
+          std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel, getSharedLogger());
         m_resourceDependencyGraph->buildGraph();
     }
 
