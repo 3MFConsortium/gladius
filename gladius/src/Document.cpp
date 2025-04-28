@@ -1009,8 +1009,24 @@ namespace gladius
         }
         catch (const Lib3MF::ELib3MFException & e)
         {
+            // Resource not found, return empty result
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("Resource not found: {}", e.what()), events::Severity::Error});
+            }
+        }
+        catch (const std::exception & e)
+        {
 
             // Resource not found, return empty result
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("Exception occurred: {}", e.what()), events::Severity::Error});
+            }
             return result;
         }
 

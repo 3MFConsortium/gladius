@@ -23,12 +23,13 @@ namespace gladius::ui
                 {
                     // Try to get part name
                     std::string partName = object->GetName();
-                    std::string partNumber = object->GetPartNumber();
+                    std::string partNumber = buildItem->GetPartNumber();
                     if (!partName.empty())
                     {
                         return fmt::format("{} (BuildItem #{})", 
                             partName, buildItem->GetObjectResourceID());
                     }
+
                 }
                 return fmt::format("BuildItem #{}", buildItem->GetObjectResourceID());
             }
@@ -69,13 +70,13 @@ namespace gladius::ui
                     auto object = buildItem->GetObjectResource();
                     if (object)
                     {
-                        std::string partNumber = object->GetPartNumber();
+                        std::string partNumber = buildItem->GetPartNumber();
                         if (ImGui::InputText("##PartNumber", &partNumber, ImGuiInputTextFlags_None))
                         {
                             try
                             {
                                 document->update3mfModel();
-                                object->SetPartNumber(partNumber);
+                                buildItem->SetPartNumber(partNumber);
                                 document->markFileAsChanged();
 
                                // propertiesChanged = true;

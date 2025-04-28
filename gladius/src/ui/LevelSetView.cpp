@@ -5,6 +5,7 @@
 #include "ResourceManager.h"
 #include "Widgets.h"
 #include "imgui.h"
+#include "imgui_stdlib.h"
 #include <io/3mf/ResourceIdUtil.h>
 #include <lib3mf_implicit.hpp>
 #include <nodes/ModelUtils.h>
@@ -92,12 +93,34 @@ namespace gladius::ui
                         levelSet->SetFallBackValue(fallbackValue);
                         propertiesChanged = true;
                     }
-                }
-
-                ImGui::TableNextColumn();
+                }                ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Mesh");
                 ImGui::TableNextColumn();
                 propertiesChanged |= LevelSetView::renderMeshDropdown(document, model3mf, levelSet);
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Part Number");
+                ImGui::TableNextColumn();
+                {                    // Cast to Object since only Objects have part numbers
+                    auto object = std::dynamic_pointer_cast<Lib3MF::CObject>(levelSet);
+                    if (object)
+                    {
+                        std::string partNumber = object->GetPartNumber();
+                        if (ImGui::InputText("##PartNumber", &partNumber))
+                        {
+                            try
+                            {
+                                document->update3mfModel();
+                                object->SetPartNumber(partNumber);
+                                document->markFileAsChanged();
+                            }
+                            catch (...)
+                            {
+                                // Handle errors silently
+                            }
+                        }
+                    }
+                }
 
                 ImGui::EndTable();
             }

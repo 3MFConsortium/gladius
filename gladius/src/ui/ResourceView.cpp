@@ -9,6 +9,7 @@
 #include "Widgets.h"
 
 #include "imgui.h"
+#include <imgui_stdlib.h>  // For InputText with std::string
 
 namespace gladius::ui
 {
@@ -85,9 +86,7 @@ namespace gladius::ui
                                                            meshData.getMin().x,
                                                            meshData.getMin().y,
                                                            meshData.getMin().z)
-                                                 .c_str());
-
-                        ImGui::TableNextColumn();
+                                                 .c_str());                        ImGui::TableNextColumn();
                         ImGui::TextUnformatted("Max");
                         ImGui::TableNextColumn();
                         ImGui::TextUnformatted(fmt::format("({}, {}, {})",
@@ -95,6 +94,47 @@ namespace gladius::ui
                                                            meshData.getMax().y,
                                                            meshData.getMax().z)
                                                  .c_str());
+
+                        // Add Part Number field
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted("Part Number:");
+                        ImGui::TableNextColumn();                        try
+                        {
+                            auto model3mf = document->get3mfModel();
+                            if (model3mf && key.getResourceId().has_value())
+                            {
+                                auto lib3mfUniqueResourceId = gladius::io::resourceIdToUniqueResourceId(
+                                    model3mf, key.getResourceId().value());
+                                
+                                auto resource = model3mf->GetResourceByID(lib3mfUniqueResourceId);
+                                if (resource)
+                                {
+                                    // Convert resource to Object since only Objects have part numbers
+                                    auto object = std::dynamic_pointer_cast<Lib3MF::CObject>(resource);
+                                    if (object)
+                                    {
+                                        std::string partNumber = object->GetPartNumber();
+                                        if (ImGui::InputText("##PartNumber", &partNumber, ImGuiInputTextFlags_None))
+                                        {
+                                            try
+                                            {
+                                                document->update3mfModel();
+                                                object->SetPartNumber(partNumber);
+                                                document->markFileAsChanged();
+                                            }
+                                            catch (...)
+                                            {
+                                                // Handle errors silently
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch (...)
+                        {
+                            // Handle errors silently
+                        }
 
                         ImGui::EndTable();
                     }
@@ -170,8 +210,7 @@ namespace gladius::ui
 
                 ImGui::BeginGroup();
                 if (ImGui::TreeNodeEx(key.getDisplayName().c_str(), baseFlags))
-                {
-                    (ImGui::TextUnformatted(fmt::format("# {} loaded as {}",
+                {                    (ImGui::TextUnformatted(fmt::format("# {} loaded as {}",
                                                         key.getResourceId().value_or(-1),
                                                         stack ? "image stack" : "vdb grid")
                                               .c_str()));
@@ -187,6 +226,56 @@ namespace gladius::ui
                         {
                             ImGui::TreePop();
                         }
+                    }
+
+                    // Add Part Number field for image resources
+                    if (ImGui::TreeNodeEx("Properties", infoNodeFlags))
+                    {
+                        if (ImGui::BeginTable(
+                              "ResourceProperties", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+                        {
+                            ImGui::TableNextColumn();
+                            ImGui::TextUnformatted("Part Number:");
+                            ImGui::TableNextColumn();                            try
+                            {
+                                auto model3mf = document->get3mfModel();
+                                if (model3mf && key.getResourceId().has_value())
+                                {
+                                    auto lib3mfUniqueResourceId = gladius::io::resourceIdToUniqueResourceId(
+                                        model3mf, key.getResourceId().value());
+                                    
+                                    auto resource = model3mf->GetResourceByID(lib3mfUniqueResourceId);
+                                    if (resource)
+                                    {
+                                        // Convert resource to Object since only Objects have part numbers
+                                        auto object = std::dynamic_pointer_cast<Lib3MF::CObject>(resource);
+                                        if (object)
+                                        {
+                                            std::string partNumber = object->GetPartNumber();
+                                            if (ImGui::InputText("##ImgPartNumber", &partNumber, ImGuiInputTextFlags_None))
+                                            {
+                                                try
+                                                {
+                                                    document->update3mfModel();
+                                                    object->SetPartNumber(partNumber);
+                                                    document->markFileAsChanged();
+                                                }
+                                                catch (...)
+                                                {
+                                                    // Handle errors silently
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            catch (...)
+                            {
+                                // Handle errors silently
+                            }
+                            ImGui::EndTable();
+                        }
+                        ImGui::TreePop();
                     }
 
                     // delete image stack
