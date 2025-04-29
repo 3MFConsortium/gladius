@@ -5,7 +5,6 @@
 #include "nodes/Object.h"
 #include "imgui.h"
 #include "BuildItemView.h"
-#include "ComponentsObjectView.h"
 
 namespace gladius::ui
 {
@@ -33,22 +32,7 @@ namespace gladius::ui
             {
                 // If build items were modified, mark the document as changed
                 propertiesChanged = true;
-            }
-
-            ImGui::TreePop();
-        }
-
-        if (ImGui::TreeNodeEx("Components Objects", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            // Use ComponentsObjectView to render components objects
-            ComponentsObjectView componentsObjectView;
-            if (componentsObjectView.render(m_document))
-            {
-                // If components objects were modified, mark the document as changed
-                propertiesChanged = true;
-            }
-
-            ImGui::TreePop();
+            }            ImGui::TreePop();
         }
 
         ImGui::EndGroup();

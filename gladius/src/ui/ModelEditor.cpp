@@ -22,6 +22,7 @@
 #include "imgui.h"
 #include "nodesfwd.h"
 #include "ui/LevelSetView.h"
+#include "ComponentsObjectView.h"
 
 namespace gladius::ui
 {
@@ -171,11 +172,22 @@ namespace gladius::ui
 
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
-                                             ImGuiTreeNodeFlags_SpanAvailWidth;
-
-        ImGui::BeginGroup();
+                                             ImGuiTreeNodeFlags_SpanAvailWidth;        ImGui::BeginGroup();
         if (ImGui::TreeNodeEx("Resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("ComponentsObjects", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ComponentsObjectView componentsObjectView;
+                if (componentsObjectView.render(m_doc))
+                {
+                    markModelAsModified();
+                }
+                ImGui::TreePop();
+            }
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(0.0f, 0.8f, 0.8f, 0.1f));
+            
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("VolumeData", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {

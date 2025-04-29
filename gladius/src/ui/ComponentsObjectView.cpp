@@ -70,6 +70,40 @@ namespace gladius::ui
                 propertiesChanged |= ComponentsObjectView::renderObjectDropdown(
                     document, model3mf, component);
 
+
+                // Add Part Number field
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Part Number:");
+                ImGui::TableNextColumn();
+                ImGui::PushID(index);
+                try
+                {
+                    auto objectResource = component->GetObjectResource();
+                    if (objectResource)
+                    {
+                        std::string partNumber = objectResource->GetPartNumber();
+                        if (ImGui::InputText("##ComponentPartNumber", &partNumber, ImGuiInputTextFlags_None))
+                        {
+                            try
+                            {
+                                document->update3mfModel();
+                                objectResource->SetPartNumber(partNumber);
+                                document->markFileAsChanged();
+                            }
+                            catch (...)
+                            {
+                                // Handle errors silently
+                            }
+                        }
+                    }
+
+                }
+                catch (...)
+                {
+                    // Handle errors silently
+                    ImGui::TextUnformatted("(Error retrieving part number)");
+                }
+                ImGui::PopID();
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Transform:");
                 ImGui::TableNextColumn();
@@ -179,6 +213,31 @@ namespace gladius::ui
                         {
                             // Handle errors silently
                         }
+                    }
+                    
+                    // Part number
+                    try
+                    {
+                        std::string partNumber = componentsObject->GetPartNumber();
+                        ImGui::Text("Part Number:");
+                        ImGui::SameLine();
+                        if (ImGui::InputText("##PartNumber", &partNumber, ImGuiInputTextFlags_None))
+                        {
+                            try
+                            {
+                                document->update3mfModel();
+                                componentsObject->SetPartNumber(partNumber);
+                                document->markFileAsChanged();
+                            }
+                            catch (...)
+                            {
+                                // Handle errors silently
+                            }
+                        }
+                    }
+                    catch (...)
+                    {
+                        // Handle errors silently
                     }
                     
                     // Add a new component button
