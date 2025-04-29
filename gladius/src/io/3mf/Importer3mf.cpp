@@ -1153,7 +1153,8 @@ namespace gladius::io
 
                     if (component->HasTransform())
                     {
-                        componentTrafo = matrix4x4From3mfTransform(component->GetTransform());
+                        auto const transformationComponent = matrix4x4From3mfTransform(component->GetTransform());
+                        componentTrafo = inverseMatrix(transformationComponent);
                     }
 
                     buildItemIter->addComponent(
