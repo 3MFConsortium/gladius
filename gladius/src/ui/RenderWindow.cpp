@@ -86,6 +86,26 @@ namespace gladius::ui
                 flagsChanged |= ImGui::CheckboxFlags(
                   "Show Coordinate System", &renderingFlags, RF_SHOW_COORDINATE_SYSTEM);
 
+                ImGui::Separator();
+
+                // Quality slider
+                float quality = m_core->getResourceContext().getRenderingSettings().quality;
+                ImGui::SetNextItemWidth(150.f * m_uiScale);
+                bool qualityChanged = ImGui::SliderFloat("Quality", &quality, 0.1f, 2.0f);
+                
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Rendering quality (0.1 = Fast, 2.0 = Highest Quality)");
+                }
+                
+                if (qualityChanged)
+                {
+                    m_core->getResourceContext().getRenderingSettings().quality = quality;
+                    m_renderWindowState.renderQuality = quality;
+                    m_renderWindowState.renderQualityWhileMoving = quality * 0.5f;
+                    invalidateView();
+                }
+
                 ImGui::EndMenu();
             }
 
