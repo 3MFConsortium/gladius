@@ -1032,4 +1032,108 @@ namespace gladius
 
         return result;
     }
+
+    std::size_t Document::removeUnusedResources()
+    {
+        if (!m_3mfmodel || !m_resourceDependencyGraph)
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {"Cannot remove unused resources: Model or resource dependency graph not available",
+                   events::Severity::Warning});
+            }
+            return 0;
+        }
+        
+        // Ensure the resource dependency graph is up-to-date
+        rebuildResourceDependencyGraph();
+        
+        // Find all unused resources
+        std::vector<Lib3MF::PResource> unusedResources = m_resourceDependencyGraph->findUnusedResources();
+        
+        if (unusedResources.empty())
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {"No unused resources found in the model",
+                   events::Severity::Info});
+            }
+            return 0;
+        }
+        
+        std::size_t removedCount = 0;
+        auto & resourceManager = getGeneratorContext().resourceManager;
+        
+        // Remove each unused resource
+        for (auto const & resource : unusedResources)
+        {
+            try
+            {
+                // Get the model resource ID for this resource
+                Lib3MF_uint32 modelResourceId = resource->GetModelResourceID();
+                ResourceKey key{modelResourceId};
+                
+                // Check if this is actually a function (need to handle differently)
+                bool isFunction = false;
+                try
+                {
+                    auto function = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+                    if (function)
+                    {
+                        isFunction = true;
+                        deleteFunction(modelResourceId);
+                    }
+                }
+                catch (const std::exception&)
+                {
+                    // Not a function, continue with normal resource deletion
+                }
+                
+                if (!isFunction)
+                {
+                    // Delete from resource manager if it exists there
+                    if (resourceManager.hasResource(key))
+                    {
+                        resourceManager.deleteResource(key);
+                    }
+                    
+                    // Delete the resource from the 3MF model
+                    m_3mfmodel->RemoveResource(resource);
+                }
+                
+                removedCount++;
+            }
+            catch (const std::exception & e)
+            {
+                auto logger = getSharedLogger();
+                if (logger)
+                {
+                    logger->addEvent(
+                      {fmt::format("Failed to remove unused resource: {}", e.what()),
+                       events::Severity::Error});
+                }
+            }
+        }
+        
+        if (removedCount > 0)
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("Successfully removed {} unused resources", removedCount),
+                   events::Severity::Info});
+            }
+            markFileAsChanged();
+            
+            // Rebuild the dependency graph now that resources have been removed
+            rebuildResourceDependencyGraph();
+        }
+        
+        return removedCount;
+    }
 }

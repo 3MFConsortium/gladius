@@ -195,6 +195,17 @@ namespace gladius
          * @return Result containing removal possibility and dependent items.
          */
         gladius::io::CanResourceBeRemovedResult isItSafeToDeleteResource(ResourceKey key);
+        
+        /**
+         * @brief Removes all resources that are not used by any build item.
+         * 
+         * This method identifies resources that are not directly or indirectly referenced
+         * by any build item and removes them from the model. It uses the ResourceDependencyGraph
+         * to find unused resources and safely delete them.
+         * 
+         * @return The number of resources that were removed
+         */
+        [[nodiscard]] std::size_t removeUnusedResources();
 
       private:
         [[nodiscard]] nodes::VariantParameter &
