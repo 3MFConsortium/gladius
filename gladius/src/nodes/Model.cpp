@@ -511,13 +511,21 @@ namespace gladius::nodes
     void Model::remove(NodeId id)
     {
         const auto nodeToRemove = m_nodes.find(id);
-
-        if (nodeToRemove->second->getId() == m_beginNode->getId())
+        
+        // First check if the node exists
+        if (nodeToRemove == std::end(m_nodes))
         {
             return;
         }
-
-        if (nodeToRemove->second->getId() == m_endNode->getId())
+        
+        // Protect begin node from deletion
+        if (m_beginNode && nodeToRemove->second->getId() == m_beginNode->getId())
+        {
+            return;
+        }
+        
+        // Protect end node from deletion
+        if (m_endNode && nodeToRemove->second->getId() == m_endNode->getId())
         {
             return;
         }
@@ -844,8 +852,19 @@ namespace gladius::nodes
         // Get the node ID of the end node
         NodeId const endNodeId = m_endNode->getId();
 
-        // Determine all dependencies of the end node (nodes that can reach the end node)
-        auto neededNodes = graph::determineAllDependencies(m_graph, endNodeId);
+        // Create a set of all nodes that are needed (directly or indirectly contribute to the end node)
+        std::set<NodeId> neededNodes;
+        
+        // First, include the end node itself
+        neededNodes.insert(endNodeId);
+        
+        // Then add all nodes that the end node depends on
+        // We need to carefully handle the dependencies
+        if (m_graph.getSize() > 0 && endNodeId < static_cast<NodeId>(m_graph.getSize()))
+        {
+            auto endNodeDependencies = graph::determineAllDependencies(m_graph, endNodeId);
+            neededNodes.insert(endNodeDependencies.begin(), endNodeDependencies.end());
+        }
         
         // Always include the Begin node if it exists
         if (m_beginNode)
@@ -857,7 +876,7 @@ namespace gladius::nodes
         std::vector<NodeId> nodesToRemove;
         for (const auto& [nodeId, node] : m_nodes)
         {
-            // Skip begin and end nodes
+            // Skip begin and end nodes (redundant check, but for clarity)
             if (nodeId == endNodeId || (m_beginNode && nodeId == m_beginNode->getId()))
             {
                 continue;
@@ -879,6 +898,8 @@ namespace gladius::nodes
         // Update the graph after removing nodes
         m_graphRequiresUpdate = true;
         updateGraphAndOrderIfNeeded();
+        
+        return removedCount;
 
         return removedCount;
     }
