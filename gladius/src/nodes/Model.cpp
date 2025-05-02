@@ -873,7 +873,7 @@ namespace gladius::nodes
         size_t removedCount = nodesToRemove.size();
         for (auto nodeId : nodesToRemove)
         {
-            removeNodeWithoutLinks(nodeId);
+            remove(nodeId);
         }
 
         // Update the graph after removing nodes
