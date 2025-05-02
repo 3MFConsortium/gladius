@@ -21,7 +21,6 @@
 #include "nodesfwd.h"
 #include "ui/LevelSetView.h"
 #include <nodes/Assembly.h>
-#include <nodes/GraphFlattener.h>
 #include <nodes/Model.h>
 
 namespace gladius::ui

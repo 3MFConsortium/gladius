@@ -128,6 +128,7 @@ namespace gladius
 
     void Document::updateFlatAssembly()
     {
+        ProfileFunction;
         using namespace gladius::events;
         nodes::Assembly assemblyToFlat = *m_assembly;
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
