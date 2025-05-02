@@ -89,9 +89,12 @@ namespace gladius::nodes
         
         // First find all functions that are actually used - will use dependency graph if available
         findUsedFunctions();
-
+        
         // The assembly model is always used
         m_usedFunctions.insert(modelToFlat->getResourceId());
+        
+        // Simplify all used models before flattening
+        simplifyUsedModels();
 
         // Flatten recursively starting with the top-level model
         flattenRecursive(*modelToFlat);
@@ -631,6 +634,22 @@ namespace gladius::nodes
                 
             // Now use the named visitor
             currentModel->visitNodes(nestedFunctionCallVisitor);
+        }
+    }
+
+    void GraphFlattener::simplifyUsedModels()
+    {
+        ProfileFunction;
+        
+        // Process all models that were identified as used
+        for (const auto& modelId : m_usedFunctions)
+        {
+            auto model = m_assembly.findModel(modelId);
+            if (model)
+            {
+                // Apply model simplification
+                model->simplifyModel();
+            }
         }
     }
 } // namespace gladius::nodes

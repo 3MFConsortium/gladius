@@ -239,6 +239,17 @@ namespace gladius::nodes
         void setIsValid(bool isValid);
 
         /**
+         * @brief Simplifies the model by removing nodes that are not connected to the end node.
+         *
+         * This method identifies all nodes that cannot influence the end node (i.e.,
+         * there is no path from these nodes to the end node) and removes them.
+         * This helps optimize the model by eliminating unused nodes.
+         *
+         * @return The number of nodes removed during simplification
+         */
+        size_t simplifyModel();
+        
+        /**
          * @brief Clears the Model, resetting it to its initial state.
          */
         void clear();

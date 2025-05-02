@@ -821,21 +821,89 @@ namespace gladius::nodes
         m_isValid = isValid;
     }
 
+    /**
+     * @brief Simplifies the model by removing nodes that are not connected to the end node.
+     * 
+     * This method identifies all nodes that cannot influence the end node (i.e.,
+     * there is no path from these nodes to the end node) and removes them.
+     * This helps optimize the model by eliminating unused nodes.
+     *
+     * @return The number of nodes removed during simplification
+     */
+    size_t Model::simplifyModel()
+    {
+        // Make sure the graph is up-to-date
+        updateGraphAndOrderIfNeeded();
+
+        // If there's no end node, there's nothing to simplify
+        if (!m_endNode)
+        {
+            return 0;
+        }
+
+        // Get the node ID of the end node
+        NodeId const endNodeId = m_endNode->getId();
+
+        // Determine all dependencies of the end node (nodes that can reach the end node)
+        auto neededNodes = graph::determineAllDependencies(m_graph, endNodeId);
+        
+        // Always include the Begin node if it exists
+        if (m_beginNode)
+        {
+            neededNodes.insert(m_beginNode->getId());
+        }
+
+        // Find nodes to remove (those not in the needed set)
+        std::vector<NodeId> nodesToRemove;
+        for (const auto& [nodeId, node] : m_nodes)
+        {
+            // Skip begin and end nodes
+            if (nodeId == endNodeId || (m_beginNode && nodeId == m_beginNode->getId()))
+            {
+                continue;
+            }
+
+            if (neededNodes.find(nodeId) == neededNodes.end())
+            {
+                nodesToRemove.push_back(nodeId);
+            }
+        }
+
+        // Remove the unneeded nodes
+        size_t removedCount = nodesToRemove.size();
+        for (auto nodeId : nodesToRemove)
+        {
+            removeNodeWithoutLinks(nodeId);
+        }
+
+        // Update the graph after removing nodes
+        m_graphRequiresUpdate = true;
+        updateGraphAndOrderIfNeeded();
+
+        return removedCount;
+    }
+
     void Model::clear()
     {
+        // Clear all nodes and registries
         m_nodes.clear();
         m_outPorts.clear();
         m_inputParameter.clear();
+        
+        // Reset node pointers
         m_beginNode = nullptr;
         m_endNode = nullptr;
-        m_lastParameterId = {};
+        
+        // Reset IDs
+        m_lastParameterId = 0;
         m_lastId = 1;
+        
+        // Reset graph
         m_graph = graph::DirectedGraph(0);
         m_outputOrder.clear();
         m_graphRequiresUpdate = true;
-        m_displayName.reset();
-        m_resourceId = 0;
-        m_isManaged = false;
+        
+        // Reset state flags
         m_allInputReferencesAreValid = false;
         m_nodesHaveBeenLayouted = false;
         m_isValid = true;

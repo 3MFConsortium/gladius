@@ -41,6 +41,7 @@ namespace gladius::nodes
         void findUsedFunctions();
         void findUsedFunctionsInModel(Model & model);
         void findUsedFunctionsUsingDependencyGraph(Model & rootModel);
+        void simplifyUsedModels();
         void integrateFunctionCall(nodes::FunctionCall const & functionCall, Model & target);
         void flattenRecursive(Model & model);
         void deleteFunctions();
