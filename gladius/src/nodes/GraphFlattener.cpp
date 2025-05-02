@@ -1,11 +1,17 @@
 #include "GraphFlattener.h"
 #include "Profiling.h"
+#include "io/3mf/ResourceDependencyGraph.h"
 #include <fmt/format.h>
 
 namespace gladius::nodes
 {
     GraphFlattener::GraphFlattener(Assembly const & assembly)
-        : m_assembly(assembly)
+        : m_assembly(assembly), m_dependencyGraph(nullptr), m_hasDependencyGraph(false)
+    {
+    }
+    
+    GraphFlattener::GraphFlattener(Assembly const & assembly, io::ResourceDependencyGraph const * dependencyGraph)
+        : m_assembly(assembly), m_dependencyGraph(dependencyGraph), m_hasDependencyGraph(dependencyGraph != nullptr)
     {
     }
 
@@ -47,7 +53,9 @@ namespace gladius::nodes
               fmt::format("Referenced function {} not found", functionCall.getFunctionId()));
         }
 
-        if (referencedFunction->getResourceId() == target.getResourceId())
+        // Check for self-reference (circular dependency)
+        ResourceId refResourceId = referencedFunction->getResourceId();
+        if (refResourceId == target.getResourceId())
         {
             throw std::runtime_error(fmt::format(
               "Function {} references itself", referencedFunction->getDisplayName().value_or("")));
@@ -79,7 +87,7 @@ namespace gladius::nodes
         // Reserve capacity for used functions based on the number of models in assembly
         m_usedFunctions.reserve(m_assembly.getFunctions().size());
         
-        // First find all functions that are actually used
+        // First find all functions that are actually used - will use dependency graph if available
         findUsedFunctions();
 
         // The assembly model is always used
@@ -444,8 +452,16 @@ namespace gladius::nodes
         {
             throw std::runtime_error("Assembly model not found");
         }
-
-        findUsedFunctionsInModel(*modelToFlat);
+        
+        // If we have a dependency graph, use it for optimized lookup
+        if (m_hasDependencyGraph && m_dependencyGraph)
+        {
+            findUsedFunctionsUsingDependencyGraph(*modelToFlat);
+        }
+        else
+        {
+            findUsedFunctionsInModel(*modelToFlat);
+        }
     }
 
     void GraphFlattener::findUsedFunctionsInModel(Model & model)
@@ -494,5 +510,127 @@ namespace gladius::nodes
             });
         
         model.visitNodes(functionCallVisitor);
+    }
+
+    void GraphFlattener::findUsedFunctionsUsingDependencyGraph(Model & rootModel)
+    {
+        ProfileFunction;
+        
+        // First, add the root model's resource ID to used functions
+        ResourceId rootResourceId = rootModel.getResourceId();
+        m_usedFunctions.insert(rootResourceId);
+        
+        // Use direct function calls to identify initial set of functions
+        std::vector<ResourceId> functionQueue;
+        
+        // Find function call nodes in the root model to initialize the queue
+        auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
+            [&](FunctionCall & functionCallNode)
+            {
+                // Skip if no outputs are used
+                bool isFunctionOutputUsed = false;
+                for (auto const & output : functionCallNode.getOutputs())
+                {
+                    if (output.second.isUsed())
+                    {
+                        isFunctionOutputUsed = true;
+                        break;
+                    }
+                }
+                
+                if (!isFunctionOutputUsed)
+                    return;
+                    
+                ResourceId functionId = functionCallNode.getFunctionId();
+                if (m_usedFunctions.find(functionId) == m_usedFunctions.end())
+                {
+                    m_usedFunctions.insert(functionId);
+                    functionQueue.push_back(functionId);
+                    
+                    // If we have a dependency graph, let's use it to find all dependencies up front
+                    // This can potentially save multiple traversals if the dependency graph already 
+                    // contains complete dependency data
+                    if (m_hasDependencyGraph && m_dependencyGraph)
+                    {
+                        auto resourcePtr = m_dependencyGraph->getResourceById(functionId);
+                        if (resourcePtr)
+                        {
+                            // Get all required resources from the dependency graph
+                            auto requiredResources = m_dependencyGraph->getAllRequiredResources(resourcePtr);
+                            for (const auto& resource : requiredResources)
+                            {
+                                auto depId = resource->GetResourceID();
+                                if (m_usedFunctions.find(depId) == m_usedFunctions.end())
+                                {
+                                    m_usedFunctions.insert(depId);
+                                    functionQueue.push_back(depId);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        
+        // Use the named visitor
+        rootModel.visitNodes(functionCallVisitor);
+        
+        // Process the queue of functions - for each function, get its model and find more function calls
+        while (!functionQueue.empty())
+        {
+            ResourceId currentFunctionId = functionQueue.back();
+            functionQueue.pop_back();
+            
+            auto currentModel = m_assembly.findModel(currentFunctionId);
+            if (!currentModel)
+                continue;
+                
+            // Find function calls in this model - create a named visitor to avoid temporary object issues
+            auto nestedFunctionCallVisitor = OnTypeVisitor<FunctionCall>(
+                [&](FunctionCall & functionCallNode)
+                {
+                    // Skip if no outputs are used
+                    bool isFunctionOutputUsed = false;
+                    for (auto const & output : functionCallNode.getOutputs())
+                    {
+                        if (output.second.isUsed())
+                        {
+                            isFunctionOutputUsed = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!isFunctionOutputUsed)
+                        return;
+                        
+                    ResourceId nestedFunctionId = functionCallNode.getFunctionId();
+                    if (m_usedFunctions.find(nestedFunctionId) == m_usedFunctions.end())
+                    {
+                        m_usedFunctions.insert(nestedFunctionId);
+                        functionQueue.push_back(nestedFunctionId);
+                        
+                        // Use the dependency graph here as well
+                        if (m_hasDependencyGraph && m_dependencyGraph)
+                        {
+                            auto resourcePtr = m_dependencyGraph->getResourceById(nestedFunctionId);
+                            if (resourcePtr)
+                            {
+                                auto requiredResources = m_dependencyGraph->getAllRequiredResources(resourcePtr);
+                                for (const auto& resource : requiredResources)
+                                {
+                                    auto depId = resource->GetResourceID();
+                                    if (m_usedFunctions.find(depId) == m_usedFunctions.end())
+                                    {
+                                        m_usedFunctions.insert(depId);
+                                        functionQueue.push_back(depId);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+            // Now use the named visitor
+            currentModel->visitNodes(nestedFunctionCallVisitor);
+        }
     }
 } // namespace gladius::nodes

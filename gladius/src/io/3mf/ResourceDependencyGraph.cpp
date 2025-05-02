@@ -641,4 +641,22 @@ namespace gladius::io
 
         return unusedResources;
     }
+
+    Lib3MF::PResource ResourceDependencyGraph::getResourceById(Lib3MF_uint32 resourceId) const
+    {
+        if (!m_model || resourceId == 0)
+        {
+            return nullptr;
+        }
+        
+        try
+        {
+            return m_model->GetResourceByID(resourceId);
+        }
+        catch (const std::exception&)
+        {
+            // Resource not found or other error
+            return nullptr;
+        }
+    }
 } // namespace gladius::io

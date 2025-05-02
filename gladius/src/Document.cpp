@@ -134,7 +134,11 @@ namespace gladius
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();
 
-        nodes::GraphFlattener flattener(assemblyToFlat);
+        // Pass the dependency graph to the flattener if available
+        nodes::GraphFlattener flattener = m_resourceDependencyGraph ? 
+            nodes::GraphFlattener(assemblyToFlat, m_resourceDependencyGraph.get()) : 
+            nodes::GraphFlattener(assemblyToFlat);
+            
         nodes::Validator validator;
         auto logger = getSharedLogger();
         if (!validator.validate(*m_assembly))

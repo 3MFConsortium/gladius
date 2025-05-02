@@ -26,7 +26,6 @@
 #include "RenderProgram.h"
 #include "ResourceContext.h"
 #include "SlicerProgram.h"
-#include "nodes/GraphFlattener.h"
 #include "nodes/OptimizeOutputs.h"
 #include "nodes/Validator.h"
 

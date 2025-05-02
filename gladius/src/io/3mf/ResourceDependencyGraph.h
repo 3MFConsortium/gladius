@@ -90,6 +90,13 @@ namespace gladius::io
          */
         [[nodiscard]] std::vector<Lib3MF::PResource> findUnusedResources() const;
 
+        /**
+         * @brief Get a resource by its ID
+         * @param resourceId The ID of the resource to find
+         * @return The resource if found, nullptr otherwise
+         */
+        [[nodiscard]] Lib3MF::PResource getResourceById(Lib3MF_uint32 resourceId) const;
+
     private:
         /**
          * @brief Process a LevelSet resource and add its dependencies to the graph
