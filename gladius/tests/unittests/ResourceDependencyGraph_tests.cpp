@@ -418,4 +418,143 @@ namespace gladius_tests
         ASSERT_EQ(result.dependentBuildItems.size(), 1u);
         EXPECT_EQ(result.dependentBuildItems[0]->GetObjectResourceID(), meshId);
     }
+
+    TEST_F(ResourceDependencyGraphTest, FindUnusedResources_WithBuildItems_ReturnsCorrectResources)
+    {
+        // Arrange
+        // 1. Create a mesh object that will be referenced by a build item
+        Lib3MF::PMeshObject usedMeshObject = m_model->AddMeshObject();
+        Lib3MF_uint32 usedMeshId = usedMeshObject->GetResourceID();
+        
+        // 2. Create another mesh object that will NOT be referenced by any build item
+        Lib3MF::PMeshObject unusedMeshObject = m_model->AddMeshObject();
+        Lib3MF_uint32 unusedMeshId = unusedMeshObject->GetResourceID();
+        
+        // 3. Create a components object that references the unused mesh (to test dependencies)
+        Lib3MF::PComponentsObject componentsObject = m_model->AddComponentsObject();
+        componentsObject->AddComponent(unusedMeshObject.get(), Lib3MF::sTransform());
+        Lib3MF_uint32 componentsId = componentsObject->GetResourceID();
+        
+        // 4. Add a build item that references the used mesh
+        Lib3MF::PObject objectResource = std::static_pointer_cast<Lib3MF::CObject>(usedMeshObject);
+        Lib3MF::sTransform transform = {}; // Initialize identity matrix
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                transform.m_Fields[i][j] = (i == j) ? 1.0f : 0.0f;
+            }
+        }
+        Lib3MF::PBuildItem buildItem = m_model->AddBuildItem(objectResource, transform);
+        
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto unusedResources = dependencyGraph.findUnusedResources();
+
+        // Assert
+        ASSERT_EQ(unusedResources.size(), 2u) << "Should find two unused resources";
+        
+        // Check that the unused resources are the ones we expect
+        bool foundUnusedMesh = false;
+        bool foundComponentsObject = false;
+        
+        for (const auto& res : unusedResources)
+        {
+            Lib3MF_uint32 resId = res->GetResourceID();
+            
+            if (resId == unusedMeshId) {
+                foundUnusedMesh = true;
+            }
+            else if (resId == componentsId) {
+                foundComponentsObject = true;
+            }
+        }
+        
+        EXPECT_TRUE(foundUnusedMesh) << "The unused mesh object should be in the results";
+        EXPECT_TRUE(foundComponentsObject) << "The components object should be in the results";
+    }
+    
+    TEST_F(ResourceDependencyGraphTest, FindUnusedResources_WithTransitiveDependencies_ReturnsCorrectResources)
+    {
+        // Arrange
+        // Create a more complex dependency chain:
+        // usedMesh <- buildItem (used)
+        // unusedMesh -> componentsObject -> levelSet (all unused)
+        
+        // 1. Create used mesh (will be referenced by build item)
+        Lib3MF::PMeshObject usedMeshObject = m_model->AddMeshObject();
+        Lib3MF_uint32 usedMeshId = usedMeshObject->GetResourceID();
+        
+        // 2. Create unused mesh
+        Lib3MF::PMeshObject unusedMeshObject = m_model->AddMeshObject();
+        Lib3MF_uint32 unusedMeshId = unusedMeshObject->GetResourceID();
+        
+        // 3. Create components object that references the unused mesh
+        Lib3MF::PComponentsObject componentsObject = m_model->AddComponentsObject();
+        componentsObject->AddComponent(unusedMeshObject.get(), Lib3MF::sTransform());
+        Lib3MF_uint32 componentsId = componentsObject->GetResourceID();
+        
+        // 4. Create a function (simplified, just for ID)
+        Lib3MF::PImplicitFunction function = m_model->AddImplicitFunction();
+        Lib3MF_uint32 functionId = function->GetResourceID();
+        
+        // 5. Create a LevelSet that depends on the function
+        Lib3MF::PLevelSet levelSet = m_model->AddLevelSet();
+        levelSet->SetFunction(function.get());
+        levelSet->SetMesh(unusedMeshObject.get()); // Must use a MeshObject, not ComponentsObject
+        Lib3MF_uint32 levelSetId = levelSet->GetResourceID();
+        
+        // 6. Add a build item referencing the used mesh
+        Lib3MF::PBuildItem buildItem = m_model->AddBuildItem(usedMeshObject.get(), Lib3MF::sTransform());
+        
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto unusedResources = dependencyGraph.findUnusedResources();
+
+        // Assert
+        ASSERT_EQ(unusedResources.size(), 4u) << "Should find four unused resources";
+        
+        // Check that the unused resources are the ones we expect
+        std::unordered_set<Lib3MF_uint32> expectedUnusedIds = {
+            unusedMeshId, componentsId, functionId, levelSetId
+        };
+        
+        std::unordered_set<Lib3MF_uint32> actualUnusedIds;
+        for (const auto& res : unusedResources) {
+            actualUnusedIds.insert(res->GetResourceID());
+        }
+        
+        EXPECT_EQ(actualUnusedIds, expectedUnusedIds) << "The unused resources don't match expected IDs";
+    }
+    
+    TEST_F(ResourceDependencyGraphTest, FindUnusedResources_NoBuildItems_ReturnsEmptySet)
+    {
+        // Arrange - Create resources but no build items
+        Lib3MF::PMeshObject meshObject = m_model->AddMeshObject();
+        io::ResourceDependencyGraph dependencyGraph(m_model, m_logger);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto unusedResources = dependencyGraph.findUnusedResources();
+
+        // Assert
+        EXPECT_TRUE(unusedResources.empty()) 
+            << "With no build items, should return empty set (as all resources could potentially be used)";
+    }
+    
+    TEST_F(ResourceDependencyGraphTest, FindUnusedResources_NullModel_ReturnsEmptySet)
+    {
+        // Arrange
+        Lib3MF::PModel nullModel = nullptr;
+        io::ResourceDependencyGraph dependencyGraph(nullModel, m_logger);
+        dependencyGraph.buildGraph();
+
+        // Act
+        auto unusedResources = dependencyGraph.findUnusedResources();
+
+        // Assert
+        EXPECT_TRUE(unusedResources.empty()) << "With null model, should return empty set";
+    }
 }

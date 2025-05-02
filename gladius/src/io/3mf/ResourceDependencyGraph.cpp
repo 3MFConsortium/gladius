@@ -555,4 +555,90 @@ namespace gladius::io
                 m_logger->addEvent({fmt::format("Error processing FunctionReference for resource {}: {}", resourceId, e.what()), gladius::events::Severity::Error});
         }
     }
+
+    std::vector<Lib3MF::PResource> ResourceDependencyGraph::findUnusedResources() const
+    {
+        std::vector<Lib3MF::PResource> unusedResources;
+        if (!m_model || !m_graph)
+        {
+            if (m_logger)
+                m_logger->addEvent({"Cannot find unused resources: invalid model or graph", gladius::events::Severity::Error});
+            return unusedResources;
+        }
+
+        // Get all available resources in the model
+        std::unordered_map<Lib3MF_uint32, Lib3MF::PResource> allResources;
+        Lib3MF::PResourceIterator resourceIterator = m_model->GetResources();
+        while (resourceIterator->MoveNext())
+        {
+            Lib3MF::PResource resource = resourceIterator->GetCurrent();
+            if (resource)
+            {
+                Lib3MF_uint32 resourceId = resource->GetResourceID();
+                if (resourceId > 0)
+                {
+                    allResources[resourceId] = resource;
+                }
+            }
+        }
+        
+        if (allResources.empty())
+        {
+            return unusedResources;
+        }
+
+        // Track which resources are required
+        std::unordered_set<Lib3MF_uint32> requiredResourceIds;
+
+        // Iterate through all build items and find their required resources
+        Lib3MF::PBuildItemIterator buildItemIterator = m_model->GetBuildItems();
+        bool hasBuildItems = false;
+        
+        while (buildItemIterator->MoveNext())
+        {
+            hasBuildItems = true;
+            Lib3MF::PBuildItem buildItem = buildItemIterator->GetCurrent();
+            if (!buildItem)
+                continue;
+
+            // Get the resource directly referenced by this build item
+            Lib3MF_uint32 objectResourceId = buildItem->GetObjectResourceID();
+            if (objectResourceId == 0)
+                continue;
+
+            // Add this resource and all its dependencies to required resources
+            requiredResourceIds.insert(objectResourceId);
+
+            // Use the existing graph to find all dependencies of this resource
+            auto allDependencies = gladius::nodes::graph::determineAllDependencies(*m_graph, objectResourceId);
+            requiredResourceIds.insert(allDependencies.begin(), allDependencies.end());
+        }
+
+        // If there are no build items, all resources are technically unused,
+        // but we might want to keep them (as they could be referenced in future build items)
+        if (!hasBuildItems)
+        {
+            if (m_logger)
+                m_logger->addEvent({"No build items found in model", gladius::events::Severity::Info});
+            return unusedResources;
+        }
+
+        // Collect all resources that are not in the required set
+        unusedResources.reserve(allResources.size() - requiredResourceIds.size());
+        for (const auto& [resourceId, resource] : allResources)
+        {
+            if (requiredResourceIds.find(resourceId) == requiredResourceIds.end())
+            {
+                unusedResources.push_back(resource);
+            }
+        }
+
+        if (m_logger && !unusedResources.empty())
+        {
+            m_logger->addEvent({fmt::format("Found {} unused resources", unusedResources.size()), 
+                              gladius::events::Severity::Info});
+        }
+
+        return unusedResources;
+    }
 } // namespace gladius::io

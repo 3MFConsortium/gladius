@@ -10,7 +10,7 @@
 
 namespace gladius::io
 {
-    /**
+    /**    Lib3MF_uint32 targetId
      * @brief Structure to hold the results of a resource removal check.
      */
     struct CanResourceBeRemovedResult
@@ -80,6 +80,15 @@ namespace gladius::io
          * @return A struct containing the check result, dependent resources, and dependent build items.
          */
         [[nodiscard]] CanResourceBeRemovedResult checkResourceRemoval(Lib3MF::PResource resourceToBeRemoved) const;
+
+        /**
+         * @brief Find all resources that are not required by any build item.
+         * 
+         * A resource is considered unused if it and its dependencies are not referenced 
+         * directly or indirectly by any build item in the model.
+         * @return Vector of resource pointers that can be safely removed.
+         */
+        [[nodiscard]] std::vector<Lib3MF::PResource> findUnusedResources() const;
 
     private:
         /**
