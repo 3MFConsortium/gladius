@@ -111,10 +111,9 @@ namespace gladius
         m_parameterDirty = true;
         m_contoursDirty = true;
 
-        updateFlatAssembly();
-
         // Rebuild resource dependency graph
         rebuildResourceDependencyGraph();
+        updateFlatAssembly();
 
         m_core->refreshProgram(m_flatAssembly);
         m_core->recompileBlockingNoLock();
@@ -135,10 +134,11 @@ namespace gladius
         optimizer.optimize();
 
         // Pass the dependency graph to the flattener if available
-        nodes::GraphFlattener flattener = m_resourceDependencyGraph ? 
-            nodes::GraphFlattener(assemblyToFlat, m_resourceDependencyGraph.get()) : 
-            nodes::GraphFlattener(assemblyToFlat);
-            
+        nodes::GraphFlattener flattener =
+          m_resourceDependencyGraph
+            ? nodes::GraphFlattener(assemblyToFlat, m_resourceDependencyGraph.get())
+            : nodes::GraphFlattener(assemblyToFlat);
+
         nodes::Validator validator;
         auto logger = getSharedLogger();
         if (!validator.validate(*m_assembly))
@@ -1045,34 +1045,34 @@ namespace gladius
             auto logger = getSharedLogger();
             if (logger)
             {
-                logger->addEvent(
-                  {"Cannot remove unused resources: Model or resource dependency graph not available",
-                   events::Severity::Warning});
+                logger->addEvent({"Cannot remove unused resources: Model or resource dependency "
+                                  "graph not available",
+                                  events::Severity::Warning});
             }
             return 0;
         }
-        
+
         // Ensure the resource dependency graph is up-to-date
         rebuildResourceDependencyGraph();
-        
+
         // Find all unused resources
-        std::vector<Lib3MF::PResource> unusedResources = m_resourceDependencyGraph->findUnusedResources();
-        
+        std::vector<Lib3MF::PResource> unusedResources =
+          m_resourceDependencyGraph->findUnusedResources();
+
         if (unusedResources.empty())
         {
             auto logger = getSharedLogger();
             if (logger)
             {
                 logger->addEvent(
-                  {"No unused resources found in the model",
-                   events::Severity::Info});
+                  {"No unused resources found in the model", events::Severity::Info});
             }
             return 0;
         }
-        
+
         std::size_t removedCount = 0;
         auto & resourceManager = getGeneratorContext().resourceManager;
-        
+
         // Remove each unused resource
         for (auto const & resource : unusedResources)
         {
@@ -1081,7 +1081,7 @@ namespace gladius
                 // Get the model resource ID for this resource
                 Lib3MF_uint32 modelResourceId = resource->GetModelResourceID();
                 ResourceKey key{modelResourceId};
-                
+
                 // Check if this is actually a function (need to handle differently)
                 bool isFunction = false;
                 try
@@ -1093,11 +1093,11 @@ namespace gladius
                         deleteFunction(modelResourceId);
                     }
                 }
-                catch (const std::exception&)
+                catch (const std::exception &)
                 {
                     // Not a function, continue with normal resource deletion
                 }
-                
+
                 if (!isFunction)
                 {
                     // Delete from resource manager if it exists there
@@ -1105,11 +1105,11 @@ namespace gladius
                     {
                         resourceManager.deleteResource(key);
                     }
-                    
+
                     // Delete the resource from the 3MF model
                     m_3mfmodel->RemoveResource(resource);
                 }
-                
+
                 removedCount++;
             }
             catch (const std::exception & e)
@@ -1117,13 +1117,12 @@ namespace gladius
                 auto logger = getSharedLogger();
                 if (logger)
                 {
-                    logger->addEvent(
-                      {fmt::format("Failed to remove unused resource: {}", e.what()),
-                       events::Severity::Error});
+                    logger->addEvent({fmt::format("Failed to remove unused resource: {}", e.what()),
+                                      events::Severity::Error});
                 }
             }
         }
-        
+
         if (removedCount > 0)
         {
             auto logger = getSharedLogger();
@@ -1134,11 +1133,11 @@ namespace gladius
                    events::Severity::Info});
             }
             markFileAsChanged();
-            
+
             // Rebuild the dependency graph now that resources have been removed
             rebuildResourceDependencyGraph();
         }
-        
+
         return removedCount;
     }
 
@@ -1155,15 +1154,15 @@ namespace gladius
             }
             return {};
         }
-        
+
         // Ensure the resource dependency graph is up-to-date
         rebuildResourceDependencyGraph();
-        
+
         // Find all unused resources
         return m_resourceDependencyGraph->findUnusedResources();
     }
 
-    const gladius::io::ResourceDependencyGraph* Document::getResourceDependencyGraph() const
+    const gladius::io::ResourceDependencyGraph * Document::getResourceDependencyGraph() const
     {
         return m_resourceDependencyGraph.get();
     }
