@@ -16,13 +16,18 @@ namespace gladius::nodes
         ProfileFunction;
         // 1. Find the referenced model
         auto functionId = functionCall.getFunctionId();
+        
+        // Quick check for used functions first - this is the most frequently hit early-out condition
+        if (m_usedFunctions.find(functionId) == m_usedFunctions.end())
+        {
+            return; // Skip function integration immediately if not in used functions set
+        }
 
+        // Check if any outputs are actually used
         bool isFunctionOutputUsed = false;
         for (auto const & output : functionCall.getOutputs())
         {
-            auto const & outputName = output.first;
-            auto const & outputValue = output.second;
-            if (outputValue.isUsed())
+            if (output.second.isUsed())
             {
                 isFunctionOutputUsed = true;
                 break;
@@ -34,13 +39,8 @@ namespace gladius::nodes
             return;
         }
 
-        // Skip function integration if it's not in the used functions set
-        if (m_usedFunctions.find(functionId) == m_usedFunctions.end())
-        {
-            return;
-        }
-
-        auto referencedFunction = m_assembly.findModel(functionCall.getFunctionId());
+        // Cache the referenced function to avoid multiple lookups
+        auto referencedFunction = m_assembly.findModel(functionId);
         if (!referencedFunction)
         {
             throw std::runtime_error(
@@ -76,18 +76,25 @@ namespace gladius::nodes
             throw std::runtime_error("Assembly model not found");
         }
 
+        // Reserve capacity for used functions based on the number of models in assembly
+        m_usedFunctions.reserve(m_assembly.getFunctions().size());
+        
         // First find all functions that are actually used
         findUsedFunctions();
 
         // The assembly model is always used
         m_usedFunctions.insert(modelToFlat->getResourceId());
 
+        // Flatten recursively starting with the top-level model
         flattenRecursive(*modelToFlat);
 
+        // Clean up after flattening
         deleteFunctions();
-
         deleteFunctionCallNodes();
+        
+        // Update the graph order
         m_assembly.assemblyModel()->updateGraphAndOrderIfNeeded();
+        
         return m_assembly;
     }
 
@@ -201,12 +208,17 @@ namespace gladius::nodes
             }
         }
 
+        // Ensure recursive flattening is done before integrating
         flattenRecursive(model);
 
+        // Pre-allocate collections to avoid reallocations
         std::unordered_map<std::string, std::string> nameMapping; // old name -> new name
+        nameMapping.reserve(100); // Reserve space for a reasonable number of nodes
 
         std::vector<NodeBase *> createdNodes;
-        // 1. Integrate all nodes
+        createdNodes.reserve(100); // Reserve space for a reasonable number of nodes
+
+        // 1. Integrate all nodes first to create the new structure
         for (auto & node : model)
         {
             // Skip Begin and End nodes
@@ -229,82 +241,86 @@ namespace gladius::nodes
             nameMapping[node.second->getUniqueName()] = integratedNode->getUniqueName();
         }
 
-        // 3. Update the source ports
+        // Cache Begin node for input mapping
+        auto const * beginNode = model.getBeginNode();
+
+        // 3. Update the source ports for each new node
         for (auto * node : createdNodes)
         {
             for (auto & [parameterName, parameter] : node->parameter())
             {
                 auto & source = parameter.getSource();
-                if (source.has_value() && source.value().port)
+                if (!source.has_value() || !source.value().port)
                 {
-
-                    auto & originalSourcePort = source.value().port;
-                    auto const * originalSourceNode = originalSourcePort->getParent();
-                    auto const & originalSourceNodeName = originalSourceNode->getUniqueName();
-                    auto & sourcePortName = originalSourcePort->getShortName();
-
-                    // If originalSourceNode is a BeginNode, we need to find the corresponding
-                    // inputs to the function call
-
-                    if (auto * beginNode = dynamic_cast<Begin const *>(originalSourceNode))
-                    {
-                        auto const & inputs = functionCall.constParameter();
-                        auto const & input = inputs.at(sourcePortName);
-                        auto const & inputSource = input.getConstSource();
-                        if (!inputSource.has_value())
-                        {
-                            throw std::runtime_error(
-                              fmt::format("Input {} has no source", sourcePortName));
-                        }
-
-                        if (!inputSource.value().port)
-                        {
-                            throw std::runtime_error(
-                              fmt::format("Input {} has no port", sourcePortName));
-                        }
-
-                        auto portId = inputSource.value().portId;
-
-                        auto * port = target.getPort(portId);
-                        if (!port)
-                        {
-                            throw std::runtime_error(fmt::format("Port {} not found", portId));
-                        }
-
-                        parameter.setInputFromPort(*port);
-                        continue;
-                    }
-
-                    auto newSourceNodeNameIter = nameMapping.find(originalSourceNodeName);
-                    if (newSourceNodeNameIter == std::end(nameMapping))
-                    {
-                        throw std::runtime_error(
-                          fmt::format("Source node {} not found", originalSourceNodeName));
-                    }
-
-                    auto * newSourceNode = target.findNode(newSourceNodeNameIter->second);
-                    if (!newSourceNode)
-                    {
-                        throw std::runtime_error(
-                          fmt::format("Source node {} not found", newSourceNodeNameIter->second));
-                    }
-
-                    Port * newSourcePort = newSourceNode->findOutputPort(sourcePortName);
-
-                    if (!newSourcePort)
-                    {
-                        throw std::runtime_error(
-                          fmt::format("Source port {} not found", sourcePortName));
-                    }
-
-                    if (newSourcePort->getShortName() != sourcePortName)
-                    {
-                        throw std::runtime_error(
-                          fmt::format("Source port {} not found", sourcePortName));
-                    }
-
-                    parameter.setInputFromPort(*newSourcePort);
+                    continue; // Skip if no source or port
                 }
+
+                auto & originalSourcePort = source.value().port;
+                auto const * originalSourceNode = originalSourcePort->getParent();
+                
+                if (!originalSourceNode)
+                {
+                    throw std::runtime_error("Source node not found");
+                }
+                
+                auto const & originalSourceNodeName = originalSourceNode->getUniqueName();
+                auto & sourcePortName = originalSourcePort->getShortName();
+
+                // If originalSourceNode is a BeginNode, we need to find the corresponding
+                // inputs to the function call
+                if (dynamic_cast<Begin const *>(originalSourceNode))
+                {
+                    auto const & inputs = functionCall.constParameter();
+                    auto inputIt = inputs.find(sourcePortName);
+                    
+                    if (inputIt == inputs.end())
+                    {
+                        throw std::runtime_error(
+                          fmt::format("Input {} not found", sourcePortName));
+                    }
+                    
+                    auto const & input = inputIt->second;
+                    auto const & inputSource = input.getConstSource();
+                    if (!inputSource.has_value() || !inputSource.value().port)
+                    {
+                        throw std::runtime_error(
+                          fmt::format("Input {} has no valid source", sourcePortName));
+                    }
+
+                    auto portId = inputSource.value().portId;
+                    auto * port = target.getPort(portId);
+                    if (!port)
+                    {
+                        throw std::runtime_error(fmt::format("Port {} not found", portId));
+                    }
+
+                    parameter.setInputFromPort(*port);
+                    continue;
+                }
+
+                // Fast lookup in the name mapping for regular nodes
+                auto newSourceNodeNameIter = nameMapping.find(originalSourceNodeName);
+                if (newSourceNodeNameIter == std::end(nameMapping))
+                {
+                    throw std::runtime_error(
+                      fmt::format("Source node {} not found", originalSourceNodeName));
+                }
+
+                auto * newSourceNode = target.findNode(newSourceNodeNameIter->second);
+                if (!newSourceNode)
+                {
+                    throw std::runtime_error(
+                      fmt::format("Source node {} not found", newSourceNodeNameIter->second));
+                }
+
+                Port * newSourcePort = newSourceNode->findOutputPort(sourcePortName);
+                if (!newSourcePort)
+                {
+                    throw std::runtime_error(
+                      fmt::format("Source port {} not found", sourcePortName));
+                }
+
+                parameter.setInputFromPort(*newSourcePort);
             }
         }
 
@@ -319,97 +335,102 @@ namespace gladius::nodes
                                    std::unordered_map<std::string, std::string> const & nameMapping)
     {
         ProfileFunction;
-        // Find all usages of the outputs of the function call and and set
+        // Find all usages of the outputs of the function call and set
         // the corresponding outputs from the end node of the function
 
         auto const & outputs = functionCall.getOutputs();
-        for (auto const & [outputName, output] : outputs)
+        if (outputs.empty())
         {
-            auto const & inputParameters = target.getParameterRegistry();
-            for (auto const & [parameterId, input] : inputParameters)
+            return; // Early exit if no outputs
+        }
+        
+        // Cache the end node for repeated lookups
+        auto const & endNode = model.getEndNode();
+        auto const & functionCallId = functionCall.getId();
+        
+        // Create a lookup set for fast output name checks
+        std::unordered_set<std::string> outputNames;
+        outputNames.reserve(outputs.size());
+        for (auto const & output : outputs)
+        {
+            outputNames.insert(output.first);
+        }
+
+        auto const & inputParameters = target.getParameterRegistry();
+        for (auto const & [parameterId, input] : inputParameters)
+        {
+            auto const & inputSource = input->getSource();
+            if (!inputSource.has_value() || !inputSource.value().port)
             {
-                auto const & inputSource = input->getSource();
-                if (!inputSource.has_value())
-                {
-                    continue;
-                }
-
-                auto const & inputSourcePort = inputSource.value().port;
-                if (!inputSourcePort)
-                {
-                    continue;
-                }
-
-                auto const & inputSourcePortName = inputSourcePort->getShortName();
-                if (inputSourcePortName != outputName)
-                {
-                    continue;
-                }
-
-                auto const * inputSourceNode = inputSourcePort->getParent();
-                if (!inputSourceNode)
-                {
-                    throw std::runtime_error(
-                      fmt::format("Input source node not found for {}", parameterId));
-                }
-
-                if (inputSourceNode->getId() != functionCall.getId())
-                {
-                    continue;
-                }
-
-                auto const & endNode = model.getEndNode();
-                auto * const parameter = endNode->getParameter(outputName);
-                if (!parameter)
-                {
-                    throw std::runtime_error(
-                      fmt::format("Output {} not found in end node", outputName));
-                }
-
-                auto const & sourceInOriginalModel = parameter->getSource();
-                if (!sourceInOriginalModel.has_value())
-                {
-                    throw std::runtime_error(fmt::format("Parameter {} of node {} has no source",
-                                                         outputName,
-                                                         endNode->getUniqueName()));
-                }
-
-                auto parentNodeInOriginalModel =
-                  model.getNode(sourceInOriginalModel.value().nodeId);
-                if (!parentNodeInOriginalModel.has_value() || !parentNodeInOriginalModel.value())
-                {
-                    throw std::runtime_error(
-                      fmt::format("Parent node of output {} not found", outputName));
-                }
-
-                auto const & parentNodeNameInOriginalModel =
-                  parentNodeInOriginalModel.value()->getUniqueName();
-                auto parentNodeNameInTargetModelIter =
-                  nameMapping.find(parentNodeNameInOriginalModel);
-                if (parentNodeNameInTargetModelIter == std::end(nameMapping))
-                {
-                    throw std::runtime_error(
-                      fmt::format("Parent node of output {} not found", outputName));
-                }
-
-                auto * parentNodeInTargetModel =
-                  target.findNode(parentNodeNameInTargetModelIter->second);
-                if (!parentNodeInTargetModel)
-                {
-                    throw std::runtime_error(
-                      fmt::format("Parent node of output {} not found", outputName));
-                }
-
-                auto * outputPortInTargetModel =
-                  parentNodeInTargetModel->findOutputPort(sourceInOriginalModel.value().shortName);
-
-                if (!outputPortInTargetModel)
-                {
-                    throw std::runtime_error(fmt::format("Output port {} not found", outputName));
-                }
-
-                input->setInputFromPort(*outputPortInTargetModel);
+                continue;
             }
+
+            auto const & inputSourcePort = inputSource.value().port;
+            auto const & inputSourcePortName = inputSourcePort->getShortName();
+            
+            // Skip if not an output we care about
+            if (outputNames.find(inputSourcePortName) == outputNames.end())
+            {
+                continue;
+            }
+
+            auto const * inputSourceNode = inputSourcePort->getParent();
+            if (!inputSourceNode || inputSourceNode->getId() != functionCallId)
+            {
+                continue;
+            }
+
+            // We found a parameter that uses this function call output
+            auto * const parameter = endNode->getParameter(inputSourcePortName);
+            if (!parameter)
+            {
+                throw std::runtime_error(
+                  fmt::format("Output {} not found in end node", inputSourcePortName));
+            }
+
+            auto const & sourceInOriginalModel = parameter->getSource();
+            if (!sourceInOriginalModel.has_value())
+            {
+                throw std::runtime_error(fmt::format("Parameter {} of node {} has no source",
+                                                     inputSourcePortName,
+                                                     endNode->getUniqueName()));
+            }
+
+            auto parentNodeInOriginalModel =
+              model.getNode(sourceInOriginalModel.value().nodeId);
+            if (!parentNodeInOriginalModel.has_value() || !parentNodeInOriginalModel.value())
+            {
+                throw std::runtime_error(
+                  fmt::format("Parent node of output {} not found", inputSourcePortName));
+            }
+
+            auto const & parentNodeNameInOriginalModel =
+              parentNodeInOriginalModel.value()->getUniqueName();
+            auto parentNodeNameInTargetModelIter =
+              nameMapping.find(parentNodeNameInOriginalModel);
+            if (parentNodeNameInTargetModelIter == std::end(nameMapping))
+            {
+                throw std::runtime_error(
+                  fmt::format("Parent node of output {} not found", inputSourcePortName));
+            }
+
+            auto * parentNodeInTargetModel =
+              target.findNode(parentNodeNameInTargetModelIter->second);
+            if (!parentNodeInTargetModel)
+            {
+                throw std::runtime_error(
+                  fmt::format("Parent node of output {} not found", inputSourcePortName));
+            }
+
+            auto * outputPortInTargetModel =
+              parentNodeInTargetModel->findOutputPort(sourceInOriginalModel.value().shortName);
+
+            if (!outputPortInTargetModel)
+            {
+                throw std::runtime_error(fmt::format("Output port {} not found", inputSourcePortName));
+            }
+
+            input->setInputFromPort(*outputPortInTargetModel);
         }
     }
 
@@ -435,31 +456,41 @@ namespace gladius::nodes
         auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
             [&](FunctionCall & functionCallNode)
             {
+                // Check if any output is used before proceeding
                 bool isFunctionOutputUsed = false;
                 for (auto const & output : functionCallNode.getOutputs())
                 {
-                    auto const & outputValue = output.second;
-                    if (outputValue.isUsed())
+                    if (output.second.isUsed())
                     {
                         isFunctionOutputUsed = true;
                         break;
                     }
                 }
 
-                if (isFunctionOutputUsed)
+                if (!isFunctionOutputUsed)
                 {
-                    auto functionId = functionCallNode.getFunctionId();
-                    auto referencedFunction = m_assembly.findModel(functionId);
-                    
-                    if (referencedFunction && m_usedFunctions.find(functionId) == m_usedFunctions.end())
-                    {
-                        // Mark this function as used
-                        m_usedFunctions.insert(functionId);
-                        
-                        // Recursively find used functions in this function
-                        findUsedFunctionsInModel(*referencedFunction);
-                    }
+                    return; // Skip if no outputs are used
                 }
+                    
+                auto functionId = functionCallNode.getFunctionId();
+                
+                // Check if function is already processed
+                if (m_usedFunctions.find(functionId) != m_usedFunctions.end())
+                {
+                    return; // Already processed this function
+                }
+                
+                auto referencedFunction = m_assembly.findModel(functionId);
+                if (!referencedFunction)
+                {
+                    return; // Function not found
+                }
+                
+                // Mark this function as used
+                m_usedFunctions.insert(functionId);
+                
+                // Recursively find used functions in this function
+                findUsedFunctionsInModel(*referencedFunction);
             });
         
         model.visitNodes(functionCallVisitor);
