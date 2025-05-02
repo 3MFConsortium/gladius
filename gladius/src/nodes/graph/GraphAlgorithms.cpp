@@ -33,7 +33,7 @@ namespace gladius::nodes::graph
     auto determineAllDependencies(const IDirectedGraph & graph, Identifier id) -> DependencySet
     {
         ProfileFunction;
-        if (id < 0 || id > static_cast<Identifier>(graph.getSize()))
+        if (id < 0 || id >= static_cast<Identifier>(graph.getSize()))
         {
             return DependencySet();
         }
