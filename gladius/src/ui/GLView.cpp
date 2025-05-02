@@ -167,14 +167,16 @@ namespace gladius
         ImGui::CreateContext();
         ImGuiIO & io = ImGui::GetIO();
 
+        // Set up the UI configuration file path
         std::filesystem::path gladiusConfigDir =
           sago::getConfigHome() / std::filesystem::path{"gladius"};
         m_gladiusImgUiFilename = gladiusConfigDir / "ui.config";
+        
         if (!std::filesystem::is_directory(gladiusConfigDir))
         {
             std::filesystem::create_directory(gladiusConfigDir);
         }
-
+        
         if (!std::filesystem::is_regular_file(m_gladiusImgUiFilename) &&
             std::filesystem::is_regular_file(io.IniFilename))
         {
@@ -310,7 +312,10 @@ namespace gladius
         glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
         float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
         float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
-        m_uiScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
+        
+        // Calculate scale based on HDPI
+        float calculatedScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
+        m_uiScale = calculatedScale;
     }
 
     void GLView::handleDropCallback(GLFWwindow *, int count, const char ** paths)

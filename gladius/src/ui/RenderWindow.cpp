@@ -27,6 +27,10 @@ namespace gladius::ui
     {
         m_core = core;
         m_view = view;
+
+        auto & settings = m_core->getResourceContext().getRenderingSettings();
+        m_renderWindowState.renderQuality = settings.quality;
+        m_renderWindowState.renderQualityWhileMoving = settings.quality * 0.5f;
     }
 
     void RenderWindow::renderWindow()
@@ -105,6 +109,7 @@ namespace gladius::ui
                     m_renderWindowState.renderQualityWhileMoving = quality * 0.5f;
                     invalidateView();
                 }
+                m_renderWindowState.renderQuality = quality;
 
                 ImGui::EndMenu();
             }

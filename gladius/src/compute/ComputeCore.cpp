@@ -879,6 +879,7 @@ namespace gladius
 
     bool ComputeCore::setScreenResolution(size_t width, size_t height)
     {
+        ProfileFunction
         if (m_resultImage && (width == m_resultImage->getWidth()) &&
             (height == m_resultImage->getHeight()))
         {

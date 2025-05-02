@@ -48,8 +48,8 @@ namespace gladius::ui
         m_logger = std::make_shared<events::Logger>();
         m_mainView.addViewCallBack([&]() { renderWelcomeScreen(); });
         m_mainView.setRequestCloseCallBack([&]() { close(); });
-        setup();
     }
+    
 
     void MainWindow::setup(std::shared_ptr<ComputeCore> core,
                            std::shared_ptr<Document> doc,
@@ -84,6 +84,7 @@ namespace gladius::ui
 
         nodeEditor();
         newModel();
+        loadRenderSettings();
     }
 
     void MainWindow::dragParameter(const std::string & label,
@@ -102,6 +103,21 @@ namespace gladius::ui
 
         if (ImGui::CollapsingHeader("Rendering"))
         {
+            // Add save/load buttons for settings if ConfigManager is available
+            if (m_configManager)
+            {
+                if (ImGui::Button("Save Settings"))
+                {
+                    saveRenderSettings();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Load Settings"))
+                {
+                    loadRenderSettings();
+                    refreshModel();
+                }
+                ImGui::Separator();
+            }
 
             ImGui::SliderFloat("Ray marching tolerance",
                                &m_core->getResourceContext().getRenderingSettings().quality,
@@ -163,6 +179,12 @@ namespace gladius::ui
         m_core =
           std::make_shared<ComputeCore>(context, RequiredCapabilities::OpenGLInterop, m_logger);
         m_doc = std::make_shared<Document>(m_core);
+        
+        // Load render settings if ConfigManager is available
+        if (m_configManager)
+        {
+            loadRenderSettings();
+        }
 
         setup(m_core, m_doc, m_logger);
     }
@@ -880,6 +902,7 @@ namespace gladius::ui
 
     void MainWindow::close()
     {
+        saveRenderSettings();
         if (m_fileChanged)
         {
             m_showSaveBeforeExit = true;

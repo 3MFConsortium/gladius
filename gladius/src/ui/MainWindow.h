@@ -6,6 +6,7 @@
 #include <filesystem>
 
 #include "../Document.h"
+#include "../ConfigManager.h"
 #include "AboutDialog.h"
 #include "CliExportDialog.h"
 #include "GLView.h"
@@ -27,6 +28,12 @@ namespace gladius::ui
       public:
         MainWindow();
 
+        /**
+         * @brief Set the ConfigManager reference
+         * @param configManager Reference to the ConfigManager
+         */
+        void setConfigManager(ConfigManager& configManager) { m_configManager = &configManager; }
+
         void setup(std::shared_ptr<ComputeCore> core,
                    std::shared_ptr<Document> doc,
                    events::SharedLogger logger);
@@ -34,9 +41,9 @@ namespace gladius::ui
         void renderSettingsDialog();
         void open(const std::filesystem::path & filename);
         void startMainLoop();
-
-      private:
         void setup();
+      private:
+
 
         void render();
         void renderWelcomeScreen();
@@ -66,6 +73,16 @@ namespace gladius::ui
         void saveAs();
         void saveCurrentFunction();
         void importImageStack();
+        
+        /**
+         * @brief Save rendering settings to configuration
+         */
+        void saveRenderSettings();
+        
+        /**
+         * @brief Load rendering settings from configuration
+         */
+        void loadRenderSettings();
 
         void onPreviewProgramSwap();
 
@@ -117,5 +134,7 @@ namespace gladius::ui
         Outline m_outline;
 
         float m_uiScale = 1.f;
+        
+        ConfigManager* m_configManager = nullptr; // Pointer to the Application's ConfigManager
     };
 }

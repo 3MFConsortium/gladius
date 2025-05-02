@@ -48,7 +48,8 @@
     "pkgconf",
     "minizip",
     "tracy",
-    "clipper2"
+    "clipper2",
+    "nlohmann-json"
   ],
   "overrides": [
     {
