@@ -165,6 +165,29 @@ namespace gladius::ui
         }
 
         ImGui::Begin("Outline", nullptr, ImGuiWindowFlags_MenuBar);
+
+        // delete unused resources
+        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_TRASH "\tDelete unused resources")))
+        {
+            m_unusedResources = m_doc->findUnusedResources();
+            
+            if (!m_unusedResources.empty())
+            {
+                m_showDeleteUnusedResourcesConfirmation = true;
+                ImGui::OpenPopup("Delete Unused Resources");
+            }
+            else
+            {
+                auto logger = m_doc->getSharedLogger();
+                if (logger)
+                {
+                    logger->addEvent(
+                      {"No unused resources found in the model",
+                       events::Severity::Info});
+                }
+            }
+        }
+
         if (m_outline.render())
         {
             markModelAsModified();
@@ -598,6 +621,7 @@ namespace gladius::ui
 
         outline();
         newModelDialog();
+        showDeleteUnusedResourcesDialog();
         try
         {
 
@@ -1359,6 +1383,102 @@ namespace gladius::ui
         std::vector<ed::NodeId> selectedNodeIds(numSelectedItems);
         GetSelectedNodes(selectedNodeIds.data(), static_cast<int>(numSelectedItems));
         return selectedNodeIds;
+    }
+
+    void ModelEditor::showDeleteUnusedResourcesDialog()
+    {
+        if (!m_showDeleteUnusedResourcesConfirmation)
+        {
+            return;
+        }
+
+        ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        
+        if (!ImGui::IsPopupOpen("Delete Unused Resources"))
+        {
+            ImGui::OpenPopup("Delete Unused Resources");
+        }
+        
+        if (ImGui::BeginPopupModal("Delete Unused Resources", 
+                                  &m_showDeleteUnusedResourcesConfirmation, 
+                                  ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            if (m_unusedResources.empty())
+            {
+                ImGui::TextUnformatted("No unused resources found in the model.");
+            }
+            else
+            {
+                ImGui::Text("The following %zu unused resources will be deleted:", m_unusedResources.size());
+                ImGui::Separator();
+                
+                ImGui::BeginChild("ResourceList", ImVec2(400, 300), true);
+                
+                for (auto const& resource : m_unusedResources)
+                {
+                    try
+                    {
+                        Lib3MF_uint32 modelResourceId = resource->GetModelResourceID();
+                        ResourceKey key{modelResourceId};
+                        std::string resourceName = key.getDisplayName();
+                        
+                        // Try to determine the resource type
+                        std::string resourceType = "Unknown";
+                        try
+                        {
+                            if (std::dynamic_pointer_cast<Lib3MF::CFunction>(resource))
+                                resourceType = "Function";
+                            else if (std::dynamic_pointer_cast<Lib3MF::CMeshObject>(resource))
+                                resourceType = "Mesh";
+                            else if (std::dynamic_pointer_cast<Lib3MF::CComponentsObject>(resource))
+                                resourceType = "Components";
+                            else if (std::dynamic_pointer_cast<Lib3MF::CLevelSet>(resource))
+                                resourceType = "Level Set";
+                        }
+                        catch (const std::exception&) 
+                        {
+                            // Fallback to unknown type
+                        }
+                        
+                        ImGui::Text("%s #%u (%s)", 
+                                    resourceName.c_str(), 
+                                    modelResourceId, 
+                                    resourceType.c_str());
+                    }
+                    catch (const std::exception& e)
+                    {
+                        ImGui::Text("Error getting resource info: %s", e.what());
+                    }
+                }
+                
+                ImGui::EndChild();
+                ImGui::Separator();
+                
+                ImGui::Text("Are you sure you want to delete these resources?");
+                ImGui::Text("This action cannot be undone.");
+                ImGui::Separator();
+                
+                if (ImGui::Button("Delete", ImVec2(120, 0)))
+                {
+                    m_doc->removeUnusedResources();
+                    markModelAsModified();
+                    m_showDeleteUnusedResourcesConfirmation = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                
+                ImGui::SameLine();
+                
+                if (ImGui::Button("Cancel", ImVec2(120, 0)))
+                {
+                    m_unusedResources.clear();
+                    m_showDeleteUnusedResourcesConfirmation = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            
+            ImGui::EndPopup();
+        }
     }
 
 } // namespace gladius::ui

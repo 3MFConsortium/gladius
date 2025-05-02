@@ -1136,4 +1136,30 @@ namespace gladius
         
         return removedCount;
     }
+
+    std::vector<Lib3MF::PResource> Document::findUnusedResources()
+    {
+        if (!m_3mfmodel || !m_resourceDependencyGraph)
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {"Cannot find unused resources: Model or resource dependency graph not available",
+                   events::Severity::Warning});
+            }
+            return {};
+        }
+        
+        // Ensure the resource dependency graph is up-to-date
+        rebuildResourceDependencyGraph();
+        
+        // Find all unused resources
+        return m_resourceDependencyGraph->findUnusedResources();
+    }
+
+    const gladius::io::ResourceDependencyGraph* Document::getResourceDependencyGraph() const
+    {
+        return m_resourceDependencyGraph.get();
+    }
 }

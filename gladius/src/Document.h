@@ -205,7 +205,24 @@ namespace gladius
          * 
          * @return The number of resources that were removed
          */
-        [[nodiscard]] std::size_t removeUnusedResources();
+        std::size_t removeUnusedResources();
+
+        /**
+         * @brief Updates the resource dependency graph and finds all unused resources.
+         *
+         * This method is a public version that updates the dependency graph and returns
+         * unused resources without deleting them.
+         *
+         * @return Vector of resource pointers that can be safely removed.
+         */
+        std::vector<Lib3MF::PResource> findUnusedResources();
+
+        /**
+         * @brief Get the ResourceDependencyGraph object
+         *
+         * @return A pointer to the resource dependency graph (nullptr if not available)
+         */
+        [[nodiscard]] const gladius::io::ResourceDependencyGraph* getResourceDependencyGraph() const;
 
       private:
         [[nodiscard]] nodes::VariantParameter &

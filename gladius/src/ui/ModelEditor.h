@@ -86,7 +86,7 @@ namespace gladius::ui
 
         void functionToolBox(ImVec2 mousePos);
         void meshResourceToolBox(ImVec2 mousePos);
-
+        void showDeleteUnusedResourcesDialog();
         void validate();
 
         void undo();
@@ -135,6 +135,10 @@ namespace gladius::ui
 
         NodeTypeToColor m_nodeTypeToColor;
         float m_uiScale = 1.0f;
+
+        // Confirmation dialog for removing unused resources
+        bool m_showDeleteUnusedResourcesConfirmation = false;
+        std::vector<Lib3MF::PResource> m_unusedResources;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);
