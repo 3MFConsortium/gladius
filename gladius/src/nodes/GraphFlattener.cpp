@@ -34,6 +34,12 @@ namespace gladius::nodes
             return;
         }
 
+        // Skip function integration if it's not in the used functions set
+        if (m_usedFunctions.find(functionId) == m_usedFunctions.end())
+        {
+            return;
+        }
+
         auto referencedFunction = m_assembly.findModel(functionCall.getFunctionId());
         if (!referencedFunction)
         {
@@ -69,6 +75,12 @@ namespace gladius::nodes
         {
             throw std::runtime_error("Assembly model not found");
         }
+
+        // First find all functions that are actually used
+        findUsedFunctions();
+
+        // The assembly model is always used
+        m_usedFunctions.insert(modelToFlat->getResourceId());
 
         flattenRecursive(*modelToFlat);
 
@@ -399,5 +411,57 @@ namespace gladius::nodes
                 input->setInputFromPort(*outputPortInTargetModel);
             }
         }
+    }
+
+    void GraphFlattener::findUsedFunctions()
+    {
+        ProfileFunction;
+        m_usedFunctions.clear();
+
+        auto modelToFlat = m_assembly.assemblyModel();
+        if (!modelToFlat)
+        {
+            throw std::runtime_error("Assembly model not found");
+        }
+
+        findUsedFunctionsInModel(*modelToFlat);
+    }
+
+    void GraphFlattener::findUsedFunctionsInModel(Model & model)
+    {
+        ProfileFunction;
+        
+        // Find all function calls in the model with used outputs
+        auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
+            [&](FunctionCall & functionCallNode)
+            {
+                bool isFunctionOutputUsed = false;
+                for (auto const & output : functionCallNode.getOutputs())
+                {
+                    auto const & outputValue = output.second;
+                    if (outputValue.isUsed())
+                    {
+                        isFunctionOutputUsed = true;
+                        break;
+                    }
+                }
+
+                if (isFunctionOutputUsed)
+                {
+                    auto functionId = functionCallNode.getFunctionId();
+                    auto referencedFunction = m_assembly.findModel(functionId);
+                    
+                    if (referencedFunction && m_usedFunctions.find(functionId) == m_usedFunctions.end())
+                    {
+                        // Mark this function as used
+                        m_usedFunctions.insert(functionId);
+                        
+                        // Recursively find used functions in this function
+                        findUsedFunctionsInModel(*referencedFunction);
+                    }
+                }
+            });
+        
+        model.visitNodes(functionCallVisitor);
     }
 } // namespace gladius::nodes

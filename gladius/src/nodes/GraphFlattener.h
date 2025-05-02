@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Assembly.h"
+#include <unordered_set>
 
 namespace gladius::nodes
 {
@@ -16,7 +17,10 @@ namespace gladius::nodes
 
       private:
         Assembly m_assembly;
+        std::unordered_set<ResourceId> m_usedFunctions;
 
+        void findUsedFunctions();
+        void findUsedFunctionsInModel(Model & model);
         void integrateFunctionCall(nodes::FunctionCall const & functionCall, Model & target);
         void flattenRecursive(Model & model);
         void deleteFunctions();
