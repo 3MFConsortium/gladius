@@ -34,6 +34,25 @@ namespace gladius::io
     }
 
     /**
+     * @brief Sets a lib3mf transform to identity matrix
+     *
+     * A utility function to initialize a 3MF transform as an identity matrix.
+     * The identity matrix has 1's on the diagonal and 0's elsewhere.
+     *
+     * @param transform Reference to the Lib3MF::sTransform to be set to identity
+     */
+    inline void setTransformToIdentity(Lib3MF::sTransform& transform)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                transform.m_Fields[i][j] = (i == j) ? 1.0f : 0.0f;
+            }
+        }
+    }
+
+    /**
      * @brief Converts a lib3mf UniqueResourceID to a gladius ResourceId
      * 
      * This conversion requires access to the Model to find the resource

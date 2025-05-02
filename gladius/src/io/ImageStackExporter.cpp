@@ -2,6 +2,7 @@
 
 #include "MeshExporter.h"
 #include "compute/ComputeCore.h"
+#include "io/3mf/ResourceIdUtil.h"
 
 #include <lodepng.h>
 
@@ -44,22 +45,7 @@ namespace gladius::io
     Lib3MF::sTransform createtIdentityTransform()
     {
         Lib3MF::sTransform transform;
-        transform.m_Fields[0][0] = 1.0f;
-        transform.m_Fields[0][1] = 0.0f;
-        transform.m_Fields[0][2] = 0.0f;
-
-        transform.m_Fields[1][0] = 0.0f;
-        transform.m_Fields[1][1] = 1.0f;
-        transform.m_Fields[1][2] = 0.0f;
-
-        transform.m_Fields[2][0] = 0.0f;
-        transform.m_Fields[2][1] = 0.0f;
-        transform.m_Fields[2][2] = 1.0f;
-
-        transform.m_Fields[3][0] = 0.0f;
-        transform.m_Fields[3][1] = 0.0f;
-        transform.m_Fields[3][2] = 0.0f;
-
+        setTransformToIdentity(transform);
         return transform;
     }
 

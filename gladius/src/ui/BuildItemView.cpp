@@ -389,13 +389,7 @@ namespace gladius::ui
                     document->update3mfModel();
                     
                     // Set identity matrix
-                    for (int i = 0; i < 4; i++)
-                    {
-                        for (int j = 0; j < 3; j++)
-                        {
-                            transform.m_Fields[i][j] = (i == j) ? 1.0f : 0.0f;
-                        }
-                    }
+                    io::setTransformToIdentity(transform);
                     
                     buildItem->SetObjectTransform(transform);
                     document->markFileAsChanged();
