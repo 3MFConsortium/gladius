@@ -116,55 +116,130 @@ if (renderingSettings.z_mm > 0.0001f && renderingSettings.flags & RF_SHOW_STACK)
     return result;
 }
 
+/**
+ * @brief Performs ray casting against signed distance fields to find intersections.
+ * 
+ * Enhanced to better handle thin-walled geometries using binary refinement when
+ * passing through surfaces and adaptive step sizes to reduce the chance of missing details.
+ * 
+ * @param eyePosition The starting position of the ray
+ * @param rayDirection The normalized direction of the ray
+ * @param startDistance Initial travel distance offset
+ * @param PAYLOAD_ARGS Additional arguments passed to mapping functions
+ * @return struct RayCastResult Result of the ray cast containing hit information
+ */
 struct RayCastResult
 rayCast(float3 eyePosition, float3 rayDirection, float startDistance, PAYLOAD_ARGS)
 {
-
+    // Configuration constants
     int const maxRaySteps = renderingSettings.approximation & AM_FULL_MODEL ? 1000 : 300;
     float const maxTravelDistance = 10000.f;
     float const initialCloseEnough = (renderingSettings.approximation & AM_ONLY_PRECOMPSDF) ? 0.01f : 1.E-3f;
     float closeEnough = initialCloseEnough;
-    float const edgeWidth = 0.f; // renderingSettings.crestLineWidth;
-    float traveledDistance = closeEnough;
+    
+    // Ray state tracking
+    float traveledDistance = startDistance + closeEnough;
     float distanceToSurface = closeEnough * 2.f;
-
+    float minStepSize = initialCloseEnough * 0.01f; // Minimum step size to prevent skipping tiny features
+    
+    // Result structure preparation
     struct RayCastResult result;
     struct DistanceColor hitObject;
     result.edge = FLT_MAX;
-
+    
     bool hit = false;
-    int const zero = min((int)(fabs(eyePosition.x)), 0);    //trick the compiler to avoid inlining
+    int const zero = min((int)(fabs(eyePosition.x)), 0);    // Trick the compiler to avoid inlining
     float nearRangeFactor = 1.0f;
-
+    float prevDistance = FLT_MAX;
+    
+    // Main ray marching loop
     for (int i = zero; i < maxRaySteps; ++i)
     {
         float3 rayPos = eyePosition + traveledDistance * rayDirection;
         hitObject = mapCached(rayPos, PASS_PAYLOAD_ARGS);
-
-        closeEnough = initialCloseEnough + traveledDistance * 1.E-6f;
-        bool signChanged = sign(distanceToSurface) != sign(hitObject.signedDistance);
-        nearRangeFactor = (signChanged) ? 0.1f : nearRangeFactor;
-        //pull back if we just run through a surface to approach with smaller steps again
-        traveledDistance =  (signChanged) ? traveledDistance - fabs(distanceToSurface) : traveledDistance;
-
-        distanceToSurface = hitObject.signedDistance;
-
         
-        traveledDistance += distanceToSurface * nearRangeFactor;
-
-        if (fabs(distanceToSurface) < closeEnough)
+        // Dynamic precision adjustment based on distance traveled
+        closeEnough = initialCloseEnough + traveledDistance * 1.E-6f;
+        
+        // Detect if we've crossed a surface boundary
+        bool signChanged = sign(distanceToSurface) != sign(hitObject.signedDistance);
+        
+        if (signChanged)
         {
-            traveledDistance -= distanceToSurface;
+            // Binary search refinement when we detect that we've crossed a surface
+            float lastGoodT = traveledDistance - fabs(distanceToSurface);
+            float badT = traveledDistance;
+            float midT = 0.0f;
+            
+            // Perform binary search to find accurate intersection
+            for (int refineSteps = 0; refineSteps < 20; ++refineSteps)
+            {
+                midT = (lastGoodT + badT) * 0.5f;
+                float3 midPos = eyePosition + midT * rayDirection;
+                struct DistanceColor midSample = mapCached(midPos, PASS_PAYLOAD_ARGS);
+                
+                if (sign(distanceToSurface) != sign(midSample.signedDistance))
+                {
+                    badT = midT;
+                }
+                else
+                {
+                    lastGoodT = midT;
+                    distanceToSurface = midSample.signedDistance;
+                }
+            }
+            
+            // Update traveled distance to refined position
+            traveledDistance = lastGoodT;
+            
+            // Use very small steps after passing through a surface
+            nearRangeFactor = 0.1f;
+        }
+        else
+        {
+            // Gradually increase the step size when moving in the same SDF region
+            nearRangeFactor = min(nearRangeFactor * 1.05f, 1.0f);
+            
+            // Store current distance for next iteration
+            distanceToSurface = hitObject.signedDistance;
+        }
+        
+        // Calculate the next step size, ensuring it's not too small
+        float nextStep = max(hitObject.signedDistance * nearRangeFactor, minStepSize);
+        
+        // For thin-walled geometries, detect potential walls by checking for rapid distance changes
+        if (i > 0 && !signChanged)
+        {
+            float distanceChange = fabs(prevDistance - hitObject.signedDistance);
+            float distanceRatio = prevDistance / (hitObject.signedDistance + FLT_EPSILON);
+            
+            // If distance is rapidly changing but sign hasn't changed, we might be near a thin wall
+            if ((distanceChange > prevDistance * 0.5f) || (distanceRatio > 2.0f || distanceRatio < 0.5f)) 
+            {
+                // Reduce step size when approaching potential thin features
+                nextStep *= 0.5f;
+            }
+        }
+        
+        prevDistance = fabs(hitObject.signedDistance);
+        traveledDistance += nextStep;
+        
+        // Check if we've hit the surface
+        if (fabs(hitObject.signedDistance) < closeEnough)
+        {
+            // Fine-tune the final position
+            traveledDistance -= hitObject.signedDistance;
             hit = true;
             break;
         }
-
+        
+        // Terminate if we've gone too far
         if (traveledDistance > maxTravelDistance)
         {
             break;
         }
     }
-
+    
     result.color = hitObject.color;
     result.type = hitObject.type;
     result.hit = (hit) ? 1.f : -1.f;
