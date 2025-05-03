@@ -23,6 +23,21 @@ namespace gladius::ui
         bool render(SharedDocument document) const;
 
         /**
+         * @brief Checks if any color functions are available for use with volume data
+         * 
+         * A color function is available if:
+         * 1. It exists in the document's assembly
+         * 2. It meets the criteria defined by isQualifiedForVolumeColor
+         * 3. It has a corresponding resource in the 3MF model
+         * 
+         * @param document The document containing the functions
+         * @param model3mf The 3MF model containing the resources
+         * 
+         * @return true if at least one qualified color function is available, false otherwise
+         */
+        static bool areColorFunctionsAvailable(SharedDocument const& document, Lib3MF::PModel const& model3mf);
+
+        /**
          * @brief Renders the color function selection dropdown for volume data
          * 
          * @param document The document containing the functions

@@ -48,36 +48,63 @@ namespace gladius::ui
                 }
                 else
                 {
-                    if (ImGui::Button("Add Color Function"))
+                    // Check if any color functions are available
+                    bool functionsAvailable = VolumeDataView::areColorFunctionsAvailable(document, model3mf);
+                    
+                    // Display button and tooltip based on availability
+                    if (!functionsAvailable)
+                    {
+                        ImGui::BeginDisabled();
+                        ImGui::Button("Add Color Function");
+                        ImGui::EndDisabled();
+                        
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("No qualified color functions available");
+                        }
+                    }
+                    else if (ImGui::Button("Add Color Function"))
                     {
                         try
                         {
                             // Use CreateNewColor to add a color function, passing a default function if available
-                            // We'll pick the first function if any
+                            // We'll pick the first qualified function
                             auto functions = document->getAssembly()->getFunctions();
-                            if (!functions.empty()) {
-                                auto funcNode = std::begin(functions)->second;
-                                // Get the corresponding Lib3MF::PFunction
-                                auto resource = model3mf->GetResourceByID(
-                                    io::resourceIdToUniqueResourceId(model3mf, funcNode->getResourceId()));
-                                auto func3mf = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                                if (func3mf) {
-                                    // Use CreateNewColor
-                                    auto newColorData = volumeData->CreateNewColor(func3mf.get()); 
-                                    propertiesChanged = true;
-                                } else {
-                                     if (document->getSharedLogger()) {
-                                        document->getSharedLogger()->addEvent(
-                                            {fmt::format("Failed to find corresponding lib3mf function for Gladius function ID {}", funcNode->getResourceId()), 
-                                            events::Severity::Warning});
+                            for (const auto& [id, modelNode] : functions)
+                            {
+                                if (!modelNode || !nodes::isQualifiedForVolumeColor(*modelNode))
+                                {
+                                    continue;
+                                }
+                                
+                                try
+                                {
+                                    // Get the corresponding Lib3MF::PFunction
+                                    auto resource = model3mf->GetResourceByID(
+                                        io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId()));
+                                    auto func3mf = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+                                    
+                                    if (func3mf)
+                                    {
+                                        // Use CreateNewColor
+                                        auto newColorData = volumeData->CreateNewColor(func3mf.get()); 
+                                        propertiesChanged = true;
+                                        break; // Successfully added a color function, so exit the loop
                                     }
                                 }
-                            } else {
-                                if (document->getSharedLogger()) {
-                                    document->getSharedLogger()->addEvent(
-                                        {"No functions available to assign to new color function", 
-                                        events::Severity::Warning});
+                                catch (...) 
+                                {
+                                    // Skip to the next function if there was an error
+                                    continue;
                                 }
+                            }
+                            
+                            // If we got here without setting propertiesChanged, no suitable function was found
+                            if (!propertiesChanged && document->getSharedLogger())
+                            {
+                                document->getSharedLogger()->addEvent(
+                                    {"Failed to add color function: No suitable function found", 
+                                    events::Severity::Warning});
                             }
                         }
                         catch (const std::exception& e)
@@ -147,35 +174,62 @@ namespace gladius::ui
                 }
                 else
                 {
-                    if (ImGui::Button("Add Property Function"))
+                    // Check if any functions are available
+                    bool functionsAvailable = VolumeDataView::areColorFunctionsAvailable(document, model3mf);
+                    
+                    // Display button and tooltip based on availability
+                    if (!functionsAvailable)
+                    {
+                        ImGui::BeginDisabled();
+                        ImGui::Button("Add Property Function");
+                        ImGui::EndDisabled();
+                        
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("No qualified functions available");
+                        }
+                    }
+                    else if (ImGui::Button("Add Property Function"))
                     {
                         try
                         {
-                            // Pick first available function if exists
+                            // Pick first qualified function
                             auto functions = document->getAssembly()->getFunctions();
-                            if (!functions.empty()) {
-                                auto funcNode = std::begin(functions)->second;
-                                // Get the corresponding Lib3MF::PFunction
-                                auto resource = model3mf->GetResourceByID(
-                                    io::resourceIdToUniqueResourceId(model3mf, funcNode->getResourceId()));
-                                auto func3mf = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                                if (func3mf) {
-                                    // TODO: Allow user to specify name
-                                    auto newProperty = volumeData->AddPropertyFromFunction("NewProperty", func3mf.get()); 
-                                    propertiesChanged = true;
-                                } else {
-                                     if (document->getSharedLogger()) {
-                                        document->getSharedLogger()->addEvent(
-                                            {fmt::format("Failed to find corresponding lib3mf function for Gladius function ID {}", funcNode->getResourceId()), 
-                                            events::Severity::Warning});
+                            for (const auto& [id, modelNode] : functions)
+                            {
+                                if (!modelNode || !nodes::isQualifiedForVolumeColor(*modelNode))
+                                {
+                                    continue;
+                                }
+                                
+                                try
+                                {
+                                    // Get the corresponding Lib3MF::PFunction
+                                    auto resource = model3mf->GetResourceByID(
+                                        io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId()));
+                                    auto func3mf = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+                                    
+                                    if (func3mf)
+                                    {
+                                        // TODO: Allow user to specify name
+                                        auto newProperty = volumeData->AddPropertyFromFunction("NewProperty", func3mf.get()); 
+                                        propertiesChanged = true;
+                                        break; // Successfully added a property function, so exit the loop
                                     }
                                 }
-                            } else {
-                                if (document->getSharedLogger()) {
-                                    document->getSharedLogger()->addEvent(
-                                        {"No functions available to assign to new property function", 
-                                        events::Severity::Warning});
+                                catch (...) 
+                                {
+                                    // Skip to the next function if there was an error
+                                    continue;
                                 }
+                            }
+                            
+                            // If we got here without setting propertiesChanged, no suitable function was found
+                            if (!propertiesChanged && document->getSharedLogger())
+                            {
+                                document->getSharedLogger()->addEvent(
+                                    {"Failed to add property function: No suitable function found", 
+                                    events::Severity::Warning});
                             }
                         }
                         catch (const std::exception& e)
@@ -197,7 +251,64 @@ namespace gladius::ui
         }
     } // End anonymous namespace
 
-    // ... existing render function ...
+    bool VolumeDataView::areColorFunctionsAvailable(SharedDocument const& document, Lib3MF::PModel const& model3mf)
+    {
+        if (!document || !model3mf)
+        {
+            return false;
+        }
+
+        auto assembly = document->getAssembly();
+        if (!assembly)
+        {
+            return false;
+        }
+
+        // Get all functions from the document's assembly
+        auto functions = assembly->getFunctions();
+        if (functions.empty())
+        {
+            return false;
+        }
+
+        // Check each function to see if it's qualified and has a corresponding 3MF resource
+        for (const auto& [id, modelNode] : functions)
+        {
+            if (!modelNode)
+            {
+                continue;
+            }
+
+            // Skip if not qualified for volume color
+            if (!nodes::isQualifiedForVolumeColor(*modelNode))
+            {
+                continue;
+            }
+
+            // Check if there's a corresponding resource in the 3MF model
+            try
+            {
+                Lib3MF_uint32 uniqueResourceId = io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId());
+                auto resource = model3mf->GetResourceByID(uniqueResourceId);
+                auto functionResource = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+                
+                if (functionResource)
+                {
+                    // Found at least one qualified function with a corresponding resource
+                    return true;
+                }
+            }
+            catch (...)
+            {
+                // Function might not exist in the 3mf model yet or ID mismatch
+                // Continue checking other functions
+            }
+        }
+
+        // No qualified color functions available
+        return false;
+    }
+
     bool VolumeDataView::render(SharedDocument document) const
     {
         // ... (render function remains largely the same, using ResourceKey constructor and RemoveResource) ...
