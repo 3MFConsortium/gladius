@@ -55,9 +55,6 @@ namespace gladius::nodes
         if (m_integratedFunctionCalls.find(&functionCall) != m_integratedFunctionCalls.end())
         {
             m_redundantIntegrationSkips++;
-            fmt::print("Function call {} already integrated, skipping (total skips: {}).\n",
-                       functionCall.getDisplayName(),
-                       m_redundantIntegrationSkips);
             return; // Skip if this function call has already been integrated
         }
 
@@ -86,11 +83,7 @@ namespace gladius::nodes
 
         // 2. Integrate the referenced model into the target model
         m_flatteningDepth++;
-        fmt::print("Integrating function call: {} into model: {} (depth: {})\n",
-                   functionCall.getDisplayName(),
-                   target.getResourceId(),
-                   m_flatteningDepth);
-
+       
         // Add to integrated set before proceeding with integration
         m_integratedFunctionCalls.insert(&functionCall);
 
@@ -101,9 +94,6 @@ namespace gladius::nodes
     Assembly GraphFlattener::flatten()
     {
         ProfileFunction;
-        // print the expected node count
-        size_t expectedNodeCount = calculateExpectedNodeCount();
-        fmt::print("Expected node count after flattening: {}\n", expectedNodeCount);
         auto modelToFlat = m_assembly.assemblyModel();
 
         if (!modelToFlat)
@@ -138,23 +128,6 @@ namespace gladius::nodes
 
         // Update the graph order
         m_assembly.assemblyModel()->updateGraphAndOrderIfNeeded();
-
-        // actual node count
-        size_t actualNodeCount = m_assembly.assemblyModel()->getSize();
-        fmt::print("Actual node count after flattening: {}\n", actualNodeCount);
-        if (actualNodeCount != expectedNodeCount)
-        {
-            fmt::print("Warning: Expected node count ({}) does not match actual node count ({}).\n",
-                       expectedNodeCount,
-                       actualNodeCount);
-        }
-
-        // Print integration statistics
-        fmt::print("Integration statistics:\n");
-        fmt::print("  - Integrated function calls: {}\n", m_integratedFunctionCalls.size());
-        fmt::print("  - Redundant integration attempts avoided: {}\n", m_redundantIntegrationSkips);
-        fmt::print("  - Total models flattened: {}\n", m_flattenedModels.size());
-        fmt::print("  - Redundant flattening operations avoided: {}\n", m_redundantFlatteningSkips);
 
         return m_assembly;
     }
@@ -254,8 +227,6 @@ namespace gladius::nodes
         // Check if this model has already been flattened
         if (m_flattenedModels.find(&model) != m_flattenedModels.end())
         {
-            fmt::print("Model {} already flattened, skipping.\n", 
-                      model.getDisplayName().value_or(""));
             m_redundantFlatteningSkips++;
             return;
         }
@@ -403,10 +374,6 @@ namespace gladius::nodes
             // Update the name mapping
             nameMapping[node.second->getUniqueName()] = integratedNode->getUniqueName();
         }
-
-        // print size of created nodes and size of target model
-        std::cout << "Created nodes: " << createdNodes.size() << std::endl;
-        std::cout << "Target model size: " << target.getSize() << std::endl;
 
         return createdNodes;
     }
