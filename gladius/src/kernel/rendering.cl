@@ -193,7 +193,7 @@ rayCast(float3 eyePosition, float3 rayDirection, float startDistance, PAYLOAD_AR
             float midT;
             
             // Perform binary search to find accurate intersection
-            for (int refineSteps = 0; refineSteps < 20; ++refineSteps)
+            for (int refineSteps = 0; refineSteps < 6; ++refineSteps)
             {
                 midT = (lastGoodT + badT) * 0.5f;
                 float3 midPos = eyePosition + midT * rayDirection;
