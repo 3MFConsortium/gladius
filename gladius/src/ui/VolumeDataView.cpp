@@ -45,6 +45,14 @@ namespace gladius::ui
                 {
                     propertiesChanged |= VolumeDataView::renderColorFunctionDropdown(
                         document, model3mf, volumeData, colorData);
+                        
+                    // Channel name of color data
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted("Channel Name");
+                    ImGui::TableNextColumn();
+  
+                    propertiesChanged |= VolumeDataView::renderChannelDropdown(
+                        document, model3mf, volumeData, colorData);
                 }
                 else
                 {
@@ -617,6 +625,92 @@ namespace gladius::ui
         // Example: Edit Function (similar logic to renderColorFunctionDropdown)
         // if (ImGui::BeginCombo("##PropFunc", functionName.c_str())) { ... }
 
+
+        return propertiesChanged;
+    }
+
+    bool VolumeDataView::renderChannelDropdown(SharedDocument document,
+                                             Lib3MF::PModel model3mf,
+                                             Lib3MF::PVolumeData volumeData,
+                                             Lib3MF::PVolumeDataColor colorData)
+    {
+        bool propertiesChanged = false;
+
+        // Get the current function from the colorData
+        auto functionId = colorData->GetFunctionResourceID();
+        if (functionId == 0)
+        {
+            return propertiesChanged;
+        }
+
+        // Get the function resource
+        Lib3MF::PFunction function;
+        try
+        {
+            auto resource = model3mf->GetResourceByID(functionId);
+            function = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+        }
+        catch (...)
+        {
+            // Handle errors silently
+            return propertiesChanged;
+        }
+
+        if (!function)
+        {
+            return propertiesChanged;
+        }
+
+        // Find the corresponding function model
+        auto functionModel = document->getAssembly()->findModel(
+            io::uniqueResourceIdToResourceId(model3mf, function->GetResourceID()));
+        if (!functionModel)
+        {
+            return propertiesChanged;
+        }
+
+        // Get the outputs from the function model's end node
+        auto& endNodeParameters = functionModel->getOutputs();
+
+        ImGui::PushID("ColorChannelDropdown");
+        if (ImGui::BeginCombo("##ColorChannelCombo", colorData->GetChannelName().c_str()))
+        {
+            for (const auto& [paramName, param] : endNodeParameters)
+            {
+                // Filter for float3 type outputs only
+                if (param.getTypeIndex() != nodes::ParameterTypeIndex::Float3)
+                {
+                    continue;
+                }
+
+                bool isSelected = (paramName == colorData->GetChannelName());
+                if (ImGui::Selectable(paramName.c_str(), isSelected))
+                {
+                    try
+                    {
+                        colorData->SetChannelName(paramName);
+                        propertiesChanged = true;
+                    }
+                    catch (const std::exception& e)
+                    {
+                        if (document->getSharedLogger())
+                        {
+                            document->getSharedLogger()->addEvent(
+                                {fmt::format("Failed to set channel name: {}", e.what()), 
+                                events::Severity::Error});
+                        }
+                    }
+                }
+
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+        ImGui::PopID();
 
         return propertiesChanged;
     }

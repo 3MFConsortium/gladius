@@ -54,6 +54,24 @@ namespace gladius::ui
             Lib3MF::PVolumeDataColor colorFunction);
                         
         /**
+         * @brief Renders a dropdown for selecting a channel from a color function
+         *
+         * Displays a dropdown with all available float3 output channels from the selected function
+         * 
+         * @param document The document containing the functions
+         * @param model3mf The 3MF model containing the resources
+         * @param volumeData The volume data to modify
+         * @param colorData The color data containing the channel information
+         * 
+         * @return true if the channel selection was modified
+         */
+        static bool renderChannelDropdown(
+            SharedDocument document,
+            Lib3MF::PModel model3mf,
+            Lib3MF::PVolumeData volumeData,
+            Lib3MF::PVolumeDataColor colorData);
+            
+        /**
          * @brief Renders the property functions section for volume data
          * 
          * @param document The document containing the functions
