@@ -111,9 +111,11 @@ namespace gladius::nodes
             throw std::runtime_error("Assembly model not found");
         }
 
-        // Clear set of integrated function calls and reset statistics
+        // Clear sets and reset statistics
         m_integratedFunctionCalls.clear();
+        m_flattenedModels.clear();
         m_redundantIntegrationSkips = 0;
+        m_redundantFlatteningSkips = 0;
 
         // Reserve capacity for used functions based on the number of models in assembly
         m_usedFunctions.reserve(m_assembly.getFunctions().size());
@@ -151,6 +153,8 @@ namespace gladius::nodes
         fmt::print("Integration statistics:\n");
         fmt::print("  - Integrated function calls: {}\n", m_integratedFunctionCalls.size());
         fmt::print("  - Redundant integration attempts avoided: {}\n", m_redundantIntegrationSkips);
+        fmt::print("  - Total models flattened: {}\n", m_flattenedModels.size());
+        fmt::print("  - Redundant flattening operations avoided: {}\n", m_redundantFlatteningSkips);
 
         return m_assembly;
     }
@@ -182,8 +186,10 @@ namespace gladius::nodes
         m_usedFunctions.clear();
         m_usedFunctions.reserve(m_assembly.getFunctions().size());
 
-        // Clear set of integrated function calls
+        // Clear sets and reset statistics
         m_integratedFunctionCalls.clear();
+        m_flattenedModels.clear();
+        m_redundantFlatteningSkips = 0;
 
         // Find all functions that are actually used
         findUsedFunctions();
@@ -244,6 +250,19 @@ namespace gladius::nodes
     void GraphFlattener::flattenRecursive(Model & model)
     {
         ProfileFunction;
+        
+        // Check if this model has already been flattened
+        if (m_flattenedModels.find(&model) != m_flattenedModels.end())
+        {
+            fmt::print("Model {} already flattened, skipping.\n", 
+                      model.getDisplayName().value_or(""));
+            m_redundantFlatteningSkips++;
+            return;
+        }
+        
+        // Add to flattened models set before processing
+        m_flattenedModels.insert(&model);
+        
         // 1. Find all function calls
         auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
           [&](FunctionCall & functionCallNode)
@@ -561,6 +580,7 @@ namespace gladius::nodes
         validateFunctionCallInputs(functionCall);
 
         // Ensure recursive flattening is done before integrating
+        // The flattenRecursive method already checks if the model has been flattened
         flattenRecursive(model);
 
         // Pre-allocate name mapping
