@@ -97,6 +97,11 @@ namespace gladius::ui
                 ImGui::TextUnformatted("Mesh");
                 ImGui::TableNextColumn();
                 propertiesChanged |= LevelSetView::renderMeshDropdown(document, model3mf, levelSet);
+                
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted("Volume Data");
+                ImGui::TableNextColumn();
+                propertiesChanged |= LevelSetView::renderVolumeDataDropdown(document, model3mf, levelSet);
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Part Number");
@@ -409,6 +414,112 @@ namespace gladius::ui
                     catch (...)
                     {
                         // Handle errors silently
+                    }
+                }
+
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+        ImGui::PopID();
+
+        return propertiesChanged;
+    }
+
+    bool LevelSetView::renderVolumeDataDropdown(SharedDocument document,
+                                                Lib3MF::PModel model3mf,
+                                                Lib3MF::PLevelSet levelSet)
+    {
+        bool propertiesChanged = false;
+
+        ImGui::PushID("VolumeDataDropdown");
+        
+        // Get current VolumeData for this levelset if it exists
+        Lib3MF::PVolumeData currentVolumeData;
+        std::string currentVolumeDataName = "None";
+
+        try
+        {
+            currentVolumeData = levelSet->GetVolumeData();
+            if (currentVolumeData)
+            {
+                currentVolumeDataName =
+                  fmt::format("VolumeData #{}", currentVolumeData->GetResourceID());
+            }
+        }
+        catch (...)
+        {
+            // Handle errors silently - no VolumeData exists
+        }
+
+        if (ImGui::BeginCombo("##VolumeData", currentVolumeDataName.c_str()))
+        {
+            // Add "None" option to remove VolumeData
+            bool isSelected = !currentVolumeData;
+            if (ImGui::Selectable("None", isSelected))
+            {
+                try
+                {
+                    document->update3mfModel();
+                    // Set VolumeData to nullptr to remove the association
+                    levelSet->SetVolumeData(nullptr);
+                    document->markFileAsChanged();
+                    document->updateDocumenFrom3mfModel();
+                    propertiesChanged = true;
+                }
+                catch (...)
+                {
+                    // Handle errors silently
+                }
+            }
+
+            if (isSelected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+
+            // List all available VolumeData resources
+            auto resourceIterator = model3mf->GetResources();
+            while (resourceIterator->MoveNext())
+            {
+                auto resource = resourceIterator->GetCurrent();
+                if (!resource)
+                {
+                    continue;
+                }
+
+                auto volumeData = std::dynamic_pointer_cast<Lib3MF::CVolumeData>(resource);
+                if (!volumeData)
+                {
+                    continue;
+                }
+
+                auto name = fmt::format("VolumeData #{}", volumeData->GetResourceID());
+                isSelected = currentVolumeData &&
+                             (currentVolumeData->GetResourceID() == volumeData->GetResourceID());
+
+                if (ImGui::Selectable(name.c_str(), isSelected))
+                {
+                    try
+                    {
+                        document->update3mfModel();
+                        levelSet->SetVolumeData(volumeData);
+                        document->markFileAsChanged();
+                        document->updateDocumenFrom3mfModel();
+                        propertiesChanged = true;
+                    }
+                    catch (const std::exception & e)
+                    {
+                        if (document->getSharedLogger())
+                        {
+                            document->getSharedLogger()->addEvent(
+                              {fmt::format("Failed to set VolumeData: {}", e.what()),
+                               events::Severity::Error});
+                        }
                     }
                 }
 
