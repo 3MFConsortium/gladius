@@ -20,6 +20,7 @@
 #include "imgui.h"
 #include "nodesfwd.h"
 #include "ui/LevelSetView.h"
+#include "ui/VolumeDataView.h"
 #include <nodes/Assembly.h>
 #include <nodes/Model.h>
 
@@ -218,6 +219,11 @@ namespace gladius::ui
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("VolumeData", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
+                VolumeDataView volumeDataView;
+                if (volumeDataView.render(m_doc))
+                {
+                    markModelAsModified();
+                }
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
