@@ -2,24 +2,24 @@
 
 #include "Document.h"
 #include "MeshResource.h"
+#include "ResourceKey.h" // Include ResourceKey header
 #include "ResourceManager.h"
 #include "Widgets.h"
 #include "imgui.h"
 #include "imgui_stdlib.h"
+#include <algorithm> // For std::sort
 #include <io/3mf/ResourceIdUtil.h>
 #include <lib3mf_implicit.hpp>
 #include <nodes/ModelUtils.h>
-#include "ResourceKey.h" // Include ResourceKey header
-#include <algorithm> // For std::sort
 #include <vector> // For std::vector
 
 namespace gladius::ui
 {
     namespace
     {
-        bool renderVolumeDataProperties(const Lib3MF::PVolumeData& volumeData,
-                                      SharedDocument document,
-                                      Lib3MF::PModel model3mf)
+        bool renderVolumeDataProperties(const Lib3MF::PVolumeData & volumeData,
+                                        SharedDocument document,
+                                        Lib3MF::PModel model3mf)
         {
             bool propertiesChanged = false;
 
@@ -30,7 +30,7 @@ namespace gladius::ui
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Color Function");
                 ImGui::TableNextColumn();
-                
+
                 Lib3MF::PVolumeDataColor colorData;
                 try
                 {
@@ -40,218 +40,98 @@ namespace gladius::ui
                 {
                     // Handle errors silently - GetColor throws if no color exists
                 }
-                
+
                 if (colorData)
                 {
                     propertiesChanged |= VolumeDataView::renderColorFunctionDropdown(
-                        document, model3mf, volumeData, colorData);
-                        
+                      document, model3mf, volumeData, colorData);
+
                     // Channel name of color data
                     ImGui::TableNextColumn();
                     ImGui::TextUnformatted("Channel Name");
                     ImGui::TableNextColumn();
-  
+
                     propertiesChanged |= VolumeDataView::renderChannelDropdown(
-                        document, model3mf, volumeData, colorData);
+                      document, model3mf, volumeData, colorData);
                 }
                 else
                 {
-                    // Check if any color functions are available
-                    bool functionsAvailable = VolumeDataView::areColorFunctionsAvailable(document, model3mf);
-                    
-                    // Display button and tooltip based on availability
-                    if (!functionsAvailable)
+                    // First draw the button - we'll check for functions only when needed
+                    bool buttonClicked = ImGui::Button("Add Color Function");
+
+                    // Check if button is hovered to determine tooltip
+                    if (ImGui::IsItemHovered())
                     {
-                        ImGui::BeginDisabled();
-                        ImGui::Button("Add Color Function");
-                        ImGui::EndDisabled();
-                        
-                        if (ImGui::IsItemHovered())
+                        // Only call areColorFunctionsAvailable when the button is hovered
+                        bool functionsAvailable =
+                          VolumeDataView::areColorFunctionsAvailable(document, model3mf);
+                        if (!functionsAvailable)
                         {
                             ImGui::SetTooltip("No qualified color functions available");
                         }
                     }
-                    else if (ImGui::Button("Add Color Function"))
+
+                    if (buttonClicked)
                     {
                         try
                         {
-                            // Use CreateNewColor to add a color function, passing a default function if available
-                            // We'll pick the first qualified function
+                            // Use CreateNewColor to add a color function, passing a default
+                            // function if available We'll pick the first qualified function
                             auto functions = document->getAssembly()->getFunctions();
-                            for (const auto& [id, modelNode] : functions)
+                            for (const auto & [id, modelNode] : functions)
                             {
                                 if (!modelNode || !nodes::isQualifiedForVolumeColor(*modelNode))
                                 {
                                     continue;
                                 }
-                                
+
                                 try
                                 {
                                     // Get the corresponding Lib3MF::PFunction
-                                    auto resource = model3mf->GetResourceByID(
-                                        io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId()));
-                                    auto func3mf = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                                    
+                                    auto resource =
+                                      model3mf->GetResourceByID(io::resourceIdToUniqueResourceId(
+                                        model3mf, modelNode->getResourceId()));
+                                    auto func3mf =
+                                      std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+
                                     if (func3mf)
                                     {
                                         // Use CreateNewColor
-                                        auto newColorData = volumeData->CreateNewColor(func3mf.get()); 
+                                        auto newColorData =
+                                          volumeData->CreateNewColor(func3mf.get());
                                         propertiesChanged = true;
-                                        break; // Successfully added a color function, so exit the loop
+                                        break; // Successfully added a color function, so exit the
+                                               // loop
                                     }
                                 }
-                                catch (...) 
+                                catch (...)
                                 {
                                     // Skip to the next function if there was an error
                                     continue;
                                 }
                             }
-                            
-                            // If we got here without setting propertiesChanged, no suitable function was found
+
+                            // If we got here without setting propertiesChanged, no suitable
+                            // function was found
                             if (!propertiesChanged && document->getSharedLogger())
                             {
                                 document->getSharedLogger()->addEvent(
-                                    {"Failed to add color function: No suitable function found", 
-                                    events::Severity::Warning});
+                                  {"Failed to add color function: No suitable function found",
+                                   events::Severity::Warning});
                             }
                         }
-                        catch (const std::exception& e)
+                        catch (const std::exception & e)
                         {
                             if (document->getSharedLogger())
                             {
                                 document->getSharedLogger()->addEvent(
-                                    {fmt::format("Failed to add color function: {}", e.what()), 
-                                    events::Severity::Error});
+                                  {fmt::format("Failed to add color function: {}", e.what()),
+                                   events::Severity::Error});
                             }
                         }
                     }
                 }
 
-            
-                
-                // Property Functions section
-                ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Property Functions");
-                ImGui::TableNextColumn();
-                
-                // Use GetPropertyCount on volumeData
-                auto propertyCount = volumeData->GetPropertyCount(); 
-                if (propertyCount > 0)
-                {
-                    // Keep track of indices to remove later if needed
-                    std::vector<Lib3MF_uint32> indicesToRemove;
-                    for (Lib3MF_uint32 i = 0; i < propertyCount; ++i) {
-                        ImGui::PushID(static_cast<int>(i)); // Ensure unique IDs for widgets within the loop
-                        try {
-                            // Use GetProperty(i) on volumeData
-                            auto prop = volumeData->GetProperty(i); 
-                            propertiesChanged |= VolumeDataView::renderPropertyFunctionsSection(
-                                document, model3mf, volumeData, prop);
-                            
-                            // Add a remove button for each property
-                            ImGui::SameLine();
-                            if (ImGui::Button("Remove")) {
-                                indicesToRemove.push_back(i);
-                            }
-                        } catch (const std::exception& e) {
-                             if (document->getSharedLogger()) {
-                                document->getSharedLogger()->addEvent(
-                                    {fmt::format("Error rendering property at index {}: {}", i, e.what()), events::Severity::Error});
-                            }
-                            // Optionally display an error message in the UI
-                            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error rendering property");
-                        }
-                        ImGui::PopID();
-                    }
-
-                    // Remove properties marked for deletion (iterate backwards to handle index shifts)
-                    if (!indicesToRemove.empty()) {
-                        std::sort(indicesToRemove.rbegin(), indicesToRemove.rend());
-                        for (auto index : indicesToRemove) {
-                            try {
-                                volumeData->RemoveProperty(index);
-                                propertiesChanged = true;
-                            } catch (const std::exception& e) {
-                                if (document->getSharedLogger()) {
-                                    document->getSharedLogger()->addEvent(
-                                        {fmt::format("Failed to remove property function at index {}: {}", index, e.what()), events::Severity::Error});
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Check if any functions are available
-                    bool functionsAvailable = VolumeDataView::areColorFunctionsAvailable(document, model3mf);
-                    
-                    // Display button and tooltip based on availability
-                    if (!functionsAvailable)
-                    {
-                        ImGui::BeginDisabled();
-                        ImGui::Button("Add Property Function");
-                        ImGui::EndDisabled();
-                        
-                        if (ImGui::IsItemHovered())
-                        {
-                            ImGui::SetTooltip("No qualified functions available");
-                        }
-                    }
-                    else if (ImGui::Button("Add Property Function"))
-                    {
-                        try
-                        {
-                            // Pick first qualified function
-                            auto functions = document->getAssembly()->getFunctions();
-                            for (const auto& [id, modelNode] : functions)
-                            {
-                                if (!modelNode || !nodes::isQualifiedForVolumeColor(*modelNode))
-                                {
-                                    continue;
-                                }
-                                
-                                try
-                                {
-                                    // Get the corresponding Lib3MF::PFunction
-                                    auto resource = model3mf->GetResourceByID(
-                                        io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId()));
-                                    auto func3mf = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                                    
-                                    if (func3mf)
-                                    {
-                                        // TODO: Allow user to specify name
-                                        auto newProperty = volumeData->AddPropertyFromFunction("NewProperty", func3mf.get()); 
-                                        propertiesChanged = true;
-                                        break; // Successfully added a property function, so exit the loop
-                                    }
-                                }
-                                catch (...) 
-                                {
-                                    // Skip to the next function if there was an error
-                                    continue;
-                                }
-                            }
-                            
-                            // If we got here without setting propertiesChanged, no suitable function was found
-                            if (!propertiesChanged && document->getSharedLogger())
-                            {
-                                document->getSharedLogger()->addEvent(
-                                    {"Failed to add property function: No suitable function found", 
-                                    events::Severity::Warning});
-                            }
-                        }
-                        catch (const std::exception& e)
-                        {
-                            if (document->getSharedLogger())
-                            {
-                                document->getSharedLogger()->addEvent(
-                                    {fmt::format("Failed to add property function: {}", e.what()), 
-                                    events::Severity::Error});
-                            }
-                        }
-                    }
-                }
-                
                 ImGui::EndTable();
             }
 
@@ -259,7 +139,8 @@ namespace gladius::ui
         }
     } // End anonymous namespace
 
-    bool VolumeDataView::areColorFunctionsAvailable(SharedDocument const& document, Lib3MF::PModel const& model3mf)
+    bool VolumeDataView::areColorFunctionsAvailable(SharedDocument const & document,
+                                                    Lib3MF::PModel const & model3mf)
     {
         if (!document || !model3mf)
         {
@@ -280,7 +161,7 @@ namespace gladius::ui
         }
 
         // Check each function to see if it's qualified and has a corresponding 3MF resource
-        for (const auto& [id, modelNode] : functions)
+        for (const auto & [id, modelNode] : functions)
         {
             if (!modelNode)
             {
@@ -296,10 +177,11 @@ namespace gladius::ui
             // Check if there's a corresponding resource in the 3MF model
             try
             {
-                Lib3MF_uint32 uniqueResourceId = io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId());
+                Lib3MF_uint32 uniqueResourceId =
+                  io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId());
                 auto resource = model3mf->GetResourceByID(uniqueResourceId);
                 auto functionResource = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                
+
                 if (functionResource)
                 {
                     // Found at least one qualified function with a corresponding resource
@@ -319,7 +201,8 @@ namespace gladius::ui
 
     bool VolumeDataView::render(SharedDocument document) const
     {
-        // ... (render function remains largely the same, using ResourceKey constructor and RemoveResource) ...
+        // ... (render function remains largely the same, using ResourceKey constructor and
+        // RemoveResource) ...
         if (!document)
         {
             return false;
@@ -344,25 +227,26 @@ namespace gladius::ui
                 {
                     // Initialize default properties if needed
                     // Metadata needs to be added via the model, not directly on the resource
-                    // Example: model3mf->GetMetaDataGroup()->AddMetaData(...) 
+                    // Example: model3mf->GetMetaDataGroup()->AddMetaData(...)
                     //          referencing newVolumeData->GetResourceID() if needed.
-                    
+
                     if (document->getSharedLogger())
                     {
                         document->getSharedLogger()->addEvent(
-                            {fmt::format("Added new VolumeData (ID: {})", newVolumeData->GetResourceID()), 
-                            events::Severity::Info});
+                          {fmt::format("Added new VolumeData (ID: {})",
+                                       newVolumeData->GetResourceID()),
+                           events::Severity::Info});
                     }
                     propertiesChanged = true;
                 }
             }
-            catch (const std::exception& e)
+            catch (const std::exception & e)
             {
                 if (document->getSharedLogger())
                 {
                     document->getSharedLogger()->addEvent(
-                        {fmt::format("Failed to add VolumeData: {}", e.what()), 
-                        events::Severity::Error});
+                      {fmt::format("Failed to add VolumeData: {}", e.what()),
+                       events::Severity::Error});
                 }
             }
         }
@@ -383,7 +267,8 @@ namespace gladius::ui
                 continue;
             }
 
-            Lib3MF::PVolumeData volumeData = std::dynamic_pointer_cast<Lib3MF::CVolumeData>(resource);
+            Lib3MF::PVolumeData volumeData =
+              std::dynamic_pointer_cast<Lib3MF::CVolumeData>(resource);
             if (!volumeData)
             {
                 continue;
@@ -395,7 +280,7 @@ namespace gladius::ui
             if (ImGui::TreeNodeEx(name.c_str(), baseFlags))
             {
                 propertiesChanged |= renderVolumeDataProperties(volumeData, document, model3mf);
-                
+
                 // Delete button
                 if (ImGui::Button("Delete"))
                 {
@@ -403,21 +288,23 @@ namespace gladius::ui
                     {
                         // Check if this resource can be safely deleted
                         // Use ResourceKey constructor directly
-                        auto resourceKey = ResourceKey(volumeData->GetResourceID()); 
+                        auto resourceKey = ResourceKey(volumeData->GetResourceID());
                         auto safeResult = document->isItSafeToDeleteResource(resourceKey);
-                        
+
                         if (safeResult.canBeRemoved)
                         {
                             model3mf->RemoveResource(volumeData.get());
                             propertiesChanged = true;
-                            
+
                             if (document->getSharedLogger())
                             {
                                 document->getSharedLogger()->addEvent(
-                                    {fmt::format("Deleted VolumeData '{}'", name), events::Severity::Info});
+                                  {fmt::format("Deleted VolumeData '{}'", name),
+                                   events::Severity::Info});
                             }
-                            // Need to break or handle iterator invalidation if removing the current item
-                            ImGui::TreePop(); 
+                            // Need to break or handle iterator invalidation if removing the current
+                            // item
+                            ImGui::TreePop();
                             ImGui::EndGroup();
                             break; // Exit loop after removal to avoid using invalidated iterator
                         }
@@ -426,22 +313,22 @@ namespace gladius::ui
                             if (document->getSharedLogger())
                             {
                                 document->getSharedLogger()->addEvent(
-                                    {fmt::format("Cannot delete VolumeData: it is still in use."), 
-                                    events::Severity::Warning});
+                                  {fmt::format("Cannot delete VolumeData: it is still in use."),
+                                   events::Severity::Warning});
                             }
                         }
                     }
-                    catch (const std::exception& e)
+                    catch (const std::exception & e)
                     {
                         if (document->getSharedLogger())
                         {
                             document->getSharedLogger()->addEvent(
-                                {fmt::format("Failed to delete VolumeData: {}", e.what()), 
-                                events::Severity::Error});
+                              {fmt::format("Failed to delete VolumeData: {}", e.what()),
+                               events::Severity::Error});
                         }
                     }
                 }
-                
+
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
@@ -451,8 +338,7 @@ namespace gladius::ui
         return propertiesChanged;
     }
 
-
-    std::string VolumeDataView::getVolumeDataName(const Lib3MF::PVolumeData& volumeData)
+    std::string VolumeDataView::getVolumeDataName(const Lib3MF::PVolumeData & volumeData)
     {
         if (!volumeData)
         {
@@ -462,42 +348,50 @@ namespace gladius::ui
         return fmt::format("VolumeData #{}", volumeData->GetResourceID());
     }
 
-    bool VolumeDataView::renderColorFunctionDropdown(SharedDocument document,
-                                              Lib3MF::PModel model3mf,
-                                              Lib3MF::PVolumeData volumeData,
-                                              Lib3MF::PVolumeDataColor colorData) // Pass PVolumeDataColor
+    bool VolumeDataView::renderColorFunctionDropdown(
+      SharedDocument document,
+      Lib3MF::PModel model3mf,
+      Lib3MF::PVolumeData volumeData,
+      Lib3MF::PVolumeDataColor colorData) // Pass PVolumeDataColor
     {
         bool propertiesChanged = false;
 
         ImGui::PushID("ColorFunctionDropdown");
-        
+
         std::string functionDisplayName = "Please select";
         Lib3MF_uint32 currentFunctionId = 0;
-        try {
+        try
+        {
             // Use GetFunctionResourceID on colorData
-            currentFunctionId = colorData->GetFunctionResourceID(); 
-            if (currentFunctionId != 0) {
+            currentFunctionId = colorData->GetFunctionResourceID();
+            if (currentFunctionId != 0)
+            {
                 // Use GetResourceByID on model3mf
-                auto resource = model3mf->GetResourceByID(currentFunctionId); 
+                auto resource = model3mf->GetResourceByID(currentFunctionId);
                 auto currentFunction = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                if (currentFunction) {
+                if (currentFunction)
+                {
                     functionDisplayName = currentFunction->GetDisplayName();
-                } else {
+                }
+                else
+                {
                     functionDisplayName = fmt::format("Invalid Function ID: {}", currentFunctionId);
                 }
             }
-        } catch (...) {
+        }
+        catch (...)
+        {
             // Handle error getting function ID or function
-             functionDisplayName = "Error reading function";
+            functionDisplayName = "Error reading function";
         }
 
-        
-        if (ImGui::BeginCombo("##ColorFunctionCombo", functionDisplayName.c_str())) // Added unique label
+        if (ImGui::BeginCombo("##ColorFunctionCombo",
+                              functionDisplayName.c_str())) // Added unique label
         {
             auto assembly = document->getAssembly();
             if (assembly)
             {
-                for (const auto& [id, modelNode] : assembly->getFunctions())
+                for (const auto & [id, modelNode] : assembly->getFunctions())
                 {
                     if (!modelNode)
                     {
@@ -512,14 +406,18 @@ namespace gladius::ui
 
                     // Get the corresponding Lib3MF function resource
                     Lib3MF::PFunction functionResource;
-                    Lib3MF_uint32 uniqueResourceId = io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId());
-                    try {
-                         // Use GetResourceByID
-                         auto resource = model3mf->GetResourceByID(uniqueResourceId); 
-                         functionResource = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                    } catch (...) {
+                    Lib3MF_uint32 uniqueResourceId =
+                      io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId());
+                    try
+                    {
+                        // Use GetResourceByID
+                        auto resource = model3mf->GetResourceByID(uniqueResourceId);
+                        functionResource = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+                    }
+                    catch (...)
+                    {
                         // Function might not exist in the 3mf model yet or ID mismatch
-                        continue; 
+                        continue;
                     }
 
                     if (!functionResource)
@@ -528,27 +426,32 @@ namespace gladius::ui
                     }
 
                     // Check against the unique resource ID
-                    bool isSelected = (currentFunctionId != 0) && (functionResource->GetUniqueResourceID() == currentFunctionId); 
+                    bool isSelected =
+                      (currentFunctionId != 0) &&
+                      (functionResource->GetUniqueResourceID() == currentFunctionId);
 
-                    std::string itemName = fmt::format("{} (Function #{})",
-                                                      functionResource->GetDisplayName(),
-                                                      functionResource->GetResourceID()); // Use ModelResourceID for display consistency?
+                    std::string itemName = fmt::format(
+                      "{} (Function #{})",
+                      functionResource->GetDisplayName(),
+                      functionResource
+                        ->GetResourceID()); // Use ModelResourceID for display consistency?
 
                     if (ImGui::Selectable(itemName.c_str(), isSelected))
                     {
                         try
                         {
                             // Set the function ID on the color data using SetFunctionResourceID
-                            colorData->SetFunctionResourceID(functionResource->GetUniqueResourceID()); 
+                            colorData->SetFunctionResourceID(
+                              functionResource->GetUniqueResourceID());
                             propertiesChanged = true;
                         }
-                        catch (const std::exception& e)
+                        catch (const std::exception & e)
                         {
                             if (document->getSharedLogger())
                             {
                                 document->getSharedLogger()->addEvent(
-                                    {fmt::format("Failed to set color function: {}", e.what()), 
-                                    events::Severity::Error});
+                                  {fmt::format("Failed to set color function: {}", e.what()),
+                                   events::Severity::Error});
                             }
                         }
                     }
@@ -556,17 +459,22 @@ namespace gladius::ui
             }
 
             // Option to remove/unset the function
-            if (ImGui::Selectable("[Remove Color Function]", false)) {
-                 try {
+            if (ImGui::Selectable("[Remove Color Function]", false))
+            {
+                try
+                {
                     volumeData->RemoveColor();
                     propertiesChanged = true;
-                 } catch (const std::exception& e) {
-                     if (document->getSharedLogger()) {
-                         document->getSharedLogger()->addEvent(
-                             {fmt::format("Failed to remove color function: {}", e.what()), 
-                             events::Severity::Error});
-                     }
-                 }
+                }
+                catch (const std::exception & e)
+                {
+                    if (document->getSharedLogger())
+                    {
+                        document->getSharedLogger()->addEvent(
+                          {fmt::format("Failed to remove color function: {}", e.what()),
+                           events::Severity::Error});
+                    }
+                }
             }
 
             ImGui::EndCombo();
@@ -576,11 +484,11 @@ namespace gladius::ui
         return propertiesChanged;
     }
 
-
-    bool VolumeDataView::renderPropertyFunctionsSection(SharedDocument document,
-                                          Lib3MF::PModel model3mf,
-                                          Lib3MF::PVolumeData volumeData,
-                                          Lib3MF::PVolumeDataProperty propertyData) // Pass PVolumeDataProperty
+    bool VolumeDataView::renderPropertyFunctionsSection(
+      SharedDocument document,
+      Lib3MF::PModel model3mf,
+      Lib3MF::PVolumeData volumeData,
+      Lib3MF::PVolumeDataProperty propertyData) // Pass PVolumeDataProperty
     {
         bool propertiesChanged = false;
 
@@ -588,24 +496,31 @@ namespace gladius::ui
         Lib3MF_uint32 functionId = 0;
         std::string functionName = "[Unknown Function]";
 
-        try {
+        try
+        {
             // Use GetName on propertyData
-            propName = propertyData->GetName(); 
+            propName = propertyData->GetName();
             // Use GetFunctionResourceID on propertyData
-            functionId = propertyData->GetFunctionResourceID(); 
-             if (functionId != 0) {
+            functionId = propertyData->GetFunctionResourceID();
+            if (functionId != 0)
+            {
                 // Use GetResourceByID on model3mf
-                auto resource = model3mf->GetResourceByID(functionId); 
+                auto resource = model3mf->GetResourceByID(functionId);
                 auto func = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                if (func) {
+                if (func)
+                {
                     functionName = func->GetDisplayName();
-                } else {
-                     functionName = fmt::format("[Invalid Function ID: {}]", functionId);
+                }
+                else
+                {
+                    functionName = fmt::format("[Invalid Function ID: {}]", functionId);
                 }
             }
-        } catch (...) {
-             // Error reading property details
-             propName = "[Error Reading Property]";
+        }
+        catch (...)
+        {
+            // Error reading property details
+            propName = "[Error Reading Property]";
         }
 
         ImGui::Text("%s: %s", propName.c_str(), functionName.c_str());
@@ -617,7 +532,7 @@ namespace gladius::ui
         // if (ImGui::InputText("##PropName", &currentName)) {
         //     try {
         //         // Need a SetName method on CVolumeDataProperty - check if it exists
-        //         // propertyData->SetName(currentName); 
+        //         // propertyData->SetName(currentName);
         //         propertiesChanged = true;
         //     } catch (...) { ... }
         // }
@@ -625,14 +540,13 @@ namespace gladius::ui
         // Example: Edit Function (similar logic to renderColorFunctionDropdown)
         // if (ImGui::BeginCombo("##PropFunc", functionName.c_str())) { ... }
 
-
         return propertiesChanged;
     }
 
     bool VolumeDataView::renderChannelDropdown(SharedDocument document,
-                                             Lib3MF::PModel model3mf,
-                                             Lib3MF::PVolumeData volumeData,
-                                             Lib3MF::PVolumeDataColor colorData)
+                                               Lib3MF::PModel model3mf,
+                                               Lib3MF::PVolumeData volumeData,
+                                               Lib3MF::PVolumeDataColor colorData)
     {
         bool propertiesChanged = false;
 
@@ -663,19 +577,19 @@ namespace gladius::ui
 
         // Find the corresponding function model
         auto functionModel = document->getAssembly()->findModel(
-            io::uniqueResourceIdToResourceId(model3mf, function->GetResourceID()));
+          io::uniqueResourceIdToResourceId(model3mf, function->GetResourceID()));
         if (!functionModel)
         {
             return propertiesChanged;
         }
 
         // Get the outputs from the function model's end node
-        auto& endNodeParameters = functionModel->getOutputs();
+        auto & endNodeParameters = functionModel->getOutputs();
 
         ImGui::PushID("ColorChannelDropdown");
         if (ImGui::BeginCombo("##ColorChannelCombo", colorData->GetChannelName().c_str()))
         {
-            for (const auto& [paramName, param] : endNodeParameters)
+            for (const auto & [paramName, param] : endNodeParameters)
             {
                 // Filter for float3 type outputs only
                 if (param.getTypeIndex() != nodes::ParameterTypeIndex::Float3)
@@ -691,13 +605,13 @@ namespace gladius::ui
                         colorData->SetChannelName(paramName);
                         propertiesChanged = true;
                     }
-                    catch (const std::exception& e)
+                    catch (const std::exception & e)
                     {
                         if (document->getSharedLogger())
                         {
                             document->getSharedLogger()->addEvent(
-                                {fmt::format("Failed to set channel name: {}", e.what()), 
-                                events::Severity::Error});
+                              {fmt::format("Failed to set channel name: {}", e.what()),
+                               events::Severity::Error});
                         }
                     }
                 }
