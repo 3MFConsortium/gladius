@@ -37,23 +37,7 @@ namespace gladius::ui
             Lib3MF::PModel model3mf, 
             Lib3MF::PVolumeData volumeData, 
             Lib3MF::PVolumeDataColor colorFunction);
-            
-        /**
-         * @brief Renders the composite materials section for volume data
-         * 
-         * @param document The document containing the functions
-         * @param model3mf The 3MF model containing the resources
-         * @param volumeData The volume data to modify
-         * @param compositeData The current composite data of the volume data
-         * 
-         * @return true if the composite properties were modified
-         */
-        static bool renderCompositeMaterialsSection(
-            SharedDocument document,
-            Lib3MF::PModel model3mf,
-            Lib3MF::PVolumeData volumeData,
-            Lib3MF::PVolumeDataComposite compositeData);
-            
+                        
         /**
          * @brief Renders the property functions section for volume data
          * 

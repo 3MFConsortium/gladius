@@ -92,47 +92,7 @@ namespace gladius::ui
                     }
                 }
 
-                // Composite Materials section
-                // ... (composite section remains largely the same, using CreateNewComposite) ...
-                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted("Composite Materials");
-                ImGui::TableNextColumn();
-                
-                Lib3MF::PVolumeDataComposite compositeData;
-                try
-                {
-                    compositeData = volumeData->GetComposite();
-                }
-                catch (...)
-                {
-                    // Handle errors silently
-                }
-                
-                if (compositeData)
-                {
-                    propertiesChanged |= VolumeDataView::renderCompositeMaterialsSection(
-                        document, model3mf, volumeData, compositeData);
-                }
-                else
-                {
-                    if (ImGui::Button("Add Composite Materials"))
-                    {
-                        try
-                        {
-                            auto newCompositeData = volumeData->CreateNewComposite();
-                            propertiesChanged = true;
-                        }
-                        catch (const std::exception& e)
-                        {
-                            if (document->getSharedLogger())
-                            {
-                                document->getSharedLogger()->addEvent(
-                                    {fmt::format("Failed to add composite materials: {}", e.what()), 
-                                    events::Severity::Error});
-                            }
-                        }
-                    }
-                }
+            
                 
                 // Property Functions section
                 ImGui::TableNextColumn();
@@ -223,7 +183,8 @@ namespace gladius::ui
                             if (document->getSharedLogger())
                             {
                                 document->getSharedLogger()->addEvent(
-                                    {fmt::format("Failed to add property function: {}", e.what()), events::Severity::Error});
+                                    {fmt::format("Failed to add property function: {}", e.what()), 
+                                    events::Severity::Error});
                             }
                         }
                     }
@@ -424,6 +385,12 @@ namespace gladius::ui
                         continue;
                     }
 
+                    // Filter functions using isQualifiedForVolumeColor
+                    if (!nodes::isQualifiedForVolumeColor(*modelNode))
+                    {
+                        continue;
+                    }
+
                     // Get the corresponding Lib3MF function resource
                     Lib3MF::PFunction functionResource;
                     Lib3MF_uint32 uniqueResourceId = io::resourceIdToUniqueResourceId(model3mf, modelNode->getResourceId());
@@ -490,75 +457,6 @@ namespace gladius::ui
         return propertiesChanged;
     }
 
-    bool VolumeDataView::renderCompositeMaterialsSection(SharedDocument document,
-                                             Lib3MF::PModel model3mf,
-                                             Lib3MF::PVolumeData volumeData,
-                                             Lib3MF::PVolumeDataComposite compositeData)
-    {
-        bool propertiesChanged = false;
-
-        if (ImGui::Button("Edit Composite Materials"))
-        {
-            // Could open a dialog or expand a section for editing
-            if (document->getSharedLogger())
-            {
-                document->getSharedLogger()->addEvent(
-                    {"Composite Materials editing not fully implemented yet", events::Severity::Info});
-            }
-        }
-        
-        // Basic info about the composite materials
-        try
-        {
-            // Use GetMaterialMappingCount
-            auto materialCount = compositeData->GetMaterialMappingCount(); 
-            ImGui::Text("Materials: %u", materialCount);
-            
-            // Display material mapping functions (limited to first few for simplicity)
-            for (Lib3MF_uint32 i = 0; i < std::min(materialCount, (Lib3MF_uint32)3); i++)
-            {
-                // Use GetMaterialMapping
-                auto materialMapping = compositeData->GetMaterialMapping(i); 
-                // materialMapping is a PMaterialMapping which inherits CFunctionReference
-                Lib3MF_uint32 functionId = 0;
-                std::string functionName = "[Unknown Function]";
-                try {
-                    // Use GetFunctionResourceID
-                    functionId = materialMapping->GetFunctionResourceID(); 
-                    if (functionId != 0) {
-                        // Use GetResourceByID
-                        auto resource = model3mf->GetResourceByID(functionId); 
-                        auto func = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
-                        if (func) {
-                            functionName = func->GetDisplayName();
-                        } else {
-                             functionName = fmt::format("[Invalid Function ID: {}]", functionId);
-                        }
-                    }
-                } catch (...) {
-                     functionName = "[Error Reading Function]";
-                }
-
-                ImGui::Text("Material %u: %s", i, functionName.c_str());
-            }
-            
-            if (materialCount > 3)
-            {
-                ImGui::Text("... and %u more", materialCount - 3);
-            }
-        }
-        catch (const std::exception& e)
-        {
-            if (document->getSharedLogger())
-            {
-                document->getSharedLogger()->addEvent(
-                    {fmt::format("Error reading composite materials: {}", e.what()), 
-                    events::Severity::Warning});
-            }
-        }
-
-        return propertiesChanged;
-    }
 
     bool VolumeDataView::renderPropertyFunctionsSection(SharedDocument document,
                                           Lib3MF::PModel model3mf,
