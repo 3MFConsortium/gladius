@@ -9,10 +9,116 @@
 #include "Widgets.h"
 
 #include "imgui.h"
-#include <imgui_stdlib.h>  // For InputText with std::string
+#include <imgui_stdlib.h>      // For InputText with std::string
+#include <lib3mf_implicit.hpp> // For VolumeData interfaces
 
 namespace gladius::ui
 {
+
+    // Implementation of renderVolumeDataDropdown to show available VolumeData resources for a mesh
+    bool ResourceView::renderVolumeDataDropdown(SharedDocument document,
+                                                Lib3MF::PModel model3mf,
+                                                std::shared_ptr<Lib3MF::CMeshObject> mesh) const
+    {
+        bool propertiesChanged = false;
+
+        ImGui::PushID("VolumeDataDropdown");
+
+        // Get current VolumeData for this mesh if it exists
+        Lib3MF::PVolumeData currentVolumeData;
+        std::string currentVolumeDataName = "None";
+
+        try
+        {
+            currentVolumeData = mesh->GetVolumeData();
+            if (currentVolumeData)
+            {
+                currentVolumeDataName =
+                  fmt::format("VolumeData #{}", currentVolumeData->GetResourceID());
+            }
+        }
+        catch (...)
+        {
+            // Handle errors silently - no VolumeData exists
+        }
+
+        if (ImGui::BeginCombo("##VolumeData", currentVolumeDataName.c_str()))
+        {
+            // Add "None" option to remove VolumeData
+            bool isSelected = !currentVolumeData;
+            if (ImGui::Selectable("None", isSelected))
+            {
+                try
+                {
+                    document->update3mfModel();
+                    // Set VolumeData to nullptr to remove the association
+                    mesh->SetVolumeData(nullptr);
+                    document->markFileAsChanged();
+                    propertiesChanged = true;
+                }
+                catch (...)
+                {
+                    // Handle errors silently
+                }
+            }
+
+            if (isSelected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+
+            // List all available VolumeData resources
+            auto resourceIterator = model3mf->GetResources();
+            while (resourceIterator->MoveNext())
+            {
+                auto resource = resourceIterator->GetCurrent();
+                if (!resource)
+                {
+                    continue;
+                }
+
+                auto volumeData = std::dynamic_pointer_cast<Lib3MF::CVolumeData>(resource);
+                if (!volumeData)
+                {
+                    continue;
+                }
+
+                auto name = fmt::format("VolumeData #{}", volumeData->GetResourceID());
+                isSelected = currentVolumeData &&
+                             (currentVolumeData->GetResourceID() == volumeData->GetResourceID());
+
+                if (ImGui::Selectable(name.c_str(), isSelected))
+                {
+                    try
+                    {
+                        document->update3mfModel();
+                        mesh->SetVolumeData(volumeData);
+                        document->markFileAsChanged();
+                        propertiesChanged = true;
+                    }
+                    catch (const std::exception & e)
+                    {
+                        if (document->getSharedLogger())
+                        {
+                            document->getSharedLogger()->addEvent(
+                              {fmt::format("Failed to set VolumeData: {}", e.what()),
+                               events::Severity::Error});
+                        }
+                    }
+                }
+
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+        ImGui::PopID();
+
+        return propertiesChanged;
+    }
 
     void ResourceView::render(SharedDocument document) const
     {
@@ -86,7 +192,8 @@ namespace gladius::ui
                                                            meshData.getMin().x,
                                                            meshData.getMin().y,
                                                            meshData.getMin().z)
-                                                 .c_str());                        ImGui::TableNextColumn();
+                                                 .c_str());
+                        ImGui::TableNextColumn();
                         ImGui::TextUnformatted("Max");
                         ImGui::TableNextColumn();
                         ImGui::TextUnformatted(fmt::format("({}, {}, {})",
@@ -98,23 +205,29 @@ namespace gladius::ui
                         // Add Part Number field
                         ImGui::TableNextColumn();
                         ImGui::TextUnformatted("Part Number:");
-                        ImGui::TableNextColumn();                        try
+                        ImGui::TableNextColumn();
+                        try
                         {
                             auto model3mf = document->get3mfModel();
                             if (model3mf && key.getResourceId().has_value())
                             {
-                                auto lib3mfUniqueResourceId = gladius::io::resourceIdToUniqueResourceId(
+                                auto lib3mfUniqueResourceId =
+                                  gladius::io::resourceIdToUniqueResourceId(
                                     model3mf, key.getResourceId().value());
-                                
+
                                 auto resource = model3mf->GetResourceByID(lib3mfUniqueResourceId);
                                 if (resource)
                                 {
-                                    // Convert resource to Object since only Objects have part numbers
-                                    auto object = std::dynamic_pointer_cast<Lib3MF::CObject>(resource);
+                                    // Convert resource to Object since only Objects have part
+                                    // numbers
+                                    auto object =
+                                      std::dynamic_pointer_cast<Lib3MF::CObject>(resource);
                                     if (object)
                                     {
                                         std::string partNumber = object->GetPartNumber();
-                                        if (ImGui::InputText("##PartNumber", &partNumber, ImGuiInputTextFlags_None))
+                                        if (ImGui::InputText("##PartNumber",
+                                                             &partNumber,
+                                                             ImGuiInputTextFlags_None))
                                         {
                                             try
                                             {
@@ -129,6 +242,39 @@ namespace gladius::ui
                                         }
                                     }
                                 }
+                            }
+
+                            // Add dropdown for selecting a volume data
+                            ImGui::TableNextColumn();
+                            ImGui::TextUnformatted("Volume Data:");
+                            ImGui::TableNextColumn();
+                            try
+                            {
+                                auto model3mf = document->get3mfModel();
+                                if (model3mf && key.getResourceId().has_value())
+                                {
+                                    auto lib3mfUniqueResourceId =
+                                      gladius::io::resourceIdToUniqueResourceId(
+                                        model3mf, key.getResourceId().value());
+
+                                    auto resource =
+                                      model3mf->GetResourceByID(lib3mfUniqueResourceId);
+                                    if (resource)
+                                    {
+                                        auto meshObject =
+                                          std::dynamic_pointer_cast<Lib3MF::CMeshObject>(resource);
+                                        if (meshObject)
+                                        {
+                                            renderVolumeDataDropdown(
+                                              document, model3mf, meshObject);
+                                        }
+                                    }
+                                }
+                            }
+
+                            catch (...)
+                            {
+                                // Handle errors silently
                             }
                         }
                         catch (...)
@@ -154,8 +300,9 @@ namespace gladius::ui
                         if (ImGui::IsItemHovered())
                         {
                             ImGui::BeginTooltip();
-                            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
-                                               "Cannot delete, the resource is referenced by another item:");
+                            ImGui::TextColored(
+                              ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                              "Cannot delete, the resource is referenced by another item:");
                             for (auto const & depRes : safeResult.dependentResources)
                             {
                                 ImGui::BulletText("Resource ID: %u", depRes->GetModelResourceID());
@@ -210,7 +357,8 @@ namespace gladius::ui
 
                 ImGui::BeginGroup();
                 if (ImGui::TreeNodeEx(key.getDisplayName().c_str(), baseFlags))
-                {                    (ImGui::TextUnformatted(fmt::format("# {} loaded as {}",
+                {
+                    (ImGui::TextUnformatted(fmt::format("# {} loaded as {}",
                                                         key.getResourceId().value_or(-1),
                                                         stack ? "image stack" : "vdb grid")
                                               .c_str()));
@@ -231,28 +379,36 @@ namespace gladius::ui
                     // Add Part Number field for image resources
                     if (ImGui::TreeNodeEx("Properties", infoNodeFlags))
                     {
-                        if (ImGui::BeginTable(
-                              "ResourceProperties", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+                        if (ImGui::BeginTable("ResourceProperties",
+                                              2,
+                                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
                         {
                             ImGui::TableNextColumn();
                             ImGui::TextUnformatted("Part Number:");
-                            ImGui::TableNextColumn();                            try
+                            ImGui::TableNextColumn();
+                            try
                             {
                                 auto model3mf = document->get3mfModel();
                                 if (model3mf && key.getResourceId().has_value())
                                 {
-                                    auto lib3mfUniqueResourceId = gladius::io::resourceIdToUniqueResourceId(
+                                    auto lib3mfUniqueResourceId =
+                                      gladius::io::resourceIdToUniqueResourceId(
                                         model3mf, key.getResourceId().value());
-                                    
-                                    auto resource = model3mf->GetResourceByID(lib3mfUniqueResourceId);
+
+                                    auto resource =
+                                      model3mf->GetResourceByID(lib3mfUniqueResourceId);
                                     if (resource)
                                     {
-                                        // Convert resource to Object since only Objects have part numbers
-                                        auto object = std::dynamic_pointer_cast<Lib3MF::CObject>(resource);
+                                        // Convert resource to Object since only Objects have part
+                                        // numbers
+                                        auto object =
+                                          std::dynamic_pointer_cast<Lib3MF::CObject>(resource);
                                         if (object)
                                         {
                                             std::string partNumber = object->GetPartNumber();
-                                            if (ImGui::InputText("##ImgPartNumber", &partNumber, ImGuiInputTextFlags_None))
+                                            if (ImGui::InputText("##ImgPartNumber",
+                                                                 &partNumber,
+                                                                 ImGuiInputTextFlags_None))
                                             {
                                                 try
                                                 {
@@ -293,8 +449,9 @@ namespace gladius::ui
                         if (ImGui::IsItemHovered())
                         {
                             ImGui::BeginTooltip();
-                            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
-                                               "Cannot delete, the resource is referenced by another item:");
+                            ImGui::TextColored(
+                              ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                              "Cannot delete, the resource is referenced by another item:");
                             for (auto const & depRes : safeResult.dependentResources)
                             {
                                 ImGui::BulletText("Resource ID: %u", depRes->GetModelResourceID());
