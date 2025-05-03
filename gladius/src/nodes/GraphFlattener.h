@@ -37,13 +37,25 @@ namespace gladius::nodes
          * @return The expected node count in the flattened model
          */
         size_t calculateExpectedNodeCount();
+        
+        /**
+         * @brief Get integration statistics
+         * @return A pair containing number of integrated calls and redundant skips
+         */
+        std::pair<size_t, size_t> getIntegrationStats() const 
+        {
+            return { m_integratedFunctionCalls.size(), m_redundantIntegrationSkips };
+        }
 
       private:
         Assembly m_assembly;
         std::unordered_set<ResourceId> m_usedFunctions;
         io::ResourceDependencyGraph const * m_dependencyGraph = nullptr;
         bool m_hasDependencyGraph = false;
-
+        
+        // Statistics counters for integration process
+        size_t m_redundantIntegrationSkips = 0;
+        
         void findUsedFunctions();
         void findUsedFunctionsInModel(Model & model);
         void findUsedFunctionsUsingDependencyGraph(Model & rootModel);
@@ -128,6 +140,12 @@ namespace gladius::nodes
         void rerouteOutputs(Model & model, Model & target, nodes::FunctionCall const & functionCall, std::unordered_map<std::string, std::string> const & nameMapping);
 
         size_t m_flatteningDepth = 0;
+        
+        /**
+         * @brief Set of function calls that have already been integrated
+         * Used to avoid redundant processing of the same function call multiple times
+         */
+        std::unordered_set<nodes::FunctionCall const *> m_integratedFunctionCalls;
         
         /**
          * @brief Counts nodes that would be added from function calls in a model

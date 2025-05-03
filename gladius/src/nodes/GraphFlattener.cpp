@@ -44,6 +44,15 @@ namespace gladius::nodes
         {
             return;
         }
+        
+        // Check if this function call has already been integrated
+        if (m_integratedFunctionCalls.find(&functionCall) != m_integratedFunctionCalls.end())
+        {
+            m_redundantIntegrationSkips++;
+            fmt::print("Function call {} already integrated, skipping (total skips: {}).\n", 
+                       functionCall.getDisplayName(), m_redundantIntegrationSkips);
+            return; // Skip if this function call has already been integrated
+        }
 
         // Cache the referenced function to avoid multiple lookups
         auto referencedFunction = m_assembly.findModel(functionId);
@@ -72,7 +81,10 @@ namespace gladius::nodes
         m_flatteningDepth++;
         fmt::print("Integrating function call: {} into model: {} (depth: {})\n",
                    functionCall.getDisplayName(), target.getResourceId(), m_flatteningDepth);
-
+        
+        // Add to integrated set before proceeding with integration
+        m_integratedFunctionCalls.insert(&functionCall);
+        
         integrateModel(*referencedFunction, target, functionCall);
         m_flatteningDepth--;
     }
@@ -89,6 +101,10 @@ namespace gladius::nodes
         {
             throw std::runtime_error("Assembly model not found");
         }
+
+        // Clear set of integrated function calls and reset statistics
+        m_integratedFunctionCalls.clear();
+        m_redundantIntegrationSkips = 0;
 
         // Reserve capacity for used functions based on the number of models in assembly
         m_usedFunctions.reserve(m_assembly.getFunctions().size());
@@ -121,6 +137,10 @@ namespace gladius::nodes
                        expectedNodeCount, actualNodeCount);
         }
         
+        // Print integration statistics
+        fmt::print("Integration statistics:\n");
+        fmt::print("  - Integrated function calls: {}\n", m_integratedFunctionCalls.size());
+        fmt::print("  - Redundant integration attempts avoided: {}\n", m_redundantIntegrationSkips);
         
         return m_assembly;
     }
@@ -150,6 +170,9 @@ size_t GraphFlattener::calculateExpectedNodeCount()
     // Clear and reserve capacity for used functions
     m_usedFunctions.clear();
     m_usedFunctions.reserve(m_assembly.getFunctions().size());
+    
+    // Clear set of integrated function calls
+    m_integratedFunctionCalls.clear();
     
     // Find all functions that are actually used
     findUsedFunctions();
