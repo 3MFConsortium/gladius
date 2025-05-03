@@ -6,12 +6,17 @@
 namespace gladius::nodes
 {
     GraphFlattener::GraphFlattener(Assembly const & assembly)
-        : m_assembly(assembly), m_dependencyGraph(nullptr), m_hasDependencyGraph(false)
+        : m_assembly(assembly)
+        , m_dependencyGraph(nullptr)
+        , m_hasDependencyGraph(false)
     {
     }
-    
-    GraphFlattener::GraphFlattener(Assembly const & assembly, io::ResourceDependencyGraph const * dependencyGraph)
-        : m_assembly(assembly), m_dependencyGraph(dependencyGraph), m_hasDependencyGraph(dependencyGraph != nullptr)
+
+    GraphFlattener::GraphFlattener(Assembly const & assembly,
+                                   io::ResourceDependencyGraph const * dependencyGraph)
+        : m_assembly(assembly)
+        , m_dependencyGraph(dependencyGraph)
+        , m_hasDependencyGraph(dependencyGraph != nullptr)
     {
     }
 
@@ -22,8 +27,9 @@ namespace gladius::nodes
         ProfileFunction;
         // 1. Find the referenced model
         auto functionId = functionCall.getFunctionId();
-        
-        // Quick check for used functions first - this is the most frequently hit early-out condition
+
+        // Quick check for used functions first - this is the most frequently hit early-out
+        // condition
         if (m_usedFunctions.find(functionId) == m_usedFunctions.end())
         {
             return; // Skip function integration immediately if not in used functions set
@@ -44,13 +50,14 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         // Check if this function call has already been integrated
         if (m_integratedFunctionCalls.find(&functionCall) != m_integratedFunctionCalls.end())
         {
             m_redundantIntegrationSkips++;
-            fmt::print("Function call {} already integrated, skipping (total skips: {}).\n", 
-                       functionCall.getDisplayName(), m_redundantIntegrationSkips);
+            fmt::print("Function call {} already integrated, skipping (total skips: {}).\n",
+                       functionCall.getDisplayName(),
+                       m_redundantIntegrationSkips);
             return; // Skip if this function call has already been integrated
         }
 
@@ -80,11 +87,13 @@ namespace gladius::nodes
         // 2. Integrate the referenced model into the target model
         m_flatteningDepth++;
         fmt::print("Integrating function call: {} into model: {} (depth: {})\n",
-                   functionCall.getDisplayName(), target.getResourceId(), m_flatteningDepth);
-        
+                   functionCall.getDisplayName(),
+                   target.getResourceId(),
+                   m_flatteningDepth);
+
         // Add to integrated set before proceeding with integration
         m_integratedFunctionCalls.insert(&functionCall);
-        
+
         integrateModel(*referencedFunction, target, functionCall);
         m_flatteningDepth--;
     }
@@ -108,13 +117,13 @@ namespace gladius::nodes
 
         // Reserve capacity for used functions based on the number of models in assembly
         m_usedFunctions.reserve(m_assembly.getFunctions().size());
-        
+
         // First find all functions that are actually used - will use dependency graph if available
         findUsedFunctions();
-        
+
         // The assembly model is always used
         m_usedFunctions.insert(modelToFlat->getResourceId());
-        
+
         // Simplify all used models before flattening
         simplifyUsedModels();
 
@@ -124,7 +133,7 @@ namespace gladius::nodes
         // Clean up after flattening
         deleteFunctions();
         deleteFunctionCallNodes();
-        
+
         // Update the graph order
         m_assembly.assemblyModel()->updateGraphAndOrderIfNeeded();
 
@@ -134,101 +143,103 @@ namespace gladius::nodes
         if (actualNodeCount != expectedNodeCount)
         {
             fmt::print("Warning: Expected node count ({}) does not match actual node count ({}).\n",
-                       expectedNodeCount, actualNodeCount);
+                       expectedNodeCount,
+                       actualNodeCount);
         }
-        
+
         // Print integration statistics
         fmt::print("Integration statistics:\n");
         fmt::print("  - Integrated function calls: {}\n", m_integratedFunctionCalls.size());
         fmt::print("  - Redundant integration attempts avoided: {}\n", m_redundantIntegrationSkips);
-        
+
         return m_assembly;
     }
-    
-/**
- * @brief Calculate the expected number of nodes after flattening without performing the actual flattening
- * 
- * This method simulates the flattening process to count how many nodes would be in the final
- * flattened model without actually modifying any models. It takes into account:
- * - Only functions with used outputs
- * - Skipping Begin and End nodes during integration
- * - Each node being integrated exactly once (no duplicates)
- * 
- * @return size_t The expected number of nodes in the flattened model
- * @throws std::runtime_error if the assembly model is not found
- */
-size_t GraphFlattener::calculateExpectedNodeCount()
-{
-    ProfileFunction;
-    auto modelToFlat = m_assembly.assemblyModel();
 
-    if (!modelToFlat)
+    /**
+     * @brief Calculate the expected number of nodes after flattening without performing the actual
+     * flattening
+     *
+     * This method simulates the flattening process to count how many nodes would be in the final
+     * flattened model without actually modifying any models. It takes into account:
+     * - Only functions with used outputs
+     * - Skipping Begin and End nodes during integration
+     * - Each node being integrated exactly once (no duplicates)
+     *
+     * @return size_t The expected number of nodes in the flattened model
+     * @throws std::runtime_error if the assembly model is not found
+     */
+    size_t GraphFlattener::calculateExpectedNodeCount()
     {
-        throw std::runtime_error("Assembly model not found");
-    }
-    
-    // Clear and reserve capacity for used functions
-    m_usedFunctions.clear();
-    m_usedFunctions.reserve(m_assembly.getFunctions().size());
-    
-    // Clear set of integrated function calls
-    m_integratedFunctionCalls.clear();
-    
-    // Find all functions that are actually used
-    findUsedFunctions();
-    
-    // The assembly model is always used
-    m_usedFunctions.insert(modelToFlat->getResourceId());
-    
-    // Keep track of node count without Begin/End nodes
-    size_t totalNodeCount = 0;
-    
-    // Track models that have been counted to avoid double-counting
-    std::unordered_set<ResourceId> countedModels;
-    
-    // Count all nodes in the used functions, excluding Begin and End nodes
-    for (auto const & functionId : m_usedFunctions)
-    {
-        // Skip if already counted
-        if (countedModels.find(functionId) != countedModels.end())
+        ProfileFunction;
+        auto modelToFlat = m_assembly.assemblyModel();
+
+        if (!modelToFlat)
         {
-            continue;
+            throw std::runtime_error("Assembly model not found");
         }
-        
-        auto model = m_assembly.findModel(functionId);
-        if (!model)
+
+        // Clear and reserve capacity for used functions
+        m_usedFunctions.clear();
+        m_usedFunctions.reserve(m_assembly.getFunctions().size());
+
+        // Clear set of integrated function calls
+        m_integratedFunctionCalls.clear();
+
+        // Find all functions that are actually used
+        findUsedFunctions();
+
+        // The assembly model is always used
+        m_usedFunctions.insert(modelToFlat->getResourceId());
+
+        // Keep track of node count without Begin/End nodes
+        size_t totalNodeCount = 0;
+
+        // Track models that have been counted to avoid double-counting
+        std::unordered_set<ResourceId> countedModels;
+
+        // Count all nodes in the used functions, excluding Begin and End nodes
+        for (auto const & functionId : m_usedFunctions)
         {
-            continue;
-        }
-        
-        // Count nodes in this model (excluding Begin and End nodes)
-        for (auto & node : *model)
-        {
-            // Skip Begin and End nodes as they're not integrated
-            if (dynamic_cast<Begin const *>(node.second.get()) ||
-                dynamic_cast<End const *>(node.second.get()))
+            // Skip if already counted
+            if (countedModels.find(functionId) != countedModels.end())
             {
                 continue;
             }
-            
-            // Skip FunctionCall nodes as they'll be replaced
-            if (dynamic_cast<FunctionCall const *>(node.second.get()))
+
+            auto model = m_assembly.findModel(functionId);
+            if (!model)
             {
                 continue;
             }
-            
-            totalNodeCount++;
+
+            // Count nodes in this model (excluding Begin and End nodes)
+            for (auto & node : *model)
+            {
+                // Skip Begin and End nodes as they're not integrated
+                if (dynamic_cast<Begin const *>(node.second.get()) ||
+                    dynamic_cast<End const *>(node.second.get()))
+                {
+                    continue;
+                }
+
+                // Skip FunctionCall nodes as they'll be replaced
+                if (dynamic_cast<FunctionCall const *>(node.second.get()))
+                {
+                    continue;
+                }
+
+                totalNodeCount++;
+            }
+
+            // Mark as counted
+            countedModels.insert(functionId);
+
+            // Count nodes from function calls within this model
+            countNodesFromFunctionCalls(*model, countedModels, totalNodeCount);
         }
-        
-        // Mark as counted
-        countedModels.insert(functionId);
-        
-        // Count nodes from function calls within this model
-        countNodesFromFunctionCalls(*model, countedModels, totalNodeCount);
+
+        return totalNodeCount;
     }
-    
-    return totalNodeCount;
-}
 
     void GraphFlattener::flattenRecursive(Model & model)
     {
@@ -300,12 +311,12 @@ size_t GraphFlattener::calculateExpectedNodeCount()
      * @throws std::runtime_error if integration fails or required nodes/ports are not found.
      */
     /**
- * @brief Validates that all required inputs of a function call are properly connected
- * 
- * @param functionCall The function call to validate inputs for
- * @throws std::runtime_error if any input is not properly connected
- */
-void GraphFlattener::validateFunctionCallInputs(nodes::FunctionCall const & functionCall) const
+     * @brief Validates that all required inputs of a function call are properly connected
+     *
+     * @param functionCall The function call to validate inputs for
+     * @throws std::runtime_error if any input is not properly connected
+     */
+    void GraphFlattener::validateFunctionCallInputs(nodes::FunctionCall const & functionCall) const
     {
         ProfileFunction;
         auto const & inputs = functionCall.constParameter();
@@ -319,32 +330,32 @@ void GraphFlattener::validateFunctionCallInputs(nodes::FunctionCall const & func
             if (!inputSource.has_value())
             {
                 throw std::runtime_error(fmt::format("Input {} of function call {} has no source",
-                                                    inputName,
-                                                    functionCall.getUniqueName()));
+                                                     inputName,
+                                                     functionCall.getUniqueName()));
             }
 
             if (!inputSource.value().port)
             {
                 throw std::runtime_error(fmt::format("Input {} of function call {} has no port",
-                                                    inputName,
-                                                    functionCall.getUniqueName()));
+                                                     inputName,
+                                                     functionCall.getUniqueName()));
             }
         }
     }
 
-/**
- * @brief Integrates nodes from source model into target model and creates a name mapping
- * 
- * @param model Source model containing nodes to integrate
- * @param target Target model to integrate nodes into
- * @param nameMapping Output parameter that will map source node names to target node names
- * @return std::vector<NodeBase *> Collection of newly created nodes
- * @throws std::runtime_error if node integration fails
- */
-std::vector<NodeBase *> GraphFlattener::integrateNodesFromModel(
-    Model & model, 
-    Model & target, 
-    std::unordered_map<std::string, std::string> & nameMapping)
+    /**
+     * @brief Integrates nodes from source model into target model and creates a name mapping
+     *
+     * @param model Source model containing nodes to integrate
+     * @param target Target model to integrate nodes into
+     * @param nameMapping Output parameter that will map source node names to target node names
+     * @return std::vector<NodeBase *> Collection of newly created nodes
+     * @throws std::runtime_error if node integration fails
+     */
+    std::vector<NodeBase *> GraphFlattener::integrateNodesFromModel(
+      Model & model,
+      Model & target,
+      std::unordered_map<std::string, std::string> & nameMapping)
     {
         ProfileFunction;
         // Pre-allocate to avoid reallocations
@@ -381,22 +392,22 @@ std::vector<NodeBase *> GraphFlattener::integrateNodesFromModel(
         return createdNodes;
     }
 
-/**
- * @brief Updates connections for newly integrated nodes
- * 
- * @param model Source model
- * @param target Target model
- * @param functionCall Function call that triggered the integration
- * @param nameMapping Mapping from source node names to target node names
- * @param createdNodes Collection of newly created nodes
- * @throws std::runtime_error if connection update fails due to missing nodes or ports
- */
-void GraphFlattener::updateNodeConnections(
-    Model & model,
-    Model & target,
-    nodes::FunctionCall const & functionCall,
-    std::unordered_map<std::string, std::string> const & nameMapping,
-    std::vector<NodeBase *> const & createdNodes)
+    /**
+     * @brief Updates connections for newly integrated nodes
+     *
+     * @param model Source model
+     * @param target Target model
+     * @param functionCall Function call that triggered the integration
+     * @param nameMapping Mapping from source node names to target node names
+     * @param createdNodes Collection of newly created nodes
+     * @throws std::runtime_error if connection update fails due to missing nodes or ports
+     */
+    void GraphFlattener::updateNodeConnections(
+      Model & model,
+      Model & target,
+      nodes::FunctionCall const & functionCall,
+      std::unordered_map<std::string, std::string> const & nameMapping,
+      std::vector<NodeBase *> const & createdNodes)
     {
         ProfileFunction;
         // Cache Begin node for input mapping
@@ -415,12 +426,12 @@ void GraphFlattener::updateNodeConnections(
 
                 auto & originalSourcePort = source.value().port;
                 auto const * originalSourceNode = originalSourcePort->getParent();
-                
+
                 if (!originalSourceNode)
                 {
                     throw std::runtime_error("Source node not found");
                 }
-                
+
                 auto const & originalSourceNodeName = originalSourceNode->getUniqueName();
                 auto & sourcePortName = originalSourcePort->getShortName();
 
@@ -432,42 +443,40 @@ void GraphFlattener::updateNodeConnections(
                     continue;
                 }
 
-                connectRegularNodeInput(target, parameter, originalSourceNodeName, sourcePortName, nameMapping);
+                connectRegularNodeInput(
+                  target, parameter, originalSourceNodeName, sourcePortName, nameMapping);
             }
         }
     }
 
-/**
- * @brief Connects an input parameter to a corresponding function call input
- * 
- * @param target Target model
- * @param functionCall Function call that contains the input
- * @param parameter Parameter to connect
- * @param sourcePortName Source port name to look for in function call inputs
- * @throws std::runtime_error if connection fails due to missing input or port
- */
-void GraphFlattener::connectBeginNodeInput(
-    Model & target,
-    nodes::FunctionCall const & functionCall,
-    VariantParameter & parameter,
-    std::string const & sourcePortName)
+    /**
+     * @brief Connects an input parameter to a corresponding function call input
+     *
+     * @param target Target model
+     * @param functionCall Function call that contains the input
+     * @param parameter Parameter to connect
+     * @param sourcePortName Source port name to look for in function call inputs
+     * @throws std::runtime_error if connection fails due to missing input or port
+     */
+    void GraphFlattener::connectBeginNodeInput(Model & target,
+                                               nodes::FunctionCall const & functionCall,
+                                               VariantParameter & parameter,
+                                               std::string const & sourcePortName)
     {
         ProfileFunction;
         auto const & inputs = functionCall.constParameter();
         auto inputIt = inputs.find(sourcePortName);
-        
+
         if (inputIt == inputs.end())
         {
-            throw std::runtime_error(
-              fmt::format("Input {} not found", sourcePortName));
+            throw std::runtime_error(fmt::format("Input {} not found", sourcePortName));
         }
-        
+
         auto const & input = inputIt->second;
         auto const & inputSource = input.getConstSource();
         if (!inputSource.has_value() || !inputSource.value().port)
         {
-            throw std::runtime_error(
-              fmt::format("Input {} has no valid source", sourcePortName));
+            throw std::runtime_error(fmt::format("Input {} has no valid source", sourcePortName));
         }
 
         auto portId = inputSource.value().portId;
@@ -480,22 +489,22 @@ void GraphFlattener::connectBeginNodeInput(
         parameter.setInputFromPort(*port);
     }
 
-/**
- * @brief Connects an input parameter to a corresponding port in a regular node
- * 
- * @param target Target model
- * @param parameter Parameter to connect
- * @param originalSourceNodeName Original source node name
- * @param sourcePortName Source port name
- * @param nameMapping Mapping from source node names to target node names
- * @throws std::runtime_error if connection fails due to missing node or port
- */
-void GraphFlattener::connectRegularNodeInput(
-    Model & target,
-    VariantParameter & parameter,
-    std::string const & originalSourceNodeName,
-    std::string const & sourcePortName,
-    std::unordered_map<std::string, std::string> const & nameMapping)
+    /**
+     * @brief Connects an input parameter to a corresponding port in a regular node
+     *
+     * @param target Target model
+     * @param parameter Parameter to connect
+     * @param originalSourceNodeName Original source node name
+     * @param sourcePortName Source port name
+     * @param nameMapping Mapping from source node names to target node names
+     * @throws std::runtime_error if connection fails due to missing node or port
+     */
+    void GraphFlattener::connectRegularNodeInput(
+      Model & target,
+      VariantParameter & parameter,
+      std::string const & originalSourceNodeName,
+      std::string const & sourcePortName,
+      std::unordered_map<std::string, std::string> const & nameMapping)
     {
         ProfileFunction;
         // Fast lookup in the name mapping for regular nodes
@@ -516,24 +525,24 @@ void GraphFlattener::connectRegularNodeInput(
         Port * newSourcePort = newSourceNode->findOutputPort(sourcePortName);
         if (!newSourcePort)
         {
-            throw std::runtime_error(
-              fmt::format("Source port {} not found", sourcePortName));
+            throw std::runtime_error(fmt::format("Source port {} not found", sourcePortName));
         }
 
         parameter.setInputFromPort(*newSourcePort);
     }
 
-/**
- * @brief Integrates a model into another model by cloning and updating the nodes and connections
- *
- * @param model The model to be integrated
- * @param target The target model to integrate into
- * @param functionCall The function call node that triggers the integration
- * @throws std::runtime_error if integration fails or required nodes/ports are not found
- */
-void GraphFlattener::integrateModel(Model & model,
-                                    Model & target,
-                                    nodes::FunctionCall const & functionCall)
+    /**
+     * @brief Integrates a model into another model by cloning and updating the nodes and
+     * connections
+     *
+     * @param model The model to be integrated
+     * @param target The target model to integrate into
+     * @param functionCall The function call node that triggers the integration
+     * @throws std::runtime_error if integration fails or required nodes/ports are not found
+     */
+    void GraphFlattener::integrateModel(Model & model,
+                                        Model & target,
+                                        nodes::FunctionCall const & functionCall)
     {
         ProfileFunction;
         if (model.getResourceId() == target.getResourceId())
@@ -544,8 +553,8 @@ void GraphFlattener::integrateModel(Model & model,
         if (!m_assembly.findModel(model.getResourceId()))
         {
             throw std::runtime_error(fmt::format("Model {} with id {} not found",
-                                                model.getDisplayName().value_or(""),
-                                                model.getResourceId()));
+                                                 model.getDisplayName().value_or(""),
+                                                 model.getResourceId()));
         }
 
         // Validate inputs
@@ -560,7 +569,7 @@ void GraphFlattener::integrateModel(Model & model,
 
         // Integrate nodes and get created node references
         auto createdNodes = integrateNodesFromModel(model, target, nameMapping);
-        
+
         // Update connections for the new nodes
         updateNodeConnections(model, target, functionCall, nameMapping, createdNodes);
 
@@ -583,11 +592,11 @@ void GraphFlattener::integrateModel(Model & model,
         {
             return; // Early exit if no outputs
         }
-        
+
         // Cache the end node for repeated lookups
         auto const & endNode = model.getEndNode();
         auto const & functionCallId = functionCall.getId();
-        
+
         // Create a lookup set for fast output name checks
         std::unordered_set<std::string> outputNames;
         outputNames.reserve(outputs.size());
@@ -607,7 +616,7 @@ void GraphFlattener::integrateModel(Model & model,
 
             auto const & inputSourcePort = inputSource.value().port;
             auto const & inputSourcePortName = inputSourcePort->getShortName();
-            
+
             // Skip if not an output we care about
             if (outputNames.find(inputSourcePortName) == outputNames.end())
             {
@@ -636,8 +645,7 @@ void GraphFlattener::integrateModel(Model & model,
                                                      endNode->getUniqueName()));
             }
 
-            auto parentNodeInOriginalModel =
-              model.getNode(sourceInOriginalModel.value().nodeId);
+            auto parentNodeInOriginalModel = model.getNode(sourceInOriginalModel.value().nodeId);
             if (!parentNodeInOriginalModel.has_value() || !parentNodeInOriginalModel.value())
             {
                 throw std::runtime_error(
@@ -646,8 +654,7 @@ void GraphFlattener::integrateModel(Model & model,
 
             auto const & parentNodeNameInOriginalModel =
               parentNodeInOriginalModel.value()->getUniqueName();
-            auto parentNodeNameInTargetModelIter =
-              nameMapping.find(parentNodeNameInOriginalModel);
+            auto parentNodeNameInTargetModelIter = nameMapping.find(parentNodeNameInOriginalModel);
             if (parentNodeNameInTargetModelIter == std::end(nameMapping))
             {
                 throw std::runtime_error(
@@ -667,7 +674,8 @@ void GraphFlattener::integrateModel(Model & model,
 
             if (!outputPortInTargetModel)
             {
-                throw std::runtime_error(fmt::format("Output port {} not found", inputSourcePortName));
+                throw std::runtime_error(
+                  fmt::format("Output port {} not found", inputSourcePortName));
             }
 
             input->setInputFromPort(*outputPortInTargetModel);
@@ -684,7 +692,7 @@ void GraphFlattener::integrateModel(Model & model,
         {
             throw std::runtime_error("Assembly model not found");
         }
-        
+
         // If we have a dependency graph, use it for optimized lookup
         if (m_hasDependencyGraph && m_dependencyGraph)
         {
@@ -699,168 +707,172 @@ void GraphFlattener::integrateModel(Model & model,
     void GraphFlattener::findUsedFunctionsInModel(Model & model)
     {
         ProfileFunction;
-        
+
         // Find all function calls in the model with used outputs
         auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
-            [&](FunctionCall & functionCallNode)
-            {
-                // Check if any output is used before proceeding
-                bool isFunctionOutputUsed = false;
-                for (auto const & output : functionCallNode.getOutputs())
-                {
-                    if (output.second.isUsed())
-                    {
-                        isFunctionOutputUsed = true;
-                        break;
-                    }
-                }
+          [&](FunctionCall & functionCallNode)
+          {
+              // Check if any output is used before proceeding
+              bool isFunctionOutputUsed = false;
+              for (auto const & output : functionCallNode.getOutputs())
+              {
+                  if (output.second.isUsed())
+                  {
+                      isFunctionOutputUsed = true;
+                      break;
+                  }
+              }
 
-                if (!isFunctionOutputUsed)
-                {
-                    return; // Skip if no outputs are used
-                }
-                    
-                auto functionId = functionCallNode.getFunctionId();
-                
-                // Check if function is already processed
-                if (m_usedFunctions.find(functionId) != m_usedFunctions.end())
-                {
-                    return; // Already processed this function
-                }
-                
-                auto referencedFunction = m_assembly.findModel(functionId);
-                if (!referencedFunction)
-                {
-                    return; // Function not found
-                }
-                
-                // Mark this function as used
-                m_usedFunctions.insert(functionId);
-                
-                // Recursively find used functions in this function
-                findUsedFunctionsInModel(*referencedFunction);
-            });
-        
+              if (!isFunctionOutputUsed)
+              {
+                  return; // Skip if no outputs are used
+              }
+
+              auto functionId = functionCallNode.getFunctionId();
+
+              // Check if function is already processed
+              if (m_usedFunctions.find(functionId) != m_usedFunctions.end())
+              {
+                  return; // Already processed this function
+              }
+
+              auto referencedFunction = m_assembly.findModel(functionId);
+              if (!referencedFunction)
+              {
+                  return; // Function not found
+              }
+
+              // Mark this function as used
+              m_usedFunctions.insert(functionId);
+
+              // Recursively find used functions in this function
+              findUsedFunctionsInModel(*referencedFunction);
+          });
+
         model.visitNodes(functionCallVisitor);
     }
 
     void GraphFlattener::findUsedFunctionsUsingDependencyGraph(Model & rootModel)
     {
         ProfileFunction;
-        
+
         // First, add the root model's resource ID to used functions
         ResourceId rootResourceId = rootModel.getResourceId();
         m_usedFunctions.insert(rootResourceId);
-        
+
         // Use direct function calls to identify initial set of functions
         std::vector<ResourceId> functionQueue;
-        
+
         // Find function call nodes in the root model to initialize the queue
         auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
-            [&](FunctionCall & functionCallNode)
-            {
-                // Skip if no outputs are used
-                bool isFunctionOutputUsed = false;
-                for (auto const & output : functionCallNode.getOutputs())
-                {
-                    if (output.second.isUsed())
-                    {
-                        isFunctionOutputUsed = true;
-                        break;
-                    }
-                }
-                
-                if (!isFunctionOutputUsed)
-                    return;
-                    
-                ResourceId functionId = functionCallNode.getFunctionId();
-                if (m_usedFunctions.find(functionId) == m_usedFunctions.end())
-                {
-                    m_usedFunctions.insert(functionId);
-                    functionQueue.push_back(functionId);
-                    
-                    // If we have a dependency graph, let's use it to find all dependencies up front
-                    // This can potentially save multiple traversals if the dependency graph already 
-                    // contains complete dependency data
-                    if (m_hasDependencyGraph && m_dependencyGraph)
-                    {
-                        auto resourcePtr = m_dependencyGraph->getResourceById(functionId);
-                        if (resourcePtr)
-                        {
-                            // Get all required resources from the dependency graph
-                            auto requiredResources = m_dependencyGraph->getAllRequiredResources(resourcePtr);
-                            for (const auto& resource : requiredResources)
-                            {
-                                auto depId = resource->GetResourceID();
-                                if (m_usedFunctions.find(depId) == m_usedFunctions.end())
-                                {
-                                    m_usedFunctions.insert(depId);
-                                    functionQueue.push_back(depId);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        
+          [&](FunctionCall & functionCallNode)
+          {
+              // Skip if no outputs are used
+              bool isFunctionOutputUsed = false;
+              for (auto const & output : functionCallNode.getOutputs())
+              {
+                  if (output.second.isUsed())
+                  {
+                      isFunctionOutputUsed = true;
+                      break;
+                  }
+              }
+
+              if (!isFunctionOutputUsed)
+                  return;
+
+              ResourceId functionId = functionCallNode.getFunctionId();
+              if (m_usedFunctions.find(functionId) == m_usedFunctions.end())
+              {
+                  m_usedFunctions.insert(functionId);
+                  functionQueue.push_back(functionId);
+
+                  // If we have a dependency graph, let's use it to find all dependencies up front
+                  // This can potentially save multiple traversals if the dependency graph already
+                  // contains complete dependency data
+                  if (m_hasDependencyGraph && m_dependencyGraph)
+                  {
+                      auto resourcePtr = m_dependencyGraph->getResourceById(functionId);
+                      if (resourcePtr)
+                      {
+                          // Get all required resources from the dependency graph
+                          auto requiredResources =
+                            m_dependencyGraph->getAllRequiredResources(resourcePtr);
+                          for (const auto & resource : requiredResources)
+                          {
+                              auto depId = resource->GetResourceID();
+                              if (m_usedFunctions.find(depId) == m_usedFunctions.end())
+                              {
+                                  m_usedFunctions.insert(depId);
+                                  functionQueue.push_back(depId);
+                              }
+                          }
+                      }
+                  }
+              }
+          });
+
         // Use the named visitor
         rootModel.visitNodes(functionCallVisitor);
-        
-        // Process the queue of functions - for each function, get its model and find more function calls
+
+        // Process the queue of functions - for each function, get its model and find more function
+        // calls
         while (!functionQueue.empty())
         {
             ResourceId currentFunctionId = functionQueue.back();
             functionQueue.pop_back();
-            
+
             auto currentModel = m_assembly.findModel(currentFunctionId);
             if (!currentModel)
                 continue;
-                
-            // Find function calls in this model - create a named visitor to avoid temporary object issues
+
+            // Find function calls in this model - create a named visitor to avoid temporary object
+            // issues
             auto nestedFunctionCallVisitor = OnTypeVisitor<FunctionCall>(
-                [&](FunctionCall & functionCallNode)
-                {
-                    // Skip if no outputs are used
-                    bool isFunctionOutputUsed = false;
-                    for (auto const & output : functionCallNode.getOutputs())
-                    {
-                        if (output.second.isUsed())
-                        {
-                            isFunctionOutputUsed = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!isFunctionOutputUsed)
-                        return;
-                        
-                    ResourceId nestedFunctionId = functionCallNode.getFunctionId();
-                    if (m_usedFunctions.find(nestedFunctionId) == m_usedFunctions.end())
-                    {
-                        m_usedFunctions.insert(nestedFunctionId);
-                        functionQueue.push_back(nestedFunctionId);
-                        
-                        // Use the dependency graph here as well
-                        if (m_hasDependencyGraph && m_dependencyGraph)
-                        {
-                            auto resourcePtr = m_dependencyGraph->getResourceById(nestedFunctionId);
-                            if (resourcePtr)
-                            {
-                                auto requiredResources = m_dependencyGraph->getAllRequiredResources(resourcePtr);
-                                for (const auto& resource : requiredResources)
-                                {
-                                    auto depId = resource->GetResourceID();
-                                    if (m_usedFunctions.find(depId) == m_usedFunctions.end())
-                                    {
-                                        m_usedFunctions.insert(depId);
-                                        functionQueue.push_back(depId);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-                
+              [&](FunctionCall & functionCallNode)
+              {
+                  // Skip if no outputs are used
+                  bool isFunctionOutputUsed = false;
+                  for (auto const & output : functionCallNode.getOutputs())
+                  {
+                      if (output.second.isUsed())
+                      {
+                          isFunctionOutputUsed = true;
+                          break;
+                      }
+                  }
+
+                  if (!isFunctionOutputUsed)
+                      return;
+
+                  ResourceId nestedFunctionId = functionCallNode.getFunctionId();
+                  if (m_usedFunctions.find(nestedFunctionId) == m_usedFunctions.end())
+                  {
+                      m_usedFunctions.insert(nestedFunctionId);
+                      functionQueue.push_back(nestedFunctionId);
+
+                      // Use the dependency graph here as well
+                      if (m_hasDependencyGraph && m_dependencyGraph)
+                      {
+                          auto resourcePtr = m_dependencyGraph->getResourceById(nestedFunctionId);
+                          if (resourcePtr)
+                          {
+                              auto requiredResources =
+                                m_dependencyGraph->getAllRequiredResources(resourcePtr);
+                              for (const auto & resource : requiredResources)
+                              {
+                                  auto depId = resource->GetResourceID();
+                                  if (m_usedFunctions.find(depId) == m_usedFunctions.end())
+                                  {
+                                      m_usedFunctions.insert(depId);
+                                      functionQueue.push_back(depId);
+                                  }
+                              }
+                          }
+                      }
+                  }
+              });
+
             // Now use the named visitor
             currentModel->visitNodes(nestedFunctionCallVisitor);
         }
@@ -869,9 +881,9 @@ void GraphFlattener::integrateModel(Model & model,
     void GraphFlattener::simplifyUsedModels()
     {
         ProfileFunction;
-        
+
         // Process all models that were identified as used
-        for (const auto& modelId : m_usedFunctions)
+        for (const auto & modelId : m_usedFunctions)
         {
             auto model = m_assembly.findModel(modelId);
             if (model)
@@ -882,88 +894,87 @@ void GraphFlattener::integrateModel(Model & model,
         }
     }
 
-/**
- * @brief Counts nodes that would be added from function calls in a model
- * 
- * This method recursively counts nodes from function calls within the given model.
- * It checks if any outputs of function calls are used and counts nodes from the
- * referenced function if they haven't been counted already.
- * 
- * @param model The model to examine function calls in
- * @param countedModels Set of models that have already been counted
- * @param totalNodeCount Reference to running total of node count
- */
-void GraphFlattener::countNodesFromFunctionCalls(
-    Model const & model, 
-    std::unordered_set<ResourceId> & countedModels, 
-    size_t & totalNodeCount)
-{
-    ProfileFunction;
-    
-    // Create a visitor for function calls
-    auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
-        [&](FunctionCall & functionCallNode)
-        {
-            // Check if any output is actually used
-            bool isFunctionOutputUsed = false;
-            for (auto const & output : functionCallNode.getOutputs())
-            {
-                if (output.second.isUsed())
-                {
-                    isFunctionOutputUsed = true;
-                    break;
-                }
-            }
+    /**
+     * @brief Counts nodes that would be added from function calls in a model
+     *
+     * This method recursively counts nodes from function calls within the given model.
+     * It checks if any outputs of function calls are used and counts nodes from the
+     * referenced function if they haven't been counted already.
+     *
+     * @param model The model to examine function calls in
+     * @param countedModels Set of models that have already been counted
+     * @param totalNodeCount Reference to running total of node count
+     */
+    void GraphFlattener::countNodesFromFunctionCalls(Model const & model,
+                                                     std::unordered_set<ResourceId> & countedModels,
+                                                     size_t & totalNodeCount)
+    {
+        ProfileFunction;
 
-            if (!isFunctionOutputUsed)
-            {
-                return; // Skip if no outputs are used
-            }
-            
-            // Get the function ID
-            auto functionId = functionCallNode.getFunctionId();
-            
-            // Check if already counted
-            if (countedModels.find(functionId) != countedModels.end())
-            {
-                return; // Already counted this function
-            }
-            
-            // Check if function exists
-            auto referencedFunction = m_assembly.findModel(functionId);
-            if (!referencedFunction)
-            {
-                return; // Function not found
-            }
-            
-            // Check for self-reference (circular dependency)
-            if (referencedFunction->getResourceId() == model.getResourceId())
-            {
-                return; // Avoid infinite recursion
-            }
-            
-            // Count nodes in this referenced function (excluding Begin and End nodes)
-            for (auto & node : *referencedFunction)
-            {
-                // Skip Begin, End, and FunctionCall nodes
-                if (dynamic_cast<Begin const *>(node.second.get()) ||
-                    dynamic_cast<End const *>(node.second.get()) ||
-                    dynamic_cast<FunctionCall const *>(node.second.get()))
-                {
-                    continue;
-                }
-                
-                totalNodeCount++;
-            }
-            
-            // Mark as counted
-            countedModels.insert(functionId);
-            
-            // Recursively count nodes from function calls in the referenced function
-            countNodesFromFunctionCalls(*referencedFunction, countedModels, totalNodeCount);
-        });
-    
-    // Apply the visitor to the model
-    const_cast<Model &>(model).visitNodes(functionCallVisitor);
-}
+        // Create a visitor for function calls
+        auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
+          [&](FunctionCall & functionCallNode)
+          {
+              // Check if any output is actually used
+              bool isFunctionOutputUsed = false;
+              for (auto const & output : functionCallNode.getOutputs())
+              {
+                  if (output.second.isUsed())
+                  {
+                      isFunctionOutputUsed = true;
+                      break;
+                  }
+              }
+
+              if (!isFunctionOutputUsed)
+              {
+                  return; // Skip if no outputs are used
+              }
+
+              // Get the function ID
+              auto functionId = functionCallNode.getFunctionId();
+
+              // Check if already counted
+              if (countedModels.find(functionId) != countedModels.end())
+              {
+                  return; // Already counted this function
+              }
+
+              // Check if function exists
+              auto referencedFunction = m_assembly.findModel(functionId);
+              if (!referencedFunction)
+              {
+                  return; // Function not found
+              }
+
+              // Check for self-reference (circular dependency)
+              if (referencedFunction->getResourceId() == model.getResourceId())
+              {
+                  return; // Avoid infinite recursion
+              }
+
+              // Count nodes in this referenced function (excluding Begin and End nodes)
+              for (auto & node : *referencedFunction)
+              {
+                  // Skip Begin, End, and FunctionCall nodes
+                  if (dynamic_cast<Begin const *>(node.second.get()) ||
+                      dynamic_cast<End const *>(node.second.get()) ||
+                      dynamic_cast<FunctionCall const *>(node.second.get()))
+                  {
+                      continue;
+                  }
+
+                  totalNodeCount++;
+              }
+
+              // Mark as counted
+              countedModels.insert(functionId);
+
+              // Recursively count nodes from function calls in the referenced function
+              countNodesFromFunctionCalls(*referencedFunction, countedModels, totalNodeCount);
+          });
+
+        // Apply the visitor to the model
+        const_cast<Model &>(model).visitNodes(functionCallVisitor);
+    }
 } // namespace gladius::nodes
