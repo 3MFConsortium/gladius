@@ -178,24 +178,15 @@ namespace gladius::nodes
      * @param functionCall The function call node that triggers the integration.
      * @throws std::runtime_error if integration fails or required nodes/ports are not found.
      */
-    void GraphFlattener::integrateModel(Model & model,
-                                        Model & target,
-                                        nodes::FunctionCall const & functionCall)
+    /**
+ * @brief Validates that all required inputs of a function call are properly connected
+ * 
+ * @param functionCall The function call to validate inputs for
+ * @throws std::runtime_error if any input is not properly connected
+ */
+void GraphFlattener::validateFunctionCallInputs(nodes::FunctionCall const & functionCall) const
     {
         ProfileFunction;
-        if (model.getResourceId() == target.getResourceId())
-        {
-            return; // nothing to integrate
-        }
-
-        if (!m_assembly.findModel(model.getResourceId()))
-        {
-            throw std::runtime_error(fmt::format("Model {} with id {} not found",
-                                                 model.getDisplayName().value_or(""),
-                                                 model.getResourceId()));
-        }
-
-        // check, if all required inputs are connected
         auto const & inputs = functionCall.constParameter();
         for (auto const & [inputName, input] : inputs)
         {
@@ -207,29 +198,39 @@ namespace gladius::nodes
             if (!inputSource.has_value())
             {
                 throw std::runtime_error(fmt::format("Input {} of function call {} has no source",
-                                                     inputName,
-                                                     functionCall.getUniqueName()));
+                                                    inputName,
+                                                    functionCall.getUniqueName()));
             }
 
             if (!inputSource.value().port)
             {
                 throw std::runtime_error(fmt::format("Input {} of function call {} has no port",
-                                                     inputName,
-                                                     functionCall.getUniqueName()));
+                                                    inputName,
+                                                    functionCall.getUniqueName()));
             }
         }
+    }
 
-        // Ensure recursive flattening is done before integrating
-        flattenRecursive(model);
-
-        // Pre-allocate collections to avoid reallocations
-        std::unordered_map<std::string, std::string> nameMapping; // old name -> new name
-        nameMapping.reserve(100); // Reserve space for a reasonable number of nodes
-
+/**
+ * @brief Integrates nodes from source model into target model and creates a name mapping
+ * 
+ * @param model Source model containing nodes to integrate
+ * @param target Target model to integrate nodes into
+ * @param nameMapping Output parameter that will map source node names to target node names
+ * @return std::vector<NodeBase *> Collection of newly created nodes
+ * @throws std::runtime_error if node integration fails
+ */
+std::vector<NodeBase *> GraphFlattener::integrateNodesFromModel(
+    Model & model, 
+    Model & target, 
+    std::unordered_map<std::string, std::string> & nameMapping)
+    {
+        ProfileFunction;
+        // Pre-allocate to avoid reallocations
         std::vector<NodeBase *> createdNodes;
-        createdNodes.reserve(100); // Reserve space for a reasonable number of nodes
+        createdNodes.reserve(100);
 
-        // 1. Integrate all nodes first to create the new structure
+        // Integrate all nodes first to create the new structure
         for (auto & node : model)
         {
             // Skip Begin and End nodes
@@ -248,14 +249,35 @@ namespace gladius::nodes
             }
             createdNodes.push_back(integratedNode);
 
-            // 2. Update the name mapping
+            // Update the name mapping
             nameMapping[node.second->getUniqueName()] = integratedNode->getUniqueName();
         }
 
+        return createdNodes;
+    }
+
+/**
+ * @brief Updates connections for newly integrated nodes
+ * 
+ * @param model Source model
+ * @param target Target model
+ * @param functionCall Function call that triggered the integration
+ * @param nameMapping Mapping from source node names to target node names
+ * @param createdNodes Collection of newly created nodes
+ * @throws std::runtime_error if connection update fails due to missing nodes or ports
+ */
+void GraphFlattener::updateNodeConnections(
+    Model & model,
+    Model & target,
+    nodes::FunctionCall const & functionCall,
+    std::unordered_map<std::string, std::string> const & nameMapping,
+    std::vector<NodeBase *> const & createdNodes)
+    {
+        ProfileFunction;
         // Cache Begin node for input mapping
         auto const * beginNode = model.getBeginNode();
 
-        // 3. Update the source ports for each new node
+        // Update the source ports for each new node
         for (auto * node : createdNodes)
         {
             for (auto & [parameterName, parameter] : node->parameter())
@@ -281,61 +303,143 @@ namespace gladius::nodes
                 // inputs to the function call
                 if (dynamic_cast<Begin const *>(originalSourceNode))
                 {
-                    auto const & inputs = functionCall.constParameter();
-                    auto inputIt = inputs.find(sourcePortName);
-                    
-                    if (inputIt == inputs.end())
-                    {
-                        throw std::runtime_error(
-                          fmt::format("Input {} not found", sourcePortName));
-                    }
-                    
-                    auto const & input = inputIt->second;
-                    auto const & inputSource = input.getConstSource();
-                    if (!inputSource.has_value() || !inputSource.value().port)
-                    {
-                        throw std::runtime_error(
-                          fmt::format("Input {} has no valid source", sourcePortName));
-                    }
-
-                    auto portId = inputSource.value().portId;
-                    auto * port = target.getPort(portId);
-                    if (!port)
-                    {
-                        throw std::runtime_error(fmt::format("Port {} not found", portId));
-                    }
-
-                    parameter.setInputFromPort(*port);
+                    connectBeginNodeInput(target, functionCall, parameter, sourcePortName);
                     continue;
                 }
 
-                // Fast lookup in the name mapping for regular nodes
-                auto newSourceNodeNameIter = nameMapping.find(originalSourceNodeName);
-                if (newSourceNodeNameIter == std::end(nameMapping))
-                {
-                    throw std::runtime_error(
-                      fmt::format("Source node {} not found", originalSourceNodeName));
-                }
-
-                auto * newSourceNode = target.findNode(newSourceNodeNameIter->second);
-                if (!newSourceNode)
-                {
-                    throw std::runtime_error(
-                      fmt::format("Source node {} not found", newSourceNodeNameIter->second));
-                }
-
-                Port * newSourcePort = newSourceNode->findOutputPort(sourcePortName);
-                if (!newSourcePort)
-                {
-                    throw std::runtime_error(
-                      fmt::format("Source port {} not found", sourcePortName));
-                }
-
-                parameter.setInputFromPort(*newSourcePort);
+                connectRegularNodeInput(target, parameter, originalSourceNodeName, sourcePortName, nameMapping);
             }
         }
+    }
 
-        // 4. Update the outputs
+/**
+ * @brief Connects an input parameter to a corresponding function call input
+ * 
+ * @param target Target model
+ * @param functionCall Function call that contains the input
+ * @param parameter Parameter to connect
+ * @param sourcePortName Source port name to look for in function call inputs
+ * @throws std::runtime_error if connection fails due to missing input or port
+ */
+void GraphFlattener::connectBeginNodeInput(
+    Model & target,
+    nodes::FunctionCall const & functionCall,
+    VariantParameter & parameter,
+    std::string const & sourcePortName)
+    {
+        ProfileFunction;
+        auto const & inputs = functionCall.constParameter();
+        auto inputIt = inputs.find(sourcePortName);
+        
+        if (inputIt == inputs.end())
+        {
+            throw std::runtime_error(
+              fmt::format("Input {} not found", sourcePortName));
+        }
+        
+        auto const & input = inputIt->second;
+        auto const & inputSource = input.getConstSource();
+        if (!inputSource.has_value() || !inputSource.value().port)
+        {
+            throw std::runtime_error(
+              fmt::format("Input {} has no valid source", sourcePortName));
+        }
+
+        auto portId = inputSource.value().portId;
+        auto * port = target.getPort(portId);
+        if (!port)
+        {
+            throw std::runtime_error(fmt::format("Port {} not found", portId));
+        }
+
+        parameter.setInputFromPort(*port);
+    }
+
+/**
+ * @brief Connects an input parameter to a corresponding port in a regular node
+ * 
+ * @param target Target model
+ * @param parameter Parameter to connect
+ * @param originalSourceNodeName Original source node name
+ * @param sourcePortName Source port name
+ * @param nameMapping Mapping from source node names to target node names
+ * @throws std::runtime_error if connection fails due to missing node or port
+ */
+void GraphFlattener::connectRegularNodeInput(
+    Model & target,
+    VariantParameter & parameter,
+    std::string const & originalSourceNodeName,
+    std::string const & sourcePortName,
+    std::unordered_map<std::string, std::string> const & nameMapping)
+    {
+        ProfileFunction;
+        // Fast lookup in the name mapping for regular nodes
+        auto newSourceNodeNameIter = nameMapping.find(originalSourceNodeName);
+        if (newSourceNodeNameIter == std::end(nameMapping))
+        {
+            throw std::runtime_error(
+              fmt::format("Source node {} not found", originalSourceNodeName));
+        }
+
+        auto * newSourceNode = target.findNode(newSourceNodeNameIter->second);
+        if (!newSourceNode)
+        {
+            throw std::runtime_error(
+              fmt::format("Source node {} not found", newSourceNodeNameIter->second));
+        }
+
+        Port * newSourcePort = newSourceNode->findOutputPort(sourcePortName);
+        if (!newSourcePort)
+        {
+            throw std::runtime_error(
+              fmt::format("Source port {} not found", sourcePortName));
+        }
+
+        parameter.setInputFromPort(*newSourcePort);
+    }
+
+/**
+ * @brief Integrates a model into another model by cloning and updating the nodes and connections
+ *
+ * @param model The model to be integrated
+ * @param target The target model to integrate into
+ * @param functionCall The function call node that triggers the integration
+ * @throws std::runtime_error if integration fails or required nodes/ports are not found
+ */
+void GraphFlattener::integrateModel(Model & model,
+                                    Model & target,
+                                    nodes::FunctionCall const & functionCall)
+    {
+        ProfileFunction;
+        if (model.getResourceId() == target.getResourceId())
+        {
+            return; // nothing to integrate
+        }
+
+        if (!m_assembly.findModel(model.getResourceId()))
+        {
+            throw std::runtime_error(fmt::format("Model {} with id {} not found",
+                                                model.getDisplayName().value_or(""),
+                                                model.getResourceId()));
+        }
+
+        // Validate inputs
+        validateFunctionCallInputs(functionCall);
+
+        // Ensure recursive flattening is done before integrating
+        flattenRecursive(model);
+
+        // Pre-allocate name mapping
+        std::unordered_map<std::string, std::string> nameMapping; // old name -> new name
+        nameMapping.reserve(100);
+
+        // Integrate nodes and get created node references
+        auto createdNodes = integrateNodesFromModel(model, target, nameMapping);
+        
+        // Update connections for the new nodes
+        updateNodeConnections(model, target, functionCall, nameMapping, createdNodes);
+
+        // Update the outputs
         rerouteOutputs(model, target, functionCall, nameMapping);
     }
 
