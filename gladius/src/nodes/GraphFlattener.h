@@ -31,6 +31,12 @@ namespace gladius::nodes
          * @brief Flatten the graph, so the assembly will only have one single function (model)
          */
         Assembly flatten();
+        
+        /**
+         * @brief Calculate the expected number of nodes after flattening without performing the actual flattening
+         * @return The expected node count in the flattened model
+         */
+        size_t calculateExpectedNodeCount();
 
       private:
         Assembly m_assembly;
@@ -122,5 +128,16 @@ namespace gladius::nodes
         void rerouteOutputs(Model & model, Model & target, nodes::FunctionCall const & functionCall, std::unordered_map<std::string, std::string> const & nameMapping);
 
         size_t m_flatteningDepth = 0;
+        
+        /**
+         * @brief Counts nodes that would be added from function calls in a model
+         * @param model The model to examine function calls in
+         * @param countedModels Set of models that have already been counted
+         * @param totalNodeCount Reference to running total of node count
+         */
+        void countNodesFromFunctionCalls(
+            Model const & model, 
+            std::unordered_set<ResourceId> & countedModels, 
+            size_t & totalNodeCount);
     };
 }

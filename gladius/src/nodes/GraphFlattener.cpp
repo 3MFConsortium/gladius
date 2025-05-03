@@ -70,6 +70,9 @@ namespace gladius::nodes
 
         // 2. Integrate the referenced model into the target model
         m_flatteningDepth++;
+        fmt::print("Integrating function call: {} into model: {} (depth: {})\n",
+                   functionCall.getDisplayName(), target.getResourceId(), m_flatteningDepth);
+
         integrateModel(*referencedFunction, target, functionCall);
         m_flatteningDepth--;
     }
@@ -77,6 +80,9 @@ namespace gladius::nodes
     Assembly GraphFlattener::flatten()
     {
         ProfileFunction;
+        // print the expected node count
+        size_t expectedNodeCount = calculateExpectedNodeCount();
+        fmt::print("Expected node count after flattening: {}\n", expectedNodeCount);
         auto modelToFlat = m_assembly.assemblyModel();
 
         if (!modelToFlat)
@@ -105,9 +111,101 @@ namespace gladius::nodes
         
         // Update the graph order
         m_assembly.assemblyModel()->updateGraphAndOrderIfNeeded();
+
+        // actual node count
+        size_t actualNodeCount = m_assembly.assemblyModel()->getSize();
+        fmt::print("Actual node count after flattening: {}\n", actualNodeCount);
+        if (actualNodeCount != expectedNodeCount)
+        {
+            fmt::print("Warning: Expected node count ({}) does not match actual node count ({}).\n",
+                       expectedNodeCount, actualNodeCount);
+        }
+        
         
         return m_assembly;
     }
+    
+/**
+ * @brief Calculate the expected number of nodes after flattening without performing the actual flattening
+ * 
+ * This method simulates the flattening process to count how many nodes would be in the final
+ * flattened model without actually modifying any models. It takes into account:
+ * - Only functions with used outputs
+ * - Skipping Begin and End nodes during integration
+ * - Each node being integrated exactly once (no duplicates)
+ * 
+ * @return size_t The expected number of nodes in the flattened model
+ * @throws std::runtime_error if the assembly model is not found
+ */
+size_t GraphFlattener::calculateExpectedNodeCount()
+{
+    ProfileFunction;
+    auto modelToFlat = m_assembly.assemblyModel();
+
+    if (!modelToFlat)
+    {
+        throw std::runtime_error("Assembly model not found");
+    }
+    
+    // Clear and reserve capacity for used functions
+    m_usedFunctions.clear();
+    m_usedFunctions.reserve(m_assembly.getFunctions().size());
+    
+    // Find all functions that are actually used
+    findUsedFunctions();
+    
+    // The assembly model is always used
+    m_usedFunctions.insert(modelToFlat->getResourceId());
+    
+    // Keep track of node count without Begin/End nodes
+    size_t totalNodeCount = 0;
+    
+    // Track models that have been counted to avoid double-counting
+    std::unordered_set<ResourceId> countedModels;
+    
+    // Count all nodes in the used functions, excluding Begin and End nodes
+    for (auto const & functionId : m_usedFunctions)
+    {
+        // Skip if already counted
+        if (countedModels.find(functionId) != countedModels.end())
+        {
+            continue;
+        }
+        
+        auto model = m_assembly.findModel(functionId);
+        if (!model)
+        {
+            continue;
+        }
+        
+        // Count nodes in this model (excluding Begin and End nodes)
+        for (auto & node : *model)
+        {
+            // Skip Begin and End nodes as they're not integrated
+            if (dynamic_cast<Begin const *>(node.second.get()) ||
+                dynamic_cast<End const *>(node.second.get()))
+            {
+                continue;
+            }
+            
+            // Skip FunctionCall nodes as they'll be replaced
+            if (dynamic_cast<FunctionCall const *>(node.second.get()))
+            {
+                continue;
+            }
+            
+            totalNodeCount++;
+        }
+        
+        // Mark as counted
+        countedModels.insert(functionId);
+        
+        // Count nodes from function calls within this model
+        countNodesFromFunctionCalls(*model, countedModels, totalNodeCount);
+    }
+    
+    return totalNodeCount;
+}
 
     void GraphFlattener::flattenRecursive(Model & model)
     {
@@ -252,6 +350,10 @@ std::vector<NodeBase *> GraphFlattener::integrateNodesFromModel(
             // Update the name mapping
             nameMapping[node.second->getUniqueName()] = integratedNode->getUniqueName();
         }
+
+        // print size of created nodes and size of target model
+        std::cout << "Created nodes: " << createdNodes.size() << std::endl;
+        std::cout << "Target model size: " << target.getSize() << std::endl;
 
         return createdNodes;
     }
@@ -756,4 +858,89 @@ void GraphFlattener::integrateModel(Model & model,
             }
         }
     }
+
+/**
+ * @brief Counts nodes that would be added from function calls in a model
+ * 
+ * This method recursively counts nodes from function calls within the given model.
+ * It checks if any outputs of function calls are used and counts nodes from the
+ * referenced function if they haven't been counted already.
+ * 
+ * @param model The model to examine function calls in
+ * @param countedModels Set of models that have already been counted
+ * @param totalNodeCount Reference to running total of node count
+ */
+void GraphFlattener::countNodesFromFunctionCalls(
+    Model const & model, 
+    std::unordered_set<ResourceId> & countedModels, 
+    size_t & totalNodeCount)
+{
+    ProfileFunction;
+    
+    // Create a visitor for function calls
+    auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
+        [&](FunctionCall & functionCallNode)
+        {
+            // Check if any output is actually used
+            bool isFunctionOutputUsed = false;
+            for (auto const & output : functionCallNode.getOutputs())
+            {
+                if (output.second.isUsed())
+                {
+                    isFunctionOutputUsed = true;
+                    break;
+                }
+            }
+
+            if (!isFunctionOutputUsed)
+            {
+                return; // Skip if no outputs are used
+            }
+            
+            // Get the function ID
+            auto functionId = functionCallNode.getFunctionId();
+            
+            // Check if already counted
+            if (countedModels.find(functionId) != countedModels.end())
+            {
+                return; // Already counted this function
+            }
+            
+            // Check if function exists
+            auto referencedFunction = m_assembly.findModel(functionId);
+            if (!referencedFunction)
+            {
+                return; // Function not found
+            }
+            
+            // Check for self-reference (circular dependency)
+            if (referencedFunction->getResourceId() == model.getResourceId())
+            {
+                return; // Avoid infinite recursion
+            }
+            
+            // Count nodes in this referenced function (excluding Begin and End nodes)
+            for (auto & node : *referencedFunction)
+            {
+                // Skip Begin, End, and FunctionCall nodes
+                if (dynamic_cast<Begin const *>(node.second.get()) ||
+                    dynamic_cast<End const *>(node.second.get()) ||
+                    dynamic_cast<FunctionCall const *>(node.second.get()))
+                {
+                    continue;
+                }
+                
+                totalNodeCount++;
+            }
+            
+            // Mark as counted
+            countedModels.insert(functionId);
+            
+            // Recursively count nodes from function calls in the referenced function
+            countNodesFromFunctionCalls(*referencedFunction, countedModels, totalNodeCount);
+        });
+    
+    // Apply the visitor to the model
+    const_cast<Model &>(model).visitNodes(functionCallVisitor);
+}
 } // namespace gladius::nodes
