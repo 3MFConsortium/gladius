@@ -4,14 +4,15 @@
 #include "nodes/Components.h"
 #include "nodes/Object.h"
 #include "imgui.h"
-#include "BuildItemView.h"
 
 namespace gladius::ui
 {
     void Outline::setDocument(SharedDocument document)
     {
         m_document = std::move(document);
-    }    bool Outline::render() const
+    }
+    
+    bool Outline::render() const
     {
         if (!m_document)
         {
@@ -24,6 +25,8 @@ namespace gladius::ui
 
         ImGui::BeginGroup();
         bool propertiesChanged = false;
+        
+        // Build Items section
         if (ImGui::TreeNodeEx("Build Items", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
             // Replace direct rendering with BuildItemView
@@ -32,7 +35,21 @@ namespace gladius::ui
             {
                 // If build items were modified, mark the document as changed
                 propertiesChanged = true;
-            }            ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
+        
+        // Metadata section
+        if (ImGui::TreeNodeEx("Metadata", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            // Render the metadata view
+            MetaDataView metaDataView;
+            if (metaDataView.render(m_document))
+            {
+                // If metadata was modified, mark the document as changed
+                propertiesChanged = true;
+            }
+            ImGui::TreePop();
         }
 
         ImGui::EndGroup();

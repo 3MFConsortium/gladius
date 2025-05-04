@@ -1,5 +1,7 @@
 #pragma once
 #include "Document.h"
+#include "BuildItemView.h"
+#include "MetaDataView.h"
 
 //forward declaration
 namespace gladius::nodes
