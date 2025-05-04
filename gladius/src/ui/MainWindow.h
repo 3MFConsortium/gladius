@@ -16,6 +16,7 @@
 #include "RenderWindow.h"
 #include "SliceView.h"
 #include "Outline.h"
+#include "ThreemfFileViewer.h"
 
 #include <chrono>
 
@@ -117,6 +118,7 @@ namespace gladius::ui
         LogView m_logView;
         RenderWindow m_renderWindow;
         AboutDialog m_about;
+        ThreemfFileViewer m_threemfFileViewer;
 
         std::shared_ptr<Document> m_doc;
         events::SharedLogger m_logger;

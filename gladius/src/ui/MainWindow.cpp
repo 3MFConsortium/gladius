@@ -44,6 +44,7 @@ namespace gladius::ui
     }
 
     MainWindow::MainWindow()
+        : m_threemfFileViewer(std::make_shared<events::Logger>())
     {
         m_logger = std::make_shared<events::Logger>();
         m_mainView.addViewCallBack([&]() { renderWelcomeScreen(); });
@@ -59,6 +60,9 @@ namespace gladius::ui
         m_doc = std::move(doc);
         m_logger = std::move(logger);
         m_outline.setDocument(m_doc);
+        
+        // Set the logger for the ThreemfFileViewer
+        m_threemfFileViewer = ThreemfFileViewer(m_logger);
 
         m_modelEditor.setDocument(m_doc);
         using namespace gladius;
@@ -193,6 +197,13 @@ namespace gladius::ui
     {
         ProfileFunction;
         m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
+        
+        // Check for keyboard shortcuts
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false)) {
+            m_threemfFileViewer.setDirectory(getAppDir() / "examples");
+            m_threemfFileViewer.setVisibility(!m_threemfFileViewer.isVisible());
+        }
         if (!m_core->getComputeContext().isValid())
         {
             m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
@@ -324,6 +335,7 @@ namespace gladius::ui
             logViewer();
             m_about.render();
             m_renderWindow.updateCamera();
+            m_threemfFileViewer.render(m_doc);
         }
         catch (OpenCLError & e)
         {
@@ -692,6 +704,15 @@ namespace gladius::ui
         }
 
         ImGui::Separator();
+        
+        // Add 3MF File Browser menu item
+        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN "\t3MF Browser")))
+        {
+            closeMenu();
+            m_threemfFileViewer.setDirectory(getAppDir() / "examples");
+            m_threemfFileViewer.setVisibility(true);
+        }
+        
         if (m_showSettings)
         {
             if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_COG "\tSettings")))
