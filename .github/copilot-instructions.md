@@ -1,7 +1,7 @@
 # C++ Coding Guidelines
 
 ## General
-- **Modern C++**: Use C++11 and later features.
+- **Modern C++**: Use C++11 and later features. Use std::algorithm when possible.
 - **Naming**: camelCase for variables/functions, PascalCase for classes/structs, UPPER_CASE for constants/macros.
 - **Comments**: Use Doxygen-style comments.
 
@@ -34,6 +34,9 @@
 - **Inline Functions**: Use `inline` for small functions.
 - **Const Correctness**: Use `const` wherever possible.
 - **East-side const**: Place `const` on the right of the type being qualified (e.g., `int const*` rather than `const int*`).
+- **Move Semantics**: Use move semantics for performance optimization.
+- **Copy Elision**: Use copy elision to avoid unnecessary copies.
+- **constexpr**: Use `constexpr` for compile-time constants.
 
 ## Testing
 - **Unit Tests**: Use GTest/GMock.
@@ -57,5 +60,11 @@
 ## Best Practices
 - **STL Containers**: Use `empty()` instead of `size()` to check for emptiness.
 - **Fallthrough**: Use `[[fallthrough]]` only when necessary.
+
+## Comments
+- **Doxygen**: Use Doxygen comments for public APIs. Use `///` for single-line comments and `/** */` for multi-line comments.
+- **TODOs**: Use `// TODO: description` for tasks to be completed later.
+- **FIXME**: Use `// FIXME: description` for known issues that need fixing.
+- **Documentatioon**: Only add comments that add additional value. Avoid stating the obvious.
 
 By following these guidelines, you can ensure clean, efficient, and maintainable C++ code.
