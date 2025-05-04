@@ -206,7 +206,11 @@ namespace gladius::ui
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
-            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
+            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
+                        "Level Set Details\n\n"
+                        "Configure this level set's mathematical properties and transforms.\n"
+                        "Level sets define shapes using math functions instead of triangles,\n"
+                        "which gives them smooth surfaces at any resolution.");
         }
 
         return propertiesChanged;

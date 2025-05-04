@@ -40,7 +40,11 @@ namespace gladius::ui
             ImGui::TreePop();
         }
         ImGui::EndGroup();
-        frameOverlay(ImVec4(0.9f, 0.6f, 0.3f, 0.1f));
+        frameOverlay(ImVec4(0.9f, 0.6f, 0.3f, 0.1f), 
+                    "Document Information\n\n"
+                    "Add title, author, and other details about your design here.\n"
+                    "This information helps identify your model when sharing with others or\n"
+                    "when sending to manufacturing services.");
 
         ImGui::BeginGroup();
         // Build Items section
@@ -58,8 +62,13 @@ namespace gladius::ui
 
         ImGui::EndGroup();
         frameOverlay(ImVec4(1.0f, 0.9f, 0.6f, 0.1f),
-                     "Build items are used to define the objects in the 3MF model. "
-                     "You can add, remove, or modify build items here.");
+                     "Objects to Manufacture\n\n"
+                     "This section shows the parts that will be sent to the printer.\n"
+                     "You can:\n"
+                     " Add new objects to your build\n"
+                     " Position and rotate parts\n"
+                     " Combine multiple objects in your design\n"
+                     " Arrange items for optimal printing");
 
         return propertiesChanged;
     }

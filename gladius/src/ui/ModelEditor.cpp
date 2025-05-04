@@ -214,7 +214,11 @@ namespace gladius::ui
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
-            frameOverlay(ImVec4(0.0f, 0.8f, 0.8f, 0.1f));
+            frameOverlay(ImVec4(0.0f, 0.8f, 0.8f, 0.1f),
+                         "Components Objects\n\n"
+                         "Design elements that form your model's structure and features.\n"
+                         "Use components to reuse repetitive features and to\n"
+                         "composite complex parts.\n");
 
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("VolumeData", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
@@ -227,7 +231,18 @@ namespace gladius::ui
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
-            frameOverlay(ImVec4(1.0f, 0.0f, 1.0f, 0.1f));
+            frameOverlay(ImVec4(1.0f, 0.0f, 1.0f, 0.1f), 
+              "Volume Data\n\n"
+              "Define spatially varying properties inside your 3D models.\n"
+              "Volume data lets you specify how material properties change throughout\n"
+              "the interior of an object, not just on its surface.\n\n"
+              "Common uses:\n"
+              " Gradual color transitions and material blending\n"
+              " Variable density or infill structures\n"
+              " Physical properties like elasticity or conductivity\n"
+              " Temperature or stress distribution for simulation\n\n"
+              "Apply volume data to meshes or level sets using functions with \"pos\" input\n"
+              "and appropriate scalar (custom property) or vector (color) outputs for your desired property.");
 
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("LevelSet", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
@@ -240,7 +255,13 @@ namespace gladius::ui
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
-            frameOverlay(ImVec4(1.0f, 1.0f, 0.0f, 0.1f));
+            frameOverlay(
+              ImVec4(1.0f, 1.0f, 0.0f, 0.1f),
+              "Level Sets\n\n"
+              "Define your 3D shape using mathematical boundaries instead of triangles.\n"
+              "Level sets are perfect for creating smooth, organic shapes and\n"
+              "allow for easier mixing between different shapes.\n\n"
+              "For a level set you need a function with a \"pos\" vector as input and a scalar output.\n");
 
             resourceOutline();
 
@@ -251,7 +272,13 @@ namespace gladius::ui
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
-            frameOverlay(ImVec4(0.0f, 0.5f, 1.0f, 0.1f));
+            frameOverlay(ImVec4(0.0f, 0.5f, 1.0f, 0.1f),
+                         "Functions\n\n"
+                         "These are the building blocks for creating implicit surfaces.\n"
+                         "Think of them as tools that let you combine basic shapes like\n"
+                         "spheres and cubes into more complex models.\n\n"
+                         "You can reference functions in a Level Set to define a geometry\n"
+                         "or in a Volume data to define the inner properties of your model.\n");
 
             ImGui::TreePop();
         }

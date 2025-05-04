@@ -216,7 +216,10 @@ namespace gladius::ui
                             propertiesChanged = true;
                             ImGui::TreePop();
                             ImGui::EndGroup();
-                            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
+                            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
+                                        "Build Item Properties\n\n"
+                                        "Each build item can be positioned, rotated, and scaled.\n"
+                                        "Changes here affect how your model appears in the final print.");
                             continue; // Skip the rest for this deleted item
                         }
                         catch (...)
@@ -230,7 +233,10 @@ namespace gladius::ui
                     ImGui::TreePop();
                 }
                 ImGui::EndGroup();
-                frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
+                frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
+                            "Build Item\n\n"
+                            "Items in this section represent objects that will be printed.\n"
+                            "Each one has a position, rotation, and references a 3D model.");
             }
         }
         catch (...)

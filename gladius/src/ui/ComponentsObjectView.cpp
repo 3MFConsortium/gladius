@@ -317,7 +317,10 @@ namespace gladius::ui
                     ImGui::TreePop();
                 }
                 ImGui::EndGroup();
-                frameOverlay(ImVec4(1.0f, 0.8f, 0.8f, 0.2f));
+                frameOverlay(ImVec4(1.0f, 0.8f, 0.8f, 0.2f),
+                            "Components\n\n"
+                            "Components are reusable parts that make up your 3D models.\n"
+                            "They can be combined to create complex objects and assemblies.");
             }
         }
         catch (...)
