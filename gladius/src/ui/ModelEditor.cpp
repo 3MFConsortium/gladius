@@ -594,7 +594,38 @@ namespace gladius::ui
             
             // Auto-focus on the filter input when popup opens
             bool isFirstFrame = ImGui::IsWindowAppearing();
-            if (isFirstFrame) {
+            
+            // Check if any key is pressed and focus the filter input
+            bool needsFocus = isFirstFrame;
+            auto& io = ImGui::GetIO();
+            bool isAnyKeyTyped = io.InputQueueCharacters.Size > 0;
+            
+            // Check if backspace is pressed (Backspace isn't in InputQueueCharacters)
+            bool isBackspacePressed = io.KeysDown[ImGui::GetKeyIndex(ImGuiKey_Backspace)];
+                                    
+            // Check if a key was pressed and the filter input doesn't already have focus
+            if ((isAnyKeyTyped || isBackspacePressed) && !ImGui::IsItemActive()) {
+                needsFocus = true;
+                
+                // If any character was typed, update the filter text with it
+                if (!isFirstFrame) {
+                    if (isBackspacePressed) {
+                        // Clear filter text on backspace
+                        m_nodeFilterText.clear();
+                    } else {
+                        // Set filter text to the first typed character
+                        for (int i = 0; i < io.InputQueueCharacters.Size; i++) {
+                            char c = (char)io.InputQueueCharacters[i];
+                            if (c >= 32) { // Ignore control characters
+                                m_nodeFilterText = c;
+                                break; // Only use the first typed character
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (needsFocus) {
                 ImGui::SetKeyboardFocusHere();
             }
             
