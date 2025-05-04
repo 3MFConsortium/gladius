@@ -91,6 +91,9 @@ namespace gladius::ui
 
         void undo();
         void redo();
+        
+        // Helper method to check if a string matches the current filter
+        bool matchesNodeFilter(const std::string& text) const;
 
         void pushNodeColor(nodes::NodeBase & node);
         void popNodeColor(nodes::NodeBase & node);
@@ -139,6 +142,9 @@ namespace gladius::ui
         // Confirmation dialog for removing unused resources
         bool m_showDeleteUnusedResourcesConfirmation = false;
         std::vector<Lib3MF::PResource> m_unusedResources;
+        
+        // Node filtering
+        std::string m_nodeFilterText;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

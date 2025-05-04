@@ -131,6 +131,14 @@ namespace gladius::ui
                                ImVec2(300, height),
                                ImGuiWindowFlags_HorizontalScrollbar);
 
+        // Add a filter text box at the top
+        ImGui::TextUnformatted(ICON_FA_SEARCH);
+        ImGui::SameLine();
+        ImGui::PushItemWidth(200.0f * m_uiScale);
+        ImGui::InputText("##NodeFilterToolbox", &m_nodeFilterText);
+        ImGui::PopItemWidth();
+        ImGui::Separator();
+
         // Add the user defined functions. Because we do not have a mouse position
         // we use a dummy position
         ImGui::TextUnformatted("Functions");
@@ -560,6 +568,8 @@ namespace gladius::ui
         {
             ImGui::OpenPopup("Create Node");
             m_showCreateNodePopUp = false;
+            // Clear filter text when opening popup
+            m_nodeFilterText.clear();
         }
 
         if (m_currentModel == nullptr)
@@ -577,6 +587,25 @@ namespace gladius::ui
 
         if (ImGui::BeginPopup("Create Node"))
         {
+            // Add filter text box at the top of the popup
+            ImGui::TextUnformatted(ICON_FA_SEARCH);
+            ImGui::SameLine();
+            ImGui::PushItemWidth(200.0f * m_uiScale);
+            
+            // Auto-focus on the filter input when popup opens
+            bool isFirstFrame = ImGui::IsWindowAppearing();
+            if (isFirstFrame) {
+                ImGui::SetKeyboardFocusHere();
+            }
+            
+            if (ImGui::InputText("##NodeFilter", &m_nodeFilterText, ImGuiInputTextFlags_AutoSelectAll))
+            {
+                // Filter text changed
+            }
+            ImGui::PopItemWidth();
+            ImGui::Separator();
+            
+            // Filter function and mesh resources using the filter text
             functionToolBox(mousePos);
             meshResourceToolBox(mousePos);
 
@@ -611,10 +640,15 @@ namespace gladius::ui
                       bool hasRequiredField = targetParameterIter != std::end(node.parameter());
 
                       pushNodeColor(node);
-                      if (node.getCategory() == category &&
+                      // Check if node matches filter
+                      std::string nodeName = node.name();
+                      bool matchesFilter = matchesNodeFilter(nodeName);
+                      
+                      if (matchesFilter && 
+                          node.getCategory() == category &&
                           (hasRequiredField || !showOnlyLinkableNodes))
                       {
-                          if (ImGui::Button(node.name().c_str()))
+                          if (ImGui::Button(nodeName.c_str()))
                           {
                               createUndoRestorePoint("Create node");
                               auto createdNode = m_currentModel->create(node);
@@ -913,6 +947,23 @@ namespace gladius::ui
         m_history = History();
         switchModel();
     }
+    
+    bool ModelEditor::matchesNodeFilter(const std::string& text) const
+    {
+        if (m_nodeFilterText.empty()) {
+            return true; // No filter active, match everything
+        }
+        
+        // Case-insensitive comparison
+        std::string lowerText = text;
+        std::string lowerFilter = m_nodeFilterText;
+        std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(), 
+                      [](unsigned char c){ return std::tolower(c); });
+        std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), 
+                      [](unsigned char c){ return std::tolower(c); });
+                      
+        return lowerText.find(lowerFilter) != std::string::npos;
+    }
 
     void ModelEditor::functionToolBox(ImVec2 mousePos)
     {
@@ -923,7 +974,17 @@ namespace gladius::ui
             {
                 continue;
             }
-            if (ImGui::Button(model->getDisplayName().value_or("function").c_str()))
+            
+            // Get the display name
+            std::string displayName = model->getDisplayName().value_or("function");
+            
+            // Check if it matches the filter
+            if (!matchesNodeFilter(displayName))
+            {
+                continue; // Skip this item if it doesn't match the filter
+            }
+            
+            if (ImGui::Button(displayName.c_str()))
             {
                 createUndoRestorePoint("Create node");
                 auto posOnCanvas = ed::ScreenToCanvas(mousePos);
@@ -957,8 +1018,17 @@ namespace gladius::ui
             {
                 continue;
             }
+            
+            // Get the display name
+            std::string displayName = key.getDisplayName();
+            
+            // Check if it matches the filter
+            if (!matchesNodeFilter(displayName))
+            {
+                continue; // Skip this item if it doesn't match the filter
+            }
 
-            if (ImGui::Button(key.getDisplayName().c_str()))
+            if (ImGui::Button(displayName.c_str()))
             {
                 createUndoRestorePoint("Create node");
                 auto posOnCanvas = ed::ScreenToCanvas(mousePos);
