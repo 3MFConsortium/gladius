@@ -9,6 +9,7 @@
 - **Headers**: Use `.h` for declarations, `.cpp` for definitions.
 - **Include Guards**: Use `#pragma once`.
 - **Namespaces**: Use `lower_snake_case`, avoid more than two levels.
+- **Maintainability**: Keep code modular, reusable and testable. Avoid long functions and classes.
 
 ## Types
 - **Naming**: UpperCamelCase for all user-defined types.
@@ -39,7 +40,7 @@
 - **constexpr**: Use `constexpr` for compile-time constants.
 
 ## Testing
-- **Unit Tests**: Use GTest/GMock.
+- **Unit Tests**: Use GTest/GMock. Write unit tests if possible.
 - **Test Naming**: Follow `[UnitOfWork_StateUnderTest_ExpectedBehavior]` naming convention:
   - **UnitOfWork**: The method or function being tested
   - **StateUnderTest**: The inputs or conditions being tested
