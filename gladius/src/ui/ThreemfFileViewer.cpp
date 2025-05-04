@@ -242,8 +242,11 @@ namespace gladius::ui
             ImGui::SameLine();
             if (ImGui::Button("Select Directory"))
             {
-                // For now, just use the current directory
-                setDirectory(std::filesystem::current_path());
+                auto selectedDir = queryDirectory(m_directory);
+                if (selectedDir)
+                {
+                    setDirectory(selectedDir.value());
+                }
             }
             
             ImGui::SameLine();
