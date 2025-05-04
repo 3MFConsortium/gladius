@@ -57,7 +57,9 @@ namespace gladius::ui
         }
 
         ImGui::EndGroup();
-        frameOverlay(ImVec4(1.0f, 0.9f, 0.6f, 0.1f));
+        frameOverlay(ImVec4(1.0f, 0.9f, 0.6f, 0.1f),
+                     "Build items are used to define the objects in the 3MF model. "
+                     "You can add, remove, or modify build items here.");
 
         return propertiesChanged;
     }
