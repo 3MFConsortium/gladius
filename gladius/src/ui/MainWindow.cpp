@@ -30,6 +30,7 @@
 #include "io/3mf/Writer3mf.h"
 #include "io/ImageStackExporter.h"
 #include <nodes/ToCommandStreamVisitor.h>
+#include "LibraryBrowser.h"
 
 namespace gladius::ui
 {
@@ -44,9 +45,9 @@ namespace gladius::ui
     }
 
     MainWindow::MainWindow()
-        : m_threemfFileViewer(std::make_shared<events::Logger>())
+        : m_logger(std::make_shared<events::Logger>()),
+          m_libraryBrowser(m_logger) // Initialize m_libraryBrowser with m_logger
     {
-        m_logger = std::make_shared<events::Logger>();
         m_mainView.addViewCallBack([&]() { renderWelcomeScreen(); });
         m_mainView.setRequestCloseCallBack([&]() { close(); });
     }
@@ -60,19 +61,18 @@ namespace gladius::ui
         m_logger = std::move(logger);
         m_outline.setDocument(m_doc);
 
-        // Set the logger for the ThreemfFileViewer
-        m_threemfFileViewer = ThreemfFileViewer(m_logger);
+        // Properly initialize LibraryBrowser
+        m_libraryBrowser.setRootDirectory(getAppDir() / "examples");
+
 
         m_modelEditor.setDocument(m_doc);
         using namespace gladius;
 
         m_renderWindow.initialize(m_core.get(), &m_mainView);
         LOG_LOCATION
-        m_core->getPreviewRenderProgram()->setOnProgramSwapCallBack([&]()
-                                                                    { onPreviewProgramSwap(); });
+        m_core->getPreviewRenderProgram()->setOnProgramSwapCallBack([&]() { onPreviewProgramSwap(); });
 
-        m_core->getOptimzedRenderProgram()->setOnProgramSwapCallBack([&]()
-                                                                     { onPreviewProgramSwap(); });
+        m_core->getOptimzedRenderProgram()->setOnProgramSwapCallBack([&]() { onPreviewProgramSwap(); });
 
         m_dirty = true;
 
@@ -201,8 +201,8 @@ namespace gladius::ui
         ImGuiIO & io = ImGui::GetIO();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false))
         {
-            m_threemfFileViewer.setDirectory(getAppDir() / "examples");
-            m_isThreemfFileViewerVisible = !m_isThreemfFileViewerVisible;
+            m_libraryBrowser.setRootDirectory(getAppDir() / "examples");
+            m_isLibraryBrowserVisible = !m_isLibraryBrowserVisible;
         }
         if (!m_core->getComputeContext().isValid())
         {
@@ -335,9 +335,9 @@ namespace gladius::ui
             logViewer();
             m_about.render();
             m_renderWindow.updateCamera();
-            if (m_isThreemfFileViewerVisible)
+            if (m_isLibraryBrowserVisible)
             {
-                m_threemfFileViewer.render(m_doc);
+                m_libraryBrowser.render(m_doc);
             }
         }
         catch (OpenCLError & e)
@@ -708,12 +708,12 @@ namespace gladius::ui
 
         ImGui::Separator();
 
-        // Add 3MF File Browser menu item
-        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN "\t3MF Browser")))
+        // Add Library Browser menu item
+        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN "\tLibrary Browser")))
         {
             closeMenu();
-            m_threemfFileViewer.setDirectory(getAppDir() / "examples");
-            m_isThreemfFileViewerVisible = true;
+            m_libraryBrowser.setRootDirectory(getAppDir() / "examples");
+            m_isLibraryBrowserVisible = true;
         }
 
         if (m_showSettings)

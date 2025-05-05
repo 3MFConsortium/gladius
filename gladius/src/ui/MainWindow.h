@@ -16,7 +16,7 @@
 #include "Outline.h"
 #include "RenderWindow.h"
 #include "SliceView.h"
-#include "ThreemfFileViewer.h"
+#include "LibraryBrowser.h"
 
 #include <chrono>
 
@@ -120,13 +120,15 @@ namespace gladius::ui
         LogView m_logView;
         RenderWindow m_renderWindow;
         AboutDialog m_about;
-        ThreemfFileViewer m_threemfFileViewer;
-
-        // Flag to manage the visibility of the ThreemfFileViewer
-        bool m_isThreemfFileViewerVisible = false;
 
         std::shared_ptr<Document> m_doc;
         events::SharedLogger m_logger;
+
+
+        // Add member variables for LibraryBrowser
+        LibraryBrowser m_libraryBrowser;
+        bool m_isLibraryBrowserVisible = false;
+
 
         double m_maxTimeSliceOptimization_s = 60.f;
 
