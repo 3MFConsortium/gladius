@@ -5,17 +5,17 @@
 #include <atomic>
 #include <filesystem>
 
-#include "../Document.h"
 #include "../ConfigManager.h"
+#include "../Document.h"
 #include "AboutDialog.h"
 #include "CliExportDialog.h"
 #include "GLView.h"
 #include "LogView.h"
 #include "MeshExportDialog.h"
 #include "ModelEditor.h"
+#include "Outline.h"
 #include "RenderWindow.h"
 #include "SliceView.h"
-#include "Outline.h"
 #include "ThreemfFileViewer.h"
 
 #include <chrono>
@@ -33,7 +33,10 @@ namespace gladius::ui
          * @brief Set the ConfigManager reference
          * @param configManager Reference to the ConfigManager
          */
-        void setConfigManager(ConfigManager& configManager) { m_configManager = &configManager; }
+        void setConfigManager(ConfigManager & configManager)
+        {
+            m_configManager = &configManager;
+        }
 
         void setup(std::shared_ptr<ComputeCore> core,
                    std::shared_ptr<Document> doc,
@@ -43,9 +46,8 @@ namespace gladius::ui
         void open(const std::filesystem::path & filename);
         void startMainLoop();
         void setup();
+
       private:
-
-
         void render();
         void renderWelcomeScreen();
         void nodeEditor();
@@ -74,12 +76,12 @@ namespace gladius::ui
         void saveAs();
         void saveCurrentFunction();
         void importImageStack();
-        
+
         /**
          * @brief Save rendering settings to configuration
          */
         void saveRenderSettings();
-        
+
         /**
          * @brief Load rendering settings from configuration
          */
@@ -120,6 +122,9 @@ namespace gladius::ui
         AboutDialog m_about;
         ThreemfFileViewer m_threemfFileViewer;
 
+        // Flag to manage the visibility of the ThreemfFileViewer
+        bool m_isThreemfFileViewerVisible = false;
+
         std::shared_ptr<Document> m_doc;
         events::SharedLogger m_logger;
 
@@ -136,7 +141,7 @@ namespace gladius::ui
         Outline m_outline;
 
         float m_uiScale = 1.f;
-        
-        ConfigManager* m_configManager = nullptr; // Pointer to the Application's ConfigManager
+
+        ConfigManager * m_configManager = nullptr; // Pointer to the Application's ConfigManager
     };
 }

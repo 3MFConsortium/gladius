@@ -49,10 +49,7 @@ namespace gladius::ui
         }
     }
 
-    void ThreemfFileViewer::setVisibility(bool visible)
-    {
-        m_visible = visible;
-    }
+    // setVisibility removed - no longer needed as this is a pure widget
 
     void ThreemfFileViewer::refreshDirectory()
     {
@@ -235,54 +232,27 @@ namespace gladius::ui
 
     void ThreemfFileViewer::render(SharedDocument doc)
     {
-        if (!m_visible)
-        {
-            return;
-        }
-
         // Scan the directory if needed
         scanDirectory();
-
-        // Configure window
-        ImGuiWindowFlags windowFlags = 0;
-        ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("3MF File Browser", &m_visible, windowFlags))
-        {
-            // Directory selection and refresh button
-            ImGui::Text("Directory: %s", m_directory.string().c_str());
-            ImGui::SameLine();
-
-            // button with icon
-            if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FOLDER)))
-            {
-                auto selectedDir = queryDirectory(m_directory);
-                if (selectedDir)
-                {
-                    setDirectory(selectedDir.value());
-                }
-            }
             
-            // Calculate the number of columns that fit into the window based on thumbnail size
-            float const windowWidth = ImGui::GetContentRegionAvail().x;
-            float const spacing = ImGui::GetStyle().ItemSpacing.x;
-            float const effectiveItemWidth = m_thumbnailSize + spacing;
+        // Calculate the number of columns that fit into the window based on thumbnail size
+        float const windowWidth = ImGui::GetContentRegionAvail().x;
+        float const spacing = ImGui::GetStyle().ItemSpacing.x;
+        float const effectiveItemWidth = m_thumbnailSize + spacing;
 
-            // Calculate how many thumbnails fit in the window width
-            m_columns = std::max(1, static_cast<int>(windowWidth / effectiveItemWidth));
-
-            ImGui::Separator();
-            bool oneThumbnailLoaded = false;
-            // Display files in a grid
-            if (m_files.empty())
-            {
-                ImGui::TextUnformatted("No 3MF files found in the specified directory");
-            }
-            else
-            {
-                // Calculate the number of files and start the child window
-                float childHeight = ImGui::GetContentRegionAvail().y;
-                ImGui::BeginChild("FilesView", ImVec2(0, childHeight), false);
+        // Calculate how many thumbnails fit in the window width
+        m_columns = std::max(1, static_cast<int>(windowWidth / effectiveItemWidth));
+            
+        bool oneThumbnailLoaded = false;
+        // Display files in a grid
+        if (m_files.empty())
+        {
+            ImGui::TextUnformatted("No 3MF files found in the specified directory");
+        }
+        else
+        {
+            // No need for a child window as we're already in a tab or window
+            float availableHeight = ImGui::GetContentRegionAvail().y;
 
                 // Calculate item width based on available width and desired columns
                 float windowWidth = ImGui::GetContentRegionAvail().x;
@@ -445,11 +415,7 @@ namespace gladius::ui
 
                     fileIndex++;
                 }
-
-                ImGui::EndChild();
             }
-        }
-        ImGui::End();
     }
 
 } // namespace gladius::ui

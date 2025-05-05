@@ -16,7 +16,6 @@
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
 #include "../TimeMeasurement.h"
 #include "../io/MeshExporter.h"
-#include <nodes/ToCommandStreamVisitor.h>
 #include "AboutDialog.h"
 #include "FileChooser.h"
 #include "FileSystemUtils.h"
@@ -30,6 +29,7 @@
 #include "io/3mf/ImageStackCreator.h"
 #include "io/3mf/Writer3mf.h"
 #include "io/ImageStackExporter.h"
+#include <nodes/ToCommandStreamVisitor.h>
 
 namespace gladius::ui
 {
@@ -50,7 +50,6 @@ namespace gladius::ui
         m_mainView.addViewCallBack([&]() { renderWelcomeScreen(); });
         m_mainView.setRequestCloseCallBack([&]() { close(); });
     }
-    
 
     void MainWindow::setup(std::shared_ptr<ComputeCore> core,
                            std::shared_ptr<Document> doc,
@@ -60,7 +59,7 @@ namespace gladius::ui
         m_doc = std::move(doc);
         m_logger = std::move(logger);
         m_outline.setDocument(m_doc);
-        
+
         // Set the logger for the ThreemfFileViewer
         m_threemfFileViewer = ThreemfFileViewer(m_logger);
 
@@ -183,7 +182,7 @@ namespace gladius::ui
         m_core =
           std::make_shared<ComputeCore>(context, RequiredCapabilities::OpenGLInterop, m_logger);
         m_doc = std::make_shared<Document>(m_core);
-        
+
         // Load render settings if ConfigManager is available
         if (m_configManager)
         {
@@ -197,12 +196,13 @@ namespace gladius::ui
     {
         ProfileFunction;
         m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
-        
+
         // Check for keyboard shortcuts
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false)) {
+        ImGuiIO & io = ImGui::GetIO();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false))
+        {
             m_threemfFileViewer.setDirectory(getAppDir() / "examples");
-            m_threemfFileViewer.setVisibility(!m_threemfFileViewer.isVisible());
+            m_isThreemfFileViewerVisible = !m_isThreemfFileViewerVisible;
         }
         if (!m_core->getComputeContext().isValid())
         {
@@ -335,7 +335,10 @@ namespace gladius::ui
             logViewer();
             m_about.render();
             m_renderWindow.updateCamera();
-            m_threemfFileViewer.render(m_doc);
+            if (m_isThreemfFileViewerVisible)
+            {
+                m_threemfFileViewer.render(m_doc);
+            }
         }
         catch (OpenCLError & e)
         {
@@ -484,7 +487,7 @@ namespace gladius::ui
         const auto menuBarHeight = ImGui::GetWindowHeight();
         ImGui::EndMainMenuBar();
         auto & io = ImGui::GetIO();
-        const auto menuWidth = 400.f  * m_uiScale;
+        const auto menuWidth = 400.f * m_uiScale;
         auto closeMenu = [&]()
         {
             m_showMainMenu = false;
@@ -704,15 +707,15 @@ namespace gladius::ui
         }
 
         ImGui::Separator();
-        
+
         // Add 3MF File Browser menu item
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN "\t3MF Browser")))
         {
             closeMenu();
             m_threemfFileViewer.setDirectory(getAppDir() / "examples");
-            m_threemfFileViewer.setVisibility(true);
+            m_isThreemfFileViewerVisible = true;
         }
-        
+
         if (m_showSettings)
         {
             if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_COG "\tSettings")))
