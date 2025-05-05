@@ -91,7 +91,7 @@ namespace gladius::ui
                 {
                     ThreemfFileInfo fileInfo;
                     fileInfo.filePath = entry.path();
-                    fileInfo.fileName = entry.path().filename().string();
+                    fileInfo.fileName = entry.path().stem().string();
                     m_files.push_back(fileInfo);
                 }
             }
@@ -262,28 +262,14 @@ namespace gladius::ui
                     setDirectory(selectedDir.value());
                 }
             }
+            
+            // Calculate the number of columns that fit into the window based on thumbnail size
+            float const windowWidth = ImGui::GetContentRegionAvail().x;
+            float const spacing = ImGui::GetStyle().ItemSpacing.x;
+            float const effectiveItemWidth = m_thumbnailSize + spacing;
 
-            ImGui::SameLine();
-            if (ImGui::Button("Refresh"))
-            {
-                refreshDirectory();
-            }
-
-            ImGui::SameLine();
-
-            // Settings
-            if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::SliderFloat("Thumbnail Size", &m_thumbnailSize, 100.0f, 400.0f);
-
-                // Calculate the number of columns that fit into the window based on thumbnail size
-                float const windowWidth = ImGui::GetContentRegionAvail().x;
-                float const spacing = ImGui::GetStyle().ItemSpacing.x;
-                float const effectiveItemWidth = m_thumbnailSize + spacing;
-
-                // Calculate how many thumbnails fit in the window width
-                m_columns = std::max(1, static_cast<int>(windowWidth / effectiveItemWidth));
-            }
+            // Calculate how many thumbnails fit in the window width
+            m_columns = std::max(1, static_cast<int>(windowWidth / effectiveItemWidth));
 
             ImGui::Separator();
             bool oneThumbnailLoaded = false;
