@@ -52,6 +52,7 @@ namespace gladius::ui
                     ed::SetNodePosition(newNode->getId(), posOnCanvas);
 
                     ImGui::CloseCurrentPopup();
+                    ImGui::PopStyleColor();
                     ImGui::EndPopup();
                     return {newNode->getValueOutputPort().getId()};
                 }

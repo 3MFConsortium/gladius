@@ -329,12 +329,11 @@ namespace gladius::ui
                     // Handle thumbnail click event after setting up visual elements
                     if (isClicked && ImGui::IsMouseDoubleClicked(0))
                     {
-                        // Double click to open the file
+                        // Double click to import all functions of the file
                         try
                         {
-                            io::loadFrom3mfFile(fileInfo.filePath, *doc);
-                            // Don't need to mark the file as saved
-
+                            doc->merge(fileInfo.filePath);
+                            
                             if (m_logger)
                             {
                                 m_logger->addEvent(

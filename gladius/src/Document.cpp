@@ -74,9 +74,8 @@ namespace gladius
         {
             return;
         }
-
-        m_futureMeshLoading = std::async(std::launch::async, [&]() { refreshWorker(); });
         saveBackup();
+        m_futureMeshLoading = std::async(std::launch::async, [&]() { refreshWorker(); });
     }
 
     void Document::loadAllMeshResources()

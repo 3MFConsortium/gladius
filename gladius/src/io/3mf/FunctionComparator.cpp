@@ -252,4 +252,37 @@ namespace gladius::io
         return true;
     }
 
+    Lib3MF::PImplicitFunction findEquivalentFunction(Lib3MF::CModel & model,
+                                                     Lib3MF::CImplicitFunction & function)
+    {
+        // Get all resources in the model
+        auto resourceIterator = const_cast<Lib3MF::CModel&>(model).GetResources();
+        
+        // Iterate through resources
+        while (resourceIterator->MoveNext()) {
+            auto resource = resourceIterator->GetCurrent();
+            
+            // Try to cast resource to ImplicitFunction
+            auto existingFunction = std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(resource);
+            
+            // Skip if not an implicit function
+            if (!existingFunction) {
+                continue;
+            }
+            
+            // Skip comparing function with itself (if it already exists in the model)
+            if (function.GetResourceID() == existingFunction->GetResourceID()) {
+                continue;
+            }
+            
+            // Check if the functions are equivalent
+            if (areImplicitFunctionsEqual(&function, existingFunction.get())) {
+                return existingFunction;
+            }
+        }
+        
+        // No equivalent function found
+        return nullptr;
+    }
+
 } // namespace gladius::io

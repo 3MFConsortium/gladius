@@ -6,6 +6,7 @@
 
 #include "Builder.h"
 #include "Document.h"
+#include "FunctionComparator.h"
 #include "ImageExtractor.h"
 #include "Parameter.h"
 #include "Profiling.h"
@@ -351,6 +352,7 @@ namespace gladius::io
         {
             return;
         }
+
         assembly.addModelIfNotExisting(func->GetModelResourceID());
 
         auto & idToNode = m_nodeMaps[func->GetModelResourceID()];
@@ -1153,7 +1155,8 @@ namespace gladius::io
 
                     if (component->HasTransform())
                     {
-                        auto const transformationComponent = matrix4x4From3mfTransform(component->GetTransform());
+                        auto const transformationComponent =
+                          matrix4x4From3mfTransform(component->GetTransform());
                         componentTrafo = inverseMatrix(transformationComponent);
                     }
 
