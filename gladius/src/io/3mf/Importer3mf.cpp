@@ -280,7 +280,65 @@ namespace gladius::io
         doc.getAssembly()->updateInputsAndOutputs();
     }
 
-    TextureTileStyle toTextureTileStyle(Lib3MF::eTextureTileStyle style)
+    void Importer3mf::loadImplicitFunctionsFiltered(Lib3MF::PModel fileModel, Document & doc,
+                                                   std::vector<Duplicates> const& duplicates)
+    {
+        ProfileFunction;
+
+        // If there are no duplicates to filter out, just use the regular method
+        if (duplicates.empty())
+        {
+            loadImplicitFunctions(fileModel, doc);
+            return;
+        }
+
+        // Create a set of resource IDs to skip (the duplicate functions)
+        std::set<Lib3MF_uint32> duplicateIds;
+        for (auto const& duplicate : duplicates)
+        {
+            if (duplicate.duplicateFunction)
+            {
+                duplicateIds.insert(duplicate.duplicateFunction->GetResourceID());
+            }
+        }
+
+        // Process resources, skipping those in the duplicateIds set
+        auto resourceIterator = fileModel->GetResources();
+        while (resourceIterator->MoveNext())
+        {
+            auto res = resourceIterator->GetCurrent();
+            Lib3MF_uint32 resourceId = res->GetResourceID();
+
+            // Skip if this resource is in our duplicates list
+            if (duplicateIds.find(resourceId) != duplicateIds.end())
+            {
+                if (m_eventLogger)
+                {
+                    m_eventLogger->addEvent(
+                        {fmt::format("Skipped loading duplicate function with ID: {}", resourceId),
+                        events::Severity::Info});
+                }
+                continue;
+            }
+
+            // Process as usual if not a duplicate
+            auto implicitFunc = dynamic_cast<Lib3MF::CImplicitFunction *>(res.get());
+            if (implicitFunc)
+            {
+                processImplicitFunction(doc, implicitFunc);
+            }
+
+            auto functionFromImage3d = dynamic_cast<Lib3MF::CFunctionFromImage3D *>(res.get());
+            if (functionFromImage3d)
+            {
+                processFunctionFromImage3d(doc, functionFromImage3d);
+            }
+        }
+
+        doc.getAssembly()->updateInputsAndOutputs();
+    }
+
+     TextureTileStyle toTextureTileStyle(Lib3MF::eTextureTileStyle style)
     {
         ProfileFunction switch (style)
         {
@@ -1430,8 +1488,8 @@ namespace gladius::io
 
     void Importer3mf::merge(std::filesystem::path const & filename, Document & doc)
     {
-        ProfileFunction auto model3mf = doc.get3mfModel();
-        if (!model3mf)
+        ProfileFunction auto targetModel = doc.get3mfModel();
+        if (!targetModel)
         {
             load(filename, doc);
             return;
@@ -1440,10 +1498,10 @@ namespace gladius::io
         auto core = doc.getCore();
         auto computenToken = core->waitForComputeToken();
 
-        auto const modelToMerge = m_wrapper->CreateModel();
-        auto const reader = modelToMerge->QueryReader("3mf");
+        auto const modelToMergeFrom = m_wrapper->CreateModel();
+        auto const reader = modelToMergeFrom->QueryReader("3mf");
 
-        reader->SetStrictModeActive(true);
+        reader->SetStrictModeActive(false);
         try
         {
             reader->ReadFromFile(filename.string());
@@ -1467,32 +1525,31 @@ namespace gladius::io
         try
         {
             // backup the list of function ids
+
+            std::set<Lib3MF_uint32> functionResourceIds = collectFunctionResourceIds(targetModel);
+            // store the ptr to the original functions
+            auto implicitFunctions = collectImplicitFunctions(targetModel);
+
+            targetModel->MergeFromModel(modelToMergeFrom.get());
+
+            // now find all duplicated functions
+            auto duplicates = findDuplicatedFunctions(implicitFunctions, targetModel);
+
+            // replace the references to the original functions with the duplicates
+            replaceDuplicatedFunctionReferences(duplicates, targetModel);
+            // remove the duplicates from the model
+            for (auto const & duplicate : duplicates)
             {
-                std::set<Lib3MF_uint32> functionResourceIds = collectFunctionResourceIds(model3mf);
-                // store the ptr to the original functions
-                auto implicitFunctions = collectImplicitFunctions(model3mf);
-
-                model3mf->MergeFromModel(modelToMerge.get());
-
-                // now find all duplicated functions
-                auto duplicates = findDuplicatedFunctions(implicitFunctions, model3mf);
-
-                // replace the references to the original functions with the duplicates
-                replaceDuplicatedFunctionReferences(duplicates, model3mf);
-                // remove the duplicates from the model
-                for (auto const & duplicate : duplicates)
-                {
-                    // log
-                    m_eventLogger->addEvent(
-                      {fmt::format("Removed resource from model3mf: {}",
-                                   duplicate.duplicateFunction->GetResourceID()),
-                       events::Severity::Info});
-                    model3mf->RemoveResource(duplicate.duplicateFunction.get());
-                }
+                // log
+                m_eventLogger->addEvent({fmt::format("Removed resource from model3mf: {}",
+                                                     duplicate.duplicateFunction->GetResourceID()),
+                                         events::Severity::Info});
+                //targetModel->RemoveResource(duplicate.duplicateFunction.get());
+                doc.deleteFunction(duplicate.duplicateFunction->GetModelResourceID());
             }
 
-            loadImageStacks(filename, model3mf, doc);
-            loadImplicitFunctions(model3mf, doc);
+            loadImageStacks(filename, targetModel, doc);
+            //loadImplicitFunctionsFiltered(targetModel, doc, duplicates);
         }
         catch (Lib3MF::ELib3MFException const & e)
         {

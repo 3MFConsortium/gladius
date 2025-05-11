@@ -81,6 +81,21 @@ namespace gladius::io
         void loadImplicitFunctions(Lib3MF::PModel model, Document & doc);
 
         /**
+         * @brief Loads all implicit functions from a 3MF model and adds them to the document,
+         * except for those identified as duplicates.
+         * 
+         * This function is similar to loadImplicitFunctions, but it skips loading any functions
+         * that are included in the duplicates list. This is useful for avoiding the creation
+         * of duplicate functions when merging 3MF models.
+         *
+         * @param model The 3MF model to load the implicit functions from.
+         * @param doc The document to add the loaded implicit functions to.
+         * @param duplicates Vector of Duplicates structs containing functions to be skipped.
+         */
+        void loadImplicitFunctionsFiltered(Lib3MF::PModel model, Document & doc, 
+                                           std::vector<Duplicates> const& duplicates);
+
+        /**
          * @brief Loads all component objects from a 3MF model and adds them to the document.
          *
          * @param model The 3MF model to load the component objects from.
