@@ -1,34 +1,42 @@
 #include "ResourceDependencyGraph.h"
+#include "EventLogger.h"
+#include "ResourceIdUtil.h"
 #include "nodes/graph/DirectedGraph.h"
 #include "nodes/graph/GraphAlgorithms.h"
-#include "EventLogger.h"
+#include "nodes/graph/IDirectedGraph.h"
 #include <exception>
 #include <fmt/format.h>
 
 namespace gladius::io
 {
-    ResourceDependencyGraph::ResourceDependencyGraph(Lib3MF::PModel model, gladius::events::SharedLogger logger)
-        : m_model(model), m_graph(std::make_unique<nodes::graph::DirectedGraph>(100)), m_logger(std::move(logger))
+    ResourceDependencyGraph::ResourceDependencyGraph(Lib3MF::PModel model,
+                                                     gladius::events::SharedLogger logger)
+        : m_model(model)
+        , m_graph(std::make_unique<nodes::graph::DirectedGraph>(100))
+        , m_logger(std::move(logger))
     {
         if (m_logger)
-            m_logger->addEvent({"Initialized ResourceDependencyGraph", gladius::events::Severity::Info});
+            m_logger->addEvent(
+              {"Initialized ResourceDependencyGraph", gladius::events::Severity::Info});
     }
 
     void ResourceDependencyGraph::buildGraph()
     {
         if (m_logger)
-            m_logger->addEvent({"Building resource dependency graph", gladius::events::Severity::Info});
+            m_logger->addEvent(
+              {"Building resource dependency graph", gladius::events::Severity::Info});
 
         if (!m_model)
         {
             if (m_logger)
-                m_logger->addEvent({"No model available for dependency graph", gladius::events::Severity::Error});
+                m_logger->addEvent(
+                  {"No model available for dependency graph", gladius::events::Severity::Error});
             return;
         }
 
         // Retrieve all resources
         Lib3MF::PResourceIterator resourceIterator = m_model->GetResources();
-        
+
         // First pass: add all resources as vertices
         while (resourceIterator->MoveNext())
         {
@@ -38,7 +46,7 @@ namespace gladius::io
 
         // Reset the iterator
         resourceIterator = m_model->GetResources();
-        
+
         // Second pass: process each resource and add dependencies
         while (resourceIterator->MoveNext())
         {
@@ -71,7 +79,8 @@ namespace gladius::io
                 }
 
                 // ComponentsObject
-                Lib3MF::PComponentsObject componentsObject = std::dynamic_pointer_cast<Lib3MF::CComponentsObject>(resource);
+                Lib3MF::PComponentsObject componentsObject =
+                  std::dynamic_pointer_cast<Lib3MF::CComponentsObject>(resource);
                 if (componentsObject)
                 {
                     processComponentsObject(componentsObject);
@@ -79,7 +88,8 @@ namespace gladius::io
                 }
 
                 // MeshObject
-                Lib3MF::PMeshObject meshObject = std::dynamic_pointer_cast<Lib3MF::CMeshObject>(resource);
+                Lib3MF::PMeshObject meshObject =
+                  std::dynamic_pointer_cast<Lib3MF::CMeshObject>(resource);
                 if (meshObject)
                 {
                     processMeshObject(meshObject);
@@ -87,7 +97,8 @@ namespace gladius::io
                 }
 
                 // VolumeData
-                Lib3MF::PVolumeData volumeData = std::dynamic_pointer_cast<Lib3MF::CVolumeData>(resource);
+                Lib3MF::PVolumeData volumeData =
+                  std::dynamic_pointer_cast<Lib3MF::CVolumeData>(resource);
                 if (volumeData)
                 {
                     processVolumeData(volumeData);
@@ -96,26 +107,31 @@ namespace gladius::io
 
                 // Other resource types can be added as needed
             }
-            catch (const std::exception& e)
+            catch (const std::exception & e)
             {
                 if (m_logger)
-                    m_logger->addEvent({fmt::format("Error processing resource {}: {}", resourceId, e.what()), gladius::events::Severity::Error});
+                    m_logger->addEvent(
+                      {fmt::format("Error processing resource {}: {}", resourceId, e.what()),
+                       gladius::events::Severity::Error});
             }
         }
 
         if (m_logger)
-            m_logger->addEvent({"Completed building resource dependency graph", gladius::events::Severity::Info});
+            m_logger->addEvent(
+              {"Completed building resource dependency graph", gladius::events::Severity::Info});
     }
 
-    const nodes::graph::IDirectedGraph& ResourceDependencyGraph::getGraph() const
+    const nodes::graph::IDirectedGraph & ResourceDependencyGraph::getGraph() const
     {
         return *m_graph;
     }
 
-    std::vector<Lib3MF::PResource> ResourceDependencyGraph::getAllRequiredResources(Lib3MF::PResource resource) const
+    std::vector<Lib3MF::PResource>
+    ResourceDependencyGraph::getAllRequiredResources(Lib3MF::PResource resource) const
     {
         std::vector<Lib3MF::PResource> requiredResources;
-        if (!resource || !m_model || !m_graph) {
+        if (!resource || !m_model || !m_graph)
+        {
             return requiredResources;
         }
 
@@ -133,7 +149,7 @@ namespace gladius::io
                     requiredResources.push_back(res);
                 }
             }
-            catch (const std::exception&)
+            catch (const std::exception &)
             {
                 // Skip missing resource
             }
@@ -141,10 +157,12 @@ namespace gladius::io
         return requiredResources;
     }
 
-    std::vector<Lib3MF::PBuildItem> ResourceDependencyGraph::findBuildItemsReferencingResource(Lib3MF::PResource resource) const
+    std::vector<Lib3MF::PBuildItem>
+    ResourceDependencyGraph::findBuildItemsReferencingResource(Lib3MF::PResource resource) const
     {
         std::vector<Lib3MF::PBuildItem> matchingItems;
-        if (!resource || !m_model) {
+        if (!resource || !m_model)
+        {
             return matchingItems;
         }
         Lib3MF_uint32 targetId = resource->GetResourceID();
@@ -152,14 +170,16 @@ namespace gladius::io
         while (buildItemIterator->MoveNext())
         {
             Lib3MF::PBuildItem buildItem = buildItemIterator->GetCurrent();
-            if (buildItem && buildItem->GetObjectResourceID() == targetId) {
+            if (buildItem && buildItem->GetObjectResourceID() == targetId)
+            {
                 matchingItems.push_back(buildItem);
             }
         }
         return matchingItems;
     }
 
-    CanResourceBeRemovedResult ResourceDependencyGraph::checkResourceRemoval(Lib3MF::PResource resourceToBeRemoved) const
+    CanResourceBeRemovedResult
+    ResourceDependencyGraph::checkResourceRemoval(Lib3MF::PResource resourceToBeRemoved) const
     {
         CanResourceBeRemovedResult result;
         result.canBeRemoved = true; // Assume removable until proven otherwise
@@ -218,10 +238,13 @@ namespace gladius::io
                 m_graph->addDependency(levelSetId, functionId);
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing LevelSet function dependency {}: {}", levelSetId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent(
+                  {fmt::format(
+                     "Error processing LevelSet function dependency {}: {}", levelSetId, e.what()),
+                   gladius::events::Severity::Error});
         }
 
         // LevelSet may depend on a mesh
@@ -234,10 +257,13 @@ namespace gladius::io
                 m_graph->addDependency(levelSetId, meshId);
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing LevelSet mesh dependency {}: {}", levelSetId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent({fmt::format("Error processing LevelSet mesh dependency {}: {}",
+                                                levelSetId,
+                                                e.what()),
+                                    gladius::events::Severity::Error});
         }
 
         // LevelSet may have volume data
@@ -250,10 +276,14 @@ namespace gladius::io
                 m_graph->addDependency(levelSetId, volumeDataId);
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing LevelSet volume data dependency {}: {}", levelSetId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent(
+                  {fmt::format("Error processing LevelSet volume data dependency {}: {}",
+                               levelSetId,
+                               e.what()),
+                   gladius::events::Severity::Error});
         }
     }
 
@@ -267,7 +297,8 @@ namespace gladius::io
         Lib3MF_uint32 functionId = function->GetResourceID();
 
         // Handle ImplicitFunction type (may reference other functions)
-        Lib3MF::PImplicitFunction implicitFunction = std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(function);
+        Lib3MF::PImplicitFunction implicitFunction =
+          std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(function);
         if (implicitFunction)
         {
             // Process implicit function nodes and their connections
@@ -278,27 +309,53 @@ namespace gladius::io
                 while (nodeIterator->MoveNext())
                 {
                     Lib3MF::PImplicitNode node = nodeIterator->GetCurrent();
-                    
+
                     // Handle ResourceIdNode which references another resource
-                    Lib3MF::PResourceIdNode resourceIdNode = std::dynamic_pointer_cast<Lib3MF::CResourceIdNode>(node);
+                    Lib3MF::PResourceIdNode resourceIdNode =
+                      std::dynamic_pointer_cast<Lib3MF::CResourceIdNode>(node);
                     if (resourceIdNode)
                     {
-                        Lib3MF::PResource referencedResource = resourceIdNode->GetResource();
-                        if (referencedResource)
+                        try
                         {
-                            Lib3MF_uint32 referencedResourceId = referencedResource->GetResourceID();
-                            m_graph->addDependency(functionId, referencedResourceId);
+                            Lib3MF::PResource referencedResource = resourceIdNode->GetResource();
+                            if (referencedResource)
+                            {
+                                Lib3MF_uint32 referencedResourceId =
+                                  referencedResource->GetResourceID();
+                                m_graph->addDependency(functionId, referencedResourceId);
+                            }
+                        }
+                        catch (const std::exception & e)
+                        {
+                            if (m_logger)
+                                m_logger->addEvent(
+                                  {fmt::format(
+                                     "Error retrieving resource from ResourceIdNode {}: {}",
+                                     node->GetIdentifier(),
+                                     e.what()),
+                                   gladius::events::Severity::Error});
+                        }
+                        catch (...)
+                        {
+                            if (m_logger)
+                                m_logger->addEvent(
+                                  {fmt::format(
+                                     "Unknown error retrieving resource from ResourceIdNode {}",
+                                     node->GetIdentifier()),
+                                   gladius::events::Severity::Error});
                         }
                     }
 
                     // Handle FunctionCallNode which calls another function
-                    Lib3MF::PFunctionCallNode functionCallNode = std::dynamic_pointer_cast<Lib3MF::CFunctionCallNode>(node);
+                    Lib3MF::PFunctionCallNode functionCallNode =
+                      std::dynamic_pointer_cast<Lib3MF::CFunctionCallNode>(node);
                     if (functionCallNode)
                     {
                         try
                         {
                             // Get input port that contains the function ID reference
-                            Lib3MF::PImplicitPort functionIDInput = functionCallNode->GetInputFunctionID();
+                            Lib3MF::PImplicitPort functionIDInput =
+                              functionCallNode->GetInputFunctionID();
                             if (functionIDInput && !functionIDInput->GetReference().empty())
                             {
                                 // Try to find the referenced resource node through the reference
@@ -310,34 +367,47 @@ namespace gladius::io
                                     if (refNode->GetIdentifier() + ".Value" == refName)
                                     {
                                         // Check if it's a ResourceIdNode and get the resource
-                                        Lib3MF::PResourceIdNode resourceIdNode = std::dynamic_pointer_cast<Lib3MF::CResourceIdNode>(refNode);
+                                        Lib3MF::PResourceIdNode resourceIdNode =
+                                          std::dynamic_pointer_cast<Lib3MF::CResourceIdNode>(
+                                            refNode);
                                         if (resourceIdNode && resourceIdNode->GetResource())
                                         {
-                                            Lib3MF_uint32 referencedFunctionId = resourceIdNode->GetResource()->GetResourceID();
-                                            m_graph->addDependency(functionId, referencedFunctionId);
+                                            Lib3MF_uint32 referencedFunctionId =
+                                              resourceIdNode->GetResource()->GetResourceID();
+                                            m_graph->addDependency(functionId,
+                                                                   referencedFunctionId);
                                         }
                                         break;
                                     }
                                 }
                             }
                         }
-                        catch (const std::exception& e)
+                        catch (const std::exception & e)
                         {
                             if (m_logger)
-                                m_logger->addEvent({fmt::format("Error processing FunctionCallNode in function {}: {}", functionId, e.what()), gladius::events::Severity::Error});
+                                m_logger->addEvent(
+                                  {fmt::format(
+                                     "Error processing FunctionCallNode in function {}: {}",
+                                     functionId,
+                                     e.what()),
+                                   gladius::events::Severity::Error});
                         }
                     }
                 }
             }
-            catch (const std::exception& e)
+            catch (const std::exception & e)
             {
                 if (m_logger)
-                    m_logger->addEvent({fmt::format("Error processing ImplicitFunction {}: {}", functionId, e.what()), gladius::events::Severity::Error});
+                    m_logger->addEvent({fmt::format("Error processing ImplicitFunction {}: {}",
+                                                    functionId,
+                                                    e.what()),
+                                        gladius::events::Severity::Error});
             }
         }
 
         // Handle FunctionFromImage3D type
-        Lib3MF::PFunctionFromImage3D functionFromImage = std::dynamic_pointer_cast<Lib3MF::CFunctionFromImage3D>(function);
+        Lib3MF::PFunctionFromImage3D functionFromImage =
+          std::dynamic_pointer_cast<Lib3MF::CFunctionFromImage3D>(function);
         if (functionFromImage)
         {
             try
@@ -349,15 +419,19 @@ namespace gladius::io
                     m_graph->addDependency(functionId, imageId);
                 }
             }
-            catch (const std::exception& e)
+            catch (const std::exception & e)
             {
                 if (m_logger)
-                    m_logger->addEvent({fmt::format("Error processing FunctionFromImage3D {}: {}", functionId, e.what()), gladius::events::Severity::Error});
+                    m_logger->addEvent({fmt::format("Error processing FunctionFromImage3D {}: {}",
+                                                    functionId,
+                                                    e.what()),
+                                        gladius::events::Severity::Error});
             }
         }
     }
 
-    void ResourceDependencyGraph::processComponentsObject(Lib3MF::PComponentsObject componentsObject)
+    void
+    ResourceDependencyGraph::processComponentsObject(Lib3MF::PComponentsObject componentsObject)
     {
         if (!componentsObject)
         {
@@ -380,10 +454,13 @@ namespace gladius::io
                 }
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing ComponentsObject {}: {}", componentsObjectId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent({fmt::format("Error processing ComponentsObject {}: {}",
+                                                componentsObjectId,
+                                                e.what()),
+                                    gladius::events::Severity::Error});
         }
     }
 
@@ -395,22 +472,25 @@ namespace gladius::io
         }
 
         Lib3MF_uint32 meshObjectId = meshObject->GetResourceID();
-        
+
         // Check for object level property resources
         try
         {
             Lib3MF_uint32 propertyResourceId = 0;
             Lib3MF_uint32 propertyId = 0;
-            
+
             if (meshObject->GetObjectLevelProperty(propertyResourceId, propertyId))
             {
                 m_graph->addDependency(meshObjectId, propertyResourceId);
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing MeshObject property {}: {}", meshObjectId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent({fmt::format("Error processing MeshObject property {}: {}",
+                                                meshObjectId,
+                                                e.what()),
+                                    gladius::events::Severity::Error});
         }
 
         // Check for beam lattice and its properties
@@ -422,12 +502,12 @@ namespace gladius::io
                 Lib3MF::eBeamLatticeClipMode clipMode;
                 Lib3MF_uint32 clipResourceId;
                 beamLattice->GetClipping(clipMode, clipResourceId);
-                
+
                 if (clipResourceId > 0)
                 {
                     m_graph->addDependency(meshObjectId, clipResourceId);
                 }
-                
+
                 Lib3MF_uint32 representationResourceId;
                 if (beamLattice->GetRepresentation(representationResourceId))
                 {
@@ -435,10 +515,13 @@ namespace gladius::io
                 }
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing MeshObject BeamLattice {}: {}", meshObjectId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent({fmt::format("Error processing MeshObject BeamLattice {}: {}",
+                                                meshObjectId,
+                                                e.what()),
+                                    gladius::events::Severity::Error});
         }
 
         // Check for volume data
@@ -451,10 +534,13 @@ namespace gladius::io
                 m_graph->addDependency(meshObjectId, volumeDataId);
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing MeshObject VolumeData {}: {}", meshObjectId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent({fmt::format("Error processing MeshObject VolumeData {}: {}",
+                                                meshObjectId,
+                                                e.what()),
+                                    gladius::events::Severity::Error});
         }
     }
 
@@ -476,10 +562,12 @@ namespace gladius::io
                 processFunctionReference(colorData, volumeDataId);
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing VolumeData color {}: {}", volumeDataId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent(
+                  {fmt::format("Error processing VolumeData color {}: {}", volumeDataId, e.what()),
+                   gladius::events::Severity::Error});
         }
 
         // Process composite material data
@@ -508,10 +596,13 @@ namespace gladius::io
                 }
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing VolumeData composite {}: {}", volumeDataId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent({fmt::format("Error processing VolumeData composite {}: {}",
+                                                volumeDataId,
+                                                e.what()),
+                                    gladius::events::Severity::Error});
         }
 
         // Process property functions
@@ -527,14 +618,18 @@ namespace gladius::io
                 }
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing VolumeData properties {}: {}", volumeDataId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent({fmt::format("Error processing VolumeData properties {}: {}",
+                                                volumeDataId,
+                                                e.what()),
+                                    gladius::events::Severity::Error});
         }
     }
 
-    void ResourceDependencyGraph::processFunctionReference(Lib3MF::PFunctionReference functionRef, Lib3MF_uint32 resourceId)
+    void ResourceDependencyGraph::processFunctionReference(Lib3MF::PFunctionReference functionRef,
+                                                           Lib3MF_uint32 resourceId)
     {
         if (!functionRef)
         {
@@ -549,10 +644,14 @@ namespace gladius::io
                 m_graph->addDependency(resourceId, functionResourceId);
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
-                m_logger->addEvent({fmt::format("Error processing FunctionReference for resource {}: {}", resourceId, e.what()), gladius::events::Severity::Error});
+                m_logger->addEvent(
+                  {fmt::format("Error processing FunctionReference for resource {}: {}",
+                               resourceId,
+                               e.what()),
+                   gladius::events::Severity::Error});
         }
     }
 
@@ -562,7 +661,8 @@ namespace gladius::io
         if (!m_model || !m_graph)
         {
             if (m_logger)
-                m_logger->addEvent({"Cannot find unused resources: invalid model or graph", gladius::events::Severity::Error});
+                m_logger->addEvent({"Cannot find unused resources: invalid model or graph",
+                                    gladius::events::Severity::Error});
             return unusedResources;
         }
 
@@ -581,7 +681,7 @@ namespace gladius::io
                 }
             }
         }
-        
+
         if (allResources.empty())
         {
             return unusedResources;
@@ -593,7 +693,7 @@ namespace gladius::io
         // Iterate through all build items and find their required resources
         Lib3MF::PBuildItemIterator buildItemIterator = m_model->GetBuildItems();
         bool hasBuildItems = false;
-        
+
         while (buildItemIterator->MoveNext())
         {
             hasBuildItems = true;
@@ -610,7 +710,8 @@ namespace gladius::io
             requiredResourceIds.insert(objectResourceId);
 
             // Use the existing graph to find all dependencies of this resource
-            auto allDependencies = gladius::nodes::graph::determineAllDependencies(*m_graph, objectResourceId);
+            auto allDependencies =
+              gladius::nodes::graph::determineAllDependencies(*m_graph, objectResourceId);
             requiredResourceIds.insert(allDependencies.begin(), allDependencies.end());
         }
 
@@ -619,13 +720,14 @@ namespace gladius::io
         if (!hasBuildItems)
         {
             if (m_logger)
-                m_logger->addEvent({"No build items found in model", gladius::events::Severity::Info});
+                m_logger->addEvent(
+                  {"No build items found in model", gladius::events::Severity::Info});
             return unusedResources;
         }
 
         // Collect all resources that are not in the required set
         unusedResources.reserve(allResources.size() - requiredResourceIds.size());
-        for (const auto& [resourceId, resource] : allResources)
+        for (const auto & [resourceId, resource] : allResources)
         {
             if (requiredResourceIds.find(resourceId) == requiredResourceIds.end())
             {
@@ -635,8 +737,8 @@ namespace gladius::io
 
         if (m_logger && !unusedResources.empty())
         {
-            m_logger->addEvent({fmt::format("Found {} unused resources", unusedResources.size()), 
-                              gladius::events::Severity::Info});
+            m_logger->addEvent({fmt::format("Found {} unused resources", unusedResources.size()),
+                                gladius::events::Severity::Info});
         }
 
         return unusedResources;
@@ -648,12 +750,13 @@ namespace gladius::io
         {
             return nullptr;
         }
-        
+
         try
         {
-            return m_model->GetResourceByID(resourceId);
+
+            return m_model->GetResourceByID(resourceIdToUniqueResourceId(m_model, resourceId));
         }
-        catch (const std::exception&)
+        catch (const std::exception &)
         {
             // Resource not found or other error
             return nullptr;

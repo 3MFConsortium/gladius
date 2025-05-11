@@ -17,7 +17,7 @@ namespace gladius::io
      */
     inline ResourceId modelResourceIdToResourceId(Lib3MF_uint32 modelResourceId)
     {
-        return static_cast<ResourceId>(modelResourceId);
+        return static_cast<gladius::ResourceId>(modelResourceId);
     }
 
     /**
@@ -28,7 +28,7 @@ namespace gladius::io
      * @param resourceId The gladius ResourceId to convert
      * @return Lib3MF_uint32 The converted lib3mf ModelResourceID
      */
-    inline Lib3MF_uint32 resourceIdToModelResourceId(ResourceId resourceId)
+    inline Lib3MF_uint32 resourceIdToModelResourceId(gladius::ResourceId resourceId)
     {
         return static_cast<Lib3MF_uint32>(resourceId);
     }
@@ -62,7 +62,7 @@ namespace gladius::io
      * @param uniqueResourceId The lib3mf UniqueResourceID to convert
      * @return ResourceId The converted gladius ResourceId
      */
-    inline ResourceId uniqueResourceIdToResourceId(Lib3MF::PModel model, Lib3MF_uint32 uniqueResourceId)
+    inline gladius::ResourceId uniqueResourceIdToResourceId(Lib3MF::PModel model, Lib3MF_uint32 uniqueResourceId)
     {
         try
         {
@@ -89,7 +89,7 @@ namespace gladius::io
      * @param resourceId The gladius ResourceId to convert
      * @return Lib3MF_uint32 The converted lib3mf UniqueResourceID, or 0 if not found
      */
-    inline Lib3MF_uint32 resourceIdToUniqueResourceId(Lib3MF::PModel model, ResourceId resourceId)
+    inline Lib3MF_uint32 resourceIdToUniqueResourceId(Lib3MF::PModel model, gladius::ResourceId resourceId)
     {
         // Convert the ResourceId to a ModelResourceID
         Lib3MF_uint32 modelResourceId = resourceIdToModelResourceId(resourceId);

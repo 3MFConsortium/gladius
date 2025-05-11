@@ -4,5 +4,6 @@
 
 namespace gladius
 {
-        using Vector3 = Eigen::Vector3f;
+    using Vector3 = Eigen::Vector3f;
+    using ResourceId = uint32_t;
 }

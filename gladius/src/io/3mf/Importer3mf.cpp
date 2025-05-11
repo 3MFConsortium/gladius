@@ -739,71 +739,67 @@ namespace gladius::io
         return mat;
     }
 
-    std::vector<Lib3MF::PImplicitFunction> Importer3mf::collectImplicitFunctions(Lib3MF::PModel const & model) const
+    std::vector<Lib3MF::PImplicitFunction>
+    Importer3mf::collectImplicitFunctions(Lib3MF::PModel const & model) const
     {
-        ProfileFunction
-        std::vector<Lib3MF::PImplicitFunction> implicitFunctions;
+        ProfileFunction std::vector<Lib3MF::PImplicitFunction> implicitFunctions;
         auto resourceIterator = model->GetResources();
-        
+
         while (resourceIterator->MoveNext())
         {
             auto resource = resourceIterator->GetCurrent();
             auto implicitFunc = std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(resource);
-            
+
             if (implicitFunc)
             {
                 implicitFunctions.push_back(implicitFunc);
             }
         }
-        
+
         return implicitFunctions;
     }
-    
+
     std::vector<Duplicates> Importer3mf::findDuplicatedFunctions(
-        std::vector<Lib3MF::PImplicitFunction> const& originalFunctions,
-        Lib3MF::PModel const& extendedModel) const
+      std::vector<Lib3MF::PImplicitFunction> const & originalFunctions,
+      Lib3MF::PModel const & extendedModel) const
     {
-        ProfileFunction
-        std::vector<Duplicates> duplicates;
-        
+        ProfileFunction std::vector<Duplicates> duplicates;
+
         // For each original function, search for an equivalent in the extended model
-        for (const auto& originalFunction : originalFunctions)
+        for (const auto & originalFunction : originalFunctions)
         {
             // Skip if function is null (should not happen, but let's be safe)
             if (!originalFunction)
             {
                 continue;
             }
-            
+
             // Use the FunctionComparator to find an equivalent function
             auto equivalentFunction = findEquivalentFunction(*extendedModel, *originalFunction);
-            
+
             // If an equivalent function is found, store the function pointers in the result
             if (equivalentFunction)
             {
-                Duplicates duplicate{
-                    originalFunction,
-                    equivalentFunction
-                };
-                
+                Duplicates duplicate{originalFunction, equivalentFunction};
+
                 duplicates.push_back(duplicate);
             }
         }
-        
+
         return duplicates;
     }
 
-    std::set<Lib3MF_uint32> Importer3mf::collectFunctionResourceIds(Lib3MF::PModel const & model) const
+    std::set<Lib3MF_uint32>
+    Importer3mf::collectFunctionResourceIds(Lib3MF::PModel const & model) const
     {
-        ProfileFunction
-        std::set<Lib3MF_uint32> functionResourceIds;
+        ProfileFunction std::set<Lib3MF_uint32> functionResourceIds;
         auto resourceIterator = model->GetResources();
         while (resourceIterator->MoveNext())
         {
             auto resource = resourceIterator->GetCurrent();
             auto implicitFunc = dynamic_cast<Lib3MF::CImplicitFunction *>(resource.get());
             auto functionFromImage3d = dynamic_cast<Lib3MF::CFunctionFromImage3D *>(resource.get());
-            
+
             if (implicitFunc || functionFromImage3d)
             {
                 functionResourceIds.insert(resource->GetResourceID());
@@ -812,26 +808,26 @@ namespace gladius::io
         return functionResourceIds;
     }
 
-    void Importer3mf::replaceDuplicatedFunctionReferences(
-        std::vector<Duplicates> const& duplicates,
-        Lib3MF::PModel const& model) const
+    void
+    Importer3mf::replaceDuplicatedFunctionReferences(std::vector<Duplicates> const & duplicates,
+                                                     Lib3MF::PModel const & model) const
     {
         ProfileFunction
-        
-        // If no duplicates were found, no need to replace anything
-        if (duplicates.empty())
+
+          // If no duplicates were found, no need to replace anything
+          if (duplicates.empty())
         {
             return;
         }
-        
+
         // Get all implicit functions from the model
         auto resourceIterator = model->GetResources();
-        
+
         // Iterate through all resources
         while (resourceIterator->MoveNext())
         {
             auto resource = resourceIterator->GetCurrent();
-            
+
             // Check if the resource is an implicit function
             auto implicitFunction = std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(resource);
             if (!implicitFunction)
@@ -839,15 +835,15 @@ namespace gladius::io
                 // Not an implicit function, skip
                 continue;
             }
-            
+
             // Get all nodes in this function
             auto nodeIterator = implicitFunction->GetNodes();
-            
+
             // Iterate through all nodes in the function
             while (nodeIterator->MoveNext())
             {
                 auto node = nodeIterator->GetCurrent();
-                
+
                 // Check if this is a ResourceIdNode (ConstResourceID type)
                 if (node->GetNodeType() == Lib3MF::eImplicitNodeType::ConstResourceID)
                 {
@@ -857,73 +853,79 @@ namespace gladius::io
                         if (m_eventLogger)
                         {
                             m_eventLogger->addEvent(
-                                {fmt::format("Could not cast node {} to ResourceIdNode", node->GetIdentifier()),
-                                 events::Severity::Warning});
+                              {fmt::format("Could not cast node {} to ResourceIdNode",
+                                           node->GetIdentifier()),
+                               events::Severity::Warning});
                         }
                         continue;
                     }
-                    
+
                     // Get the resource referenced by this node
                     Lib3MF::PResource referencedResource;
                     try
                     {
                         referencedResource = resourceIdNode->GetResource();
                     }
-                    catch (const std::exception& e)
+                    catch (const std::exception & e)
                     {
                         if (m_eventLogger)
                         {
                             m_eventLogger->addEvent(
-                                {fmt::format("Error retrieving resource from ResourceIdNode {}: {}", 
-                                             node->GetIdentifier(), e.what()),
-                                 events::Severity::Warning});
+                              {fmt::format("Error retrieving resource from ResourceIdNode {}: {}",
+                                           node->GetIdentifier(),
+                                           e.what()),
+                               events::Severity::Warning});
                         }
                         continue;
                     }
-                    
+
                     if (!referencedResource)
                     {
                         if (m_eventLogger)
                         {
                             m_eventLogger->addEvent(
-                                {fmt::format("ResourceIdNode {} references a null resource", 
-                                             node->GetIdentifier()),
-                                 events::Severity::Warning});
+                              {fmt::format("ResourceIdNode {} references a null resource",
+                                           node->GetIdentifier()),
+                               events::Severity::Warning});
                         }
                         continue;
                     }
-                    
+
                     // Check if this resource is one of our duplicate functions
-                    for (const auto& duplicate : duplicates)
+                    for (const auto & duplicate : duplicates)
                     {
                         // If the referenced resource ID matches a duplicate function's ID
-                        if (referencedResource->GetResourceID() == duplicate.duplicateFunction->GetResourceID())
+                        if (referencedResource->GetResourceID() ==
+                            duplicate.duplicateFunction->GetResourceID())
                         {
                             // Replace the reference with the original function
                             try
                             {
                                 resourceIdNode->SetResource(duplicate.originalFunction.get());
-                                
+
                                 if (m_eventLogger)
                                 {
                                     m_eventLogger->addEvent(
-                                        {fmt::format("Replaced reference to duplicate function {} with original function {}", 
-                                                     duplicate.duplicateFunction->GetResourceID(), 
-                                                     duplicate.originalFunction->GetResourceID()),
-                                         events::Severity::Info});
+                                      {fmt::format("Replaced reference to duplicate function {} "
+                                                   "with original function {}",
+                                                   duplicate.duplicateFunction->GetResourceID(),
+                                                   duplicate.originalFunction->GetResourceID()),
+                                       events::Severity::Info});
                                 }
                             }
-                            catch (const std::exception& e)
+                            catch (const std::exception & e)
                             {
                                 if (m_eventLogger)
                                 {
                                     m_eventLogger->addEvent(
-                                        {fmt::format("Error replacing function reference in node {}: {}", 
-                                                     node->GetIdentifier(), e.what()),
-                                         events::Severity::Error});
+                                      {fmt::format(
+                                         "Error replacing function reference in node {}: {}",
+                                         node->GetIdentifier(),
+                                         e.what()),
+                                       events::Severity::Error});
                                 }
                             }
-                            
+
                             // We've handled this node, no need to check other duplicates
                             break;
                         }
@@ -1465,21 +1467,28 @@ namespace gladius::io
         try
         {
             // backup the list of function ids
-            std::set<Lib3MF_uint32> functionResourceIds = collectFunctionResourceIds(model3mf);
-            // store the ptr to the original functions
-            auto implicitFunctions = collectImplicitFunctions(model3mf);
-
-            model3mf->MergeFromModel(modelToMerge.get());
-
-            // now find all duplicated functions
-            auto duplicates = findDuplicatedFunctions(implicitFunctions, model3mf);
-
-            // replace the references to the original functions with the duplicates
-            replaceDuplicatedFunctionReferences(duplicates, model3mf);
-            // remove the duplicates from the model
-            for (auto const & duplicate : duplicates)
             {
-                model3mf->RemoveResource(duplicate.duplicateFunction.get());
+                std::set<Lib3MF_uint32> functionResourceIds = collectFunctionResourceIds(model3mf);
+                // store the ptr to the original functions
+                auto implicitFunctions = collectImplicitFunctions(model3mf);
+
+                model3mf->MergeFromModel(modelToMerge.get());
+
+                // now find all duplicated functions
+                auto duplicates = findDuplicatedFunctions(implicitFunctions, model3mf);
+
+                // replace the references to the original functions with the duplicates
+                replaceDuplicatedFunctionReferences(duplicates, model3mf);
+                // remove the duplicates from the model
+                for (auto const & duplicate : duplicates)
+                {
+                    // log
+                    m_eventLogger->addEvent(
+                      {fmt::format("Removed resource from model3mf: {}",
+                                   duplicate.duplicateFunction->GetResourceID()),
+                       events::Severity::Info});
+                    model3mf->RemoveResource(duplicate.duplicateFunction.get());
+                }
             }
 
             loadImageStacks(filename, model3mf, doc);

@@ -127,7 +127,7 @@ namespace gladius::ui
 
         // Add member variables for LibraryBrowser
         LibraryBrowser m_libraryBrowser;
-        bool m_isLibraryBrowserVisible = false;
+        bool m_isLibraryBrowserVisible = true;
 
 
         double m_maxTimeSliceOptimization_s = 60.f;

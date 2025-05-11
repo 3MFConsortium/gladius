@@ -62,7 +62,7 @@ namespace gladius::ui
         m_outline.setDocument(m_doc);
 
         // Properly initialize LibraryBrowser
-        m_libraryBrowser.setRootDirectory(getAppDir() / "examples");
+        m_libraryBrowser.setRootDirectory(getAppDir() / "library");
 
 
         m_modelEditor.setDocument(m_doc);

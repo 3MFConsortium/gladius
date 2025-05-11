@@ -43,9 +43,6 @@ namespace gladius::ui
         m_subfolders.clear();
         m_fileBrowsers.clear();
 
-        // Add the root directory itself as the first "subfolder"
-        m_subfolders.push_back(m_rootDirectory);
-
         if (!std::filesystem::exists(m_rootDirectory) ||
             !std::filesystem::is_directory(m_rootDirectory))
         {
@@ -79,8 +76,7 @@ namespace gladius::ui
         for (const auto & subfolder : m_subfolders)
         {
             // Use folder name as key
-            std::string folderName =
-              subfolder == m_rootDirectory ? "Root" : subfolder.filename().string();
+            std::string folderName = subfolder.filename().string();
 
             // Create file browser for this subfolder if it doesn't exist
             if (m_fileBrowsers.find(folderName) == m_fileBrowsers.end())
@@ -114,29 +110,6 @@ namespace gladius::ui
 
         if (ImGui::Begin("3MF Library Browser", &m_visible, windowFlags))
         {
-            // Directory selection and refresh button
-            ImGui::Text("Library Directory: %s", m_rootDirectory.string().c_str());
-            ImGui::SameLine();
-
-            // Button with folder icon for selecting directory
-            if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FOLDER)))
-            {
-                auto selectedDir = queryDirectory(m_rootDirectory);
-                if (selectedDir)
-                {
-                    setRootDirectory(selectedDir.value());
-                }
-            }
-
-            ImGui::SameLine();
-
-            // Button with refresh icon
-            if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_SYNC_ALT)))
-            {
-                refreshDirectories();
-            }
-
-            ImGui::Separator();
 
             // Skip tab bar if no subfolders or only the root
             if (m_subfolders.empty() ||

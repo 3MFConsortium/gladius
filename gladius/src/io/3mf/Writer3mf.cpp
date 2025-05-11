@@ -506,6 +506,7 @@ namespace gladius::io
     {
         auto model = doc.get3mfModel();
 
+
         if (!model)
         {
             m_logger->addEvent({"No 3MF model to save.", events::Severity::Error});
@@ -576,8 +577,8 @@ namespace gladius::io
             }
             else
             {
-                throw std::runtime_error("Function not found in 3mf model");
-                // addFunctionTo3mf(*model, model3mf);
+                //throw std::runtime_error("Function not found in 3mf model");
+                addFunctionTo3mf(*model, model3mf);
             }
         }
     }

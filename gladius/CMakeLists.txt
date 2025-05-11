@@ -199,6 +199,8 @@ configure_file(${CMAKE_SOURCE_DIR}/src/gladius.rc.res gladius.rc.res COPYONLY)
 
 
 file(COPY examples DESTINATION "src/")
+file(COPY library DESTINATION "src/")
+
 
 file(COPY components/licenses DESTINATION "src/")
 
@@ -222,6 +224,9 @@ install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${IN
 
 # Install examples
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION ${INSTALL_PREFIX}/examples/)
+
+# Install library
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/library/ DESTINATION ${INSTALL_PREFIX}/library/)
 
 # Install binaries and libraries
 install(

@@ -472,6 +472,7 @@ namespace gladius
     {
         if (filename.extension() == ".3mf")
         {
+            auto computeToken = m_core->waitForComputeToken();
             io::saveTo3mfFile(filename, *this, writeThumbnail);
         }
 
