@@ -37,8 +37,12 @@ namespace gladius
 
     GLView::~GLView()
     {
+        // Explicitly save ImGui settings before destroying context
+        ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+        
         ImGui_ImplOpenGL2_Shutdown();
         ImGui_ImplGlfw_Shutdown();
+        
         ImGui::DestroyContext();
         glfwTerminate();
     }
@@ -50,6 +54,9 @@ namespace gladius
         m_windowSettings.width = static_cast<int>(io.DisplaySize.x);
         m_windowSettings.height = static_cast<int>(io.DisplaySize.y);
         glfwGetWindowPos(m_window, &m_windowSettings.x, &m_windowSettings.y);
+        
+        // Explicitly save ImGui settings to ensure current window positions are stored
+        ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
     }
 
     void GLView::addViewCallBack(const ViewCallBack & func)
@@ -177,13 +184,21 @@ namespace gladius
             std::filesystem::create_directory(gladiusConfigDir);
         }
         
-        if (!std::filesystem::is_regular_file(m_gladiusImgUiFilename) &&
-            std::filesystem::is_regular_file(io.IniFilename))
+        // If our custom config doesn't exist yet but the default ImGui one does, copy it
+        if (!std::filesystem::is_regular_file(m_gladiusImgUiFilename) && 
+            io.IniFilename && std::filesystem::is_regular_file(io.IniFilename))
         {
             std::filesystem::copy_file(io.IniFilename, m_gladiusImgUiFilename);
         }
+        
+        // If our custom config exists, load it immediately
+        if (std::filesystem::is_regular_file(m_gladiusImgUiFilename))
+        {
+            ImGui::LoadIniSettingsFromDisk(m_iniFileNameStorage.c_str());
+        }
 
-        // io.IniFilename = m_gladiusImgUiFilename.string().c_str();
+        m_iniFileNameStorage = m_gladiusImgUiFilename.string();
+        io.IniFilename = m_iniFileNameStorage.c_str();
 #ifdef IMGUI_HAS_DOCK
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 #endif
@@ -426,6 +441,14 @@ namespace gladius
         glPopMatrix();
 
         displayUI();
+        
+        // ImGui automatically saves settings periodically, but this ensures 
+        // we're using our custom file path if ImGui decides to save this frame
+        ImGuiIO & io = ImGui::GetIO();
+        if (io.WantSaveIniSettings)
+        {
+            io.IniFilename = m_iniFileNameStorage.c_str();
+        }
 
         glfwSwapBuffers(m_window);
     }
@@ -448,6 +471,9 @@ namespace gladius
         {
             if (glfwWindowShouldClose(m_window))
             {
+                // Save window settings before handling close request
+                storeWindowSettings();
+                
                 glfwSetWindowShouldClose(m_window, GLFW_FALSE);
                 m_close();
                 m_stateCloseRequested = false;

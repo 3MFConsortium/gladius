@@ -101,6 +101,7 @@ namespace gladius
         bool m_showViewSettings{false};
 
         std::filesystem::path m_gladiusImgUiFilename{};
+        std::string m_iniFileNameStorage{}; // Stores the string for ImGui ini filename
         GLFWwindow* m_window{nullptr};
         bool m_isAnimationRunning = false;
         bool m_stateCloseRequested = false;
