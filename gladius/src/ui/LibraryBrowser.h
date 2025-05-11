@@ -20,11 +20,16 @@ namespace gladius::ui
     class LibraryBrowser
     {
       public:
+     
+        LibraryBrowser() = default;
         /**
          * @brief Constructor
          * @param logger The logger to use for events
          */
         explicit LibraryBrowser(events::SharedLogger logger);
+
+        void setLogger(events::SharedLogger logger);
+   
 
         /**
          * @brief Destructor

@@ -12,6 +12,11 @@ namespace gladius::ui
     {
     }
 
+    void LibraryBrowser::setLogger(events::SharedLogger logger)
+    {
+        m_logger = std::move(logger);
+    }
+
     LibraryBrowser::~LibraryBrowser() = default;
 
     void LibraryBrowser::setRootDirectory(const std::filesystem::path & directory)

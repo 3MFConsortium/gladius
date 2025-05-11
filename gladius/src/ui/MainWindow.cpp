@@ -45,8 +45,7 @@ namespace gladius::ui
     }
 
     MainWindow::MainWindow()
-        : m_logger(std::make_shared<events::Logger>()),
-          m_libraryBrowser(m_logger) // Initialize m_libraryBrowser with m_logger
+        : m_logger(std::make_shared<events::Logger>())
     {
         m_mainView.addViewCallBack([&]() { renderWelcomeScreen(); });
         m_mainView.setRequestCloseCallBack([&]() { close(); });
@@ -61,11 +60,10 @@ namespace gladius::ui
         m_logger = std::move(logger);
         m_outline.setDocument(m_doc);
 
-        // Properly initialize LibraryBrowser
-        m_libraryBrowser.setRootDirectory(getAppDir() / "library");
-
-
         m_modelEditor.setDocument(m_doc);
+        // Set the library root directory
+        m_modelEditor.setLibraryRootDirectory(getAppDir() / "library");
+        
         using namespace gladius;
 
         m_renderWindow.initialize(m_core.get(), &m_mainView);
@@ -201,8 +199,9 @@ namespace gladius::ui
         ImGuiIO & io = ImGui::GetIO();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false))
         {
-            m_libraryBrowser.setRootDirectory(getAppDir() / "examples");
-            m_isLibraryBrowserVisible = !m_isLibraryBrowserVisible;
+            m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");
+            m_modelEditor.toggleLibraryVisibility();
+            m_isLibraryBrowserVisible = m_modelEditor.isLibraryVisible();
         }
         if (!m_core->getComputeContext().isValid())
         {
@@ -335,10 +334,7 @@ namespace gladius::ui
             logViewer();
             m_about.render();
             m_renderWindow.updateCamera();
-            if (m_isLibraryBrowserVisible)
-            {
-                m_libraryBrowser.render(m_doc);
-            }
+            // Library browser is now rendered by the ModelEditor
         }
         catch (OpenCLError & e)
         {
@@ -712,7 +708,8 @@ namespace gladius::ui
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN "\tLibrary Browser")))
         {
             closeMenu();
-            m_libraryBrowser.setRootDirectory(getAppDir() / "examples");
+            m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");
+            m_modelEditor.setLibraryVisibility(true);
             m_isLibraryBrowserVisible = true;
         }
 

@@ -239,7 +239,8 @@ namespace gladius::ui
                 ImGui::TreePop();
             }
             ImGui::EndGroup();
-            frameOverlay(ImVec4(1.0f, 0.0f, 1.0f, 0.1f), 
+            frameOverlay(
+              ImVec4(1.0f, 0.0f, 1.0f, 0.1f),
               "Volume Data\n\n"
               "Define spatially varying properties inside your 3D models.\n"
               "Volume data lets you specify how material properties change throughout\n"
@@ -250,7 +251,8 @@ namespace gladius::ui
               " Physical properties like elasticity or conductivity\n"
               " Temperature or stress distribution for simulation\n\n"
               "Apply volume data to meshes or level sets using functions with \"pos\" input\n"
-              "and appropriate scalar (custom property) or vector (color) outputs for your desired property.");
+              "and appropriate scalar (custom property) or vector (color) outputs for your desired "
+              "property.");
 
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("LevelSet", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
@@ -269,7 +271,8 @@ namespace gladius::ui
               "Define your 3D shape using mathematical boundaries instead of triangles.\n"
               "Level sets are perfect for creating smooth, organic shapes and\n"
               "allow for easier mixing between different shapes.\n\n"
-              "For a level set you need a function with a \"pos\" vector as input and a scalar output.\n");
+              "For a level set you need a function with a \"pos\" vector as input and a scalar "
+              "output.\n");
 
             resourceOutline();
 
@@ -591,32 +594,39 @@ namespace gladius::ui
             ImGui::TextUnformatted(ICON_FA_SEARCH);
             ImGui::SameLine();
             ImGui::PushItemWidth(200.0f * m_uiScale);
-            
+
             // Auto-focus on the filter input when popup opens
             bool isFirstFrame = ImGui::IsWindowAppearing();
-            
+
             // Check if any key is pressed and focus the filter input
             bool needsFocus = isFirstFrame;
-            auto& io = ImGui::GetIO();
+            auto & io = ImGui::GetIO();
             bool isAnyKeyTyped = io.InputQueueCharacters.Size > 0;
-            
+
             // Check if backspace is pressed (Backspace isn't in InputQueueCharacters)
             bool isBackspacePressed = io.KeysDown[ImGui::GetKeyIndex(ImGuiKey_Backspace)];
-                                    
+
             // Check if a key was pressed and the filter input doesn't already have focus
-            if ((isAnyKeyTyped || isBackspacePressed) && !ImGui::IsItemActive()) {
+            if ((isAnyKeyTyped || isBackspacePressed) && !ImGui::IsItemActive())
+            {
                 needsFocus = true;
-                
+
                 // If any character was typed, update the filter text with it
-                if (!isFirstFrame) {
-                    if (isBackspacePressed) {
+                if (!isFirstFrame)
+                {
+                    if (isBackspacePressed)
+                    {
                         // Clear filter text on backspace
                         m_nodeFilterText.clear();
-                    } else {
+                    }
+                    else
+                    {
                         // Set filter text to the first typed character
-                        for (int i = 0; i < io.InputQueueCharacters.Size; i++) {
-                            char c = (char)io.InputQueueCharacters[i];
-                            if (c >= 32) { // Ignore control characters
+                        for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+                        {
+                            char c = (char) io.InputQueueCharacters[i];
+                            if (c >= 32)
+                            { // Ignore control characters
                                 m_nodeFilterText = c;
                                 break; // Only use the first typed character
                             }
@@ -624,18 +634,20 @@ namespace gladius::ui
                     }
                 }
             }
-            
-            if (needsFocus) {
+
+            if (needsFocus)
+            {
                 ImGui::SetKeyboardFocusHere();
             }
-            
-            if (ImGui::InputText("##NodeFilter", &m_nodeFilterText, ImGuiInputTextFlags_AutoSelectAll))
+
+            if (ImGui::InputText(
+                  "##NodeFilter", &m_nodeFilterText, ImGuiInputTextFlags_AutoSelectAll))
             {
                 // Filter text changed
             }
             ImGui::PopItemWidth();
             ImGui::Separator();
-            
+
             // Filter function and mesh resources using the filter text
             functionToolBox(mousePos);
             meshResourceToolBox(mousePos);
@@ -674,9 +686,8 @@ namespace gladius::ui
                       // Check if node matches filter
                       std::string nodeName = node.name();
                       bool matchesFilter = matchesNodeFilter(nodeName);
-                      
-                      if (matchesFilter && 
-                          node.getCategory() == category &&
+
+                      if (matchesFilter && node.getCategory() == category &&
                           (hasRequiredField || !showOnlyLinkableNodes))
                       {
                           if (ImGui::Button(nodeName.c_str()))
@@ -909,6 +920,12 @@ namespace gladius::ui
             std::cerr << e.what() << "\n";
         }
 
+        // Render the library browser if visible
+        if (m_libraryBrowser.isVisible() && m_doc)
+        {
+            m_libraryBrowser.render(m_doc);
+        }
+
         if (!m_currentModel->hasBeenLayouted() && m_nodeWidthsInitialized)
         {
             autoLayout(m_nodeDistance);
@@ -947,6 +964,12 @@ namespace gladius::ui
         m_doc = std::move(document);
         setAssembly(m_doc->getAssembly());
 
+
+        if (m_doc)
+        {
+            m_libraryBrowser.setLogger(m_doc->getSharedLogger());
+        }
+
         m_outline.setDocument(m_doc);
     }
 
@@ -978,21 +1001,26 @@ namespace gladius::ui
         m_history = History();
         switchModel();
     }
-    
-    bool ModelEditor::matchesNodeFilter(const std::string& text) const
+
+    bool ModelEditor::matchesNodeFilter(const std::string & text) const
     {
-        if (m_nodeFilterText.empty()) {
+        if (m_nodeFilterText.empty())
+        {
             return true; // No filter active, match everything
         }
-        
+
         // Case-insensitive comparison
         std::string lowerText = text;
         std::string lowerFilter = m_nodeFilterText;
-        std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(), 
-                      [](unsigned char c){ return std::tolower(c); });
-        std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), 
-                      [](unsigned char c){ return std::tolower(c); });
-                      
+        std::transform(lowerText.begin(),
+                       lowerText.end(),
+                       lowerText.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        std::transform(lowerFilter.begin(),
+                       lowerFilter.end(),
+                       lowerFilter.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
         return lowerText.find(lowerFilter) != std::string::npos;
     }
 
@@ -1005,16 +1033,16 @@ namespace gladius::ui
             {
                 continue;
             }
-            
+
             // Get the display name
             std::string displayName = model->getDisplayName().value_or("function");
-            
+
             // Check if it matches the filter
             if (!matchesNodeFilter(displayName))
             {
                 continue; // Skip this item if it doesn't match the filter
             }
-            
+
             if (ImGui::Button(displayName.c_str()))
             {
                 createUndoRestorePoint("Create node");
@@ -1049,10 +1077,10 @@ namespace gladius::ui
             {
                 continue;
             }
-            
+
             // Get the display name
             std::string displayName = key.getDisplayName();
-            
+
             // Check if it matches the filter
             if (!matchesNodeFilter(displayName))
             {
@@ -1624,5 +1652,28 @@ namespace gladius::ui
             ImGui::EndPopup();
         }
     }
+    void ModelEditor::setLibraryRootDirectory(const std::filesystem::path & directory)
+    {
+        m_libraryBrowser.setRootDirectory(directory);
+    }
 
-} // namespace gladius::ui
+    void ModelEditor::toggleLibraryVisibility()
+    {
+        m_libraryBrowser.setVisibility(!m_libraryBrowser.isVisible());
+    }
+
+    void ModelEditor::setLibraryVisibility(bool visible)
+    {
+        m_libraryBrowser.setVisibility(visible);
+    }
+
+    bool ModelEditor::isLibraryVisible() const
+    {
+        return m_libraryBrowser.isVisible();
+    }
+
+    void ModelEditor::refreshLibraryDirectories()
+    {
+        m_libraryBrowser.refreshDirectories();
+    }
+} // namespace gladius::ui// Add the LibraryBrowser management methods to ModelEditor.cpp

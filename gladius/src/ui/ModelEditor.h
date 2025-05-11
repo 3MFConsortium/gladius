@@ -3,6 +3,7 @@
 #include "../nodes/History.h"
 #include "NodeView.h"
 #include "imguinodeeditor.h"
+#include "LibraryBrowser.h"
 
 #include <filesystem>
 #include <string>
@@ -58,6 +59,13 @@ namespace gladius::ui
         [[nodiscard]] bool primitveDataNeedsUpdate() const;
         void invalidatePrimitiveData();
         void markPrimitiveDataAsUpToDate();
+
+        // Library browser methods
+        void setLibraryRootDirectory(const std::filesystem::path& directory);
+        void toggleLibraryVisibility();
+        void setLibraryVisibility(bool visible);
+        [[nodiscard]] bool isLibraryVisible() const;
+        void refreshLibraryDirectories();
 
       private:
         void readBackNodePositions();
@@ -145,6 +153,9 @@ namespace gladius::ui
         
         // Node filtering
         std::string m_nodeFilterText;
+
+        // Library browser
+        LibraryBrowser m_libraryBrowser;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

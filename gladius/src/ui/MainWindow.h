@@ -16,7 +16,6 @@
 #include "Outline.h"
 #include "RenderWindow.h"
 #include "SliceView.h"
-#include "LibraryBrowser.h"
 
 #include <chrono>
 
@@ -125,8 +124,7 @@ namespace gladius::ui
         events::SharedLogger m_logger;
 
 
-        // Add member variables for LibraryBrowser
-        LibraryBrowser m_libraryBrowser;
+        // Flag to remember if library browser was visible
         bool m_isLibraryBrowserVisible = true;
 
 
