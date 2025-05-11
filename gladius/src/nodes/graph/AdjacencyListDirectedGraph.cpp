@@ -3,9 +3,13 @@
 
 namespace gladius::nodes::graph
 {
+    AdjacencyListDirectedGraph::AdjacencyListDirectedGraph() :
+        IDirectedGraph(0)
+    {
+    }
+    
     AdjacencyListDirectedGraph::AdjacencyListDirectedGraph(std::size_t const size) :
-        IDirectedGraph(size),
-        m_size(size)
+        IDirectedGraph(size)
     {
     }
 
@@ -57,7 +61,7 @@ namespace gladius::nodes::graph
 
     auto AdjacencyListDirectedGraph::getSize() const -> std::size_t
     {
-        return m_size;
+        return m_vertices.size();
     }
 
     void AdjacencyListDirectedGraph::removeVertex(Identifier id)
@@ -117,12 +121,6 @@ namespace gladius::nodes::graph
     void AdjacencyListDirectedGraph::addVertex(Identifier id)
     {
         m_vertices.insert(id);
-        
-        // Update size if needed
-        if (static_cast<std::size_t>(id) >= m_size)
-        {
-            m_size = id + 1;
-        }
     }
 
     auto AdjacencyListDirectedGraph::hasPredecessors(Identifier id) const -> bool

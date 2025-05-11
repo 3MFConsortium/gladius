@@ -15,6 +15,11 @@ namespace gladius::nodes::graph
     {
       public:
         /**
+         * @brief Constructs a new empty Adjacency List Directed Graph
+         */
+        AdjacencyListDirectedGraph();
+        
+        /**
          * @brief Constructs a new Adjacency List Directed Graph
          * 
          * @param size Initial capacity for the graph (doesn't limit vertex count)
@@ -95,8 +100,5 @@ namespace gladius::nodes::graph
 
         /// Reverse adjacency list - maps each vertex to the set of vertices that depend on it
         std::unordered_map<Identifier, DependencySet> m_incomingEdges;
-
-        /// Size of the graph, defined as the maximum vertex identifier + 1
-        std::size_t m_size;
     };
 } // namespace gladius::nodes::graph
