@@ -778,12 +778,12 @@ namespace gladius::io
             // Use the FunctionComparator to find an equivalent function
             auto equivalentFunction = findEquivalentFunction(*extendedModel, *originalFunction);
             
-            // If an equivalent function is found, store the IDs in the result
+            // If an equivalent function is found, store the function pointers in the result
             if (equivalentFunction)
             {
                 Duplicates duplicate{
-                    originalFunction->GetResourceID(),
-                    equivalentFunction->GetResourceID()
+                    originalFunction,
+                    equivalentFunction
                 };
                 
                 duplicates.push_back(duplicate);

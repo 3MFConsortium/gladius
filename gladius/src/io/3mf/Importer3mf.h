@@ -17,13 +17,13 @@ namespace gladius::io
     /**
      * @brief Structure to represent duplicated implicit functions.
      * 
-     * This structure holds the IDs of two implicit functions that are considered duplicates:
+     * This structure holds two implicit functions that are considered duplicates:
      * one from the original function list and one from the extended model.
      */
     struct Duplicates
     {
-        Lib3MF_uint32 originalFunctionId;   ///< ID of the function in the original list
-        Lib3MF_uint32 duplicateFunctionId;  ///< ID of the duplicated function in the extended model
+        Lib3MF::PImplicitFunction originalFunction;   ///< Function from the original list
+        Lib3MF::PImplicitFunction duplicateFunction;  ///< Duplicated function from the extended model
     };
 }
 
