@@ -88,6 +88,21 @@ namespace gladius::io
          */
 
         void loadComponentObjects(Lib3MF::PModel model, Document & doc);
+
+        /**
+         * @brief Replaces references to duplicated functions in an implicit function graph.
+         * 
+         * This method iterates through all implicit functions in the model. For each function,
+         * it identifies nodes of type ConstResourceID that reference a duplicated function,
+         * and replaces those references with the original function.
+         * 
+         * @param duplicates Vector of Duplicates structs containing pairs of original and duplicate functions
+         * @param model The 3MF model containing functions that may reference duplicate functions
+         */
+        void replaceDuplicatedFunctionReferences(
+            std::vector<Duplicates> const& duplicates,
+            Lib3MF::PModel const& model) const;
+
       private:
         void logWarnings(std::filesystem::path const & filename, Lib3MF::PReader reader);
 
