@@ -3,6 +3,8 @@
 #include <lib3mf_abi.hpp>
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
+#include <set>
+#include <vector>
 
 #include "Builder.h"
 #include "Document.h"
@@ -737,6 +739,45 @@ namespace gladius::io
         return mat;
     }
 
+    std::vector<Lib3MF::PImplicitFunction> Importer3mf::collectImplicitFunctions(Lib3MF::PModel const & model) const
+    {
+        ProfileFunction
+        std::vector<Lib3MF::PImplicitFunction> implicitFunctions;
+        auto resourceIterator = model->GetResources();
+        
+        while (resourceIterator->MoveNext())
+        {
+            auto resource = resourceIterator->GetCurrent();
+            auto implicitFunc = std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(resource);
+            
+            if (implicitFunc)
+            {
+                implicitFunctions.push_back(implicitFunc);
+            }
+        }
+        
+        return implicitFunctions;
+    }
+
+    std::set<Lib3MF_uint32> Importer3mf::collectFunctionResourceIds(Lib3MF::PModel const & model) const
+    {
+        ProfileFunction
+        std::set<Lib3MF_uint32> functionResourceIds;
+        auto resourceIterator = model->GetResources();
+        while (resourceIterator->MoveNext())
+        {
+            auto resource = resourceIterator->GetCurrent();
+            auto implicitFunc = dynamic_cast<Lib3MF::CImplicitFunction *>(resource.get());
+            auto functionFromImage3d = dynamic_cast<Lib3MF::CFunctionFromImage3D *>(resource.get());
+            
+            if (implicitFunc || functionFromImage3d)
+            {
+                functionResourceIds.insert(resource->GetResourceID());
+            }
+        }
+        return functionResourceIds;
+    }
+
     void Importer3mf::loadMeshes(Lib3MF::PModel model, Document & doc)
     {
         ProfileFunction auto objectIterator = model->GetObjects();
@@ -1265,6 +1306,9 @@ namespace gladius::io
 
         try
         {
+            // backup the list of function ids
+            std::set<Lib3MF_uint32> functionResourceIds = collectFunctionResourceIds(model3mf);
+
             model3mf->MergeFromModel(modelToMerge.get());
 
             loadImageStacks(filename, model3mf, doc);

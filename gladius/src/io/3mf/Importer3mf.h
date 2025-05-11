@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <unordered_map>
+#include <vector>
 
 #include "EventLogger.h"
 
@@ -120,6 +121,28 @@ namespace gladius::io
         void processImplicitFunction(Document & doc, Lib3MF::CImplicitFunction * func);
 
         void processFunctionFromImage3d(Document & doc, Lib3MF::CFunctionFromImage3D * func);
+
+        /**
+         * @brief Collects all function resource IDs from a 3MF model.
+         *
+         * This function iterates through all resources in the model and identifies
+         * those that are either implicit functions or functions from 3D images.
+         *
+         * @param model The 3MF model to collect function resource IDs from.
+         * @return A set containing the resource IDs of all functions in the model.
+         */
+        std::set<Lib3MF_uint32> collectFunctionResourceIds(Lib3MF::PModel const & model) const;
+
+        /**
+         * @brief Collects all implicit functions from a 3MF model.
+         * 
+         * This function iterates through all resources in the model and collects
+         * all implicit functions (excluding functions from 3D images).
+         * 
+         * @param model The 3MF model to collect implicit functions from.
+         * @return A vector containing shared pointers to the implicit functions in the model.
+         */
+        std::vector<Lib3MF::PImplicitFunction> collectImplicitFunctions(Lib3MF::PModel const & model) const;
 
         void connectOutputs(gladius::nodes::Model & model,
                             gladius::nodes::NodeBase & endNode,
