@@ -4,6 +4,7 @@
 - **Modern C++**: Use C++11 and later features. Use std::algorithm when possible.
 - **Naming**: camelCase for variables/functions, PascalCase for classes/structs, UPPER_CASE for constants/macros.
 - **Comments**: Use Doxygen-style comments.
+- **Missing Information**: If information is missing, ask for clarification.
 
 ## Code Structure
 - **Headers**: Use `.h` for declarations, `.cpp` for definitions.
