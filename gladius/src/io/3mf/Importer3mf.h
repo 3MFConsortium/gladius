@@ -12,6 +12,21 @@
 
 #include <lib3mf_implicit.hpp>
 
+namespace gladius::io
+{
+    /**
+     * @brief Structure to represent duplicated implicit functions.
+     * 
+     * This structure holds the IDs of two implicit functions that are considered duplicates:
+     * one from the original function list and one from the extended model.
+     */
+    struct Duplicates
+    {
+        Lib3MF_uint32 originalFunctionId;   ///< ID of the function in the original list
+        Lib3MF_uint32 duplicateFunctionId;  ///< ID of the duplicated function in the extended model
+    };
+}
+
 namespace gladius
 {
     class Document;
@@ -143,6 +158,20 @@ namespace gladius::io
          * @return A vector containing shared pointers to the implicit functions in the model.
          */
         std::vector<Lib3MF::PImplicitFunction> collectImplicitFunctions(Lib3MF::PModel const & model) const;
+        
+        /**
+         * @brief Finds duplicated implicit functions between original functions and an extended model.
+         * 
+         * This function compares each original function with functions in the extended model
+         * to identify duplicates using the FunctionComparator.
+         * 
+         * @param originalFunctions Vector of implicit functions to check for duplicates
+         * @param extendedModel The extended model to search in for duplicates
+         * @return Vector of Duplicates structs containing the IDs of duplicated functions
+         */
+        std::vector<Duplicates> findDuplicatedFunctions(
+            std::vector<Lib3MF::PImplicitFunction> const& originalFunctions,
+            Lib3MF::PModel const& extendedModel) const;
 
         void connectOutputs(gladius::nodes::Model & model,
                             gladius::nodes::NodeBase & endNode,

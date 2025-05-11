@@ -758,6 +758,40 @@ namespace gladius::io
         
         return implicitFunctions;
     }
+    
+    std::vector<Duplicates> Importer3mf::findDuplicatedFunctions(
+        std::vector<Lib3MF::PImplicitFunction> const& originalFunctions,
+        Lib3MF::PModel const& extendedModel) const
+    {
+        ProfileFunction
+        std::vector<Duplicates> duplicates;
+        
+        // For each original function, search for an equivalent in the extended model
+        for (const auto& originalFunction : originalFunctions)
+        {
+            // Skip if function is null (should not happen, but let's be safe)
+            if (!originalFunction)
+            {
+                continue;
+            }
+            
+            // Use the FunctionComparator to find an equivalent function
+            auto equivalentFunction = findEquivalentFunction(*extendedModel, *originalFunction);
+            
+            // If an equivalent function is found, store the IDs in the result
+            if (equivalentFunction)
+            {
+                Duplicates duplicate{
+                    originalFunction->GetResourceID(),
+                    equivalentFunction->GetResourceID()
+                };
+                
+                duplicates.push_back(duplicate);
+            }
+        }
+        
+        return duplicates;
+    }
 
     std::set<Lib3MF_uint32> Importer3mf::collectFunctionResourceIds(Lib3MF::PModel const & model) const
     {
@@ -1308,8 +1342,14 @@ namespace gladius::io
         {
             // backup the list of function ids
             std::set<Lib3MF_uint32> functionResourceIds = collectFunctionResourceIds(model3mf);
+            // store the ptr to the original functions
+            auto implicitFunctions = collectImplicitFunctions(model3mf);
 
             model3mf->MergeFromModel(modelToMerge.get());
+
+            // now find all duplicated functions
+            auto duplicates = findDuplicatedFunctions(implicitFunctions, model3mf);
+            // remove the duplicates from the model
 
             loadImageStacks(filename, model3mf, doc);
             loadImplicitFunctions(model3mf, doc);
