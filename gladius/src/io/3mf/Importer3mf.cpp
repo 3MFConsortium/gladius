@@ -1549,7 +1549,9 @@ namespace gladius::io
             }
 
             loadImageStacks(filename, targetModel, doc);
-            //loadImplicitFunctionsFiltered(targetModel, doc, duplicates);
+            loadImplicitFunctionsFiltered(targetModel, doc, duplicates);
+
+            doc.rebuildResourceDependencyGraph();
         }
         catch (Lib3MF::ELib3MFException const & e)
         {

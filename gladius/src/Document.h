@@ -4,11 +4,11 @@
 #include "Mesh.h"
 #include "compute/ComputeCore.h"
 #include "io/3mf/Importer3mf.h"
+#include "io/3mf/ResourceDependencyGraph.h"
 #include "nodes/Assembly.h"
 #include "nodes/BuildItem.h"
 #include "nodes/Model.h"
 #include "ui/GLView.h"
-#include "io/3mf/ResourceDependencyGraph.h"
 
 #include <atomic>
 #include <filesystem>
@@ -179,13 +179,13 @@ namespace gladius
 
         /**
          * @brief Updates the 3MF model with the current state of the document.
-         * 
+         *
          */
         void update3mfModel();
 
         /**
          * @brief Updates the document from the 3MF model.
-         * 
+         *
          */
         void updateDocumenFrom3mfModel(bool skipImplicitFunctions = false);
 
@@ -195,14 +195,14 @@ namespace gladius
          * @return Result containing removal possibility and dependent items.
          */
         gladius::io::CanResourceBeRemovedResult isItSafeToDeleteResource(ResourceKey key);
-        
+
         /**
          * @brief Removes all resources that are not used by any build item.
-         * 
+         *
          * This method identifies resources that are not directly or indirectly referenced
          * by any build item and removes them from the model. It uses the ResourceDependencyGraph
          * to find unused resources and safely delete them.
-         * 
+         *
          * @return The number of resources that were removed
          */
         std::size_t removeUnusedResources();
@@ -222,7 +222,16 @@ namespace gladius
          *
          * @return A pointer to the resource dependency graph (nullptr if not available)
          */
-        [[nodiscard]] const gladius::io::ResourceDependencyGraph* getResourceDependencyGraph() const;
+        [[nodiscard]] const gladius::io::ResourceDependencyGraph *
+        getResourceDependencyGraph() const;
+
+        /**
+         * @brief Rebuilds the dependency graph for the current 3MF model
+         *
+         * Creates a new ResourceDependencyGraph and builds the graph for the currently loaded 3MF
+         * model. This is used to track dependencies between resources for safe resource deletion.
+         */
+        void rebuildResourceDependencyGraph();
 
       private:
         [[nodiscard]] nodes::VariantParameter &
@@ -236,14 +245,6 @@ namespace gladius
         void loadAllMeshResources();
         void refreshWorker();
         void updateFlatAssembly();
-        
-        /**
-         * @brief Rebuilds the dependency graph for the current 3MF model
-         * 
-         * Creates a new ResourceDependencyGraph and builds the graph for the currently loaded 3MF model.
-         * This is used to track dependencies between resources for safe resource deletion.
-         */
-        void rebuildResourceDependencyGraph();
 
         void updateMemoryOffsets();
 

@@ -1,7 +1,7 @@
 #include "ResourceDependencyGraph.h"
 #include "EventLogger.h"
 #include "ResourceIdUtil.h"
-#include "nodes/graph/DirectedGraph.h"
+#include "nodes/graph/AdjacencyListDirectedGraph.h"
 #include "nodes/graph/GraphAlgorithms.h"
 #include "nodes/graph/IDirectedGraph.h"
 #include <exception>
@@ -12,7 +12,7 @@ namespace gladius::io
     ResourceDependencyGraph::ResourceDependencyGraph(Lib3MF::PModel model,
                                                      gladius::events::SharedLogger logger)
         : m_model(model)
-        , m_graph(std::make_unique<nodes::graph::DirectedGraph>(100))
+        , m_graph(std::make_unique<nodes::graph::AdjacencyListDirectedGraph>())
         , m_logger(std::move(logger))
     {
         if (m_logger)
