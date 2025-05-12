@@ -129,7 +129,11 @@ namespace gladius::io
                     return false;
                 }
 
-                if (constantNode1->GetConstant() != constantNode2->GetConstant())
+                double constant1 = constantNode1->GetConstant();
+                double constant2 = constantNode2->GetConstant();
+                // Use a tolerance for floating-point comparison
+                constexpr double tolerance = 1e-6;
+                if (std::abs(constant1 - constant2) > tolerance)
                 {
                     return false;
                 }
