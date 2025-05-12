@@ -298,7 +298,16 @@ namespace gladius::io
         {
             if (duplicate.duplicateFunction)
             {
-                duplicateIds.insert(duplicate.duplicateFunction->GetResourceID());
+                duplicateIds.insert(duplicate.duplicateFunction->GetUniqueResourceID());
+            }
+        }
+
+        // Log the duplicate IDs
+        for (auto const& duplicate : duplicates)
+        {
+            if (duplicate.duplicateFunction)
+            {
+                std::cout << "Duplicate function found with ID: " << duplicate.duplicateFunction->GetUniqueResourceID() << std::endl;
             }
         }
 
@@ -307,7 +316,7 @@ namespace gladius::io
         while (resourceIterator->MoveNext())
         {
             auto res = resourceIterator->GetCurrent();
-            Lib3MF_uint32 resourceId = res->GetResourceID();
+            Lib3MF_uint32 resourceId = res->GetUniqueResourceID();
 
             // Skip if this resource is in our duplicates list
             if (duplicateIds.find(resourceId) != duplicateIds.end())
@@ -413,6 +422,13 @@ namespace gladius::io
             return;
         }
 
+        std::cout << "Creating model: " << func->GetUniqueResourceID() << std::endl;
+        if (m_eventLogger)
+        {
+            m_eventLogger->addEvent({fmt::format("Creating model: {}", func->GetUniqueResourceID()),
+                                     events::Severity::Info});
+        }
+
         assembly.addModelIfNotExisting(func->GetModelResourceID());
 
         auto & idToNode = m_nodeMaps[func->GetModelResourceID()];
@@ -483,6 +499,7 @@ namespace gladius::io
                                            typeIndexFrom3mfType(output->GetType()));
                 }
             }
+            newNode->setUniqueName(node3mf->GetIdentifier());
             model->registerInputs(*newNode);
             model->registerOutputs(*newNode);
             idToNode[makeValidVariableName(node3mf->GetIdentifier())] = newNode;
@@ -953,21 +970,23 @@ namespace gladius::io
                     for (const auto & duplicate : duplicates)
                     {
                         // If the referenced resource ID matches a duplicate function's ID
-                        if (referencedResource->GetResourceID() ==
-                            duplicate.duplicateFunction->GetResourceID())
+                        if (referencedResource->GetUniqueResourceID() ==
+                            duplicate.duplicateFunction->GetUniqueResourceID())
                         {
                             // Replace the reference with the original function
                             try
                             {
-                                resourceIdNode->SetResource(duplicate.originalFunction.get());
+                                auto originalResource = model->GetResourceByID(
+                                  duplicate.originalFunction->GetUniqueResourceID());
+                                resourceIdNode->SetResource(originalResource);
 
                                 if (m_eventLogger)
                                 {
                                     m_eventLogger->addEvent(
                                       {fmt::format("Replaced reference to duplicate function {} "
                                                    "with original function {}",
-                                                   duplicate.duplicateFunction->GetResourceID(),
-                                                   duplicate.originalFunction->GetResourceID()),
+                                                   duplicate.duplicateFunction->GetUniqueResourceID(),
+                                                   duplicate.originalFunction->GetUniqueResourceID()),
                                        events::Severity::Info});
                                 }
                             }
@@ -1533,10 +1552,22 @@ namespace gladius::io
             targetModel->MergeFromModel(modelToMergeFrom.get());
 
             // now find all duplicated functions
-            auto duplicates = findDuplicatedFunctions(implicitFunctions, targetModel);
+            size_t numDuplicatesPrevious = 0;
+            size_t numDuplicatesCurrent = 0;
+            std::vector<Duplicates> duplicates;
+            do
+            {
+                numDuplicatesPrevious = numDuplicatesCurrent;
 
-            // replace the references to the original functions with the duplicates
-            replaceDuplicatedFunctionReferences(duplicates, targetModel);
+                duplicates = findDuplicatedFunctions(implicitFunctions, targetModel);
+                numDuplicatesCurrent = duplicates.size();
+
+                // replace the references to the duplicated functions with the original ones
+                replaceDuplicatedFunctionReferences(duplicates, targetModel);
+
+            } while (numDuplicatesPrevious != numDuplicatesCurrent);
+
+            
             // remove the duplicates from the model
             for (auto const & duplicate : duplicates)
             {
@@ -1545,7 +1576,20 @@ namespace gladius::io
                                                      duplicate.duplicateFunction->GetResourceID()),
                                          events::Severity::Info});
                 //targetModel->RemoveResource(duplicate.duplicateFunction.get());
-                doc.deleteFunction(duplicate.duplicateFunction->GetModelResourceID());
+                auto const & resource = targetModel->GetResourceByID(
+                  duplicate.duplicateFunction->GetUniqueResourceID());
+                if (!resource)
+                {
+                    if (m_eventLogger)
+                    {
+                        m_eventLogger->addEvent(
+                          {fmt::format("Resource {} not found in model3mf",
+                                       duplicate.duplicateFunction->GetUniqueResourceID()),
+                           events::Severity::Error});
+                    }
+                    continue;
+                }
+                targetModel->RemoveResource(resource);
             }
 
             loadImageStacks(filename, targetModel, doc);
