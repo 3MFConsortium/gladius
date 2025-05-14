@@ -183,16 +183,16 @@ namespace gladius::nodes::graph::tests
         // Add vertices
         for (std::size_t i = 0; i < graphSize; ++i)
         {
-            matrixGraph.addVertex(i);
-            listGraph.addVertex(i);
+            matrixGraph.addVertex(static_cast<Identifier>(i));
+            listGraph.addVertex(static_cast<Identifier>(i));
         }
         
         // Add some random edges (same for both graphs)
         srand(42); // Use fixed seed for reproducibility
         for (std::size_t i = 0; i < edgeCount; ++i)
         {
-            Identifier from = rand() % graphSize;
-            Identifier to = rand() % graphSize;
+            Identifier from = static_cast<Identifier>(rand() % graphSize);
+            Identifier to = static_cast<Identifier>(rand() % graphSize);
             if (from != to) // Avoid self-loops
             {
                 matrixGraph.addDependency(from, to);
