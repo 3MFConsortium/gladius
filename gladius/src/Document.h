@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <mutex>
 
 namespace gladius
 {
@@ -276,6 +277,9 @@ namespace gladius
 
         /// Dependency graph for resource removal checks
         std::unique_ptr<gladius::io::ResourceDependencyGraph> m_resourceDependencyGraph;
+
+        /// Mutex for protecting m_assembly
+        mutable std::mutex m_assemblyMutex;
     };
 
     using SharedDocument = std::shared_ptr<Document>;
