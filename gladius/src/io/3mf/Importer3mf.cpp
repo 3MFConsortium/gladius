@@ -280,8 +280,9 @@ namespace gladius::io
         doc.getAssembly()->updateInputsAndOutputs();
     }
 
-    void Importer3mf::loadImplicitFunctionsFiltered(Lib3MF::PModel fileModel, Document & doc,
-                                                   std::vector<Duplicates> const& duplicates)
+    void Importer3mf::loadImplicitFunctionsFiltered(Lib3MF::PModel fileModel,
+                                                    Document & doc,
+                                                    std::vector<Duplicates> const & duplicates)
     {
         ProfileFunction;
 
@@ -294,7 +295,7 @@ namespace gladius::io
 
         // Create a set of resource IDs to skip (the duplicate functions)
         std::set<Lib3MF_uint32> duplicateIds;
-        for (auto const& duplicate : duplicates)
+        for (auto const & duplicate : duplicates)
         {
             if (duplicate.duplicateFunction)
             {
@@ -303,11 +304,12 @@ namespace gladius::io
         }
 
         // Log the duplicate IDs
-        for (auto const& duplicate : duplicates)
+        for (auto const & duplicate : duplicates)
         {
             if (duplicate.duplicateFunction)
             {
-                std::cout << "Duplicate function found with ID: " << duplicate.duplicateFunction->GetUniqueResourceID() << std::endl;
+                std::cout << "Duplicate function found with ID: "
+                          << duplicate.duplicateFunction->GetUniqueResourceID() << std::endl;
             }
         }
 
@@ -324,8 +326,8 @@ namespace gladius::io
                 if (m_eventLogger)
                 {
                     m_eventLogger->addEvent(
-                        {fmt::format("Skipped loading duplicate function with ID: {}", resourceId),
-                        events::Severity::Info});
+                      {fmt::format("Skipped loading duplicate function with ID: {}", resourceId),
+                       events::Severity::Info});
                 }
                 continue;
             }
@@ -347,7 +349,7 @@ namespace gladius::io
         doc.getAssembly()->updateInputsAndOutputs();
     }
 
-     TextureTileStyle toTextureTileStyle(Lib3MF::eTextureTileStyle style)
+    TextureTileStyle toTextureTileStyle(Lib3MF::eTextureTileStyle style)
     {
         ProfileFunction switch (style)
         {
@@ -983,10 +985,11 @@ namespace gladius::io
                                 if (m_eventLogger)
                                 {
                                     m_eventLogger->addEvent(
-                                      {fmt::format("Replaced reference to duplicate function {} "
-                                                   "with original function {}",
-                                                   duplicate.duplicateFunction->GetUniqueResourceID(),
-                                                   duplicate.originalFunction->GetUniqueResourceID()),
+                                      {fmt::format(
+                                         "Replaced reference to duplicate function {} "
+                                         "with original function {}",
+                                         duplicate.duplicateFunction->GetUniqueResourceID(),
+                                         duplicate.originalFunction->GetUniqueResourceID()),
                                        events::Severity::Info});
                                 }
                             }
@@ -1567,7 +1570,6 @@ namespace gladius::io
 
             } while (numDuplicatesPrevious != numDuplicatesCurrent);
 
-            
             // remove the duplicates from the model
             for (auto const & duplicate : duplicates)
             {
@@ -1575,9 +1577,9 @@ namespace gladius::io
                 m_eventLogger->addEvent({fmt::format("Removed resource from model3mf: {}",
                                                      duplicate.duplicateFunction->GetResourceID()),
                                          events::Severity::Info});
-                //targetModel->RemoveResource(duplicate.duplicateFunction.get());
-                auto const & resource = targetModel->GetResourceByID(
-                  duplicate.duplicateFunction->GetUniqueResourceID());
+                // targetModel->RemoveResource(duplicate.duplicateFunction.get());
+                auto const & resource =
+                  targetModel->GetResourceByID(duplicate.duplicateFunction->GetUniqueResourceID());
                 if (!resource)
                 {
                     if (m_eventLogger)
