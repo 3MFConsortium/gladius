@@ -39,7 +39,13 @@ namespace gladius::ui
             return;
         }
 
-        render(m_renderWindowState);
+        // only render if can get a compute token
+        auto token = m_core->requestComputeToken();
+        if (token)
+        {
+               render(m_renderWindowState);
+        }
+   
 
         auto const img = m_core->getResultImage();
 
@@ -71,7 +77,9 @@ namespace gladius::ui
             }
 
             toggleButton({reinterpret_cast<const char *>(ICON_FA_ROBOT "\tHQ")},
-                         &m_enableHQRendering);            int renderingFlags = m_core->getResourceContext()->getRenderingSettings().flags;
+                         &m_enableHQRendering);
+                         
+            int renderingFlags = m_core->getResourceContext()->getRenderingSettings().flags;
 
             // submenu for rendering flags
             bool flagsChanged = false;

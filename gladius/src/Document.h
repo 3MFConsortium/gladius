@@ -13,9 +13,14 @@
 #include <atomic>
 #include <filesystem>
 #include <mutex>
+#include <optional>
 
 namespace gladius
 {
+    /// Tokens for assembly mutex access
+    using AssemblyToken = std::lock_guard<std::mutex>;
+    using OptionalAssemblyToken = std::optional<AssemblyToken>;
+
     namespace vdb
     {
         struct TriangleMesh;
@@ -79,6 +84,27 @@ namespace gladius
     class Document
     {
       public:
+        /**
+         * @brief Waits until the assembly mutex can be locked and returns a token that keeps it locked.
+         *
+         * The token is an RAII wrapper that automatically releases the mutex when it goes out of scope.
+         * Use this method when you need guaranteed access to the assembly and are willing to wait.
+         *
+         * @return AssemblyToken An RAII token that keeps the mutex locked for its lifetime
+         */
+        AssemblyToken waitForAssemblyToken() const;
+
+        /**
+         * @brief Attempts to acquire a lock on the assembly mutex without waiting.
+         * 
+         * This method tries to lock the mutex without blocking. If the mutex is already locked,
+         * it returns an empty optional. Otherwise, it returns an optional containing a token 
+         * that keeps the mutex locked.
+         *
+         * @return OptionalAssemblyToken An optional that contains a token if the lock was acquired
+         */
+        OptionalAssemblyToken requestAssemblyToken() const;
+
         void resetGeneratorContext();
         explicit Document(std::shared_ptr<ComputeCore> core);
         [[nodiscard]] bool refreshModelIfNoCompilationIsRunning();

@@ -185,7 +185,8 @@ namespace gladius
         ProfileFunction
 
           std::lock_guard<std::recursive_mutex>
-            lock(m_computeMutex, std::adopt_lock);        if (isAutoUpdateBoundingBoxEnabled())
+            lock(m_computeMutex, std::adopt_lock);
+        if (isAutoUpdateBoundingBoxEnabled())
         {
             resetBoundingBox();
         }
@@ -296,7 +297,6 @@ namespace gladius
     {
         ProfileFunction;
 
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         if (!updateBBox())
         {
             logMsg("Bounding box computation failed");
@@ -317,9 +317,9 @@ namespace gladius
         m_primitives->write();
         m_programs.getSlicerProgram()->renderLayers(*m_primitives, 0.0f, m_sliceHeight_mm);
     }
+
     std::optional<BoundingBox> ComputeCore::getBoundingBox() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return m_boundingBox; // Return a copy instead of a reference
     }
 
@@ -663,7 +663,8 @@ namespace gladius
         }
 
         m_boundingBox.reset();
-        invalidatePreCompSdf();        if (m_codeGenerator == CodeGenerator::CommandStream)
+        invalidatePreCompSdf();
+        if (m_codeGenerator == CodeGenerator::CommandStream)
         {
             std::stringstream modelKernel;
             getResourceContext()->getCommandBuffer().clear();
@@ -839,16 +840,18 @@ namespace gladius
         m_resources->setPreCompSdfBBox(boundingBox);
         m_programs.getSlicerProgram()->precomputeSdf(*m_primitives, boundingBox);
     }
+
     SharedGLImageBuffer ComputeCore::getResultImage() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return m_resultImage;
-    }    SharedContourExtractor ComputeCore::getContour() const
+    }
+
+    SharedContourExtractor ComputeCore::getContour() const
     {
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         if (m_sliceFuture.valid())
         {
-            const_cast<std::future<void>&>(m_sliceFuture).get();
+            const_cast<std::future<void> &>(m_sliceFuture).get();
         }
         return m_contour;
     }
@@ -866,25 +869,21 @@ namespace gladius
     }
     SharedSlicerProgram ComputeCore::getSlicerProgram() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return std::shared_ptr<SlicerProgram>(m_programs.getSlicerProgram(),
                                               [](SlicerProgram *) {}); // Non-owning shared_ptr
     }
     SharedRenderProgram ComputeCore::getBestRenderProgram() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return std::shared_ptr<RenderProgram>(m_programs.getRenderProgram(),
                                               [](RenderProgram *) {}); // Non-owning shared_ptr
     }
     SharedRenderProgram ComputeCore::getPreviewRenderProgram() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return std::shared_ptr<RenderProgram>(m_programs.getRenderProgram(),
                                               [](RenderProgram *) {}); // Non-owning shared_ptr
     }
     SharedRenderProgram ComputeCore::getOptimzedRenderProgram() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return std::shared_ptr<RenderProgram>(m_programs.getRenderProgram(),
                                               [](RenderProgram *) {}); // Non-owning shared_ptr
     }
@@ -933,14 +932,14 @@ namespace gladius
         }
         return {m_lowResPreviewImage->getWidth(), m_lowResPreviewImage->getHeight()};
     }
+
     SharedPrimitives ComputeCore::getPrimitives() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return m_primitives;
     }
+
     SharedResources ComputeCore::getResourceContext() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return m_resources;
     }
 
@@ -1214,10 +1213,12 @@ namespace gladius
                         image.data,
                         static_cast<unsigned int>(image.width),
                         static_cast<unsigned int>(image.height));
-    }    void ComputeCore::applyCamera(ui::OrbitalCamera const & camera)
+    }
+    void ComputeCore::applyCamera(ui::OrbitalCamera const & camera)
     {
         getResourceContext()->setEyePosition(camera.getEyePosition());
-        getResourceContext()->setModelViewPerspectiveMat(camera.computeModelViewPerspectiveMatrix());
+        getResourceContext()->setModelViewPerspectiveMat(
+          camera.computeModelViewPerspectiveMatrix());
     }
 
     void ComputeCore::injectSmoothingKernel(std::string const & kernel)

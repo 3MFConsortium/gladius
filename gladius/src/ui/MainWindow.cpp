@@ -20,6 +20,7 @@
 #include "FileChooser.h"
 #include "FileSystemUtils.h"
 #include "GLView.h"
+#include "LibraryBrowser.h"
 #include "Profiling.h"
 #include "SvgWriter.h"
 #include "compute/ComputeCore.h"
@@ -30,7 +31,6 @@
 #include "io/3mf/Writer3mf.h"
 #include "io/ImageStackExporter.h"
 #include <nodes/ToCommandStreamVisitor.h>
-#include "LibraryBrowser.h"
 
 namespace gladius::ui
 {
@@ -63,14 +63,16 @@ namespace gladius::ui
         m_modelEditor.setDocument(m_doc);
         // Set the library root directory
         m_modelEditor.setLibraryRootDirectory(getAppDir() / "library");
-        
+
         using namespace gladius;
 
         m_renderWindow.initialize(m_core.get(), &m_mainView);
         LOG_LOCATION
-        m_core->getPreviewRenderProgram()->setOnProgramSwapCallBack([&]() { onPreviewProgramSwap(); });
+        m_core->getPreviewRenderProgram()->setOnProgramSwapCallBack([&]()
+                                                                    { onPreviewProgramSwap(); });
 
-        m_core->getOptimzedRenderProgram()->setOnProgramSwapCallBack([&]() { onPreviewProgramSwap(); });
+        m_core->getOptimzedRenderProgram()->setOnProgramSwapCallBack([&]()
+                                                                     { onPreviewProgramSwap(); });
 
         m_dirty = true;
 
@@ -117,23 +119,24 @@ namespace gladius::ui
                     loadRenderSettings();
                     refreshModel();
                 }
-                ImGui::Separator();            }
-            
+                ImGui::Separator();
+            }
+
             ImGui::SliderFloat("Ray marching tolerance",
                                &m_core->getResourceContext()->getRenderingSettings().quality,
                                0.1f,
                                20.0f);
-                               
+
             dragParameter("Weight dist to neighbor",
                           &m_core->getResourceContext()->getRenderingSettings().weightDistToNb,
                           0.f,
                           100.0f);
-                          
+
             dragParameter("Weight midpoint",
                           &m_core->getResourceContext()->getRenderingSettings().weightMidPoint,
                           0.f,
                           100.0f);
-                          
+
             dragParameter("Normal offset",
                           &m_core->getResourceContext()->getRenderingSettings().normalOffset,
                           0.f,
@@ -202,22 +205,28 @@ namespace gladius::ui
             m_modelEditor.toggleLibraryVisibility();
             m_isLibraryBrowserVisible = m_modelEditor.isLibraryVisible();
         }
-        if (!m_core->getComputeContext()->isValid())
+
+        // try to get the compute token
+        auto computeToken = m_core->requestComputeToken();
+        if (computeToken)
         {
-            m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
-
-            const auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
-
-            if (!context->isValid())
+            if (!m_core->getComputeContext()->isValid())
             {
-                m_logger->addEvent(
-                  {"Failed to create OpenCL Context. Did you install proper GPU drivers?",
-                   events::Severity::FatalError});
-                throw std::runtime_error(
-                  "Failed to create OpenCL Context. Did you install proper GPU drivers?");
-            }
+                m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
 
-            m_core->setComputeContext(context);
+                const auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+
+                if (!context->isValid())
+                {
+                    m_logger->addEvent(
+                      {"Failed to create OpenCL Context. Did you install proper GPU drivers?",
+                       events::Severity::FatalError});
+                    throw std::runtime_error(
+                      "Failed to create OpenCL Context. Did you install proper GPU drivers?");
+                }
+
+                m_core->setComputeContext(context);
+            }
         }
 
         try
@@ -704,7 +713,8 @@ namespace gladius::ui
         ImGui::Separator();
 
         // Add Library Browser menu item
-        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN "\tLibrary Browser")))
+        if (ImGui::MenuItem(
+              reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN "\tLibrary Browser")))
         {
             closeMenu();
             m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");

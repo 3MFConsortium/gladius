@@ -38,9 +38,24 @@ CMRC_DECLARE(gladius_resources);
 namespace gladius
 {
     using namespace std;
+
+    AssemblyToken Document::waitForAssemblyToken() const
+    {
+        return AssemblyToken(m_assemblyMutex);
+    }
+
+    OptionalAssemblyToken Document::requestAssemblyToken() const
+    {
+        if (!m_assemblyMutex.try_lock())
+        {
+            return {};
+        }
+        std::lock_guard<std::mutex> lock(m_assemblyMutex, std::adopt_lock);
+        return OptionalAssemblyToken(m_assemblyMutex);
+    }
+
     void Document::resetGeneratorContext()
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
 
         if (!m_assembly || !m_core)
         {
@@ -97,20 +112,13 @@ namespace gladius
     void Document::refreshWorker()
     {
         ProfileFunction;
-        auto computeToken = m_core->requestComputeToken();
-        if (!computeToken.has_value())
-        {
-            m_core->invalidatePreCompSdf();
-            return;
-        }
+        auto computeToken = m_core->waitForComputeToken();
 
         auto meshResourceState = m_core->getMeshResourceState();
         meshResourceState->signalCompilationStarted();
 
-        {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
-            m_assembly->updateInputsAndOutputs();
-        }
+        m_assembly->updateInputsAndOutputs();
+
         loadAllMeshResources();
 
         updateParameterRegistration();
@@ -139,7 +147,7 @@ namespace gladius
 
         nodes::Assembly assemblyToFlat;
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             if (!m_assembly)
             {
                 return;
@@ -196,8 +204,6 @@ namespace gladius
             throw std::runtime_error("No generator context");
         }
 
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
-
         for (auto & model : m_assembly->getFunctions())
         {
             if (!model.second)
@@ -244,10 +250,15 @@ namespace gladius
         {
             return false;
         }
-
+        // only proceed if we get a lock on the assembly mutex
+        if (m_assemblyMutex.try_lock())
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
             refreshModelAsync();
+        }
+        else
+        {
+            // if we can't get a lock, we are already in the process of refreshing the model
+            return false;
         }
 
         return true;
@@ -257,7 +268,7 @@ namespace gladius
     {
         ProfileFunction;
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             m_assembly = std::make_shared<nodes::Assembly>();
             m_assembly->assemblyModel()->createValidVoid();
         }
@@ -275,7 +286,7 @@ namespace gladius
     {
         ProfileFunction;
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             m_assembly = std::make_shared<nodes::Assembly>();
             m_assembly->assemblyModel()->createBeginEndWithDefaultInAndOuts();
         }
@@ -310,7 +321,6 @@ namespace gladius
         updatePayload();
 
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
             m_parameterDirty = m_core->tryToupdateParameter(*m_assembly);
         }
 
@@ -326,7 +336,6 @@ namespace gladius
 
     void Document::updateParameterRegistration()
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
 
         if (!m_assembly)
         {
@@ -378,7 +387,6 @@ namespace gladius
             }
 
             {
-                std::lock_guard<std::mutex> lock(m_assemblyMutex);
 
                 if (!m_assembly)
                 {
@@ -407,7 +415,7 @@ namespace gladius
                 updateParameterRegistration();
 
                 {
-                    std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
                     for (auto & model : m_assembly->getFunctions())
                     {
                         if (!model.second)
@@ -447,7 +455,7 @@ namespace gladius
         ProfileFunction;
         m_core->getSlicerProgram()->waitForCompilation();
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             refreshWorker();
         }
         try
@@ -530,14 +538,14 @@ namespace gladius
         m_currentAssemblyFileName = filename;
 
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             m_assembly->setFilename(filename);
         }
     }
 
     nodes::SharedAssembly Document::getAssembly() const
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         return m_assembly;
     }
 
@@ -545,7 +553,7 @@ namespace gladius
                                       std::string const & nodeName,
                                       std::string const & parameterName)
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         auto const & parameter = findParameterOrThrow(modelId, nodeName, parameterName);
         auto val = parameter.getValue();
         if (auto * pval = std::get_if<float>(&val))
@@ -560,7 +568,7 @@ namespace gladius
                                      std::string const & parameterName,
                                      float value)
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         findParameterOrThrow(modelId, nodeName, parameterName).setValue(value);
     }
 
@@ -568,7 +576,7 @@ namespace gladius
                                                std::string const & nodeName,
                                                std::string const & parameterName)
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         auto const & parameter = findParameterOrThrow(modelId, nodeName, parameterName);
         auto val = parameter.getValue();
         if (auto * pval = std::get_if<std::string>(&val))
@@ -583,7 +591,7 @@ namespace gladius
                                       std::string const & parameterName,
                                       std::string const & value)
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         findParameterOrThrow(modelId, nodeName, parameterName).setValue(value);
     }
 
@@ -591,7 +599,7 @@ namespace gladius
                                                    std::string const & nodeName,
                                                    std::string const & parameterName)
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         auto const & parameter = findParameterOrThrow(modelId, nodeName, parameterName);
         auto val = parameter.getValue();
         if (auto * pval = std::get_if<nodes::float3>(&val))
@@ -606,7 +614,7 @@ namespace gladius
                                         std::string const & parameterName,
                                         nodes::float3 const & value)
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         findParameterOrThrow(modelId, nodeName, parameterName).setValue(value);
     }
 
@@ -629,7 +637,7 @@ namespace gladius
 
     BoundingBox Document::computeBoundingBox() const
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         if (!m_core->updateBBox())
         {
             return {};
@@ -640,7 +648,7 @@ namespace gladius
 
     gladius::Mesh Document::generateMesh() const
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
         return gladius::vdb::generatePreviewMesh(*m_core, *m_assembly);
     }
 
@@ -708,7 +716,6 @@ namespace gladius
                                                              std::string const & nodeName,
                                                              std::string const & parameterName)
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
 
         auto const modelIter = m_assembly->getFunctions().find(modelId);
         if (modelIter == std::end(m_assembly->getFunctions()))
@@ -742,7 +749,7 @@ namespace gladius
         m_primitiveDateNeedsUpdate = true;
 
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             m_assembly->setFilename(filename);
         }
 
@@ -759,7 +766,7 @@ namespace gladius
         if (filename.extension() == ".3mf")
         {
             {
-                std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
                 m_assembly = {};
             }
 
@@ -808,7 +815,6 @@ namespace gladius
     {
         m_buildItems.clear();
 
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
         m_assembly->assemblyModel()->clear();
         m_assembly->assemblyModel()->createBeginEndWithDefaultInAndOuts();
         m_assembly->assemblyModel()->setManaged(true);
@@ -876,7 +882,7 @@ namespace gladius
     void Document::deleteResource(ResourceId id)
     {
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             m_assembly->deleteModel(id); // will just return if not a function
         }
 
@@ -912,7 +918,7 @@ namespace gladius
     void Document::deleteFunction(ResourceId id)
     {
         {
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+
             m_assembly->deleteModel(id);
         }
 
@@ -1052,7 +1058,6 @@ namespace gladius
         {
             importer.loadImplicitFunctions(m_3mfmodel, *this);
 
-            std::lock_guard<std::mutex> lock(m_assemblyMutex);
             m_assembly->updateInputsAndOutputs();
         }
 
@@ -1061,7 +1066,6 @@ namespace gladius
 
     void Document::rebuildResourceDependencyGraph()
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
 
         if (!m_3mfmodel)
         {
