@@ -262,10 +262,9 @@ namespace gladius::ui
             }
 
             if (!m_contours.has_value() && !core.isSlicingInProgress())
-            {
-                auto const & contourExtractor = core.getContour();
+            {                auto const & contourExtractor = core.getContour();
                 std::lock_guard<std::mutex> lockContourExtractor(core.getContourExtractorMutex());
-                m_contours = contourExtractor.getContour();
+                m_contours = contourExtractor->getContour();
             }
 
             if (!core.isSlicingInProgress() && m_contours.has_value())
@@ -274,7 +273,7 @@ namespace gladius::ui
 
                 if (m_renderNormals)
                 {
-                    auto const & normals = core.getContour().getNormals();
+                    auto const & normals = core.getContour()->getNormals();
 
                     ImGuiCol constexpr lightBlue IM_COL32(200, 200, 255, 255);
 
@@ -286,7 +285,7 @@ namespace gladius::ui
 
                 if (m_renderSourceVertices)
                 {
-                    auto const vertices = core.getContour().getSourceVertices();
+                    auto const vertices = core.getContour()->getSourceVertices();
                     for (auto const & vertex : vertices)
                     {
                         ImGuiCol const lightGreen = IM_COL32(static_cast<char>(5.f * vertex.w),

@@ -141,7 +141,7 @@ namespace gladius
 
         [[nodiscard]] nodes::GeneratorContext & getGeneratorContext();
 
-        [[nodiscard]] ComputeContext & getComputeContext() const;
+        [[nodiscard]] SharedComputeContext getComputeContext() const;
 
         [[nodiscard]] events::SharedLogger getSharedLogger() const;
 

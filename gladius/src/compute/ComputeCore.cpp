@@ -185,14 +185,12 @@ namespace gladius
         ProfileFunction
 
           std::lock_guard<std::recursive_mutex>
-            lock(m_computeMutex, std::adopt_lock);
-
-        if (isAutoUpdateBoundingBoxEnabled())
+            lock(m_computeMutex, std::adopt_lock);        if (isAutoUpdateBoundingBoxEnabled())
         {
             resetBoundingBox();
         }
 
-        auto & paramBuf = getResourceContext().getParameterBuffer();
+        auto & paramBuf = getResourceContext()->getParameterBuffer();
         auto & parameter = paramBuf.getData();
         parameter.clear();
 
@@ -533,6 +531,12 @@ namespace gladius
         return upSkinMap;
     }
 
+    SharedComputeContext ComputeCore::getComputeContext() const
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return m_ComputeContext;
+    }
+
     void ComputeCore::setComputeContext(std::shared_ptr<ComputeContext> context)
     {
         ProfileFunction std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
@@ -659,15 +663,13 @@ namespace gladius
         }
 
         m_boundingBox.reset();
-        invalidatePreCompSdf();
-
-        if (m_codeGenerator == CodeGenerator::CommandStream)
+        invalidatePreCompSdf();        if (m_codeGenerator == CodeGenerator::CommandStream)
         {
             std::stringstream modelKernel;
-            getResourceContext().getCommandBuffer().clear();
+            getResourceContext()->getCommandBuffer().clear();
 
             nodes::ToCommandStreamVisitor toCommandStreamVisitor(
-              &getResourceContext().getCommandBuffer(), assembly.get());
+              &getResourceContext()->getCommandBuffer(), assembly.get());
             try
             {
                 assembly->visitAssemblyNodes(toCommandStreamVisitor);
@@ -679,7 +681,7 @@ namespace gladius
                 return;
             }
 
-            getResourceContext().getCommandBuffer().write();
+            getResourceContext()->getCommandBuffer().write();
 
             m_programs.setModelSource(modelKernel.str());
         }
@@ -707,11 +709,6 @@ namespace gladius
             return false;
         }
         return (!getBestRenderProgram()->isCompilationInProgress());
-    }
-    ComputeContextWrapper ComputeCore::getComputeContext() const
-    {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
-        return ComputeContextWrapper(m_ComputeContext);
     }
 
     void ComputeCore::compileSlicerProgramBlocking()
@@ -846,15 +843,14 @@ namespace gladius
     {
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return m_resultImage;
-    }
-    ContourExtractorWrapper ComputeCore::getContour()
+    }    SharedContourExtractor ComputeCore::getContour() const
     {
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         if (m_sliceFuture.valid())
         {
-            m_sliceFuture.get();
+            const_cast<std::future<void>&>(m_sliceFuture).get();
         }
-        return ContourExtractorWrapper(m_contour);
+        return m_contour;
     }
 
     cl_float ComputeCore::getSliceHeight() const
@@ -937,15 +933,15 @@ namespace gladius
         }
         return {m_lowResPreviewImage->getWidth(), m_lowResPreviewImage->getHeight()};
     }
-    PrimitivesWrapper ComputeCore::getPrimitives() const
+    SharedPrimitives ComputeCore::getPrimitives() const
     {
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
-        return PrimitivesWrapper(m_primitives);
+        return m_primitives;
     }
-    ResourceContextWrapper ComputeCore::getResourceContext() const
+    SharedResources ComputeCore::getResourceContext() const
     {
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
-        return ResourceContextWrapper(m_resources);
+        return m_resources;
     }
 
     void ComputeCore::renderResultImageInterOp(DistanceMap & sourceImage,
@@ -1100,10 +1096,10 @@ namespace gladius
     {
         m_codeGenerator = generator;
     }
-    ModelStateWrapper ComputeCore::getMeshResourceState()
+    std::shared_ptr<ModelState> ComputeCore::getMeshResourceState() const
     {
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
-        return ModelStateWrapper(m_meshResourceState);
+        return m_meshResourceState;
     }
 
     PlainImage ComputeCore::createThumbnail()
@@ -1218,12 +1214,10 @@ namespace gladius
                         image.data,
                         static_cast<unsigned int>(image.width),
                         static_cast<unsigned int>(image.height));
-    }
-
-    void ComputeCore::applyCamera(ui::OrbitalCamera const & camera)
+    }    void ComputeCore::applyCamera(ui::OrbitalCamera const & camera)
     {
-        getResourceContext().setEyePosition(camera.getEyePosition());
-        getResourceContext().setModelViewPerspectiveMat(camera.computeModelViewPerspectiveMatrix());
+        getResourceContext()->setEyePosition(camera.getEyePosition());
+        getResourceContext()->setModelViewPerspectiveMat(camera.computeModelViewPerspectiveMatrix());
     }
 
     void ComputeCore::injectSmoothingKernel(std::string const & kernel)

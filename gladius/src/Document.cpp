@@ -45,9 +45,9 @@ namespace gladius
         if (!m_assembly || !m_core)
         {
             throw std::runtime_error("No assembly or core");
-        } // Get the resource context as a shared pointer from the wrapper
-        auto resourceContextWrapper = m_core->getResourceContext();
-        auto resourceContextPtr = resourceContextWrapper.getSharedPtr();
+        }
+        // Get the resource context directly as a shared pointer
+        auto resourceContextPtr = m_core->getResourceContext();
         m_generatorContext = std::make_unique<nodes::GeneratorContext>(
           resourceContextPtr, m_assembly->getFilename().remove_filename());
         m_primitiveDateNeedsUpdate = true;
@@ -104,7 +104,8 @@ namespace gladius
             return;
         }
 
-        m_core->getMeshResourceState().signalCompilationStarted();
+        auto meshResourceState = m_core->getMeshResourceState();
+        meshResourceState->signalCompilationStarted();
 
         {
             std::lock_guard<std::mutex> lock(m_assemblyMutex);
@@ -127,7 +128,7 @@ namespace gladius
         m_core->resetBoundingBox();
         if (m_core->precomputeSdfForWholeBuildPlatform())
         {
-            m_core->getMeshResourceState().signalCompilationFinished();
+            meshResourceState->signalCompilationFinished();
         }
     }
 
@@ -229,7 +230,7 @@ namespace gladius
         ProfileFunction;
         if (m_core->getBestRenderProgram()->isCompilationInProgress() ||
             m_core->getSlicerProgram()->isCompilationInProgress() ||
-            !m_core->getMeshResourceState().isModelUpToDate())
+            !m_core->getMeshResourceState()->isModelUpToDate())
         {
             return false;
         }
@@ -256,7 +257,7 @@ namespace gladius
         io::Importer3mf importer{getSharedLogger()};
         m_3mfmodel = importer.get3mfWrapper()->CreateModel();
 
-        m_core->getResourceContext().clearImageStacks();
+        m_core->getResourceContext()->clearImageStacks();
         resetGeneratorContext();
     }
 
@@ -274,7 +275,7 @@ namespace gladius
         io::Importer3mf importer{getSharedLogger()};
         m_3mfmodel = importer.get3mfWrapper()->CreateModel();
 
-        m_core->getResourceContext().clearImageStacks();
+        m_core->getResourceContext()->clearImageStacks();
         resetGeneratorContext();
     }
 
@@ -359,9 +360,8 @@ namespace gladius
             {
                 return;
             }
-            // Get the primitives as a shared_ptr
-            auto primitivesWrapper = m_core->getPrimitives();
-            m_generatorContext->primitives = primitivesWrapper.getSharedPtr();
+            // Get the primitives directly as a shared_ptr
+            m_generatorContext->primitives = m_core->getPrimitives();
             if (!m_generatorContext->primitives)
             {
                 return;
@@ -377,15 +377,14 @@ namespace gladius
 
                 m_generatorContext->basePath = m_assembly->getFilename().remove_filename();
             }
-            // Get the compute context as a shared_ptr
-            auto computeContextWrapper = m_core->getComputeContext();
-            m_generatorContext->computeContext = computeContextWrapper.getSharedPtr();
+            // Get the compute context directly as a shared_ptr
+            m_generatorContext->computeContext = m_core->getComputeContext();
             if (!m_generatorContext->computeContext)
             {
                 return;
             }
 
-            CL_ERROR(m_core->getComputeContext().GetQueue().finish());
+            CL_ERROR(m_core->getComputeContext()->GetQueue().finish());
 
             updateMemoryOffsets(); // determines which resources are needed            if
                                    // (m_primitiveDateNeedsUpdate)
@@ -609,22 +608,22 @@ namespace gladius
             m_core->requestContourUpdate(sliceParameter);
         }
 
-        PolyLines contours = m_core->getContour().getContour();
+        auto contourExtractor = m_core->getContour();
+        PolyLines contours = contourExtractor->getContour();
         if (sliceParameter.offset != 0.f)
         {
-            return m_core->getContour().generateOffsetContours(sliceParameter.offset, contours);
+            return contourExtractor->generateOffsetContours(sliceParameter.offset, contours);
         }
         return contours;
     }
 
     BoundingBox Document::computeBoundingBox() const
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
-        if (!m_core->updateBBox())
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);        if (!m_core->updateBBox())
         {
             return {};
         }
-        m_core->getResourceContext().releasePreComputedSdf(); // saving memory (api usage)
+        m_core->getResourceContext()->releasePreComputedSdf(); // saving memory (api usage)
         return m_core->getBoundingBox().value_or(BoundingBox{});
     }
 
@@ -644,7 +643,7 @@ namespace gladius
         return *m_generatorContext;
     }
 
-    ComputeContext & Document::getComputeContext() const
+    SharedComputeContext Document::getComputeContext() const
     {
         if (!m_core)
         {
@@ -724,11 +723,9 @@ namespace gladius
     void Document::loadImpl(const std::filesystem::path & filename)
     {
         auto computeToken = m_core->waitForComputeToken();
-        m_buildItems.clear();
-
-        resetGeneratorContext();
+        m_buildItems.clear();        resetGeneratorContext();
         m_core->reset();
-        m_core->getResourceContext().clearImageStacks();
+        m_core->getResourceContext()->clearImageStacks();
         auto newFilename = filename;
         m_primitiveDateNeedsUpdate = true;
 

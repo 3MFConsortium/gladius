@@ -26,9 +26,7 @@ namespace gladius::ui
     void RenderWindow::initialize(ComputeCore * core, GLView * view)
     {
         m_core = core;
-        m_view = view;
-
-        auto & settings = m_core->getResourceContext().getRenderingSettings();
+        m_view = view;        auto & settings = m_core->getResourceContext()->getRenderingSettings();
         m_renderWindowState.renderQuality = settings.quality;
         m_renderWindowState.renderQualityWhileMoving = settings.quality * 0.5f;
     }
@@ -73,9 +71,7 @@ namespace gladius::ui
             }
 
             toggleButton({reinterpret_cast<const char *>(ICON_FA_ROBOT "\tHQ")},
-                         &m_enableHQRendering);
-
-            int renderingFlags = m_core->getResourceContext().getRenderingSettings().flags;
+                         &m_enableHQRendering);            int renderingFlags = m_core->getResourceContext()->getRenderingSettings().flags;
 
             // submenu for rendering flags
             bool flagsChanged = false;
@@ -90,10 +86,8 @@ namespace gladius::ui
                 flagsChanged |= ImGui::CheckboxFlags(
                   "Show Coordinate System", &renderingFlags, RF_SHOW_COORDINATE_SYSTEM);
 
-                ImGui::Separator();
-
-                // Quality slider
-                float quality = m_core->getResourceContext().getRenderingSettings().quality;
+                ImGui::Separator();                // Quality slider
+                float quality = m_core->getResourceContext()->getRenderingSettings().quality;
                 ImGui::SetNextItemWidth(150.f * m_uiScale);
                 bool qualityChanged = ImGui::SliderFloat("Quality", &quality, 0.1f, 2.0f);
                 
@@ -101,10 +95,9 @@ namespace gladius::ui
                 {
                     ImGui::SetTooltip("Rendering quality (0.1 = Fast, 2.0 = Highest Quality)");
                 }
-                
-                if (qualityChanged)
+                  if (qualityChanged)
                 {
-                    m_core->getResourceContext().getRenderingSettings().quality = quality;
+                    m_core->getResourceContext()->getRenderingSettings().quality = quality;
                     m_renderWindowState.renderQuality = quality;
                     m_renderWindowState.renderQualityWhileMoving = quality * 0.5f;
                     invalidateView();
@@ -119,7 +112,7 @@ namespace gladius::ui
                 invalidateView();
             }
 
-            m_core->getResourceContext().getRenderingSettings().flags = renderingFlags;
+            m_core->getResourceContext()->getRenderingSettings().flags = renderingFlags;
 
             if (m_core->isAnyCompilationInProgress())
             {
@@ -514,13 +507,11 @@ namespace gladius::ui
 
             m_centerViewRequested = false;
             invalidateView();
-        }
-
-        if (state.isMoving)
+        }        if (state.isMoving)
         {
             if (m_preComputedSdfDirty)
             {
-                m_core->getResourceContext().getRenderingSettings().approximation = AM_FULL_MODEL;
+                m_core->getResourceContext()->getRenderingSettings().approximation = AM_FULL_MODEL;
             }
         }
 

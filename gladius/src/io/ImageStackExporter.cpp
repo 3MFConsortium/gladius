@@ -143,15 +143,13 @@ namespace gladius::io
         }
 
         m_startHeight_mm = bb->min.z;
-        m_endHeight_mm = bb->max.z;
-
-        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
+        m_endHeight_mm = bb->max.z;        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
         generator.updateClippingAreaToBoundingBox();
-        generator.getResourceContext().requestDistanceMaps();
+        generator.getResourceContext()->requestDistanceMaps();
 
         m_sheetcount =
           static_cast<Lib3MF_uint32>(ceil(m_endHeight_mm - m_startHeight_mm) / m_layerIncrement_mm);
-        auto & distmap = *(generator.getResourceContext().getDistanceMipMaps()[m_qualityLevel]);
+        auto & distmap = *(generator.getResourceContext()->getDistanceMipMaps()[m_qualityLevel]);
         m_columnCountWorld = distmap.getWidth();
         m_rowCountWorld = distmap.getHeight();
         m_imageStack = m_model3mf->AddImageStack(m_columnCountWorld, m_rowCountWorld, m_sheetcount);
@@ -272,7 +270,7 @@ namespace gladius::io
         generator.updateClippingAreaToBoundingBox();
         generator.generateSdfSlice();
 
-        auto & distmap = *(generator.getResourceContext().getDistanceMipMaps()[m_qualityLevel]);
+        auto & distmap = *(generator.getResourceContext()->getDistanceMipMaps()[m_qualityLevel]);
         distmap.read();
 
         std::vector<Lib3MF_uint8> inputData;

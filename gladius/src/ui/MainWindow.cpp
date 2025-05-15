@@ -117,26 +117,25 @@ namespace gladius::ui
                     loadRenderSettings();
                     refreshModel();
                 }
-                ImGui::Separator();
-            }
-
+                ImGui::Separator();            }
+            
             ImGui::SliderFloat("Ray marching tolerance",
-                               &m_core->getResourceContext().getRenderingSettings().quality,
+                               &m_core->getResourceContext()->getRenderingSettings().quality,
                                0.1f,
                                20.0f);
-
+                               
             dragParameter("Weight dist to neighbor",
-                          &m_core->getResourceContext().getRenderingSettings().weightDistToNb,
+                          &m_core->getResourceContext()->getRenderingSettings().weightDistToNb,
                           0.f,
                           100.0f);
-
+                          
             dragParameter("Weight midpoint",
-                          &m_core->getResourceContext().getRenderingSettings().weightMidPoint,
+                          &m_core->getResourceContext()->getRenderingSettings().weightMidPoint,
                           0.f,
                           100.0f);
-
+                          
             dragParameter("Normal offset",
-                          &m_core->getResourceContext().getRenderingSettings().normalOffset,
+                          &m_core->getResourceContext()->getRenderingSettings().normalOffset,
                           0.f,
                           5.0f);
 
@@ -203,7 +202,7 @@ namespace gladius::ui
             m_modelEditor.toggleLibraryVisibility();
             m_isLibraryBrowserVisible = m_modelEditor.isLibraryVisible();
         }
-        if (!m_core->getComputeContext().isValid())
+        if (!m_core->getComputeContext()->isValid())
         {
             m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
 

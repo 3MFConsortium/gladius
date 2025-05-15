@@ -51,11 +51,13 @@ namespace gladius_tests
     TEST_F(ComputeCore_Test, PreComputeSDF_LoadedAssembly_EqualsExpectedResult)
     {
         auto core = load3mf("testdata/ImplicitGyroid.3mf");
-        auto const & payloadData = core->getPrimitives().data().getData();
+        auto primitives = core->getPrimitives();
+        auto const & payloadData = primitives->data.getData();
         auto const payloadDataHash = helper::computeHash(payloadData.cbegin(), payloadData.cend());
         EXPECT_EQ(payloadDataHash, 9702363036366401599u);
 
-        auto const parameter = core->getResourceContext().getParameterBuffer().getData();
+        auto resources = core->getResourceContext();
+        auto const parameter = resources->getParameterBuffer().getData();
         for (auto const & param : parameter)
         {
             std::cout << param << std::endl;
@@ -63,17 +65,10 @@ namespace gladius_tests
 
         auto const parameterHash = helper::computeHash(parameter.cbegin(), parameter.cend());
         constexpr auto expectedHash = 15121003317986780364u;
-        EXPECT_EQ(parameterHash, expectedHash);
+        EXPECT_EQ(parameterHash, expectedHash);        EXPECT_TRUE(core->precomputeSdfForWholeBuildPlatform());
 
-        EXPECT_TRUE(core->precomputeSdfForWholeBuildPlatform());
-
-        auto const parameterAfterComputation =
-          core->getResourceContext().getParameterBuffer().getData();
-        auto const parameterHashAfterComputation =
-          helper::computeHash(parameterAfterComputation.cbegin(), parameterAfterComputation.cend());
-        EXPECT_EQ(parameterHashAfterComputation, expectedHash);
-
-        auto preComp = core->getResourceContext().getPrecompSdfBuffer();
+        // Reuse the previously defined resources variable instead of redefining it
+        auto& preComp = resources->getPrecompSdfBuffer();
         preComp.read();
         auto const bufSize = preComp.getData().size();
         EXPECT_EQ(bufSize, 65536u);

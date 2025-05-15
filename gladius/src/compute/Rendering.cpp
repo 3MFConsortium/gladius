@@ -492,9 +492,7 @@ namespace gladius
                         image.data,
                         static_cast<unsigned int>(image.width),
                         static_cast<unsigned int>(image.height));
-    }
-
-    void Rendering::applyCamera(ui::OrbitalCamera const & camera)
+    }    void Rendering::applyCamera(ui::OrbitalCamera const & camera)
     {
         getResourceContext().setEyePosition(camera.getEyePosition());
         getResourceContext().setModelViewPerspectiveMat(camera.computeModelViewPerspectiveMatrix());

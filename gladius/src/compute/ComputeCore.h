@@ -405,9 +405,7 @@ namespace gladius
 
         bool precomputeSdfForWholeBuildPlatform();
         void precomputeSdfForBBox(const BoundingBox & boundingBox);
-        [[nodiscard]] SharedGLImageBuffer getResultImage() const;
-
-        ContourExtractorWrapper getContour();
+        [[nodiscard]] SharedGLImageBuffer getResultImage() const;        [[nodiscard]] SharedContourExtractor getContour() const;
 
         [[nodiscard]] cl_float getSliceHeight() const;
 
@@ -421,9 +419,9 @@ namespace gladius
         bool setScreenResolution(size_t width, size_t height);
         bool setLowResPreviewResolution(size_t width, size_t height);
         [[nodiscard]] std::pair<size_t, size_t> getLowResPreviewResolution() const;
-        [[nodiscard]] PrimitivesWrapper getPrimitives() const;
+        [[nodiscard]] SharedPrimitives getPrimitives() const;
 
-        ResourceContextWrapper getResourceContext() const;
+        [[nodiscard]] SharedResources getResourceContext() const;
 
         void generateSdfSlice() const;
         [[nodiscard]] std::optional<BoundingBox> getBoundingBox() const;
@@ -437,11 +435,9 @@ namespace gladius
         void updateBBoxOrThrow();
 
         void refreshProgram(nodes::SharedAssembly assembly);
-        void tryRefreshProgramProtected(nodes::SharedAssembly assembly);
+        void tryRefreshProgramProtected(nodes::SharedAssembly assembly);        [[nodiscard]] bool isRendererReady() const;
 
-        [[nodiscard]] bool isRendererReady() const;
-
-        [[nodiscard]] ComputeContextWrapper getComputeContext() const;
+        [[nodiscard]] SharedComputeContext getComputeContext() const;
 
         void compileSlicerProgramBlocking();
 
@@ -465,15 +461,13 @@ namespace gladius
 
         std::mutex & getContourExtractorMutex();
 
-        void invalidatePreCompSdf();
-
-        [[nodiscard]] events::SharedLogger getSharedLogger() const;
+        void invalidatePreCompSdf();        [[nodiscard]] events::SharedLogger getSharedLogger() const;
 
         [[nodiscard]] CodeGenerator getCodeGenerator() const;
 
         void setCodeGenerator(CodeGenerator generator);
 
-        ModelStateWrapper getMeshResourceState();
+        [[nodiscard]] std::shared_ptr<ModelState> getMeshResourceState() const;
 
         PlainImage createThumbnail();
         PlainImage createThumbnailPng();

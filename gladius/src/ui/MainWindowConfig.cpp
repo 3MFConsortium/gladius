@@ -3,13 +3,12 @@
 #include "MainWindow.h"
 
 namespace gladius::ui
-{
-    void MainWindow::saveRenderSettings()
+{    void MainWindow::saveRenderSettings()
     {
         if (!m_configManager)
             return;
             
-        auto& renderSettings = m_core->getResourceContext().getRenderingSettings();
+        auto& renderSettings = m_core->getResourceContext()->getRenderingSettings();
         
         // Save rendering settings
         m_configManager->setValue("rendering", "quality", renderSettings.quality);
@@ -28,11 +27,10 @@ namespace gladius::ui
     }
     
     void MainWindow::loadRenderSettings()
-    {
-        if (!m_configManager || !m_core)
+    {        if (!m_configManager || !m_core)
             return;
             
-        auto& renderSettings = m_core->getResourceContext().getRenderingSettings();
+        auto& renderSettings = m_core->getResourceContext()->getRenderingSettings();
         
         // Load rendering settings with defaults
         renderSettings.quality = m_configManager->getValue("rendering", "quality", 1.0f);
