@@ -22,9 +22,9 @@ namespace gladius
         reader.writeMesh(m_payloadData);
     }
 
-    ResourceManager::ResourceManager(ResourceContext * resourceContext,
+    ResourceManager::ResourceManager(SharedResources resourceContext,
                                      std::filesystem::path assemblyDir)
-        : m_resourceContext(resourceContext)
+        : m_resourceContext(std::move(resourceContext))
         , m_assemblyDir(std::move(assemblyDir))
     {
     }

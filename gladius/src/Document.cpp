@@ -38,18 +38,18 @@ CMRC_DECLARE(gladius_resources);
 namespace gladius
 {
     using namespace std;
-
     void Document::resetGeneratorContext()
     {
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
-        
+
         if (!m_assembly || !m_core)
         {
             throw std::runtime_error("No assembly or core");
-        }
-
+        } // Get the resource context as a shared pointer from the wrapper
+        auto resourceContextWrapper = m_core->getResourceContext();
+        auto resourceContextPtr = resourceContextWrapper.getSharedPtr();
         m_generatorContext = std::make_unique<nodes::GeneratorContext>(
-          &m_core->getResourceContext(), m_assembly->getFilename().remove_filename());
+          resourceContextPtr, m_assembly->getFilename().remove_filename());
         m_primitiveDateNeedsUpdate = true;
     }
 
@@ -135,9 +135,9 @@ namespace gladius
     {
         ProfileFunction;
         using namespace gladius::events;
-        
+
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
-        
+
         nodes::Assembly assemblyToFlat = *m_assembly;
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();
@@ -184,9 +184,9 @@ namespace gladius
         {
             throw std::runtime_error("No generator context");
         }
-        
+
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
-        
+
         for (auto & model : m_assembly->getFunctions())
         {
             if (!model.second)
@@ -233,12 +233,12 @@ namespace gladius
         {
             return false;
         }
-        
+
         {
             std::lock_guard<std::mutex> lock(m_assemblyMutex);
             refreshModelAsync();
         }
-        
+
         return true;
     }
 
@@ -295,14 +295,14 @@ namespace gladius
         {
             return;
         }
-        
+
         updatePayload();
-        
+
         {
             std::lock_guard<std::mutex> lock(m_assemblyMutex);
             m_parameterDirty = m_core->tryToupdateParameter(*m_assembly);
         }
-        
+
         if (m_parameterDirty)
         {
             m_parameterDirty = !m_core->precomputeSdfForWholeBuildPlatform();
@@ -316,7 +316,7 @@ namespace gladius
     void Document::updateParameterRegistration()
     {
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
-        
+
         if (!m_assembly)
         {
             return;
@@ -359,8 +359,9 @@ namespace gladius
             {
                 return;
             }
-
-            m_generatorContext->primitives = &m_core->getPrimitives();
+            // Get the primitives as a shared_ptr
+            auto primitivesWrapper = m_core->getPrimitives();
+            m_generatorContext->primitives = primitivesWrapper.getSharedPtr();
             if (!m_generatorContext->primitives)
             {
                 return;
@@ -368,7 +369,7 @@ namespace gladius
 
             {
                 std::lock_guard<std::mutex> lock(m_assemblyMutex);
-                
+
                 if (!m_assembly)
                 {
                     return;
@@ -376,8 +377,9 @@ namespace gladius
 
                 m_generatorContext->basePath = m_assembly->getFilename().remove_filename();
             }
-
-            m_generatorContext->computeContext = &m_core->getComputeContext();
+            // Get the compute context as a shared_ptr
+            auto computeContextWrapper = m_core->getComputeContext();
+            m_generatorContext->computeContext = computeContextWrapper.getSharedPtr();
             if (!m_generatorContext->computeContext)
             {
                 return;
@@ -385,9 +387,8 @@ namespace gladius
 
             CL_ERROR(m_core->getComputeContext().GetQueue().finish());
 
-            updateMemoryOffsets(); // determines which resources are needed
-
-            if (m_primitiveDateNeedsUpdate)
+            updateMemoryOffsets(); // determines which resources are needed            if
+                                   // (m_primitiveDateNeedsUpdate)
             {
                 if (m_generatorContext->primitives)
                 {
@@ -395,7 +396,7 @@ namespace gladius
                 }
 
                 updateParameterRegistration();
-                
+
                 {
                     std::lock_guard<std::mutex> lock(m_assemblyMutex);
                     for (auto & model : m_assembly->getFunctions())
@@ -518,7 +519,7 @@ namespace gladius
 
         m_fileChanged = false;
         m_currentAssemblyFileName = filename;
-        
+
         {
             std::lock_guard<std::mutex> lock(m_assemblyMutex);
             m_assembly->setFilename(filename);
@@ -685,7 +686,7 @@ namespace gladius
 
         auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
         auto const modelId = new3mfFunc->GetModelResourceID();
-        
+
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
         m_assembly->addModelIfNotExisting(modelId);
         auto & model = *m_assembly->getFunctions().at(modelId);
@@ -698,7 +699,7 @@ namespace gladius
                                                              std::string const & parameterName)
     {
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
-        
+
         auto const modelIter = m_assembly->getFunctions().find(modelId);
         if (modelIter == std::end(m_assembly->getFunctions()))
         {
@@ -730,7 +731,7 @@ namespace gladius
         m_core->getResourceContext().clearImageStacks();
         auto newFilename = filename;
         m_primitiveDateNeedsUpdate = true;
-        
+
         {
             std::lock_guard<std::mutex> lock(m_assemblyMutex);
             m_assembly->setFilename(filename);
@@ -797,7 +798,7 @@ namespace gladius
     void Document::clearBuildItems()
     {
         m_buildItems.clear();
-        
+
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
         m_assembly->assemblyModel()->clear();
         m_assembly->assemblyModel()->createBeginEndWithDefaultInAndOuts();
@@ -1041,7 +1042,7 @@ namespace gladius
         if (!skipImplicitFunctions)
         {
             importer.loadImplicitFunctions(m_3mfmodel, *this);
-            
+
             std::lock_guard<std::mutex> lock(m_assemblyMutex);
             m_assembly->updateInputsAndOutputs();
         }

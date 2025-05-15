@@ -1,6 +1,6 @@
+#include "Document.h"
 #include "testhelper.h"
 #include <compute/ComputeCore.h>
-#include "Document.h"
 #include <fmt/core.h>
 #include <nodes/Assembly.h>
 #include <nodes/Model.h>
@@ -51,8 +51,7 @@ namespace gladius_tests
     TEST_F(ComputeCore_Test, PreComputeSDF_LoadedAssembly_EqualsExpectedResult)
     {
         auto core = load3mf("testdata/ImplicitGyroid.3mf");
-        
-        auto const & payloadData = core->getPrimitives().data.getData();
+        auto const & payloadData = core->getPrimitives().data().getData();
         auto const payloadDataHash = helper::computeHash(payloadData.cbegin(), payloadData.cend());
         EXPECT_EQ(payloadDataHash, 9702363036366401599u);
 
@@ -74,7 +73,6 @@ namespace gladius_tests
           helper::computeHash(parameterAfterComputation.cbegin(), parameterAfterComputation.cend());
         EXPECT_EQ(parameterHashAfterComputation, expectedHash);
 
-
         auto preComp = core->getResourceContext().getPrecompSdfBuffer();
         preComp.read();
         auto const bufSize = preComp.getData().size();
@@ -87,7 +85,7 @@ namespace gladius_tests
         auto bBox = core->getBoundingBox();
         EXPECT_TRUE(bBox.has_value());
 
-        auto const tolerance =  1E-3f;
+        auto const tolerance = 1E-3f;
         EXPECT_NEAR(bBox->min.x, -7.5098453f, tolerance);
         EXPECT_NEAR(bBox->min.y, -1.6367177f, tolerance);
         EXPECT_NEAR(bBox->min.z, -0.00081141724f, tolerance);

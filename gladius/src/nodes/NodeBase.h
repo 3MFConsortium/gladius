@@ -7,10 +7,11 @@
 #include <utility>
 
 #include "../ResourceManager.h"
+#include "../types.h"
 #include "Parameter.h"
 #include "Port.h"
-#include "nodesfwd.h"
 #include "Primitives.h"
+#include "nodesfwd.h"
 
 namespace gladius
 {
@@ -47,16 +48,20 @@ namespace gladius::nodes
 
     /// Equal Operator for InputTypeMap
     bool operator==(const InputTypeMap & lhs, const InputTypeMap & rhs);
-
     struct GeneratorContext
     {
-        GeneratorContext(ResourceContext * resourceContext, std::filesystem::path assemblyDir)
-            : resourceManager(resourceContext, std::move(assemblyDir)) {};
+        GeneratorContext(SharedResources resourceContext, std::filesystem::path assemblyDir)
+            : resourceManager(resourceContext, std::move(assemblyDir))
+            , m_resourceContext(resourceContext) {};
 
-        Primitives * primitives{nullptr};
+        SharedPrimitives primitives{nullptr};
         ResourceManager resourceManager;
         std::filesystem::path basePath{};
-        ComputeContext * computeContext{nullptr};
+        SharedComputeContext computeContext{nullptr};
+
+      private:
+        // Keep the resources alive for the lifetime of the GeneratorContext
+        SharedResources m_resourceContext;
     };
 
     class NodeBase
@@ -72,7 +77,6 @@ namespace gladius::nodes
         };
 
         virtual ~NodeBase() = default;
-
 
         ParameterMap & parameter()
         {

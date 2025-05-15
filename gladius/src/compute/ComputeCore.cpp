@@ -16,16 +16,16 @@
 
 #include "CliReader.h"
 #include "ComputeCore.h"
-#include "Mesh.h"
-#include "ToCommandStreamVisitor.h"
-#include "ToOCLVisitor.h"
-#include "compute/ComputeCore.h"
-#include "gpgpu.h"
 #include "Contour.h"
+#include "Mesh.h"
 #include "Profiling.h"
 #include "RenderProgram.h"
 #include "ResourceContext.h"
 #include "SlicerProgram.h"
+#include "ToCommandStreamVisitor.h"
+#include "ToOCLVisitor.h"
+#include "compute/ComputeCore.h"
+#include "gpgpu.h"
 #include "nodes/OptimizeOutputs.h"
 #include "nodes/Validator.h"
 
@@ -34,13 +34,13 @@ namespace gladius
     ComputeCore::ComputeCore(SharedComputeContext context,
                              RequiredCapabilities requiredCapabilities,
                              events::SharedLogger logger)
-        : m_contour(logger)
+        : m_contour(std::make_shared<ContourExtractor>(logger))
         , m_ComputeContext(context)
         , m_resources(std::make_shared<ResourceContext>(context))
         , m_capabilities(requiredCapabilities)
         , m_eventLogger(logger)
         , m_programs(context, requiredCapabilities, logger, m_resources)
-
+        , m_meshResourceState(std::make_shared<ModelState>())
     {
         init();
     }
@@ -88,35 +88,38 @@ namespace gladius
 
         LOG_LOCATION
 
-        m_primitives = std::make_unique<Primitives>(*m_ComputeContext);
+        m_primitives = std::make_shared<Primitives>(*m_ComputeContext);
         m_primitives->create();
 
         if (m_capabilities == RequiredCapabilities::OpenGLInterop)
         {
             LOG_LOCATION
-            m_resultImage = std::make_unique<GLImageBuffer>(*m_ComputeContext, width, height);
+            m_resultImage = std::make_shared<GLImageBuffer>(*m_ComputeContext, width, height);
             m_resultImage->allocateOnDevice();
+
+            m_lowResPreviewImage =
+              std::make_shared<GLImageBuffer>(*m_ComputeContext, width / 2, height / 2);
+            m_lowResPreviewImage->allocateOnDevice();
         }
 
         const auto thumbnailSize = size_t{256};
         m_thumbnailImage =
-          std::make_unique<ImageRGBA>(*m_ComputeContext, thumbnailSize, thumbnailSize);
+          std::make_shared<ImageRGBA>(*m_ComputeContext, thumbnailSize, thumbnailSize);
         m_thumbnailImage->allocateOnDevice();
 
         m_thumbnailImageHighRes =
-          std::make_unique<ImageRGBA>(*m_ComputeContext, thumbnailSize * 2, thumbnailSize * 2);
+          std::make_shared<ImageRGBA>(*m_ComputeContext, thumbnailSize * 2, thumbnailSize * 2);
         m_thumbnailImageHighRes->allocateOnDevice();
 
         m_resources->allocatePreComputedSdf();
     }
-
     void ComputeCore::generateContourInternal(nodes::SliceParameter const & sliceParameter)
     {
         ProfileFunction
 
           m_resources->getRenderingSettings()
             .approximation = AM_FULL_MODEL;
-        m_contour.clear();
+        m_contour->clear();
 
         generateContourMarchingSquare(sliceParameter);
     }
@@ -128,13 +131,12 @@ namespace gladius
         m_primitives->write();
         m_programs.getSlicerProgram()->computeMarchingSquareState(*m_primitives,
                                                                   sliceParameter.zHeight_mm);
-        m_contour.addIsoLineFromMarchingSquare(m_resources->getMarchingSquareStates(),
-                                               m_resources->getClippingArea());
+        m_contour->addIsoLineFromMarchingSquare(m_resources->getMarchingSquareStates(),
+                                                m_resources->getClippingArea());
 
         if (sliceParameter.adoptGradientBased)
         {
-
-            for (auto & contour : m_contour.getContour())
+            for (auto & contour : m_contour->getContour())
             {
                 if (contour.vertices.empty())
                 {
@@ -161,7 +163,7 @@ namespace gladius
                 }
             }
         }
-        m_contour.runPostProcessing();
+        m_contour->runPostProcessing();
         m_lastContourSliceHeight_mm = sliceParameter.zHeight_mm;
     }
 
@@ -317,10 +319,10 @@ namespace gladius
         m_primitives->write();
         m_programs.getSlicerProgram()->renderLayers(*m_primitives, 0.0f, m_sliceHeight_mm);
     }
-
-    const std::optional<BoundingBox> & ComputeCore::getBoundingBox() const
+    std::optional<BoundingBox> ComputeCore::getBoundingBox() const
     {
-        return m_boundingBox;
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return m_boundingBox; // Return a copy instead of a reference
     }
 
     void ComputeCore::updateClippingAreaWithPadding() const
@@ -415,14 +417,25 @@ namespace gladius
                 continue;
             }
 
-            m_boundingBox->min.x =(!isnan(vertex.x) && !isinf(vertex.x)) ? std::min(m_boundingBox->min.x, vertex.x) : m_boundingBox->min.x;
-            m_boundingBox->min.y =(!isnan(vertex.y) && !isinf(vertex.y)) ? std::min(m_boundingBox->min.y, vertex.y) : m_boundingBox->min.y;
-            m_boundingBox->min.z =(!isnan(vertex.z) && !isinf(vertex.z)) ? std::min(m_boundingBox->min.z, vertex.z) : m_boundingBox->min.z;
+            m_boundingBox->min.x = (!isnan(vertex.x) && !isinf(vertex.x))
+                                     ? std::min(m_boundingBox->min.x, vertex.x)
+                                     : m_boundingBox->min.x;
+            m_boundingBox->min.y = (!isnan(vertex.y) && !isinf(vertex.y))
+                                     ? std::min(m_boundingBox->min.y, vertex.y)
+                                     : m_boundingBox->min.y;
+            m_boundingBox->min.z = (!isnan(vertex.z) && !isinf(vertex.z))
+                                     ? std::min(m_boundingBox->min.z, vertex.z)
+                                     : m_boundingBox->min.z;
 
-            m_boundingBox->max.x =(!isnan(vertex.x) && !isinf(vertex.x)) ? std::max(m_boundingBox->max.x, vertex.x) : m_boundingBox->max.x;
-            m_boundingBox->max.y =(!isnan(vertex.y) && !isinf(vertex.y)) ? std::max(m_boundingBox->max.y, vertex.y) : m_boundingBox->max.y;
-            m_boundingBox->max.z =(!isnan(vertex.z) && !isinf(vertex.z)) ? std::max(m_boundingBox->max.z, vertex.z) : m_boundingBox->max.z;
-           
+            m_boundingBox->max.x = (!isnan(vertex.x) && !isinf(vertex.x))
+                                     ? std::max(m_boundingBox->max.x, vertex.x)
+                                     : m_boundingBox->max.x;
+            m_boundingBox->max.y = (!isnan(vertex.y) && !isinf(vertex.y))
+                                     ? std::max(m_boundingBox->max.y, vertex.y)
+                                     : m_boundingBox->max.y;
+            m_boundingBox->max.z = (!isnan(vertex.z) && !isinf(vertex.z))
+                                     ? std::max(m_boundingBox->max.z, vertex.z)
+                                     : m_boundingBox->max.z;
         }
 
         // if the bounding box values are not finite, use the build volume as bounding box
@@ -687,19 +700,18 @@ namespace gladius
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         refreshProgram(assembly);
     }
-
     [[nodiscard]] bool ComputeCore::isRendererReady() const
     {
-        if (!m_meshResourceState.isModelUpToDate())
+        if (!m_meshResourceState->isModelUpToDate())
         {
             return false;
         }
         return (!getBestRenderProgram()->isCompilationInProgress());
     }
-
-    ComputeContext & ComputeCore::getComputeContext() const
+    ComputeContextWrapper ComputeCore::getComputeContext() const
     {
-        return *m_ComputeContext;
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return ComputeContextWrapper(m_ComputeContext);
     }
 
     void ComputeCore::compileSlicerProgramBlocking()
@@ -830,19 +842,19 @@ namespace gladius
         m_resources->setPreCompSdfBBox(boundingBox);
         m_programs.getSlicerProgram()->precomputeSdf(*m_primitives, boundingBox);
     }
-
-    GLImageBuffer * ComputeCore::getResultImage() const
+    SharedGLImageBuffer ComputeCore::getResultImage() const
     {
-        return m_resultImage.get();
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return m_resultImage;
     }
-
-    ContourExtractor & ComputeCore::getContour()
+    ContourExtractorWrapper ComputeCore::getContour()
     {
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         if (m_sliceFuture.valid())
         {
             m_sliceFuture.get();
         }
-        return m_contour;
+        return ContourExtractorWrapper(m_contour);
     }
 
     cl_float ComputeCore::getSliceHeight() const
@@ -856,32 +868,35 @@ namespace gladius
 
         m_sliceHeight_mm = z_mm;
     }
-
-    SlicerProgram * ComputeCore::getSlicerProgram() const
+    SharedSlicerProgram ComputeCore::getSlicerProgram() const
     {
-        return m_programs.getSlicerProgram();
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return std::shared_ptr<SlicerProgram>(m_programs.getSlicerProgram(),
+                                              [](SlicerProgram *) {}); // Non-owning shared_ptr
     }
-
-    RenderProgram * ComputeCore::getBestRenderProgram() const
+    SharedRenderProgram ComputeCore::getBestRenderProgram() const
     {
-        return m_programs.getRenderProgram();
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return std::shared_ptr<RenderProgram>(m_programs.getRenderProgram(),
+                                              [](RenderProgram *) {}); // Non-owning shared_ptr
     }
-
-    RenderProgram * ComputeCore::getPreviewRenderProgram() const
+    SharedRenderProgram ComputeCore::getPreviewRenderProgram() const
     {
-        return m_programs.getRenderProgram();
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return std::shared_ptr<RenderProgram>(m_programs.getRenderProgram(),
+                                              [](RenderProgram *) {}); // Non-owning shared_ptr
     }
-
-    RenderProgram * ComputeCore::getOptimzedRenderProgram() const
+    SharedRenderProgram ComputeCore::getOptimzedRenderProgram() const
     {
-        return m_programs.getRenderProgram();
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return std::shared_ptr<RenderProgram>(m_programs.getRenderProgram(),
+                                              [](RenderProgram *) {}); // Non-owning shared_ptr
     }
 
     bool ComputeCore::setScreenResolution(size_t width, size_t height)
     {
-        ProfileFunction
-        if (m_resultImage && (width == m_resultImage->getWidth()) &&
-            (height == m_resultImage->getHeight()))
+        ProfileFunction if (m_resultImage && (width == m_resultImage->getWidth()) &&
+                            (height == m_resultImage->getHeight()))
         {
             return false;
         }
@@ -891,7 +906,7 @@ namespace gladius
         }
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex, std::adopt_lock);
 
-        m_resultImage = std::make_unique<GLImageBuffer>(*m_ComputeContext, width, height);
+        m_resultImage = std::make_shared<GLImageBuffer>(*m_ComputeContext, width, height);
         m_resultImage->allocateOnDevice();
         return true;
     }
@@ -909,7 +924,7 @@ namespace gladius
         }
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex, std::adopt_lock);
 
-        m_lowResPreviewImage = std::make_unique<GLImageBuffer>(*m_ComputeContext, width, height);
+        m_lowResPreviewImage = std::make_shared<GLImageBuffer>(*m_ComputeContext, width, height);
         m_lowResPreviewImage->allocateOnDevice();
         return true;
     }
@@ -922,15 +937,15 @@ namespace gladius
         }
         return {m_lowResPreviewImage->getWidth(), m_lowResPreviewImage->getHeight()};
     }
-
-    Primitives & ComputeCore::getPrimitives() const
+    PrimitivesWrapper ComputeCore::getPrimitives() const
     {
-        return *m_primitives;
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return PrimitivesWrapper(m_primitives);
     }
-
-    ResourceContext & ComputeCore::getResourceContext() const
+    ResourceContextWrapper ComputeCore::getResourceContext() const
     {
-        return *m_resources;
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return ResourceContextWrapper(m_resources);
     }
 
     void ComputeCore::renderResultImageInterOp(DistanceMap & sourceImage,
@@ -1085,10 +1100,10 @@ namespace gladius
     {
         m_codeGenerator = generator;
     }
-
-    ModelState & ComputeCore::getMeshResourceState()
+    ModelStateWrapper ComputeCore::getMeshResourceState()
     {
-        return m_meshResourceState;
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+        return ModelStateWrapper(m_meshResourceState);
     }
 
     PlainImage ComputeCore::createThumbnail()

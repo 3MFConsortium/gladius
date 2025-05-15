@@ -251,7 +251,7 @@ namespace gladius::io
 
         for (int y = 0; y < height; y++)
         {
-            for (int x = 0 ; x < width; x++)
+            for (int x = 0; x < width; x++)
             {
                 unsigned int indexTarget = (y * width + x) * numChannels;
                 unsigned int indexSource = ((height - y - 1) * width + x) * numChannels;
@@ -261,8 +261,8 @@ namespace gladius::io
                 }
             }
         }
-       
-        data =  std::move(swappedData);
+
+        data = std::move(swappedData);
     }
 
     bool ImageStackExporter::advanceExport(ComputeCore & generator)
@@ -282,10 +282,9 @@ namespace gladius::io
         {
             throw std::runtime_error("Size of input data does not match the size of the image");
         }
-
         for (size_t i = 0; i < distmap.getData().size(); i++)
         {
-            auto const value = distmap.getData()[i].x;
+            float const value = distmap.getData()[i].x;
 
             float const grayValue = std::clamp(128.f + value * 1000.0f, 0.f, 255.f);
             auto const val = static_cast<unsigned char>(grayValue);
