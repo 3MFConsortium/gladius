@@ -268,7 +268,7 @@ namespace gladius
 
         Lib3MF::PModel m_3mfmodel;
 
-        std::future<void> m_futureMeshLoading;
+        std::future<void> m_futureModelRefresh;
 
         nodes::BuildItems m_buildItems;
 

@@ -78,7 +78,7 @@ namespace gladius
         }
         saveBackup();
         {
-            m_futureMeshLoading = std::async(std::launch::async, [&]() { refreshWorker(); });
+            m_futureModelRefresh = std::async(std::launch::async, [&]() { refreshWorker(); });
         }
     }
 
@@ -137,9 +137,36 @@ namespace gladius
         ProfileFunction;
         using namespace gladius::events;
 
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        nodes::Assembly assemblyToFlat;
+        {
+            std::lock_guard<std::mutex> lock(m_assemblyMutex);
+            if (!m_assembly)
+            {
+                return;
+            }
 
-        nodes::Assembly assemblyToFlat = *m_assembly;
+            nodes::Validator validator;
+            auto logger = getSharedLogger();
+            if (!validator.validate(*m_assembly))
+            {
+                auto logger = getSharedLogger();
+                for (auto const & error : validator.getErrors())
+                {
+                    if (logger)
+                        logger->addEvent(
+                          {fmt::format("{}: Review parameter {} of node {} in model {}",
+                                       error.message,
+                                       error.parameter,
+                                       error.node,
+                                       error.model),
+                           Severity::Error});
+                }
+                return;
+            }
+
+            assemblyToFlat = *m_assembly;
+        }
+
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();
 
@@ -149,23 +176,6 @@ namespace gladius
             ? nodes::GraphFlattener(assemblyToFlat, m_resourceDependencyGraph.get())
             : nodes::GraphFlattener(assemblyToFlat);
 
-        nodes::Validator validator;
-        auto logger = getSharedLogger();
-        if (!validator.validate(*m_assembly))
-        {
-            auto logger = getSharedLogger();
-            for (auto const & error : validator.getErrors())
-            {
-                if (logger)
-                    logger->addEvent({fmt::format("{}: Review parameter {} of node {} in model {}",
-                                                  error.message,
-                                                  error.parameter,
-                                                  error.node,
-                                                  error.model),
-                                      Severity::Error});
-            }
-            return;
-        }
         try
         {
             m_flatAssembly = std::make_shared<nodes::Assembly>(flattener.flatten());
@@ -442,9 +452,9 @@ namespace gladius
         }
         try
         {
-            if (m_futureMeshLoading.valid())
+            if (m_futureModelRefresh.valid())
             {
-                m_futureMeshLoading.get(); // wait for the future to finish
+                m_futureModelRefresh.get(); // wait for the future to finish
             }
         }
         catch (std::future_error const & e)
@@ -619,7 +629,8 @@ namespace gladius
 
     BoundingBox Document::computeBoundingBox() const
     {
-        std::lock_guard<std::mutex> lock(m_assemblyMutex);        if (!m_core->updateBBox())
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        if (!m_core->updateBBox())
         {
             return {};
         }
@@ -723,7 +734,8 @@ namespace gladius
     void Document::loadImpl(const std::filesystem::path & filename)
     {
         auto computeToken = m_core->waitForComputeToken();
-        m_buildItems.clear();        resetGeneratorContext();
+        m_buildItems.clear();
+        resetGeneratorContext();
         m_core->reset();
         m_core->getResourceContext()->clearImageStacks();
         auto newFilename = filename;
