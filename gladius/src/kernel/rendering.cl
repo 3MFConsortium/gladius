@@ -133,8 +133,8 @@ struct RayCastResult
 rayCast(float3 eyePosition, float3 rayDirection, float startDistance, PAYLOAD_ARGS)
 {
     // Configuration constants
-    int const maxRaySteps = renderingSettings.approximation & AM_FULL_MODEL ? 1000 : 300;
-    float const maxTravelDistance = 10000.f;
+    int const maxRaySteps = 2000;
+    float const maxTravelDistance = 100000.f;
     float const initialCloseEnough = (renderingSettings.approximation & AM_ONLY_PRECOMPSDF) ? 0.01f : 1.E-3f;
     float closeEnough = initialCloseEnough;
     
