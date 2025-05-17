@@ -85,10 +85,12 @@ namespace gladius
     {
       public:
         /**
-         * @brief Waits until the assembly mutex can be locked and returns a token that keeps it locked.
+         * @brief Waits until the assembly mutex can be locked and returns a token that keeps it
+         * locked.
          *
-         * The token is an RAII wrapper that automatically releases the mutex when it goes out of scope.
-         * Use this method when you need guaranteed access to the assembly and are willing to wait.
+         * The token is an RAII wrapper that automatically releases the mutex when it goes out of
+         * scope. Use this method when you need guaranteed access to the assembly and are willing to
+         * wait.
          *
          * @return AssemblyToken An RAII token that keeps the mutex locked for its lifetime
          */
@@ -96,9 +98,9 @@ namespace gladius
 
         /**
          * @brief Attempts to acquire a lock on the assembly mutex without waiting.
-         * 
+         *
          * This method tries to lock the mutex without blocking. If the mutex is already locked,
-         * it returns an empty optional. Otherwise, it returns an optional containing a token 
+         * it returns an empty optional. Otherwise, it returns an optional containing a token
          * that keeps the mutex locked.
          *
          * @return OptionalAssemblyToken An optional that contains a token if the lock was acquired
@@ -260,6 +262,18 @@ namespace gladius
          */
         void rebuildResourceDependencyGraph();
 
+        /**
+         * @brief Validates the current assembly
+         *
+         * Validates the assembly using the nodes::Validator.
+         * Logs any validation errors.
+         *
+         * @return True if the assembly is valid, false otherwise
+         */
+        bool validateAssembly() const;
+
+        void updateFlatAssembly();
+
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,
@@ -271,7 +285,6 @@ namespace gladius
         void refreshModelAsync();
         void loadAllMeshResources();
         void refreshWorker();
-        void updateFlatAssembly();
 
         void updateMemoryOffsets();
 

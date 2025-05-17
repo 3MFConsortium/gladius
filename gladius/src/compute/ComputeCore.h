@@ -435,7 +435,9 @@ namespace gladius
         void updateBBoxOrThrow();
 
         void refreshProgram(nodes::SharedAssembly assembly);
-        void tryRefreshProgramProtected(nodes::SharedAssembly assembly);        [[nodiscard]] bool isRendererReady() const;
+        void tryRefreshProgramProtected(nodes::SharedAssembly assembly);
+        
+        [[nodiscard]] bool isRendererReady() const;
 
         [[nodiscard]] SharedComputeContext getComputeContext() const;
 

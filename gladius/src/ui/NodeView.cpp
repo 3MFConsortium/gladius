@@ -802,7 +802,7 @@ namespace gladius::ui
               const auto newSource = inputMenu(*model, parameter.second, parameter.first);
               if (newSource.has_value())
               {
-                  model->addLink(newSource.value(), parameter.second.getId());
+                  model->addLink(newSource.value(), parameter.second.getId(), false);
                   m_modelEditor->markModelAsModified();
               }
           });

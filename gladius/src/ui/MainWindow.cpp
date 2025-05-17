@@ -418,10 +418,12 @@ namespace gladius::ui
               if (m_modelEditor.modelWasModified() || parameterModifiedByModelEditor)
               {
                   m_doc->getAssembly()->updateInputsAndOutputs();
+                  m_doc->updateParameterRegistration();
+                  m_modelEditor.markModelAsUpToDate();
                   markFileAsChanged();
               }
 
-              if (m_modelEditor.isCompileRequested() && m_core->isRendererReady())
+              if (m_modelEditor.isCompileRequested())
               {
                   refreshModel();
               }

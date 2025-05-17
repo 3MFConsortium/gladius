@@ -153,22 +153,8 @@ namespace gladius
                 return;
             }
 
-            nodes::Validator validator;
-            auto logger = getSharedLogger();
-            if (!validator.validate(*m_assembly))
+            if (!validateAssembly())
             {
-                auto logger = getSharedLogger();
-                for (auto const & error : validator.getErrors())
-                {
-                    if (logger)
-                        logger->addEvent(
-                          {fmt::format("{}: Review parameter {} of node {} in model {}",
-                                       error.message,
-                                       error.parameter,
-                                       error.node,
-                                       error.model),
-                           Severity::Error});
-                }
                 return;
             }
 
@@ -250,17 +236,9 @@ namespace gladius
         {
             return false;
         }
-        // only proceed if we get a lock on the assembly mutex
-        if (m_assemblyMutex.try_lock())
-        {
-            refreshModelAsync();
-        }
-        else
-        {
-            // if we can't get a lock, we are already in the process of refreshing the model
-            return false;
-        }
 
+        refreshModelAsync();
+       
         return true;
     }
 
@@ -1255,5 +1233,29 @@ namespace gladius
     const gladius::io::ResourceDependencyGraph * Document::getResourceDependencyGraph() const
     {
         return m_resourceDependencyGraph.get();
+    }
+
+    bool Document::validateAssembly() const
+    {
+        nodes::Validator validator;
+        auto logger = getSharedLogger();
+        
+        if (!validator.validate(*m_assembly))
+        {
+            for (auto const & error : validator.getErrors())
+            {
+                if (logger)
+                    logger->addEvent(
+                      {fmt::format("{}: Review parameter {} of node {} in model {}",
+                                   error.message,
+                                   error.parameter,
+                                   error.node,
+                                   error.model),
+                       events::Severity::Error});
+            }
+            return false;
+        }
+        
+        return true;
     }
 }
