@@ -83,25 +83,32 @@ namespace gladius::ui
         m_mainView.addViewCallBack([&]() { render(); });
 
         m_mainView.setFileDropCallback([&](std::filesystem::path const & path) { open(path); });
-        
+
         // Set up welcome screen callbacks
-        m_welcomeScreen.setNewModelCallback([this]() { 
-            newModel();
-            m_welcomeScreen.hide();
-        });
-        
-        m_welcomeScreen.setOpenFileCallback([this](const std::filesystem::path& path) {
-            if (path.empty()) {
-                open();
-            } else {
-                open(path);
-            }
-            m_welcomeScreen.hide();
-        });
-                
+        m_welcomeScreen.setNewModelCallback(
+          [this]()
+          {
+              newModel();
+              m_welcomeScreen.hide();
+          });
+
+        m_welcomeScreen.setOpenFileCallback(
+          [this](const std::filesystem::path & path)
+          {
+              if (path.empty())
+              {
+                  open();
+              }
+              else
+              {
+                  open(path);
+              }
+              m_welcomeScreen.hide();
+          });
+
         // Set the logger for the welcome screen
         m_welcomeScreen.setLogger(m_logger);
-        
+
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
 
@@ -217,6 +224,9 @@ namespace gladius::ui
         ProfileFunction;
         m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
 
+        // Check if welcome screen is visible first
+        bool welcomeScreenVisible = m_welcomeScreen.isVisible();
+
         // Check for keyboard shortcuts
         ImGuiIO & io = ImGui::GetIO();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false))
@@ -251,119 +261,163 @@ namespace gladius::ui
 
         try
         {
-
-            if (m_showStyleEditor)
+            // If welcome screen is visible, create a blocking overlay for all UI elements first
+            if (welcomeScreenVisible)
             {
-                ImGui::Begin("Style Editor", &m_showStyleEditor);
-                ImGui::ShowStyleEditor();
+                // Get the entire viewport size
+                const ImVec2 viewportSize = ImGui::GetIO().DisplaySize;
+
+                // Create a fullscreen, top-level modal overlay
+                ImGui::SetNextWindowPos(ImVec2(0, 0));
+                ImGui::SetNextWindowSize(viewportSize);
+
+                // Special flags to ensure it blocks all input and stays on top
+                ImGuiWindowFlags overlayFlags =
+                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+                  ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav;
+
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+                // Begin a blocking overlay
+                ImGui::Begin("##WelcomeScreenFullOverlay", nullptr, overlayFlags);
+
+                // Draw a fully opaque rect over the entire screen
+                ImDrawList * drawList = ImGui::GetWindowDrawList();
+                drawList->AddRectFilled(
+                  ImVec2(0, 0),
+                  viewportSize,
+                  ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.0f, 0.0f, 0.85f)));
+
                 ImGui::End();
+                ImGui::PopStyleVar();
             }
 
-            if (m_mainView.isViewSettingsVisible())
+            if (!welcomeScreenVisible)
             {
-                renderSettingsDialog();
-            }
 
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {20.f * m_uiScale, 12.f * m_uiScale});
-            if (ImGui::BeginMainMenuBar())
-            {
-                if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_BARS)))
+                if (m_showStyleEditor)
                 {
-                    m_showMainMenu = true;
+                    ImGui::Begin("Style Editor", &m_showStyleEditor);
+                    ImGui::ShowStyleEditor();
+                    ImGui::End();
                 }
 
-                if (m_modelEditor.isVisible())
+                if (m_mainView.isViewSettingsVisible())
                 {
-                    if (ImGui::Button(
-                          reinterpret_cast<const char *>(ICON_FA_PROJECT_DIAGRAM "\tGraph")))
-                    {
-                        m_modelEditor.setVisibility(false);
-                    }
-                }
-                else
-                {
-                    if (bigMenuItem(
-                          reinterpret_cast<const char *>(ICON_FA_PROJECT_DIAGRAM "\tGraph")))
-                    {
-                        m_modelEditor.setVisibility(true);
-                    }
+                    renderSettingsDialog();
                 }
 
-                if (m_renderWindow.isVisible())
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                                    {20.f * m_uiScale, 12.f * m_uiScale});
+                if (ImGui::BeginMainMenuBar())
                 {
-                    if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_DESKTOP "\tPreview")))
+                    if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_BARS)))
                     {
-                        m_renderWindow.hide();
+                        m_showMainMenu = true;
                     }
-                }
-                else
-                {
-                    if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_DESKTOP "\tPreview")))
-                    {
-                        m_renderWindow.show();
-                    }
-                }
 
-                if (m_isSlicePreviewVisible)
-                {
-                    if (ImGui::Button(
-                          reinterpret_cast<const char *>(ICON_FA_LAYER_GROUP "\tSlice")))
+                    if (m_modelEditor.isVisible())
                     {
-                        m_sliceView.hide();
-                    }
-                }
-                else
-                {
-                    if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_LAYER_GROUP "\tSlice")))
-                    {
-                        m_sliceView.show();
-                    }
-                }
-
-                if (m_mainView.isFullScreen())
-                {
-                    if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
-                    {
-                        m_mainView.setFullScreen(false);
-                    }
-                }
-                else
-                {
-                    if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
-                    {
-                        m_mainView.setFullScreen(true);
-                    }
-                }
-                if (m_currentAssemblyFileName)
-                {
-                    if (m_fileChanged)
-                    {
-                        ImGui::TextUnformatted(
-                          fmt::format("*{}", m_currentAssemblyFileName.value().string()).c_str());
+                        if (ImGui::Button(
+                              reinterpret_cast<const char *>(ICON_FA_PROJECT_DIAGRAM "\tGraph")))
+                        {
+                            m_modelEditor.setVisibility(false);
+                        }
                     }
                     else
                     {
-                        ImGui::TextUnformatted(
-                          fmt::format("{}", m_currentAssemblyFileName.value().string()).c_str());
+                        if (bigMenuItem(
+                              reinterpret_cast<const char *>(ICON_FA_PROJECT_DIAGRAM "\tGraph")))
+                        {
+                            m_modelEditor.setVisibility(true);
+                        }
                     }
+
+                    if (m_renderWindow.isVisible())
+                    {
+                        if (ImGui::Button(
+                              reinterpret_cast<const char *>(ICON_FA_DESKTOP "\tPreview")))
+                        {
+                            m_renderWindow.hide();
+                        }
+                    }
+                    else
+                    {
+                        if (bigMenuItem(
+                              reinterpret_cast<const char *>(ICON_FA_DESKTOP "\tPreview")))
+                        {
+                            m_renderWindow.show();
+                        }
+                    }
+
+                    if (m_isSlicePreviewVisible)
+                    {
+                        if (ImGui::Button(
+                              reinterpret_cast<const char *>(ICON_FA_LAYER_GROUP "\tSlice")))
+                        {
+                            m_sliceView.hide();
+                        }
+                    }
+                    else
+                    {
+                        if (bigMenuItem(
+                              reinterpret_cast<const char *>(ICON_FA_LAYER_GROUP "\tSlice")))
+                        {
+                            m_sliceView.show();
+                        }
+                    }
+
+                    if (m_mainView.isFullScreen())
+                    {
+                        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
+                        {
+                            m_mainView.setFullScreen(false);
+                        }
+                    }
+                    else
+                    {
+                        if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
+                        {
+                            m_mainView.setFullScreen(true);
+                        }
+                    }
+                    if (m_currentAssemblyFileName)
+                    {
+                        if (m_fileChanged)
+                        {
+                            ImGui::TextUnformatted(
+                              fmt::format("*{}", m_currentAssemblyFileName.value().string())
+                                .c_str());
+                        }
+                        else
+                        {
+                            ImGui::TextUnformatted(
+                              fmt::format("{}", m_currentAssemblyFileName.value().string())
+                                .c_str());
+                        }
+                    }
+
+                    ImGui::EndMainMenuBar();
                 }
+                ImGui::PopStyleVar();
 
-                ImGui::EndMainMenuBar();
+                mainWindowDockingArea();
+                sliceWindow();
+                renderWindow();
+                meshExportDialog();
+                cliExportDialog();
+                mainMenu();
             }
-            ImGui::PopStyleVar();
 
-            mainWindowDockingArea();
-            sliceWindow();
-            renderWindow();
-            meshExportDialog();
-            cliExportDialog();
-            mainMenu();
-            
-            // Render welcome screen if visible
-            m_welcomeScreen.render();
+            // Render welcome screen if it's visible
+            if (welcomeScreenVisible)
+            {
+                // Now render the welcome screen on top of the overlay we created earlier
+                m_welcomeScreen.render();
+            }
 
-            
-            showExitPopUp();
             logViewer();
             m_about.render();
             m_renderWindow.updateCamera();
@@ -422,10 +476,10 @@ namespace gladius::ui
                       m_modelEditor.markModelAsUpToDate();
                       markFileAsChanged();
                   }
-                  catch (const std::exception &e)
+                  catch (const std::exception & e)
                   {
-                      m_logger->addEvent(
-                          {fmt::format("Error updating model: {}", e.what()), events::Severity::Error});
+                      m_logger->addEvent({fmt::format("Error updating model: {}", e.what()),
+                                          events::Severity::Error});
                   }
               }
 
@@ -862,7 +916,7 @@ namespace gladius::ui
         m_doc->loadNonBlocking(filename);
         resetEditorState();
         m_renderWindow.centerView();
-        
+
         // Add to recent files list
         addToRecentFiles(filename);
     }
@@ -883,7 +937,7 @@ namespace gladius::ui
         m_doc->saveAs(m_currentAssemblyFileName.value(), writeThumbnail);
         m_renderWindow.invalidateViewDuetoModelUpdate();
         m_fileChanged = false;
-        
+
         // Add to recent files list
         addToRecentFiles(m_currentAssemblyFileName.value());
     }
@@ -899,7 +953,7 @@ namespace gladius::ui
             m_renderWindow.invalidateViewDuetoModelUpdate();
             m_fileChanged = false;
             m_currentAssemblyFileName = filename;
-            
+
             // Add to recent files list
             addToRecentFiles(filename.value());
         }
@@ -1110,45 +1164,46 @@ namespace gladius::ui
      * @brief Add a file to the list of recently modified files
      * @param filePath Path to the file that has been modified
      */
-    void MainWindow::addToRecentFiles(const std::filesystem::path& filePath)
+    void MainWindow::addToRecentFiles(const std::filesystem::path & filePath)
     {
         // If ConfigManager is not available, we can't store recent files
         if (!m_configManager)
             return;
-            
+
         // Get current time as Unix timestamp
         auto now = std::chrono::system_clock::now();
         std::time_t timestamp = std::chrono::system_clock::to_time_t(now);
-        
+
         // Get existing recent files list
-        nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>("recentFiles", "files", nlohmann::json::array());
-        
+        nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>(
+          "recentFiles", "files", nlohmann::json::array());
+
         // Check if this file is already in the list
         bool fileFound = false;
         std::string filePathStr = filePath.string();
-        
+
         // Create updated list of recent files
         nlohmann::json updatedList = nlohmann::json::array();
-        
+
         // Add the current file with updated timestamp
         nlohmann::json newEntry;
         newEntry["path"] = filePathStr;
         newEntry["timestamp"] = timestamp;
         updatedList.push_back(newEntry);
-        
+
         // Add other existing files, skipping the current one (it's already added)
         size_t count = 1; // Start at 1 since we already added the current file
         const size_t MAX_RECENT_FILES = 100;
-        
-        for (auto& entry : recentFiles)
+
+        for (auto & entry : recentFiles)
         {
             if (count >= MAX_RECENT_FILES)
                 break;
-                
+
             if (entry.is_object() && entry.contains("path") && entry["path"].is_string())
             {
                 std::string path = entry["path"].get<std::string>();
-                
+
                 // Skip the current file (we already added it with a new timestamp)
                 if (path != filePathStr)
                 {
@@ -1157,43 +1212,44 @@ namespace gladius::ui
                 }
             }
         }
-        
+
         // Store updated list back to config
         m_configManager->setValue("recentFiles", "files", updatedList);
-        
+
         // Save the configuration to disk
         m_configManager->save();
     }
-    
+
     /**
      * @brief Get the list of recently modified files
      * @param maxCount Maximum number of files to return
      * @return List of pairs containing file paths and timestamps
      */
-    std::vector<std::pair<std::filesystem::path, std::time_t>> MainWindow::getRecentFiles(size_t maxCount) const
+    std::vector<std::pair<std::filesystem::path, std::time_t>>
+    MainWindow::getRecentFiles(size_t maxCount) const
     {
         std::vector<std::pair<std::filesystem::path, std::time_t>> result;
-        
+
         if (!m_configManager)
             return result;
-            
+
         // Get recent files list from config
-        nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>("recentFiles", "files", nlohmann::json::array());
-    // print size of recentFiles
+        nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>(
+          "recentFiles", "files", nlohmann::json::array());
+        // print size of recentFiles
         std::cout << "Size of recentFiles: " << recentFiles.size() << std::endl;
         // Process each entry
-        for (auto& entry : recentFiles)
+        for (auto & entry : recentFiles)
         {
             if (result.size() >= maxCount)
                 break;
-                
-            if (entry.is_object() && 
-                entry.contains("path") && entry["path"].is_string() &&
+
+            if (entry.is_object() && entry.contains("path") && entry["path"].is_string() &&
                 entry.contains("timestamp") && entry["timestamp"].is_number())
             {
                 std::string path = entry["path"].get<std::string>();
                 std::time_t timestamp = entry["timestamp"].get<std::time_t>();
-                
+
                 // Only add if the file still exists
                 if (std::filesystem::exists(path))
                 {
@@ -1201,7 +1257,7 @@ namespace gladius::ui
                 }
             }
         }
-        
+
         return result;
     }
 }
