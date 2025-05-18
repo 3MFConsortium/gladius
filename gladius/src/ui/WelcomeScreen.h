@@ -49,14 +49,7 @@ namespace gladius::ui
          * @param callback The function to call when a new model should be created
          */
         void setNewModelCallback(std::function<void()> callback);
-        
-        /**
-         * @brief Sets the callback function for showing the library browser
-         * 
-         * @param callback The function to call when the library browser should be displayed
-         */
-        void setShowLibraryCallback(std::function<void()> callback);
-        
+                
         /**
          * @brief Sets the list of recent files
          * 
@@ -103,10 +96,7 @@ namespace gladius::ui
         
         /// Callback for when a new model should be created
         std::function<void()> m_newModelCallback;
-        
-        /// Callback for when the library browser should be shown
-        std::function<void()> m_showLibraryCallback;
-        
+                
         /// List of recent files with their modification timestamps
         std::vector<std::pair<std::filesystem::path, std::time_t>> m_recentFiles;
         

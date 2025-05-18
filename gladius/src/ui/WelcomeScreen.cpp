@@ -81,11 +81,6 @@ namespace gladius::ui
         m_newModelCallback = std::move(callback);
     }
 
-    void WelcomeScreen::setShowLibraryCallback(std::function<void()> callback)
-    {
-        m_showLibraryCallback = std::move(callback);
-    }
-
     void WelcomeScreen::setRecentFiles(
       const std::vector<std::pair<std::filesystem::path, std::time_t>> & recentFiles)
     {
@@ -254,20 +249,6 @@ namespace gladius::ui
                 }
             }
 
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            if (ImGui::Button(
-                  reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN " Library Browser"),
-                  ImVec2(-1, 50)))
-            {
-                if (m_showLibraryCallback)
-                {
-                    m_showLibraryCallback();
-                    m_isVisible = false;
-                }
-            }
 
             ImGui::PopStyleVar();
             ImGui::EndChild();

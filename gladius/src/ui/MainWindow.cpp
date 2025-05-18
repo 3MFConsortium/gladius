@@ -98,14 +98,7 @@ namespace gladius::ui
             }
             m_welcomeScreen.hide();
         });
-        
-        m_welcomeScreen.setShowLibraryCallback([this]() {
-            m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");
-            m_modelEditor.setLibraryVisibility(true);
-            m_isLibraryBrowserVisible = true;
-            m_welcomeScreen.hide();
-        });
-        
+                
         // Set the logger for the welcome screen
         m_welcomeScreen.setLogger(m_logger);
         
