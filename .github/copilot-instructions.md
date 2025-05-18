@@ -24,6 +24,9 @@
 ## Variables
 - **Naming**: lowerCamelCase, prefix with `m_` for private, `s_` for static, `g_` for global.
 - **Constants**: Use UPPER_SNAKE_CASE.
+- **No Static Variables**: Avoid static variables in functions.
+- **No Global Variables**: Avoid global variables, use singletons or namespaces instead.
+- **No Macros**: Avoid macros, use `constexpr` or `inline` functions instead.
 
 ## Memory Management
 - **Smart Pointers**: Prefer `std::unique_ptr` and `std::shared_ptr`.
