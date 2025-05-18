@@ -125,8 +125,8 @@ void WelcomeScreen::updateThumbnailInfos()
                                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
         
         const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-        const float windowWidth = std::min(800.0f, displaySize.x * 0.8f);
-        const float windowHeight = std::min(600.0f, displaySize.y * 0.8f);
+        const float windowWidth = std::min(800.0f, displaySize.x * 0.9f);
+        const float windowHeight = std::min(600.0f, displaySize.y * 0.9f);
         
         // Center the window on screen
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Always);
@@ -257,8 +257,8 @@ void WelcomeScreen::updateThumbnailInfos()
                 float cellWidth = m_thumbnailSize + 20;
                 float cellHeight = m_thumbnailSize + 60;
                 
-                // Limit columns to 3 max, and base on available width
-                int columns = std::min(3, std::max(1, static_cast<int>(availWidth / cellWidth)));
+                // Limit columns to 10 max, and base on available width
+                int columns = std::min(10, std::max(1, static_cast<int>(availWidth / cellWidth)));
                 m_columns = columns;
                 
                 // Adjust cellWidth to evenly distribute space

@@ -110,7 +110,7 @@ namespace gladius::ui
         m_welcomeScreen.setLogger(m_logger);
         
         // Set recent files
-        m_welcomeScreen.setRecentFiles(getRecentFiles(10));
+        m_welcomeScreen.setRecentFiles(getRecentFiles(100));
 
         nodeEditor();
         newModel();
@@ -367,11 +367,8 @@ namespace gladius::ui
             mainMenu();
             
             // Render welcome screen if visible
-            if (m_welcomeScreen.render())
-            {
-                // Update recent files list
-                m_welcomeScreen.setRecentFiles(getRecentFiles(10));
-            }
+            m_welcomeScreen.render();
+
             
             showExitPopUp();
             logViewer();
