@@ -53,6 +53,11 @@ namespace gladius::nodes::graph
         return m_size;
     }
 
+    auto DirectedGraph::isInRange(Identifier id) const -> bool
+    {
+        return id >= 0 && id < static_cast<Identifier>(m_size);
+    }
+
     void DirectedGraph::removeVertex(Identifier id)
     {
         auto const iterElemToRemove = m_vertices.find(id);

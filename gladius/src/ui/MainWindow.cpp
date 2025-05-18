@@ -417,10 +417,18 @@ namespace gladius::ui
               m_contoursDirty = m_parameterDirty || m_contoursDirty;
               if (m_modelEditor.modelWasModified() || parameterModifiedByModelEditor)
               {
-                  m_doc->getAssembly()->updateInputsAndOutputs();
-                  m_doc->updateParameterRegistration();
-                  m_modelEditor.markModelAsUpToDate();
-                  markFileAsChanged();
+                  try
+                  {
+                      m_doc->getAssembly()->updateInputsAndOutputs();
+                      m_doc->updateParameterRegistration();
+                      m_modelEditor.markModelAsUpToDate();
+                      markFileAsChanged();
+                  }
+                  catch (const std::exception &e)
+                  {
+                      m_logger->addEvent(
+                          {fmt::format("Error updating model: {}", e.what()), events::Severity::Error});
+                  }
               }
 
               if (m_modelEditor.isCompileRequested())

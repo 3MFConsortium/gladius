@@ -703,8 +703,6 @@ namespace gladius::io
 
             // Get the resource directly referenced by this build item
             Lib3MF_uint32 objectResourceId = buildItem->GetObjectResourceID();
-            if (objectResourceId == 0)
-                continue;
 
             // Add this resource and all its dependencies to required resources
             requiredResourceIds.insert(objectResourceId);

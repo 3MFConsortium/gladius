@@ -62,6 +62,15 @@ namespace gladius::nodes::graph
         [[nodiscard]] auto getSize() const -> std::size_t override;
 
         /**
+         * @brief Checks if a vertex is within the graph's range
+         * 
+         * @param id The vertex to check
+         * @return true if the vertex is in range
+         * @return false otherwise
+         */
+        [[nodiscard]] auto isInRange(Identifier id) const -> bool override;
+
+        /**
          * @brief Removes a vertex and all its dependencies
          * 
          * @param id The vertex to remove

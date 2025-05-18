@@ -15,6 +15,8 @@ namespace gladius::nodes::graph
 
         [[nodiscard]] auto getSize() const -> std::size_t override;
 
+        [[nodiscard]] bool isInRange(Identifier id) const override;
+
         void removeVertex(Identifier id) override;
 
         [[nodiscard]] auto getVertices() const -> const DependencySet & override;

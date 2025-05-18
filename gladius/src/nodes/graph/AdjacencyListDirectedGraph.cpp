@@ -64,6 +64,11 @@ namespace gladius::nodes::graph
         return m_vertices.size();
     }
 
+    bool AdjacencyListDirectedGraph::isInRange(Identifier id) const
+    {
+        return id >= 0;
+    }
+
     void AdjacencyListDirectedGraph::removeVertex(Identifier id)
     {
         // Find and remove the vertex
