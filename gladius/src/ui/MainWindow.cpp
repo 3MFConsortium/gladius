@@ -864,6 +864,9 @@ namespace gladius::ui
         m_doc->loadNonBlocking(filename);
         resetEditorState();
         m_renderWindow.centerView();
+        
+        // Add to recent files list
+        addToRecentFiles(filename);
     }
 
     void MainWindow::startMainLoop()
@@ -882,6 +885,9 @@ namespace gladius::ui
         m_doc->saveAs(m_currentAssemblyFileName.value(), writeThumbnail);
         m_renderWindow.invalidateViewDuetoModelUpdate();
         m_fileChanged = false;
+        
+        // Add to recent files list
+        addToRecentFiles(m_currentAssemblyFileName.value());
     }
 
     void MainWindow::saveAs()
@@ -895,6 +901,9 @@ namespace gladius::ui
             m_renderWindow.invalidateViewDuetoModelUpdate();
             m_fileChanged = false;
             m_currentAssemblyFileName = filename;
+            
+            // Add to recent files list
+            addToRecentFiles(filename.value());
         }
     }
 

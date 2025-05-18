@@ -424,7 +424,6 @@ namespace gladius::io
             return;
         }
 
-        std::cout << "Creating model: " << func->GetUniqueResourceID() << std::endl;
         if (m_eventLogger)
         {
             m_eventLogger->addEvent({fmt::format("Creating model: {}", func->GetUniqueResourceID()),
