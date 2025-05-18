@@ -16,6 +16,7 @@
 #include "Outline.h"
 #include "RenderWindow.h"
 #include "SliceView.h"
+#include "WelcomeScreen.h"
 
 #include <chrono>
 
@@ -48,7 +49,6 @@ namespace gladius::ui
 
       private:
         void render();
-        void renderWelcomeScreen();
         void nodeEditor();
         void mainWindowDockingArea();
 
@@ -132,6 +132,7 @@ namespace gladius::ui
         LogView m_logView;
         RenderWindow m_renderWindow;
         AboutDialog m_about;
+        WelcomeScreen m_welcomeScreen;
 
         std::shared_ptr<Document> m_doc;
         events::SharedLogger m_logger;
