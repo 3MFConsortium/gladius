@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include "ThreemfThumbnailExtractor.h"
 
 namespace gladius::ui
 {
@@ -51,6 +52,13 @@ namespace gladius::ui
         void setRecentFiles(const std::vector<std::pair<std::filesystem::path, std::time_t>>& recentFiles);
         
         /**
+         * @brief Sets the logger for the welcome screen
+         * 
+         * @param logger The event logger
+         */
+        void setLogger(events::SharedLogger logger);
+        
+        /**
          * @brief Renders the welcome screen
          * 
          * @return true if the screen was rendered and is still active
@@ -91,5 +99,26 @@ namespace gladius::ui
         
         /// Flag indicating whether the welcome screen is visible
         bool m_isVisible = true;
+        
+        /// Thumbnail size for the recent files grid
+        float m_thumbnailSize = 150.0f;
+        
+        /// Number of columns in the recent files grid
+        int m_columns = 3;
+        
+        /// Thumbnail extractor for recent files
+        std::unique_ptr<ThreemfThumbnailExtractor> m_thumbnailExtractor;
+        
+        /// Logger for error reporting
+        events::SharedLogger m_logger;
+        
+        /// List of thumbnail info for recent files
+        std::vector<ThreemfThumbnailExtractor::ThumbnailInfo> m_thumbnailInfos;
+        
+        /// Flag to indicate if thumbnails need to be regenerated
+        bool m_needsRefresh = true;
+        
+        /// Update the thumbnail info based on recent files list
+        void updateThumbnailInfos();
     };
 }

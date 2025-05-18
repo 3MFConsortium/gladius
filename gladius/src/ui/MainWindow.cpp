@@ -106,6 +106,9 @@ namespace gladius::ui
             m_welcomeScreen.hide();
         });
         
+        // Set the logger for the welcome screen
+        m_welcomeScreen.setLogger(m_logger);
+        
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(10));
 
