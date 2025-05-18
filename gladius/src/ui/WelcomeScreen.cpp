@@ -256,9 +256,9 @@ void WelcomeScreen::updateThumbnailInfos()
                 float availWidth = ImGui::GetContentRegionAvail().x - 20.0f; // 20px padding
                 float cellWidth = m_thumbnailSize + 20;
                 float cellHeight = m_thumbnailSize + 60;
-                
-                // Limit columns to 10 max, and base on available width. Limit the number of columns so that a cell completely fits
-                int columns = std::min(10, std::max(1, static_cast<int>(std::floor(availWidth / cellWidth))));
+
+                // Calculate number of columns based on available width
+                int columns = std::max(1, static_cast<int>(std::floor(availWidth / cellWidth)));
                 m_columns = columns;
                 
                 // Adjust cellWidth to evenly distribute space

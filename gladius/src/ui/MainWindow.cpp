@@ -1145,7 +1145,7 @@ namespace gladius::ui
         
         // Add other existing files, skipping the current one (it's already added)
         size_t count = 1; // Start at 1 since we already added the current file
-        const size_t MAX_RECENT_FILES = 10;
+        const size_t MAX_RECENT_FILES = 100;
         
         for (auto& entry : recentFiles)
         {
@@ -1186,7 +1186,8 @@ namespace gladius::ui
             
         // Get recent files list from config
         nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>("recentFiles", "files", nlohmann::json::array());
-        
+    // print size of recentFiles
+        std::cout << "Size of recentFiles: " << recentFiles.size() << std::endl;
         // Process each entry
         for (auto& entry : recentFiles)
         {

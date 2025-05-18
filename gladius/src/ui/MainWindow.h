@@ -99,7 +99,7 @@ namespace gladius::ui
          * @param maxCount Maximum number of files to return
          * @return List of pairs containing file paths and timestamps
          */
-        std::vector<std::pair<std::filesystem::path, std::time_t>> getRecentFiles(size_t maxCount = 10) const;
+        std::vector<std::pair<std::filesystem::path, std::time_t>> getRecentFiles(size_t maxCount = 100) const;
 
         GLView m_mainView;
 
