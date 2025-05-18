@@ -1,34 +1,99 @@
 #include "WelcomeScreen.h"
-#include "imgui.h"
 #include "IconsFontAwesome5.h"
+#include "imgui.h"
 #include <fmt/format.h>
 #include <iostream>
 
 namespace gladius::ui
 {
 
-    void WelcomeScreen::setOpenFileCallback(std::function<void(const std::filesystem::path&)> callback)
+    /**
+     * @brief Formats a timestamp in a human-readable format
+     *
+     * @param timestamp The timestamp to format
+     * @return std::string Formatted timestamp with context-aware formatting:
+     *   - Today: "Today at HH:MM"
+     *   - Yesterday: "Yesterday at HH:MM"
+     *   - This week: "DayName at HH:MM"
+     *   - This year: "Month Day at HH:MM"
+     *   - Older: "YYYY-MM-DD HH:MM"
+     */
+    std::string formatTimeForHuman(std::time_t const & timestamp)
+    {
+        // Get current time
+        std::time_t const now = std::time(nullptr);
+        std::tm const * nowInfo = std::localtime(&now);
+        std::tm const * timeInfo = std::localtime(&timestamp);
+
+        // Calculate days difference by converting to struct tm and comparing
+        int const daysDiff = static_cast<int>(
+          (now - timestamp) / (60 * 60 * 24) +
+          (nowInfo->tm_hour < timeInfo->tm_hour ||
+               (nowInfo->tm_hour == timeInfo->tm_hour && nowInfo->tm_min < timeInfo->tm_min)
+             ? 1
+             : 0));
+
+        // Format time part "HH:MM"
+        char timePartStr[16];
+        std::strftime(timePartStr, sizeof(timePartStr), "%H:%M", timeInfo);
+
+        if (daysDiff == 0)
+        {
+            // Today
+            return fmt::format("Today at {}", timePartStr);
+        }
+        else if (daysDiff == 1)
+        {
+            // Yesterday
+            return fmt::format("Yesterday at {}", timePartStr);
+        }
+        else if (daysDiff < 7)
+        {
+            // This week
+            char dayNameStr[16];
+            std::strftime(dayNameStr, sizeof(dayNameStr), "%A", timeInfo);
+            return fmt::format("{} at {}", dayNameStr, timePartStr);
+        }
+        else if (timeInfo->tm_year == nowInfo->tm_year)
+        {
+            // This year
+            char monthDayStr[16];
+            std::strftime(monthDayStr, sizeof(monthDayStr), "%b %d", timeInfo);
+            return fmt::format("{} at {}", monthDayStr, timePartStr);
+        }
+        else
+        {
+            // Older
+            char dateStr[64];
+            std::strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M", timeInfo);
+            return dateStr;
+        }
+    }
+
+    void
+    WelcomeScreen::setOpenFileCallback(std::function<void(const std::filesystem::path &)> callback)
     {
         m_openFileCallback = std::move(callback);
     }
-    
+
     void WelcomeScreen::setNewModelCallback(std::function<void()> callback)
     {
         m_newModelCallback = std::move(callback);
     }
-    
+
     void WelcomeScreen::setShowLibraryCallback(std::function<void()> callback)
     {
         m_showLibraryCallback = std::move(callback);
     }
-    
-    void WelcomeScreen::setRecentFiles(const std::vector<std::pair<std::filesystem::path, std::time_t>>& recentFiles)
+
+    void WelcomeScreen::setRecentFiles(
+      const std::vector<std::pair<std::filesystem::path, std::time_t>> & recentFiles)
     {
         if (m_recentFiles != recentFiles)
         {
             m_recentFiles = recentFiles;
             m_needsRefresh = true;
-            
+
             // Update thumbnails if the thumbnail extractor is available
             if (m_thumbnailExtractor)
             {
@@ -36,74 +101,80 @@ namespace gladius::ui
             }
         }
     }
-    
-void WelcomeScreen::updateThumbnailInfos()
-{
-    if (!m_thumbnailExtractor)
+
+    void WelcomeScreen::updateThumbnailInfos()
     {
-        return;
-    }
-    
-    // Clear existing thumbnails if we're refreshing
-    if (m_needsRefresh)
-    {
-        for (auto& info : m_thumbnailInfos)
+        if (!m_thumbnailExtractor)
         {
-            m_thumbnailExtractor->releaseThumbnail(info);
+            return;
         }
-        m_thumbnailInfos.clear();
-    }
-    
-    // Create new thumbnail infos for all recent files
-    for (const auto& recentFile : m_recentFiles)
-    {
-        const auto& filePath = recentFile.first;
-        const auto& timestamp = recentFile.second;
-        
-        // Check if we already have this file
-        auto it = std::find_if(m_thumbnailInfos.begin(), m_thumbnailInfos.end(),
-            [&](const auto& info) { return info.filePath == filePath; });
-            
-        if (it == m_thumbnailInfos.end())
+
+        // Clear existing thumbnails if we're refreshing
+        if (m_needsRefresh)
         {
-            // Create new thumbnail info
-            auto info = m_thumbnailExtractor->createThumbnailInfo(filePath, timestamp);
-            
-            // Load the thumbnail right away
-            m_thumbnailExtractor->loadThumbnail(info);
-            
-            m_thumbnailInfos.push_back(std::move(info));
+            for (auto & info : m_thumbnailInfos)
+            {
+                m_thumbnailExtractor->releaseThumbnail(info);
+            }
+            m_thumbnailInfos.clear();
         }
+
+        // Create new thumbnail infos for all recent files
+        for (const auto & recentFile : m_recentFiles)
+        {
+            const auto & filePath = recentFile.first;
+            const auto & timestamp = recentFile.second;
+
+            // Check if we already have this file
+            auto it = std::find_if(m_thumbnailInfos.begin(),
+                                   m_thumbnailInfos.end(),
+                                   [&](const auto & info) { return info.filePath == filePath; });
+
+            if (it == m_thumbnailInfos.end())
+            {
+                // Create new thumbnail info
+                auto info = m_thumbnailExtractor->createThumbnailInfo(filePath, timestamp);
+
+                // Load the thumbnail right away
+                m_thumbnailExtractor->loadThumbnail(info);
+
+                m_thumbnailInfos.push_back(std::move(info));
+            }
+        }
+
+        // Remove thumbnails for files that are no longer in the recent files list
+        m_thumbnailInfos.erase(
+          std::remove_if(m_thumbnailInfos.begin(),
+                         m_thumbnailInfos.end(),
+                         [this](const auto & info)
+                         {
+                             auto it = std::find_if(m_recentFiles.begin(),
+                                                    m_recentFiles.end(),
+                                                    [&info](const auto & pair)
+                                                    { return pair.first == info.filePath; });
+                             if (it == m_recentFiles.end())
+                             {
+                                 // Release the thumbnail resources before removing
+                                 m_thumbnailExtractor->releaseThumbnail(
+                                   const_cast<ThreemfThumbnailExtractor::ThumbnailInfo &>(info));
+                                 return true;
+                             }
+                             return false;
+                         }),
+          m_thumbnailInfos.end());
+
+        m_needsRefresh = false;
     }
-    
-    // Remove thumbnails for files that are no longer in the recent files list
-    m_thumbnailInfos.erase(
-        std::remove_if(m_thumbnailInfos.begin(), m_thumbnailInfos.end(),
-            [this](const auto& info) {
-                auto it = std::find_if(m_recentFiles.begin(), m_recentFiles.end(),
-                    [&info](const auto& pair) { return pair.first == info.filePath; });
-                if (it == m_recentFiles.end())
-                {
-                    // Release the thumbnail resources before removing
-                    m_thumbnailExtractor->releaseThumbnail(const_cast<ThreemfThumbnailExtractor::ThumbnailInfo&>(info));
-                    return true;
-                }
-                return false;
-            }),
-        m_thumbnailInfos.end());
-    
-    m_needsRefresh = false;
-}
-    
+
     void WelcomeScreen::setLogger(events::SharedLogger logger)
     {
         m_logger = std::move(logger);
-        
+
         // Initialize the thumbnail extractor if it doesn't exist
         if (!m_thumbnailExtractor && m_logger)
         {
             m_thumbnailExtractor = std::make_unique<ThreemfThumbnailExtractor>(m_logger);
-            
+
             // Force a refresh of thumbnails if we have any recent files
             if (!m_recentFiles.empty())
             {
@@ -112,57 +183,58 @@ void WelcomeScreen::updateThumbnailInfos()
             }
         }
     }
-    
+
     bool WelcomeScreen::render()
     {
         if (!m_isVisible)
         {
             return false;
         }
-        
+
         // Set up window styling
-        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | 
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
                                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
-        
+
         const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
         const float windowWidth = std::min(1024.0f, displaySize.x * 0.8f);
         const float windowHeight = std::min(768.0f, displaySize.y * 0.8f);
 
         // Center the window on screen
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Always);
-        ImGui::SetNextWindowPos(ImVec2(displaySize.x * 0.5f, displaySize.y * 0.5f), 
-                               ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        
+        ImGui::SetNextWindowPos(
+          ImVec2(displaySize.x * 0.5f, displaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
         ImGui::SetNextWindowBgAlpha(0.9f);
-        
+
         if (ImGui::Begin("Welcome to Gladius", &m_isVisible, windowFlags))
         {
             // Title section with larger font
             const float titleFontScale = 1.5f;
             ImGui::PushFont(ImGui::GetFont());
             ImGui::SetWindowFontScale(titleFontScale);
-            
-            const char* title = "Welcome to Gladius";
+
+            const char * title = "Welcome to Gladius";
             ImVec2 titleSize = ImGui::CalcTextSize(title);
             ImGui::SetCursorPosX((windowWidth - titleSize.x) * 0.5f);
             ImGui::TextUnformatted(title);
-            
+
             ImGui::SetWindowFontScale(1.0f);
             ImGui::PopFont();
-            
+
             ImGui::Separator();
             ImGui::Spacing();
-            
+
             // Main content split: left side for buttons, right side for recent files
             const float buttonWidth = 200.0f;
             const float listWidth = windowWidth - buttonWidth - 40.0f; // 20px padding on each side
-            
+
             // Left side - actions
             ImGui::BeginChild("ActionsPane", ImVec2(buttonWidth, 0), true);
-            
+
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 10));
-            
-            if (ImGui::Button(reinterpret_cast<const char*>(ICON_FA_FILE " New Project"), ImVec2(-1, 50)))
+
+            if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FILE " New Project"),
+                              ImVec2(-1, 50)))
             {
                 if (m_newModelCallback)
                 {
@@ -170,21 +242,25 @@ void WelcomeScreen::updateThumbnailInfos()
                     m_isVisible = false;
                 }
             }
-            
-            if (ImGui::Button(reinterpret_cast<const char*>(ICON_FA_FOLDER_OPEN " Open Existing"), ImVec2(-1, 50)))
+
+            if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN " Open Existing"),
+                              ImVec2(-1, 50)))
             {
                 if (m_openFileCallback)
                 {
-                    m_openFileCallback(std::filesystem::path()); // Empty path signals to show file dialog
+                    m_openFileCallback(
+                      std::filesystem::path()); // Empty path signals to show file dialog
                     m_isVisible = false;
                 }
             }
-            
+
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
-            
-            if (ImGui::Button(reinterpret_cast<const char*>(ICON_FA_FOLDER_OPEN " Library Browser"), ImVec2(-1, 50)))
+
+            if (ImGui::Button(
+                  reinterpret_cast<const char *>(ICON_FA_FOLDER_OPEN " Library Browser"),
+                  ImVec2(-1, 50)))
             {
                 if (m_showLibraryCallback)
                 {
@@ -192,19 +268,19 @@ void WelcomeScreen::updateThumbnailInfos()
                     m_isVisible = false;
                 }
             }
-            
+
             ImGui::PopStyleVar();
             ImGui::EndChild();
-            
+
             ImGui::SameLine();
-            
+
             // Right side - recent files
             ImGui::BeginChild("RecentFilesPane", ImVec2(listWidth, 0), true);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
-            
+
             ImGui::TextUnformatted("Recent Files");
             ImGui::Separator();
-            
+
             if (m_recentFiles.empty())
             {
                 ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No recent files found");
@@ -212,25 +288,27 @@ void WelcomeScreen::updateThumbnailInfos()
             else if (!m_thumbnailExtractor)
             {
                 // If we don't have a thumbnail extractor, show a simple list of files
-                for (const auto& [filePath, timestamp] : m_recentFiles)
+                for (const auto & [filePath, timestamp] : m_recentFiles)
                 {
-                    // Format the timestamp
-                    std::tm* timeInfo = std::localtime(&timestamp);
-                    char timeStr[64];
-                    std::strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M", timeInfo);
-                    
+                    // Format the timestamp in a human-readable format
+                    std::string timeStr = formatTimeForHuman(timestamp);
+
                     // Use a button that looks like a selectable
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+                    ImGui::PushStyleColor(ImGuiCol_Button,
+                                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 10));
-                    
+
                     const std::string fileName = filePath.filename().string();
                     const std::string folderName = filePath.parent_path().filename().string();
-                    const std::string displayText = fmt::format("{}\n{} | {}", 
-                        fileName, folderName, timeStr);
-                    
-                    if (ImGui::Button(displayText.c_str(), ImVec2(-1, ImGui::GetTextLineHeightWithSpacing() * 2.5f)))
+                    const std::string displayText =
+                      fmt::format("{}\n{} | {}", fileName, folderName, timeStr);
+
+                    if (ImGui::Button(displayText.c_str(),
+                                      ImVec2(-1, ImGui::GetTextLineHeightWithSpacing() * 2.5f)))
                     {
                         if (m_openFileCallback)
                         {
@@ -238,7 +316,7 @@ void WelcomeScreen::updateThumbnailInfos()
                             m_isVisible = false;
                         }
                     }
-                    
+
                     ImGui::PopStyleVar();
                     ImGui::PopStyleColor(3);
                     ImGui::Separator();
@@ -251,7 +329,7 @@ void WelcomeScreen::updateThumbnailInfos()
                 {
                     updateThumbnailInfos();
                 }
-                
+
                 // Calculate grid layout based on available width
                 float availWidth = ImGui::GetContentRegionAvail().x - 20.0f; // 20px padding
                 float cellWidth = m_thumbnailSize + 20;
@@ -260,19 +338,20 @@ void WelcomeScreen::updateThumbnailInfos()
                 // Calculate number of columns based on available width
                 int columns = std::max(1, static_cast<int>(std::floor(availWidth / cellWidth)));
                 m_columns = columns;
-                
+
                 // Adjust cellWidth to evenly distribute space
-                cellWidth = (availWidth - (ImGui::GetStyle().ItemSpacing.x * (columns - 1))) / columns;
+                cellWidth =
+                  (availWidth - (ImGui::GetStyle().ItemSpacing.x * (columns - 1))) / columns;
 
                 // Start the thumbnail grid
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, 5));
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-                
+
                 // Process one file at a time to ensure thumbnails load incrementally
                 bool oneThumbnailLoaded = false;
-                
+
                 int itemIdx = 0;
-                for (auto& info : m_thumbnailInfos)
+                for (auto & info : m_thumbnailInfos)
                 {
                     // Load thumbnail if not already loaded and we haven't loaded one this frame
                     if (!info.thumbnailLoaded && m_thumbnailExtractor && !oneThumbnailLoaded)
@@ -280,27 +359,29 @@ void WelcomeScreen::updateThumbnailInfos()
                         m_thumbnailExtractor->loadThumbnail(info);
                         oneThumbnailLoaded = true;
                     }
-                    
+
                     // Create a unique ID for the item
                     ImGui::PushID(itemIdx);
-                    
+
                     // Position in grid
                     if (itemIdx % columns != 0)
                     {
                         ImGui::SameLine();
                     }
-                    
+
                     // Begin a group for the whole item (thumbnail + text)
                     ImGui::BeginGroup();
-                    
+
                     // Save cursor position for item
                     ImVec2 itemPos = ImGui::GetCursorPos();
-                    
+
                     // Create a selectable area for the whole thumbnail
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 0.1f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
-                    
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+
                     if (ImGui::Button("##thumbnail", ImVec2(cellWidth, cellHeight)))
                     {
                         if (m_openFileCallback)
@@ -309,36 +390,48 @@ void WelcomeScreen::updateThumbnailInfos()
                             m_isVisible = false;
                         }
                     }
-                    
+
                     // Add tooltip when hovering over the thumbnail
                     if (ImGui::IsItemHovered())
                     {
                         // Create tooltip content
                         ImGui::BeginTooltip();
-                        
+
                         // File path and size
-                        ImGui::TextUnformatted(fmt::format("Path: {}", info.filePath.string()).c_str());
-                        
+                        ImGui::TextUnformatted(
+                          fmt::format("Path: {}", info.filePath.string()).c_str());
+
                         // Show file size in appropriate units
                         std::string sizeStr;
-                        if (info.fileInfo.fileSize > 1024 * 1024) {
-                            sizeStr = fmt::format("Size: {:.2f} MB", 
-                                               static_cast<double>(info.fileInfo.fileSize) / (1024.0 * 1024.0));
-                        } else if (info.fileInfo.fileSize > 1024) {
-                            sizeStr = fmt::format("Size: {:.2f} KB", 
-                                               static_cast<double>(info.fileInfo.fileSize) / 1024.0);
-                        } else {
+                        if (info.fileInfo.fileSize > 1024 * 1024)
+                        {
+                            sizeStr = fmt::format("Size: {:.2f} MB",
+                                                  static_cast<double>(info.fileInfo.fileSize) /
+                                                    (1024.0 * 1024.0));
+                        }
+                        else if (info.fileInfo.fileSize > 1024)
+                        {
+                            sizeStr =
+                              fmt::format("Size: {:.2f} KB",
+                                          static_cast<double>(info.fileInfo.fileSize) / 1024.0);
+                        }
+                        else
+                        {
                             sizeStr = fmt::format("Size: {} bytes", info.fileInfo.fileSize);
                         }
                         ImGui::TextUnformatted(sizeStr.c_str());
-                        
+
+                        // Display the timestamp in human-readable format
+                        std::string timeStr = formatTimeForHuman(info.timestamp);
+                        ImGui::TextUnformatted(fmt::format("Last Opened: {}", timeStr).c_str());
+
                         ImGui::Separator();
-                        
+
                         // 3MF metadata
                         if (!info.fileInfo.metadata.empty())
                         {
                             ImGui::TextUnformatted("3MF Metadata:");
-                            for (const auto& item : info.fileInfo.metadata)
+                            for (const auto & item : info.fileInfo.metadata)
                             {
                                 ImGui::BulletText("%s: %s", item.key.c_str(), item.value.c_str());
                             }
@@ -347,20 +440,20 @@ void WelcomeScreen::updateThumbnailInfos()
                         {
                             ImGui::TextUnformatted("No metadata available");
                         }
-                        
+
                         ImGui::EndTooltip();
                     }
-                    
+
                     ImGui::PopStyleColor(3);
-                    
+
                     // Draw content over the button
                     ImGui::SetItemAllowOverlap();
                     ImGui::SetCursorPos(itemPos);
-                    
+
                     // Center the thumbnail in the cell
                     float thumbPosX = itemPos.x + (cellWidth - m_thumbnailSize) * 0.5f;
                     ImGui::SetCursorPos(ImVec2(thumbPosX, itemPos.y + 5.0f));
-                    
+
                     // Draw the thumbnail or placeholder
                     if (info.hasThumbnail && info.thumbnailTextureId != 0)
                     {
@@ -368,12 +461,12 @@ void WelcomeScreen::updateThumbnailInfos()
                         float aspectRatio = 1.0f;
                         float displayWidth = m_thumbnailSize;
                         float displayHeight = m_thumbnailSize;
-                        
+
                         if (info.thumbnailWidth > 0 && info.thumbnailHeight > 0)
                         {
-                            aspectRatio = static_cast<float>(info.thumbnailWidth) / 
+                            aspectRatio = static_cast<float>(info.thumbnailWidth) /
                                           static_cast<float>(info.thumbnailHeight);
-                                          
+
                             if (aspectRatio > 1.0f) // Wider than tall
                             {
                                 displayHeight = m_thumbnailSize / aspectRatio;
@@ -383,24 +476,28 @@ void WelcomeScreen::updateThumbnailInfos()
                                 displayWidth = m_thumbnailSize * aspectRatio;
                             }
                         }
-                        
+
                         // Center the thumbnail based on its aspect ratio
                         float centerX = thumbPosX + (m_thumbnailSize - displayWidth) * 0.5f;
-                        ImGui::SetCursorPos(ImVec2(centerX, ImGui::GetCursorPosY() + 
-                                                  (m_thumbnailSize - displayHeight) * 0.5f));
-                        
-                        ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(info.thumbnailTextureId)), 
-                                    ImVec2(displayWidth, displayHeight));
+                        ImGui::SetCursorPos(ImVec2(centerX,
+                                                   ImGui::GetCursorPosY() +
+                                                     (m_thumbnailSize - displayHeight) * 0.5f));
+
+                        ImGui::Image(
+                          reinterpret_cast<void *>(static_cast<intptr_t>(info.thumbnailTextureId)),
+                          ImVec2(displayWidth, displayHeight));
                     }
                     else
                     {
                         // Draw placeholder
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
-                        
-                        if (ImGui::Button(reinterpret_cast<const char*>(ICON_FA_FILE_ALT), 
-                                         ImVec2(m_thumbnailSize, m_thumbnailSize)))
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                              ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                                              ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+
+                        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FILE_ALT),
+                                          ImVec2(m_thumbnailSize, m_thumbnailSize)))
                         {
                             // Clicking the placeholder should also open the file
                             if (m_openFileCallback)
@@ -409,59 +506,71 @@ void WelcomeScreen::updateThumbnailInfos()
                                 m_isVisible = false;
                             }
                         }
-                        
+
                         // Add tooltip for placeholder as well
                         if (ImGui::IsItemHovered())
                         {
                             // Create tooltip content
                             ImGui::BeginTooltip();
-                            
+
                             // File path and size
-                            ImGui::TextUnformatted(fmt::format("Path: {}", info.filePath.string()).c_str());
-                            
+                            ImGui::TextUnformatted(
+                              fmt::format("Path: {}", info.filePath.string()).c_str());
+
                             // Show file size in appropriate units
                             std::string sizeStr;
-                            if (info.fileInfo.fileSize > 1024 * 1024) {
-                                sizeStr = fmt::format("Size: {:.2f} MB", 
-                                                   static_cast<double>(info.fileInfo.fileSize) / (1024.0 * 1024.0));
-                            } else if (info.fileInfo.fileSize > 1024) {
-                                sizeStr = fmt::format("Size: {:.2f} KB", 
-                                                   static_cast<double>(info.fileInfo.fileSize) / 1024.0);
-                            } else {
+                            if (info.fileInfo.fileSize > 1024 * 1024)
+                            {
+                                sizeStr = fmt::format("Size: {:.2f} MB",
+                                                      static_cast<double>(info.fileInfo.fileSize) /
+                                                        (1024.0 * 1024.0));
+                            }
+                            else if (info.fileInfo.fileSize > 1024)
+                            {
+                                sizeStr =
+                                  fmt::format("Size: {:.2f} KB",
+                                              static_cast<double>(info.fileInfo.fileSize) / 1024.0);
+                            }
+                            else
+                            {
                                 sizeStr = fmt::format("Size: {} bytes", info.fileInfo.fileSize);
                             }
                             ImGui::TextUnformatted(sizeStr.c_str());
-                            
+
+                            // Display the timestamp in human-readable format
+                            std::string timeStr = formatTimeForHuman(info.timestamp);
+                            ImGui::TextUnformatted(fmt::format("Opened: {}", timeStr).c_str());
+
                             ImGui::Separator();
-                            
+
                             // 3MF metadata
                             if (!info.fileInfo.metadata.empty())
                             {
                                 ImGui::TextUnformatted("3MF Metadata:");
-                                for (const auto& item : info.fileInfo.metadata)
+                                for (const auto & item : info.fileInfo.metadata)
                                 {
-                                    ImGui::BulletText("%s: %s", item.key.c_str(), item.value.c_str());
+                                    ImGui::BulletText(
+                                      "%s: %s", item.key.c_str(), item.value.c_str());
                                 }
                             }
                             else
                             {
                                 ImGui::TextUnformatted("No metadata available");
                             }
-                            
+
                             ImGui::EndTooltip();
                         }
-                        
+
                         ImGui::PopStyleColor(3);
                     }
-                    
+
                     // File name and timestamp below thumbnail
-                    const char* fileName = info.fileName.c_str();
+                    const char * fileName = info.fileName.c_str();
                     ImVec2 textSize = ImGui::CalcTextSize(fileName);
-                    
+
                     // Position text below thumbnail
                     float textY = itemPos.y + m_thumbnailSize + 15.0f;
-                    ImGui::SetCursorPos(ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, textY));
-                    
+
                     // Draw filename with ellipsis if too long
                     if (textSize.x > cellWidth - 10)
                     {
@@ -471,50 +580,53 @@ void WelcomeScreen::updateThumbnailInfos()
                         {
                             truncatedName = truncatedName.substr(0, 12) + "...";
                         }
+                        textSize = ImGui::CalcTextSize(truncatedName.c_str());
+                        ImGui::SetCursorPos(
+                          ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, textY));
                         ImGui::TextUnformatted(truncatedName.c_str());
                     }
                     else
                     {
+                        ImGui::SetCursorPos(
+                          ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, textY));
                         ImGui::TextUnformatted(fileName);
                     }
-                    
-                    // Format timestamp
-                    std::tm* timeInfo = std::localtime(&info.timestamp);
-                    char timeStr[64];
-                    std::strftime(timeStr, sizeof(timeStr), "%Y-%m-%d", timeInfo);
-                    
-                    textSize = ImGui::CalcTextSize(timeStr);
-                    ImGui::SetCursorPos(ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, 
-                                              ImGui::GetCursorPosY() + 5.0f));
-                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", timeStr);
-                    
+
+                    // Format timestamp in a human-readable format
+                    std::string timeStr = formatTimeForHuman(info.timestamp);
+
+                    textSize = ImGui::CalcTextSize(timeStr.c_str());
+                    ImGui::SetCursorPos(ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f,
+                                               ImGui::GetCursorPosY()));
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", timeStr.c_str());
+
                     ImGui::EndGroup();
                     ImGui::PopID();
-                    
+
                     itemIdx++;
                 }
-                
+
                 ImGui::PopStyleVar(2);
             }
-            
+
             ImGui::PopStyleVar();
             ImGui::EndChild();
         }
         ImGui::End();
-        
+
         return m_isVisible;
     }
-    
+
     bool WelcomeScreen::isVisible() const
     {
         return m_isVisible;
     }
-    
+
     void WelcomeScreen::show()
     {
         m_isVisible = true;
     }
-    
+
     void WelcomeScreen::hide()
     {
         m_isVisible = false;

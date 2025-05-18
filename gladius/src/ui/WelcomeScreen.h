@@ -10,6 +10,19 @@
 namespace gladius::ui
 {
     /**
+     * @brief Formats a timestamp in a human-readable format
+     *
+     * @param timestamp The timestamp to format
+     * @return std::string Formatted timestamp with context-aware formatting:
+     *   - Today: "Today at HH:MM"
+     *   - Yesterday: "Yesterday at HH:MM"
+     *   - This week: "DayName at HH:MM"
+     *   - This year: "Month Day at HH:MM"
+     *   - Older: "YYYY-MM-DD HH:MM"
+     */
+    std::string formatTimeForHuman(std::time_t const& timestamp);
+
+    /**
      * @brief Class responsible for rendering the welcome screen
      * 
      * This class displays a welcome screen with options for creating 

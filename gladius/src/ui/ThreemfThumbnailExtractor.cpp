@@ -75,6 +75,7 @@ namespace gladius::ui
         info.hasThumbnail = !info.thumbnailData.empty();
         info.thumbnailLoaded = true;
 
+
         if (info.hasThumbnail)
         {
             // Decode the PNG data to get width and height
@@ -168,6 +169,7 @@ namespace gladius::ui
         ThumbnailInfo info;
         info.filePath = filePath;
         info.fileName = filePath.stem().string();
+        info.timestamp = timestamp;
 
         // Get file size
         try
@@ -186,6 +188,7 @@ namespace gladius::ui
                    events::Severity::Warning});
             }
         }
+        
 
         // Extract 3MF metadata if possible
         try
