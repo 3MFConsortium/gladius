@@ -125,9 +125,9 @@ void WelcomeScreen::updateThumbnailInfos()
                                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
         
         const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-        const float windowWidth = std::min(800.0f, displaySize.x * 0.9f);
-        const float windowHeight = std::min(600.0f, displaySize.y * 0.9f);
-        
+        const float windowWidth = std::min(1024.0f, displaySize.x * 0.8f);
+        const float windowHeight = std::min(768.0f, displaySize.y * 0.8f);
+
         // Center the window on screen
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Always);
         ImGui::SetNextWindowPos(ImVec2(displaySize.x * 0.5f, displaySize.y * 0.5f), 
@@ -154,8 +154,8 @@ void WelcomeScreen::updateThumbnailInfos()
             ImGui::Spacing();
             
             // Main content split: left side for buttons, right side for recent files
-            const float buttonWidth = windowWidth * 0.3f;
-            const float listWidth = windowWidth * 0.6f;
+            const float buttonWidth = 200.0f;
+            const float listWidth = windowWidth - buttonWidth - 40.0f; // 20px padding on each side
             
             // Left side - actions
             ImGui::BeginChild("ActionsPane", ImVec2(buttonWidth, 0), true);
@@ -253,17 +253,17 @@ void WelcomeScreen::updateThumbnailInfos()
                 }
                 
                 // Calculate grid layout based on available width
-                float availWidth = ImGui::GetContentRegionAvail().x;
+                float availWidth = ImGui::GetContentRegionAvail().x - 20.0f; // 20px padding
                 float cellWidth = m_thumbnailSize + 20;
                 float cellHeight = m_thumbnailSize + 60;
                 
-                // Limit columns to 10 max, and base on available width
-                int columns = std::min(10, std::max(1, static_cast<int>(availWidth / cellWidth)));
+                // Limit columns to 10 max, and base on available width. Limit the number of columns so that a cell completely fits
+                int columns = std::min(10, std::max(1, static_cast<int>(std::floor(availWidth / cellWidth))));
                 m_columns = columns;
                 
                 // Adjust cellWidth to evenly distribute space
                 cellWidth = (availWidth - (ImGui::GetStyle().ItemSpacing.x * (columns - 1))) / columns;
-                
+
                 // Start the thumbnail grid
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, 5));
                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
