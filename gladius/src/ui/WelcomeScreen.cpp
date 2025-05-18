@@ -310,6 +310,47 @@ void WelcomeScreen::updateThumbnailInfos()
                         }
                     }
                     
+                    // Add tooltip when hovering over the thumbnail
+                    if (ImGui::IsItemHovered())
+                    {
+                        // Create tooltip content
+                        ImGui::BeginTooltip();
+                        
+                        // File path and size
+                        ImGui::TextUnformatted(fmt::format("Path: {}", info.filePath.string()).c_str());
+                        
+                        // Show file size in appropriate units
+                        std::string sizeStr;
+                        if (info.fileInfo.fileSize > 1024 * 1024) {
+                            sizeStr = fmt::format("Size: {:.2f} MB", 
+                                               static_cast<double>(info.fileInfo.fileSize) / (1024.0 * 1024.0));
+                        } else if (info.fileInfo.fileSize > 1024) {
+                            sizeStr = fmt::format("Size: {:.2f} KB", 
+                                               static_cast<double>(info.fileInfo.fileSize) / 1024.0);
+                        } else {
+                            sizeStr = fmt::format("Size: {} bytes", info.fileInfo.fileSize);
+                        }
+                        ImGui::TextUnformatted(sizeStr.c_str());
+                        
+                        ImGui::Separator();
+                        
+                        // 3MF metadata
+                        if (!info.fileInfo.metadata.empty())
+                        {
+                            ImGui::TextUnformatted("3MF Metadata:");
+                            for (const auto& item : info.fileInfo.metadata)
+                            {
+                                ImGui::BulletText("%s: %s", item.key.c_str(), item.value.c_str());
+                            }
+                        }
+                        else
+                        {
+                            ImGui::TextUnformatted("No metadata available");
+                        }
+                        
+                        ImGui::EndTooltip();
+                    }
+                    
                     ImGui::PopStyleColor(3);
                     
                     // Draw content over the button
@@ -367,6 +408,47 @@ void WelcomeScreen::updateThumbnailInfos()
                                 m_openFileCallback(info.filePath);
                                 m_isVisible = false;
                             }
+                        }
+                        
+                        // Add tooltip for placeholder as well
+                        if (ImGui::IsItemHovered())
+                        {
+                            // Create tooltip content
+                            ImGui::BeginTooltip();
+                            
+                            // File path and size
+                            ImGui::TextUnformatted(fmt::format("Path: {}", info.filePath.string()).c_str());
+                            
+                            // Show file size in appropriate units
+                            std::string sizeStr;
+                            if (info.fileInfo.fileSize > 1024 * 1024) {
+                                sizeStr = fmt::format("Size: {:.2f} MB", 
+                                                   static_cast<double>(info.fileInfo.fileSize) / (1024.0 * 1024.0));
+                            } else if (info.fileInfo.fileSize > 1024) {
+                                sizeStr = fmt::format("Size: {:.2f} KB", 
+                                                   static_cast<double>(info.fileInfo.fileSize) / 1024.0);
+                            } else {
+                                sizeStr = fmt::format("Size: {} bytes", info.fileInfo.fileSize);
+                            }
+                            ImGui::TextUnformatted(sizeStr.c_str());
+                            
+                            ImGui::Separator();
+                            
+                            // 3MF metadata
+                            if (!info.fileInfo.metadata.empty())
+                            {
+                                ImGui::TextUnformatted("3MF Metadata:");
+                                for (const auto& item : info.fileInfo.metadata)
+                                {
+                                    ImGui::BulletText("%s: %s", item.key.c_str(), item.value.c_str());
+                                }
+                            }
+                            else
+                            {
+                                ImGui::TextUnformatted("No metadata available");
+                            }
+                            
+                            ImGui::EndTooltip();
                         }
                         
                         ImGui::PopStyleColor(3);

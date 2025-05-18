@@ -12,7 +12,7 @@ namespace gladius::ui
         {
             m_wrapper = Lib3MF::CWrapper::loadLibrary();
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
             {
@@ -23,7 +23,8 @@ namespace gladius::ui
 
     ThreemfThumbnailExtractor::~ThreemfThumbnailExtractor() = default;
 
-    std::vector<unsigned char> ThreemfThumbnailExtractor::extractThumbnail(const std::filesystem::path& filePath)
+    std::vector<unsigned char>
+    ThreemfThumbnailExtractor::extractThumbnail(const std::filesystem::path & filePath)
     {
         std::vector<unsigned char> thumbnailData;
 
@@ -49,21 +50,21 @@ namespace gladius::ui
                 }
             }
         }
-        catch (const std::exception& e)
+        catch (const std::exception & e)
         {
             if (m_logger)
             {
                 m_logger->addEvent({fmt::format("Failed to extract thumbnail from {}: {}",
-                                               filePath.string(),
-                                               e.what()),
-                                   events::Severity::Warning});
+                                                filePath.string(),
+                                                e.what()),
+                                    events::Severity::Warning});
             }
         }
 
         return thumbnailData;
     }
 
-    void ThreemfThumbnailExtractor::loadThumbnail(ThumbnailInfo& info)
+    void ThreemfThumbnailExtractor::loadThumbnail(ThumbnailInfo & info)
     {
         if (info.thumbnailLoaded)
         {
@@ -93,15 +94,15 @@ namespace gladius::ui
                 if (m_logger)
                 {
                     m_logger->addEvent({fmt::format("Failed to decode thumbnail for {}: {}",
-                                                  info.fileName,
-                                                  lodepng_error_text(error)),
-                                      events::Severity::Warning});
+                                                    info.fileName,
+                                                    lodepng_error_text(error)),
+                                        events::Severity::Warning});
                 }
             }
         }
     }
 
-    void ThreemfThumbnailExtractor::createThumbnailTexture(ThumbnailInfo& info)
+    void ThreemfThumbnailExtractor::createThumbnailTexture(ThumbnailInfo & info)
     {
         if (info.thumbnailTextureId != 0 || !info.hasThumbnail || info.thumbnailData.empty())
         {
@@ -131,14 +132,14 @@ namespace gladius::ui
 
         // Upload the image data to the texture
         glTexImage2D(GL_TEXTURE_2D,
-                    0,
-                    GL_RGBA,
-                    width,
-                    height,
-                    0,
-                    GL_RGBA,
-                    GL_UNSIGNED_BYTE,
-                    decodedImage.data());
+                     0,
+                     GL_RGBA,
+                     width,
+                     height,
+                     0,
+                     GL_RGBA,
+                     GL_UNSIGNED_BYTE,
+                     decodedImage.data());
 
         // Unbind the texture
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -147,50 +148,99 @@ namespace gladius::ui
         info.thumbnailTextureId = textureId;
     }
 
-    void ThreemfThumbnailExtractor::releaseThumbnail(ThumbnailInfo& info)
+    void ThreemfThumbnailExtractor::releaseThumbnail(ThumbnailInfo & info)
     {
         if (info.thumbnailTextureId != 0)
         {
             glDeleteTextures(1, &info.thumbnailTextureId);
             info.thumbnailTextureId = 0;
         }
-        
+
         info.thumbnailData.clear();
         info.hasThumbnail = false;
         info.thumbnailLoaded = false;
     }
 
-    ThreemfThumbnailExtractor::ThumbnailInfo ThreemfThumbnailExtractor::createThumbnailInfo(
-        const std::filesystem::path& filePath, std::time_t timestamp)
+    ThreemfThumbnailExtractor::ThumbnailInfo
+    ThreemfThumbnailExtractor::createThumbnailInfo(const std::filesystem::path & filePath,
+                                                   std::time_t timestamp)
     {
         ThumbnailInfo info;
         info.filePath = filePath;
         info.fileName = filePath.stem().string();
-        
-        // If timestamp wasn't provided, use the file's last modified time
-        if (timestamp == 0 && std::filesystem::exists(filePath))
+
+        // Get file size
+        try
         {
-            try
+            if (std::filesystem::exists(filePath))
             {
-                auto fileTime = std::filesystem::last_write_time(filePath);
-                auto systemTime = std::chrono::file_clock::to_sys(fileTime);
-                info.timestamp = std::chrono::system_clock::to_time_t(systemTime);
+                info.fileInfo.fileSize = std::filesystem::file_size(filePath);
             }
-            catch (const std::exception& e)
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
             {
-                if (m_logger)
+                m_logger->addEvent(
+                  {fmt::format("Failed to get file size for {}: {}", filePath.string(), e.what()),
+                   events::Severity::Warning});
+            }
+        }
+
+        // Extract 3MF metadata if possible
+        try
+        {
+            if (m_wrapper && std::filesystem::exists(filePath))
+            {
+                auto model = m_wrapper->CreateModel();
+                auto reader = model->QueryReader("3mf");
+
+                reader->SetStrictModeActive(false);
+                reader->ReadFromFile(filePath.string());
+
+                // Get the metadata group from the model
+                auto metaDataGroup = model->GetMetaDataGroup();
+                if (metaDataGroup)
                 {
-                    m_logger->addEvent({fmt::format("Failed to get timestamp for {}: {}",
-                                                  filePath.string(), e.what()),
-                                      events::Severity::Warning});
+                    // Get number of metadata entries
+                    Lib3MF_uint32 entryCount = metaDataGroup->GetMetaDataCount();
+
+                    for (Lib3MF_uint32 i = 0; i < entryCount; i++)
+                    {
+                        try
+                        {
+                            // Get metadata entry
+                            auto metaData = metaDataGroup->GetMetaData(i);
+                            if (metaData)
+                            {
+                                // Extract metadata key and value
+                                std::string key = metaData->GetName();
+                                std::string value = metaData->GetValue();
+
+                                // Get namespace if present to make key more specific
+                                std::string nameSpace = metaData->GetNameSpace();
+                                if (!nameSpace.empty())
+                                {
+                                    key = nameSpace + ":" + key;
+                                }
+
+                                // Add to fileInfo
+                                info.fileInfo.addMetadata(key, value);
+                            }
+                        }
+                        catch (...)
+                        {
+                            // Skip this metadata entry if there's an error
+                        }
+                    }
                 }
             }
         }
-        else
+        catch (const std::exception & e)
         {
-            info.timestamp = timestamp;
+            // it is not a problem if we cannot read the metadata
         }
-        
+
         return info;
     }
 }

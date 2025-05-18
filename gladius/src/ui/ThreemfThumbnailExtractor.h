@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <memory>
+#include <algorithm>  // Added for std::find_if
 #include <GL/gl.h>
 #include <lib3mf_implicit.hpp>
 #include "../EventLogger.h"
@@ -16,6 +17,54 @@ namespace gladius::ui
     class ThreemfThumbnailExtractor
     {
     public:
+    /**
+     * @brief Structure to hold 3MF file metadata
+     */
+    struct ThreemfFileInfo
+    {
+        struct MetadataItem
+        {
+            std::string key;    ///< Metadata key
+            std::string value;  ///< Metadata value
+        };
+        
+        std::vector<MetadataItem> metadata;  ///< Dynamic key-value pairs for metadata
+        uintmax_t fileSize = 0;              ///< File size in bytes
+        
+        /**
+         * @brief Add a metadata item if it has a value
+         * 
+         * @param key The metadata key
+         * @param value The metadata value
+         */
+        void addMetadata(const std::string& key, const std::string& value)
+        {
+            if (!value.empty())
+            {
+                metadata.push_back({key, value});
+            }
+        }
+        
+        /**
+         * @brief Get a metadata value by key
+         * 
+         * @param key The metadata key to look for
+         * @return std::string The value or empty string if not found
+         */
+        std::string getMetadata(const std::string& key) const
+        {
+            auto it = std::find_if(metadata.begin(), metadata.end(), 
+                [&key](const MetadataItem& item) { return item.key == key; });
+            
+            if (it != metadata.end())
+            {
+                return it->value;
+            }
+            
+            return {};
+        }
+    };
+
         /**
          * @brief Structure to hold thumbnail information
          */
@@ -30,6 +79,7 @@ namespace gladius::ui
             unsigned int thumbnailWidth = 0;  ///< Width of the thumbnail
             unsigned int thumbnailHeight = 0; ///< Height of the thumbnail
             std::time_t timestamp = 0;       ///< Last modified timestamp
+            ThreemfFileInfo fileInfo;        ///< Additional file metadata
         };
 
         /**
