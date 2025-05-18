@@ -212,11 +212,10 @@ namespace gladius::ui
             ImVec2 titleSize = ImGui::CalcTextSize(title);
             ImGui::SetCursorPosX((windowWidth - titleSize.x) * 0.5f);
             ImGui::TextUnformatted(title);
-
             ImGui::SetWindowFontScale(1.0f);
             ImGui::PopFont();
 
-            ImGui::Separator();
+           
             ImGui::Spacing();
 
             // Main content split: left side for buttons, right side for recent files
@@ -224,7 +223,7 @@ namespace gladius::ui
             const float listWidth = windowWidth - buttonWidth - 40.0f; // 20px padding on each side
 
             // Left side - actions
-            ImGui::BeginChild("ActionsPane", ImVec2(buttonWidth, 0), true);
+            ImGui::BeginChild("ActionsPane", ImVec2(buttonWidth, 0), ImGuiChildFlags_None);
 
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 10));
 
