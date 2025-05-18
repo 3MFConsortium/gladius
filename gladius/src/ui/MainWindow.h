@@ -156,6 +156,14 @@ namespace gladius::ui
 
         float m_uiScale = 1.f;
 
+        /// Opacity value for the welcome screen overlay (0.0-1.0)
+        float m_overlayOpacity = 1.0f;
+
+        /// Flag indicating if welcome screen overlay fadeout is in progress
+        bool m_overlayFadeoutActive = false;
+
         ConfigManager * m_configManager = nullptr; // Pointer to the Application's ConfigManager
+
+        bool m_wasWelcomeScreenVisible = false;
     };
 }

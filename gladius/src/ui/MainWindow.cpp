@@ -227,6 +227,14 @@ namespace gladius::ui
         // Check if welcome screen is visible first
         bool welcomeScreenVisible = m_welcomeScreen.isVisible();
 
+        bool welcomeScreenHasbeenClosed = !welcomeScreenVisible && m_wasWelcomeScreenVisible;
+        if (welcomeScreenHasbeenClosed)
+        {
+            m_overlayFadeoutActive = true;
+            m_mainView.startAnimationMode();
+        }
+        m_wasWelcomeScreenVisible = welcomeScreenVisible;
+
         // Check for keyboard shortcuts
         ImGuiIO & io = ImGui::GetIO();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false))
@@ -261,11 +269,31 @@ namespace gladius::ui
 
         try
         {
-            // If welcome screen is visible, create a blocking overlay for all UI elements first
-            if (welcomeScreenVisible)
+            // If welcome screen is visible or fadeout is active, create a blocking overlay
+            if (welcomeScreenVisible || (m_overlayFadeoutActive && m_overlayOpacity > 0.0f))
             {
                 // Get the entire viewport size
                 const ImVec2 viewportSize = ImGui::GetIO().DisplaySize;
+
+                // Update overlay opacity if fadeout is active
+                if (m_overlayFadeoutActive)
+                {
+                    // Reduce opacity based on frame time (smooth transition)
+                    float const deltaTime = ImGui::GetIO().DeltaTime;
+                    m_overlayOpacity -= deltaTime * 1.0f; // Adjust speed by changing multiplier
+
+                    // Clamp to avoid negative values
+                    if (m_overlayOpacity <= 0.0f)
+                    {
+                        m_overlayOpacity = 0.0f;
+
+                        m_welcomeScreen.hide();
+                        m_overlayFadeoutActive = false;
+                    }
+
+                    // Trigger animation mode to ensure continuous rendering during fadeout
+                    m_mainView.startAnimationMode();
+                }
 
                 // Create a fullscreen, top-level modal overlay
                 ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -288,12 +316,13 @@ namespace gladius::ui
                 drawList->AddRectFilled(
                   ImVec2(0, 0),
                   viewportSize,
-                  ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.0f, 0.0f, 0.85f)));
+                  ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.0f, 0.0f, m_overlayOpacity)));
 
                 ImGui::End();
                 ImGui::PopStyleVar();
             }
 
+            // Only render the normal UI if welcome screen is not visible and fadeout is complete
             if (!welcomeScreenVisible)
             {
 
