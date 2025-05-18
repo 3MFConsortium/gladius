@@ -46,6 +46,7 @@ namespace gladius::ui
 
     MainWindow::MainWindow()
         : m_logger(std::make_shared<events::Logger>())
+        , m_shortcutSettingsDialog(nullptr) // Initialize with nullptr, we'll set it later
     {
         m_mainView.setRequestCloseCallBack([&]() { close(); });
     }
@@ -112,6 +113,9 @@ namespace gladius::ui
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
 
+        // Initialize keyboard shortcuts
+        initializeShortcuts();
+
         nodeEditor();
         newModel();
         loadRenderSettings();
@@ -177,6 +181,34 @@ namespace gladius::ui
                 refreshModel();
             }
         }
+        
+        if (ImGui::CollapsingHeader("Keyboard Shortcuts"))
+        {
+            if (ImGui::Button("Configure Shortcuts"))
+            {
+                showShortcutSettings();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset to Defaults") && m_shortcutManager)
+            {
+                m_shortcutManager->resetAllShortcutsToDefault();
+                m_logger->addEvent({"Keyboard shortcuts reset to defaults", events::Severity::Info});
+            }
+            
+            ImGui::Text("Use Ctrl+K to open the keyboard shortcuts dialog");
+            ImGui::Separator();
+            
+            // Show a few common shortcuts
+            ImGui::Text("Common Shortcuts:");
+            if (m_shortcutManager)
+            {
+                ImGui::Text("New: %s", m_shortcutManager->getShortcut("file.new").toString().c_str());
+                ImGui::Text("Open: %s", m_shortcutManager->getShortcut("file.open").toString().c_str());
+                ImGui::Text("Save: %s", m_shortcutManager->getShortcut("file.save").toString().c_str());
+                ImGui::Text("Save As: %s", m_shortcutManager->getShortcut("file.saveAs").toString().c_str());
+            }
+        }
+        
         auto z = m_core->getSliceHeight();
         ImGui::SliderFloat("Slice Position [mm]", &z, -20.f, 300.);
 
@@ -191,6 +223,8 @@ namespace gladius::ui
             m_logView.show();
         }
         ImGui::End();
+
+
     }
 
     void MainWindow::setup()
@@ -237,12 +271,7 @@ namespace gladius::ui
 
         // Check for keyboard shortcuts
         ImGuiIO & io = ImGui::GetIO();
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_B, false))
-        {
-            m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");
-            m_modelEditor.toggleLibraryVisibility();
-            m_isLibraryBrowserVisible = m_modelEditor.isLibraryVisible();
-        }
+        processShortcuts(ShortcutContext::Global);
 
         // try to get the compute token
         auto computeToken = m_core->requestComputeToken();
@@ -412,6 +441,13 @@ namespace gladius::ui
                             m_mainView.setFullScreen(true);
                         }
                     }
+                    
+                    // Add keyboard shortcuts button
+                    if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_KEYBOARD "\tShortcuts")))
+                    {
+                        showShortcutSettings();
+                    }
+                    
                     if (m_currentAssemblyFileName)
                     {
                         if (m_fileChanged)
@@ -438,6 +474,11 @@ namespace gladius::ui
                 meshExportDialog();
                 cliExportDialog();
                 mainMenu();
+
+                if (m_shortcutSettingsDialog.isVisible())
+                {
+                    m_shortcutSettingsDialog.render();
+                }
             }
 
             // Render welcome screen if it's visible
@@ -490,6 +531,12 @@ namespace gladius::ui
               if (!m_modelEditor.isVisible())
               {
                   return;
+              }
+
+              // Process model editor shortcuts if visible and hovered
+              if (m_modelEditor.isHovered())
+              {
+                  processShortcuts(ShortcutContext::ModelEditor);
               }
 
               const auto parameterModifiedByModelEditor = m_modelEditor.showAndEdit();
@@ -563,6 +610,12 @@ namespace gladius::ui
 
     void MainWindow::renderWindow()
     {
+        // Process render window shortcuts
+        if (m_renderWindow.isVisible() && m_renderWindow.isHovered())
+        {
+            processShortcuts(ShortcutContext::RenderWindow);
+        }
+        
         m_renderWindow.renderWindow();
     }
 
@@ -820,6 +873,12 @@ namespace gladius::ui
                 closeMenu();
                 m_mainView.setViewSettingsVisible(true);
             }
+            
+            if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_KEYBOARD "\tKeyboard Shortcuts")))
+            {
+                closeMenu();
+                showShortcutSettings();
+            }
         }
 
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_QUESTION "\tAbout Gladius")))
@@ -861,6 +920,12 @@ namespace gladius::ui
     {
         updateContours();
         m_isSlicePreviewVisible = m_sliceView.render(*m_core, m_mainView);
+        
+        // Process slice window shortcuts if visible and hovered
+        if (m_isSlicePreviewVisible && m_sliceView.isHovered())
+        {
+            processShortcuts(ShortcutContext::SlicePreview);
+        }
     }
 
     void MainWindow::meshExportDialog()
@@ -1288,5 +1353,228 @@ namespace gladius::ui
         }
 
         return result;
+    }
+
+    void MainWindow::initializeShortcuts()
+    {
+        if (!m_configManager)
+        {
+            return;
+        }
+
+        // Create shortcut manager
+        m_shortcutManager = std::make_shared<ShortcutManager>(std::shared_ptr<ConfigManager>(m_configManager, [](ConfigManager*){}));
+        m_shortcutSettingsDialog.setShortcutManager(m_shortcutManager);
+
+        // Register global shortcuts
+        m_shortcutManager->registerAction(
+            "file.new", "New", "Create a new model",
+            ShortcutContext::Global,
+            ShortcutCombo(ImGuiKey_N, true), // Ctrl+N
+            [this]() { newModel(); });
+
+        m_shortcutManager->registerAction(
+            "file.open", "Open", "Open an existing model",
+            ShortcutContext::Global,
+            ShortcutCombo(ImGuiKey_O, true), // Ctrl+O
+            [this]() { open(); });
+
+        m_shortcutManager->registerAction(
+            "file.save", "Save", "Save the current model",
+            ShortcutContext::Global,
+            ShortcutCombo(ImGuiKey_S, true), // Ctrl+S
+            [this]() { save(); });
+
+        m_shortcutManager->registerAction(
+            "file.saveAs", "Save As", "Save the current model with a new name",
+            ShortcutContext::Global,
+            ShortcutCombo(ImGuiKey_S, true, false, true), // Ctrl+Shift+S
+            [this]() { saveAs(); });
+
+        m_shortcutManager->registerAction(
+            "edit.library", "Toggle Library Browser", "Show or hide the library browser",
+            ShortcutContext::Global,
+            ShortcutCombo(ImGuiKey_B, true), // Ctrl+B
+            [this]() { 
+                m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");
+                m_modelEditor.toggleLibraryVisibility();
+                m_isLibraryBrowserVisible = m_modelEditor.isLibraryVisible();
+            });
+
+        m_shortcutManager->registerAction(
+            "view.resetView", "Reset View", "Reset the camera view",
+            ShortcutContext::RenderWindow,
+            ShortcutCombo(ImGuiKey_R), // R
+            [this]() { m_renderWindow.centerView(); });
+
+        // Model editor shortcuts
+        m_shortcutManager->registerAction(
+            "edit.undo", "Undo", "Undo the last action",
+            ShortcutContext::ModelEditor,
+            ShortcutCombo(ImGuiKey_Z, true), // Ctrl+Z
+            [this]() { 
+                // Handle this in the UI code since undo/redo are private
+                if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                    ed::NavigateToContent(); 
+                }
+            });
+
+        m_shortcutManager->registerAction(
+            "edit.redo", "Redo", "Redo the last undone action",
+            ShortcutContext::ModelEditor,
+            ShortcutCombo(ImGuiKey_Y, true), // Ctrl+Y
+            [this]() { 
+                // Handle this in the UI code since undo/redo are private
+                if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+                    ed::NavigateToContent();
+                }
+            });
+
+        m_shortcutManager->registerAction(
+            "edit.compile", "Compile Model", "Compile the current model",
+            ShortcutContext::ModelEditor,
+            ShortcutCombo(ImGuiKey_F5), // F5
+            [this]() { 
+                // The model editor will handle compilation based on the F5 key press
+                // We'll let the native ImGui input handling take care of this
+            });
+
+        // Add shortcut for showing settings dialog
+        m_shortcutManager->registerAction(
+            "view.shortcuts", "Keyboard Shortcuts", "Show keyboard shortcuts dialog",
+            ShortcutContext::Global,
+            ShortcutCombo(ImGuiKey_K, true), // Ctrl+K
+            [this]() { showShortcutSettings(); });
+            
+        // Slice preview shortcuts
+        m_shortcutManager->registerAction(
+            "sliceview.zoomin", "Zoom In", "Zoom in slice view",
+            ShortcutContext::SlicePreview,
+            ShortcutCombo(ImGuiKey_Equal, true), // Ctrl+=
+            [this]() { 
+                if (m_isSlicePreviewVisible) {
+                    m_sliceView.zoomIn(); 
+                }
+            });
+            
+        m_shortcutManager->registerAction(
+            "sliceview.zoomout", "Zoom Out", "Zoom out slice view",
+            ShortcutContext::SlicePreview,
+            ShortcutCombo(ImGuiKey_Minus, true), // Ctrl+-
+            [this]() { 
+                if (m_isSlicePreviewVisible) {
+                    m_sliceView.zoomOut(); 
+                }
+            });
+            
+        m_shortcutManager->registerAction(
+            "sliceview.reset", "Reset View", "Reset the slice view",
+            ShortcutContext::SlicePreview,
+            ShortcutCombo(ImGuiKey_R), // R
+            [this]() { 
+                if (m_isSlicePreviewVisible) {
+                    m_sliceView.resetView(); 
+                }
+            });
+    }
+
+    void MainWindow::processShortcuts(ShortcutContext activeContext)
+    {
+        if (m_shortcutManager)
+        {
+            m_shortcutManager->processInput(activeContext);
+        }
+    }
+
+    void MainWindow::showShortcutSettings()
+    {
+        m_shortcutSettingsDialog.show();
+    }
+
+    void MainWindow::saveRenderSettings()
+    {
+        if (!m_configManager)
+        {
+            return;
+        }
+
+        // Get current rendering settings
+        auto& renderSettings = m_core->getResourceContext()->getRenderingSettings();
+
+        // Create JSON object for render settings
+        nlohmann::json renderJson;
+        renderJson["quality"] = renderSettings.quality;
+        renderJson["weightDistToNb"] = renderSettings.weightDistToNb;
+        renderJson["weightMidPoint"] = renderSettings.weightMidPoint;
+        renderJson["normalOffset"] = renderSettings.normalOffset;
+        renderJson["sdfVisEnabled"] = m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
+
+        // Save to config
+        m_configManager->setValue("rendering", "settings", renderJson);
+        
+        // Save shortcuts too
+        if (m_shortcutManager)
+        {
+            m_shortcutManager->saveShortcuts();
+        }
+        
+        // Write to disk
+        m_configManager->save();
+        
+        // Log success
+        m_logger->addEvent({"Rendering settings saved", events::Severity::Info});
+    }
+
+    void MainWindow::loadRenderSettings()
+    {
+        if (!m_configManager)
+        {
+            return;
+        }
+
+        // Get render settings from config (or use default empty object if not found)
+        nlohmann::json renderJson = m_configManager->getValue<nlohmann::json>(
+            "rendering", "settings", nlohmann::json::object());
+
+        // Skip if there are no saved settings
+        if (renderJson.empty())
+        {
+            return;
+        }
+
+        // Get current rendering settings to update
+        auto& renderSettings = m_core->getResourceContext()->getRenderingSettings();
+
+        // Update settings from config
+        if (renderJson.contains("quality"))
+        {
+            renderSettings.quality = renderJson["quality"].get<float>();
+        }
+        
+        if (renderJson.contains("weightDistToNb"))
+        {
+            renderSettings.weightDistToNb = renderJson["weightDistToNb"].get<float>();
+        }
+        
+        if (renderJson.contains("weightMidPoint"))
+        {
+            renderSettings.weightMidPoint = renderJson["weightMidPoint"].get<float>();
+        }
+        
+        if (renderJson.contains("normalOffset"))
+        {
+            renderSettings.normalOffset = renderJson["normalOffset"].get<float>();
+        }
+        
+        if (renderJson.contains("sdfVisEnabled"))
+        {
+            m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(
+                renderJson["sdfVisEnabled"].get<bool>());
+        }
+        
+        // Load shortcuts too (this happens automatically when m_shortcutManager is created)
+        
+        // Log success
+        m_logger->addEvent({"Rendering settings loaded", events::Severity::Info});
     }
 }

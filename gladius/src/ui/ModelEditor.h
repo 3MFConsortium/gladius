@@ -67,6 +67,12 @@ namespace gladius::ui
         [[nodiscard]] bool isLibraryVisible() const;
         void refreshLibraryDirectories();
 
+        /**
+         * @brief Check if mouse is hovering over the model editor
+         * @return true if the model editor is being hovered
+         */
+        bool isHovered() const;
+
       private:
         void readBackNodePositions();
         void autoLayout(float distance);

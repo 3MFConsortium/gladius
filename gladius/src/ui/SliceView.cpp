@@ -29,6 +29,11 @@ namespace gladius::ui
         return m_visible;
     }
 
+    bool SliceView::isHovered() const
+    {
+        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
+    }
+
     bool SliceView::render(gladius::ComputeCore & core, GLView & view)
     {
         if (!isVisible())
@@ -368,5 +373,28 @@ namespace gladius::ui
     [[nodiscard]] ImVec2 SliceView::screenToWorldPos(ImVec2 screenPos) const
     {
         return {((screenPos.x - m_origin.x) / m_zoom), ((-screenPos.y + m_origin.y) / m_zoom)};
+    }
+
+    void SliceView::zoomIn()
+    {
+        // Zoom in by 20%
+        m_zoomTarget *= 1.2f;
+        // Clamp to reasonable values
+        m_zoomTarget = std::min(m_zoomTarget, 50.0f);
+    }
+
+    void SliceView::zoomOut()
+    {
+        // Zoom out by 20%
+        m_zoomTarget *= 0.8f;
+        // Clamp to reasonable values
+        m_zoomTarget = std::max(m_zoomTarget, 0.5f);
+    }
+
+    void SliceView::resetView()
+    {
+        // Reset zoom and position
+        m_zoomTarget = 4.0f;
+        m_scrolling = {0.0f, 250.0f};
     }
 }

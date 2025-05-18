@@ -18,6 +18,10 @@
 #include "SliceView.h"
 #include "WelcomeScreen.h"
 
+// includes for the shortcut system
+#include "ShortcutManager.h"
+#include "ShortcutSettingsDialog.h"
+
 #include <chrono>
 
 namespace ed = ax::NodeEditor;
@@ -46,6 +50,23 @@ namespace gladius::ui
         void open(const std::filesystem::path & filename);
         void startMainLoop();
         void setup();
+
+        /**
+         * @brief Initialize the shortcut system
+         * Registers standard keyboard shortcuts for the application
+         */
+        void initializeShortcuts();
+
+        /**
+         * @brief Process keyboard shortcuts based on the active context
+         * @param activeContext The currently active context
+         */
+        void processShortcuts(ShortcutContext activeContext);
+
+        /**
+         * @brief Show the shortcut settings dialog
+         */
+        void showShortcutSettings();
 
       private:
         void render();
@@ -165,5 +186,9 @@ namespace gladius::ui
         ConfigManager * m_configManager = nullptr; // Pointer to the Application's ConfigManager
 
         bool m_wasWelcomeScreenVisible = false;
+
+        // Shortcut system
+        std::shared_ptr<ShortcutManager> m_shortcutManager;
+        ShortcutSettingsDialog m_shortcutSettingsDialog;
     };
 }

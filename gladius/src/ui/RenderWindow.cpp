@@ -1,5 +1,3 @@
-
-
 #include "RenderWindow.h"
 
 #include <algorithm>
@@ -415,6 +413,11 @@ namespace gladius::ui
     bool RenderWindow::isVisible() const
     {
         return m_isVisible;
+    }
+
+    bool RenderWindow::isHovered() const
+    {
+        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
     }
 
     void RenderWindow::handleKeyInput()

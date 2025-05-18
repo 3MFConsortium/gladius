@@ -1676,4 +1676,10 @@ namespace gladius::ui
     {
         m_libraryBrowser.refreshDirectories();
     }
+
+    bool ModelEditor::isHovered() const
+    {
+        // Check if any of the editor windows are hovered
+        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
+    }
 } // namespace gladius::ui// Add the LibraryBrowser management methods to ModelEditor.cpp

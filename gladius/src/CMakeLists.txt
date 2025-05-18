@@ -1,6 +1,14 @@
 set(BINARY ${CMAKE_PROJECT_NAME})
 file(GLOB SOURCES LIST_DIRECTORIES true *.h *.cpp)
 
+# Explicitly add our new shortcut system files
+list(APPEND SOURCES 
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutSettingsDialog.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutSettingsDialog.cpp
+)
+
 add_library(${BINARY}_lib STATIC ${SOURCES})
 
 if (MSVC)

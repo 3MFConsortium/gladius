@@ -49,6 +49,12 @@ namespace gladius::ui
 
         void handleKeyInput();
 
+        /**
+         * @brief Check if mouse is hovering over the render window
+         * @return true if the render window is being hovered
+         */
+        bool isHovered() const;
+
       private:
         void render(RenderWindowState & state);
         void slider();
