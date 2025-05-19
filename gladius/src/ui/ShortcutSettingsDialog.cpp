@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <unordered_set>
 #include <vector>
-#include "imgui.h"
+#include <imgui.h>
+#include <imgui_stdlib.h>
 
 namespace gladius::ui
 {
@@ -41,18 +42,12 @@ namespace gladius::ui
         {
             ImGui::End();
             return;
-        }
-
-        // Search filter
+        }        // Search filter
         ImGui::Text("Filter:");
         ImGui::SameLine();
-        char buffer[256];
-        std::strncpy(buffer, m_searchFilter.c_str(), sizeof(buffer) - 1);
-        buffer[sizeof(buffer) - 1] = '\0';
-        if (ImGui::InputText("##ShortcutSearch", buffer, sizeof(buffer)))
-        {
-            m_searchFilter = buffer;
-        }
+
+        ImGui::InputText("##ShortcutSearch", &m_searchFilter);
+
         ImGui::SameLine();
         if (ImGui::Button("Clear"))
         {

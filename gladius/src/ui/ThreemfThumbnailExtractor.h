@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <algorithm>  // Added for std::find_if
-#include <GL/gl.h>
+#include "../gpgpu.h"  // This includes GL properly with Windows.h first
 #include <lib3mf_implicit.hpp>
 #include "../EventLogger.h"
 

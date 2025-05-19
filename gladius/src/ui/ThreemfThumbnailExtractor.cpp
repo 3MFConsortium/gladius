@@ -1,4 +1,5 @@
 #include "ThreemfThumbnailExtractor.h"
+
 #include <algorithm>
 #include <fmt/format.h>
 #include <lodepng.h>
@@ -74,7 +75,6 @@ namespace gladius::ui
         info.thumbnailData = extractThumbnail(info.filePath);
         info.hasThumbnail = !info.thumbnailData.empty();
         info.thumbnailLoaded = true;
-
 
         if (info.hasThumbnail)
         {
@@ -188,7 +188,6 @@ namespace gladius::ui
                    events::Severity::Warning});
             }
         }
-        
 
         // Extract 3MF metadata if possible
         try
@@ -239,7 +238,7 @@ namespace gladius::ui
                 }
             }
         }
-        catch (const std::exception & e)
+        catch (std::exception const &)
         {
             // it is not a problem if we cannot read the metadata
         }
