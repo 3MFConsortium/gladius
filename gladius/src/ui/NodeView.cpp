@@ -307,15 +307,15 @@ namespace gladius::ui
     {
         m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
 
-        const auto styleIter = NodeColors.find(baseNode.getCategory());
+        const auto colorIter = m_nodeTypeToColor.find(typeid(baseNode));
         m_popStyle = false;
-        if (styleIter != std::end(NodeColors))
+        if (colorIter != std::end(m_nodeTypeToColor))
         {
-            const auto style = styleIter->second;
-            ed::PushStyleColor(ed::StyleColor_NodeBorder, style.color);
+            const auto color = colorIter->second;
+            ed::PushStyleColor(ed::StyleColor_NodeBorder, color);
             ed::PushStyleColor(
               ed::StyleColor_NodeBg,
-              ImColor(style.color.Value.x * 0.2f, style.color.Value.y * 0.2f, style.color.Value.z * 0.2f, 0.8f));
+              ImColor(color.x * 0.1f, color.y * 0.1f, color.z * 0.1f, 0.9f));
             m_popStyle = true;
         }
 
