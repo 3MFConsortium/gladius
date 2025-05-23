@@ -5,6 +5,8 @@
 #include <iostream>
 
 #include <algorithm>
+#include <fmt/format.h>
+#include <set>
 
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
@@ -736,6 +738,7 @@ namespace gladius::ui
 
         outline();
         newModelDialog();
+        showGroupAssignmentDialog();
         showDeleteUnusedResourcesDialog();
         try
         {
@@ -861,6 +864,42 @@ namespace gladius::ui
                       {reinterpret_cast<const char *>(ICON_FA_DATABASE "\tResource Nodes")},
                       &showResourceNodes);
                     m_nodeViewVisitor.setResourceNodesVisible(showResourceNodes);
+
+                    // Add group assignment functionality
+                    auto selection = selectedNodes(m_editorContext);
+                    if (!selection.empty())
+                    {
+                        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group")))
+                        {
+                            m_existingGroups = getAllExistingTags();
+                            m_newGroupName.clear();
+                            m_selectedExistingGroup.clear();
+                            m_showGroupAssignmentDialog = true;
+                        }
+
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted("Assign selected nodes to a group/tag");
+                            ImGui::Separator();
+                            ImGui::TextUnformatted(
+                              fmt::format("Selected nodes: {}", selection.size()).c_str());
+                            ImGui::EndTooltip();
+                        }
+                    }
+                    else
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                        ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group"));
+                        ImGui::PopStyleColor();
+
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted("Select nodes to assign them to a group");
+                            ImGui::EndTooltip();
+                        }
+                    }
 
                     ImGui::EndMenuBar();
                 }
@@ -1685,5 +1724,174 @@ namespace gladius::ui
     {
         // Check if any of the editor windows are hovered
         return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
+    }
+
+    void ModelEditor::showGroupAssignmentDialog()
+    {
+        if (m_showGroupAssignmentDialog)
+        {
+            ImGui::OpenPopup("Assign Nodes to Group");
+        }
+
+        if (ImGui::BeginPopupModal("Assign Nodes to Group", &m_showGroupAssignmentDialog, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            auto selection = selectedNodes(m_editorContext);
+            
+            ImGui::TextUnformatted(fmt::format("Assign {} selected node(s) to a group:", selection.size()).c_str());
+            ImGui::Separator();
+
+            // Option 1: Create new group
+            ImGui::TextUnformatted("Create New Group:");
+            ImGui::PushItemWidth(300.0f);
+            if (ImGui::InputText("##NewGroupName", &m_newGroupName))
+            {
+                // Clear existing group selection when typing new name
+                m_selectedExistingGroup.clear();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            bool canCreateNew = !m_newGroupName.empty() && 
+                              std::find(m_existingGroups.begin(), m_existingGroups.end(), m_newGroupName) == m_existingGroups.end();
+            
+            if (!canCreateNew)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+            }
+            
+            if (ImGui::Button("Create Group") && canCreateNew)
+            {
+                assignSelectedNodesToGroup(m_newGroupName);
+                m_showGroupAssignmentDialog = false;
+            }
+            
+            if (!canCreateNew)
+            {
+                ImGui::PopStyleColor(3);
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    if (m_newGroupName.empty())
+                    {
+                        ImGui::TextUnformatted("Please enter a group name");
+                    }
+                    else
+                    {
+                        ImGui::TextUnformatted("Group name already exists");
+                    }
+                    ImGui::EndTooltip();
+                }
+            }
+
+            // Option 2: Select existing group
+            if (!m_existingGroups.empty())
+            {
+                ImGui::Separator();
+                ImGui::TextUnformatted("Or select existing group:");
+                
+                for (const auto& groupName : m_existingGroups)
+                {
+                    bool isSelected = (m_selectedExistingGroup == groupName);
+                    if (ImGui::Selectable(groupName.c_str(), isSelected))
+                    {
+                        m_selectedExistingGroup = groupName;
+                        m_newGroupName.clear(); // Clear new group name when selecting existing
+                    }
+                }
+
+                if (!m_selectedExistingGroup.empty())
+                {
+                    if (ImGui::Button("Assign to Selected Group"))
+                    {
+                        assignSelectedNodesToGroup(m_selectedExistingGroup);
+                        m_showGroupAssignmentDialog = false;
+                    }
+                }
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Cancel"))
+            {
+                m_showGroupAssignmentDialog = false;
+            }
+
+            ImGui::EndPopup();
+        }
+    }
+
+    void ModelEditor::assignSelectedNodesToGroup(const std::string& groupName)
+    {
+        if (!m_currentModel || groupName.empty())
+        {
+            return;
+        }
+
+        auto selection = selectedNodes(m_editorContext);
+        
+        // Create undo restore point
+        createUndoRestorePoint("Assign nodes to group: " + groupName);
+
+        for (const auto& nodeId : selection)
+        {
+            auto nodeOpt = m_currentModel->getNode(static_cast<nodes::NodeId>(nodeId.Get()));
+            if (nodeOpt.has_value())
+            {
+                auto& node = *nodeOpt.value();
+                node.setTag(groupName);
+            }
+        }
+
+        // Mark model as modified and trigger updates
+        markModelAsModified();
+        m_nodeViewVisitor.reset(); // This will trigger node groups update
+        m_parameterDirty = true;
+    }
+
+    std::vector<std::string> ModelEditor::getAllExistingTags() const
+    {
+        std::vector<std::string> tags;
+        if (!m_currentModel)
+        {
+            return tags;
+        }
+
+        // Use a set to avoid duplicates
+        std::set<std::string> uniqueTags;
+
+        // Create a visitor to collect all tags
+        class TagCollector : public nodes::Visitor
+        {
+        public:
+            std::set<std::string>& tags;
+            
+            explicit TagCollector(std::set<std::string>& tagSet) : tags(tagSet) {}
+
+            void visit(nodes::NodeBase& node) override
+            {
+                const std::string& tag = node.getTag();
+                if (!tag.empty())
+                {
+                    tags.insert(tag);
+                }
+            }
+
+            // Implement all visit methods by delegating to the base method
+            void visit(nodes::Begin& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+            void visit(nodes::End& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+            void visit(nodes::ConstantScalar& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+            void visit(nodes::ConstantVector& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+            void visit(nodes::ConstantMatrix& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+            void visit(nodes::Transformation& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+            void visit(nodes::Resource& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+        };
+
+        TagCollector collector(uniqueTags);
+        m_currentModel->visitNodes(collector);
+
+        // Convert set to vector
+        tags.assign(uniqueTags.begin(), uniqueTags.end());
+        return tags;
     }
 } // namespace gladius::ui// Add the LibraryBrowser management methods to ModelEditor.cpp
