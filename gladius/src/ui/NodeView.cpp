@@ -1,5 +1,3 @@
-
-
 #include "NodeView.h"
 
 #include "Assembly.h"
@@ -18,9 +16,11 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fmt/format.h>
 #include <set>
+#include <unordered_map>
 
 namespace ed = ax::NodeEditor;
 
@@ -272,6 +272,7 @@ namespace gladius::ui
         m_currentLinkId = 0;
         m_parameterChanged = false;
         m_modelChanged = false;
+        m_nodeGroupsNeedUpdate = true;
     }
 
     void NodeView::setCurrentModel(SharedModel model)
@@ -311,48 +312,13 @@ namespace gladius::ui
         if (styleIter != std::end(NodeColors))
         {
             const auto style = styleIter->second;
-
-            auto nodeColorIter = m_nodeTypeToColor.find(typeid(baseNode));
-            if (nodeColorIter != std::end(m_nodeTypeToColor))
-            {
-                const auto & winBgCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-                const auto & nodeColor = nodeColorIter->second;
-                ImVec4 bgColor = ImVec4(0.95f * winBgCol.x + 0.05f * nodeColor.x,
-                                        0.95f * winBgCol.y + 0.05f * nodeColor.y,
-                                        0.95f * winBgCol.z + 0.05f * nodeColor.z,
-                                        1.0f);
-                ImVec4 hoverColor =
-                  ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
-                ImVec4 borderColor =
-                  ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
-
-                PushStyleColor(ed::StyleColor_NodeBg, bgColor);
-                PushStyleColor(ed::StyleColor_NodeBorder, nodeColor);
-                PushStyleColor(ed::StyleColor_HovNodeBorder, nodeColor);
-
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, bgColor);
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
-            }
-            else
-            {
-
-                const auto & winBgCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-                auto & styleCol = style.color.Value;
-                PushStyleColor(ed::StyleColor_NodeBg,
-                               ImVec4((0.95f * winBgCol.x + 0.05f * styleCol.x),
-                                      (0.95f * winBgCol.y + 0.05f * styleCol.y),
-                                      (0.95f * winBgCol.z + 0.05f * styleCol.z),
-                                      1.0f));
-
-                PushStyleColor(ed::StyleColor_NodeBorder, style.color);
-                PushStyleColor(ed::StyleColor_HovNodeBorder, style.hoveredColor);
-
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, static_cast<ImU32>(style.color));
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
-            }
-
+            ed::PushStyleColor(ed::StyleColor_NodeBorder, style.color);
+            ed::PushStyleColor(
+              ed::StyleColor_NodeBg,
+              ImColor(style.color.Value.x * 0.2f, style.color.Value.y * 0.2f, style.color.Value.z * 0.2f, 0.8f));
             m_popStyle = true;
         }
+
         ed::BeginNode(baseNode.getId());
         ImGui::PushID(baseNode.getId());
 
@@ -360,20 +326,60 @@ namespace gladius::ui
         std::string displayName = baseNode.getDisplayName();
         if (ImGui::InputText("", &displayName))
         {
-            baseNode.setDisplayName(displayName);
+            if (displayName.empty())
+            {
+                baseNode.setDisplayName(baseNode.name());
+            }
+            else
+            {
+                baseNode.setDisplayName(displayName);
+            }
+            m_parameterChanged = true;
         }
         ImGui::PopItemWidth();
+
+        // Add tag editing functionality
+        ImGui::SameLine();
+        std::string tag = baseNode.getTag();
+        bool hasTag = !tag.empty();
+
+        // If node has a tag, show a colored indicator
+        if (hasTag)
+        {
+            ImVec4 tagColor = generateGroupColor(tag);
+            ImVec4 brightTagColor(tagColor.x, tagColor.y, tagColor.z, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_Text, brightTagColor);
+
+            ImGui::PopStyleColor();
+
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(("Tag: " + tag).c_str());
+                ImGui::EndTooltip();
+            }
+        }
+        else
+        {
+            // No tag, show add tag button
+            if (ImGui::Button(ICON_FA_PLUS ICON_FA_TAG))
+            {
+                ImGui::OpenPopup(("Tag_" + std::to_string(baseNode.getId())).c_str());
+            }
+
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted("Add Tag");
+                ImGui::EndTooltip();
+            }
+        }
 
         ImGui::Indent(20.f * m_uiScale);
         ImGui::SetWindowFontScale(0.8f);
         ImGui::TextUnformatted(baseNode.name().c_str());
         ImGui::SetWindowFontScale(1.f);
         ImGui::Unindent(20.f * m_uiScale);
-
-        if (m_popStyle)
-        {
-            ImGui::PopStyleColor(2);
-        }
     }
 
     void NodeView::content(NodeBase & baseNode)
@@ -391,7 +397,7 @@ namespace gladius::ui
 
         if (m_popStyle)
         {
-            ed::PopStyleColor(3);
+            ed::PopStyleColor(2); // We push 2 colors in header(), so pop 2 here
         }
         ImGui::PopID();
 
@@ -923,6 +929,8 @@ namespace gladius::ui
 
                     ImGui::PopStyleVar();
                     ed::EndPin();
+                    ImGui::PopStyleColor(); // Pop the style color for pin text
+
                     columnWidths[1] = std::max(columnWidths[1], ImGui::GetItemRectSize().x);
                     ImGui::TableNextColumn();
 
@@ -951,11 +959,10 @@ namespace gladius::ui
                           fmt::format("Add a input of {} type",
                                       typeToString(parameter.second.getTypeIndex()))
                             .c_str());
-                        ImGui::PopStyleColor();
+                        ImGui::PopStyleColor(); // Pop style color for missing input
                         columnWidths[2] = std::max(columnWidths[2], ImGui::GetItemRectSize().x);
                         ImGui::SetWindowFontScale(1.0f);
                     }
-                    ImGui::PopStyleColor();
                 }
                 ImGui::PopID();
 
@@ -1125,6 +1132,399 @@ namespace gladius::ui
     bool NodeView::columnWidthsAreInitialized() const
     {
         return !m_columnWidths.empty();
+    }
+
+    void NodeView::updateNodeGroups()
+    {
+        if (!m_currentModel || !m_nodeGroupsNeedUpdate)
+        {
+            return;
+        }
+
+        // Clear existing groups
+        m_nodeGroups.clear();
+
+        // Map to temporarily store nodes by tag
+        std::unordered_map<std::string, std::vector<nodes::NodeId>> nodesByTag;
+
+        // Since Model doesn't have direct iterator access, we need to use the NodeRegistry
+        // We can approximate this by visiting all nodes and collecting tags
+        class TagCollector : public nodes::Visitor
+        {
+          public:
+            std::unordered_map<std::string, std::vector<nodes::NodeId>> & nodesByTag;
+
+            explicit TagCollector(
+              std::unordered_map<std::string, std::vector<nodes::NodeId>> & byTag)
+                : nodesByTag(byTag)
+            {
+            }
+
+            void visit(nodes::NodeBase & node) override
+            {
+                const std::string & tag = node.getTag();
+
+                // Skip nodes without tags
+                if (!tag.empty())
+                {
+                    nodesByTag[tag].push_back(node.getId());
+                }
+            }
+
+            // Implement all the visit methods from the base visitor class
+            void visit(nodes::Begin & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::End & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantScalar & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantVector & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantMatrix & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Transformation & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Resource & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+
+        } collector(nodesByTag);
+
+        // Visit all nodes in the model to collect tag information
+        if (m_currentModel)
+        {
+            m_currentModel->visitNodes(collector);
+        }
+
+        // Create node groups from the map
+        for (const auto & [tag, nodeIds] : nodesByTag)
+        {
+            // Only create groups with at least 2 nodes
+            if (nodeIds.size() >= 2)
+            {
+                NodeGroup group;
+                group.tag = tag;
+                group.nodes = nodeIds;
+                group.color = generateGroupColor(tag);
+
+                // Calculate group bounds
+                calculateGroupBounds(group);
+
+                m_nodeGroups.push_back(std::move(group));
+            }
+        }
+
+        m_nodeGroupsNeedUpdate = false;
+    }
+
+    void NodeView::calculateGroupBounds(NodeGroup & group)
+    {
+        if (group.nodes.empty() || !m_currentModel)
+        {
+            return;
+        }
+
+        // Initialize with extreme values
+        group.minBound = ImVec2(FLT_MAX, FLT_MAX);
+        group.maxBound = ImVec2(-FLT_MAX, -FLT_MAX);
+
+        // Padding around nodes (in screen coordinates)
+        const float PADDING = 20.0f * m_uiScale;
+
+        for (const auto & nodeId : group.nodes)
+        {
+            auto node = findNodeById(nodeId);
+            if (!node)
+            {
+                continue;
+            }
+
+            // Get position and size from node editor
+            ImVec2 pos = ImVec2(node->screenPos().x, node->screenPos().y);
+            ImVec2 size = ed::GetNodeSize(nodeId);
+
+            // Update bounds
+            group.minBound.x = std::min(group.minBound.x, pos.x - PADDING);
+            group.minBound.y = std::min(group.minBound.y, pos.y - PADDING);
+            group.maxBound.x = std::max(group.maxBound.x, pos.x + size.x + PADDING);
+            group.maxBound.y = std::max(group.maxBound.y, pos.y + size.y + PADDING);
+        }
+    }
+
+    bool NodeView::hasGroup(const std::string & tag) const
+    {
+        return std::any_of(m_nodeGroups.begin(),
+                           m_nodeGroups.end(),
+                           [&tag](const NodeGroup & group) { return group.tag == tag; });
+    }
+
+    ImVec4 NodeView::generateGroupColor(const std::string & tag) const
+    {
+        // Check if we have a custom color for this tag
+        auto customColorIt = m_customGroupColors.find(tag);
+        if (customColorIt != m_customGroupColors.end())
+        {
+            return customColorIt->second;
+        }
+
+        // Simple hash function to generate a color from the tag string
+        unsigned int hash = 0;
+        for (char c : tag)
+        {
+            hash = hash * 31 + static_cast<unsigned int>(c);
+        }
+
+        // Generate a pastel color with good alpha for background
+        const float hue = static_cast<float>(hash % 360) / 360.0f;
+        const float saturation = 0.3f + 0.2f * static_cast<float>((hash / 360) % 100) / 100.0f;
+        const float value = 0.7f + 0.3f * static_cast<float>((hash / 36000) % 100) / 100.0f;
+
+        // Convert HSV to RGB
+        int h_i = static_cast<int>(hue * 6);
+        float f = hue * 6 - h_i;
+        float p = value * (1 - saturation);
+        float q = value * (1 - f * saturation);
+        float t = value * (1 - (1 - f) * saturation);
+
+        float r, g, b;
+        switch (h_i % 6)
+        {
+        case 0:
+            r = value;
+            g = t;
+            b = p;
+            break;
+        case 1:
+            r = q;
+            g = value;
+            b = p;
+            break;
+        case 2:
+            r = p;
+            g = value;
+            b = t;
+            break;
+        case 3:
+            r = p;
+            g = q;
+            b = value;
+            break;
+        case 4:
+            r = t;
+            g = p;
+            b = value;
+            break;
+        case 5:
+            r = value;
+            g = p;
+            b = q;
+            break;
+        default:
+            r = g = b = 0;
+            break;
+        }
+
+        return ImVec4(r, g, b, 0.3f); // Semi-transparent background
+    }
+
+    void NodeView::renderNodeGroups()
+    {
+        if (m_nodeGroups.empty())
+        {
+            return;
+        }
+
+        // Update group bounds since nodes might have moved
+        for (auto & group : m_nodeGroups)
+        {
+            calculateGroupBounds(group);
+        }
+
+        // Sort groups by size (largest first) to handle nested groups properly
+        std::sort(m_nodeGroups.begin(),
+                  m_nodeGroups.end(),
+                  [](const NodeGroup & a, const NodeGroup & b)
+                  {
+                      float areaA = (a.maxBound.x - a.minBound.x) * (a.maxBound.y - a.minBound.y);
+                      float areaB = (b.maxBound.x - b.minBound.x) * (b.maxBound.y - b.minBound.y);
+                      return areaA > areaB;
+                  });
+
+        // Draw all groups
+        for (auto & group : m_nodeGroups)
+        {
+            // Begin group hint with the first node in the group as the "owner"
+            if (ed::BeginGroupHint(group.nodes[0]))
+            {
+                // Get the background and foreground draw lists
+                auto * drawList = ed::GetHintBackgroundDrawList();
+                auto * foreDrawList = ed::GetHintForegroundDrawList();
+
+                // Draw a filled rect with the group color
+                drawList->AddRectFilled(group.minBound,
+                                        group.maxBound,
+                                        ImColor(group.color),
+                                        ed::GetStyle().GroupRounding);
+
+                // Draw the border
+                const float borderWidth = ed::GetStyle().GroupBorderWidth;
+                drawList->AddRect(group.minBound,
+                                  group.maxBound,
+                                  ImColor(group.color.x, group.color.y, group.color.z, 1.0f),
+                                  ed::GetStyle().GroupRounding,
+                                  ImDrawFlags_None,
+                                  borderWidth);
+
+                // Draw the tag name in the top-left corner with an icon
+                ImVec2 textPos = ImVec2(group.minBound.x + 10, group.minBound.y + 5);
+                ImVec4 textColor = ImVec4(1.0f, 1.0f, 1.0f, 0.8f);
+                std::string tagLabel = ICON_FA_TAG " " + group.tag;
+                foreDrawList->AddText(textPos, ImColor(textColor), tagLabel.c_str());
+
+                // Check if right-clicked on the group
+                ImVec2 mousePos = ImGui::GetMousePos();
+                bool isInside = mousePos.x >= group.minBound.x && mousePos.x <= group.maxBound.x &&
+                                mousePos.y >= group.minBound.y && mousePos.y <= group.maxBound.y;
+
+                if (isInside && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                {
+                    ImGui::OpenPopup(("GroupContext_" + group.tag).c_str());
+                }
+
+                // Group context menu
+                if (ImGui::BeginPopup(("GroupContext_" + group.tag).c_str()))
+                {
+                    ImGui::Text("Group: %s", group.tag.c_str());
+                    ImGui::Separator();
+
+                    // Edit group color
+                    ImVec4 color = group.color;
+                    if (ImGui::ColorEdit4("Group Color",
+                                          (float *) &color,
+                                          ImGuiColorEditFlags_NoInputs |
+                                            ImGuiColorEditFlags_AlphaBar))
+                    {
+                        m_customGroupColors[group.tag] = color;
+                        group.color = color;
+                    }
+
+                    // Button to reset to default color
+                    if (ImGui::Button("Reset Color"))
+                    {
+                        m_customGroupColors.erase(group.tag);
+                        group.color = generateGroupColor(group.tag);
+                    }
+
+                    ImGui::Separator();
+
+                    // Show nodes in this group
+                    if (ImGui::BeginMenu("Nodes in Group"))
+                    {
+                        for (const auto & nodeId : group.nodes)
+                        {
+                            auto node = findNodeById(nodeId);
+                            if (node)
+                            {
+                                std::string nodeName = node->getDisplayName();
+                                if (ImGui::MenuItem(nodeName.c_str()))
+                                {
+                                    // Center on node when clicked
+                                    ed::CenterNodeOnScreen(nodeId);
+                                }
+                            }
+                        }
+                        ImGui::EndMenu();
+                    }
+
+                    ImGui::EndPopup();
+                }
+
+                ed::EndGroupHint();
+            }
+        }
+    }
+
+    nodes::NodeBase * NodeView::findNodeById(nodes::NodeId nodeId)
+    {
+        if (!m_currentModel)
+        {
+            return nullptr;
+        }
+
+        // Create a finder class that searches for a node with specific ID
+        class NodeFinder : public nodes::Visitor
+        {
+          public:
+            explicit NodeFinder(nodes::NodeId targetId)
+                : m_targetId(targetId)
+                , m_foundNode(nullptr)
+            {
+            }
+
+            void visit(nodes::NodeBase & node) override
+            {
+                if (node.getId() == m_targetId)
+                {
+                    m_foundNode = &node;
+                }
+            }
+
+            // Implement all the visit methods from the base visitor class
+            void visit(nodes::Begin & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::End & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantScalar & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantVector & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantMatrix & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Transformation & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Resource & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+
+            nodes::NodeBase * getFoundNode() const
+            {
+                return m_foundNode;
+            }
+
+          private:
+            nodes::NodeId m_targetId;
+            nodes::NodeBase * m_foundNode;
+        };
+
+        NodeFinder finder(nodeId);
+        m_currentModel->visitNodes(finder);
+        return finder.getFoundNode();
     }
 
 } // namespace gladius::ui
