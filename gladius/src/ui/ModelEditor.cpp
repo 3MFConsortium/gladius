@@ -916,11 +916,7 @@ namespace gladius::ui
                 m_nodeViewVisitor.setAssembly(m_assembly);
                 m_nodeViewVisitor.setModelEditor(this);
                 if (m_currentModel)
-                {
-                    // Update and render node groups before rendering nodes
-                    m_nodeViewVisitor.updateNodeGroups();
-                    m_nodeViewVisitor.renderNodeGroups();
-                    
+                {                    
                     m_nodeWidthsInitialized = m_nodeViewVisitor.columnWidthsAreInitialized();
                     m_currentModel->visitNodes(m_nodeViewVisitor);
                 }

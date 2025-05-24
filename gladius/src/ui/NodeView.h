@@ -175,12 +175,5 @@ namespace gladius::ui
         std::unordered_map<nodes::NodeId, ColumnWidths> m_columnWidths;
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
-
-        // New member variable to track node groups
-        std::vector<NodeGroup> m_nodeGroups;
-        bool m_nodeGroupsNeedUpdate{true};
-        
-        // Custom colors for groups, persisted by tag
-        std::unordered_map<std::string, ImVec4> m_customGroupColors;
     };
 } // namespace gladius::ui
