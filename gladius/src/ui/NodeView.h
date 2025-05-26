@@ -9,6 +9,8 @@
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
+#include <string>
+#include <vector>
 
 namespace gladius::ui
 {
@@ -16,6 +18,18 @@ namespace gladius::ui
 
     std::string typeToString(std::type_index typeIndex);
     using ColumnWidths = std::array<float, 8>;
+
+    /**
+     * @brief Structure that holds information about a group of nodes
+     */
+    struct NodeGroup 
+    {
+        std::string tag;                   ///< The tag that all nodes in this group share
+        std::vector<nodes::NodeId> nodes;  ///< The nodes that belong to this group
+        ImVec2 minBound;                   ///< The minimum bound of the group (top-left)
+        ImVec2 maxBound;                   ///< The maximum bound of the group (bottom-right)
+        ImVec4 color;                      ///< The color for this group
+    };
 
     class NodeView : public nodes::Visitor
     {
@@ -49,6 +63,23 @@ namespace gladius::ui
         [[nodiscard]] float getUiScale() const;
 
         bool columnWidthsAreInitialized() const;
+        
+        /**
+         * @brief Updates the node group mapping based on current model
+         */
+        void updateNodeGroups();
+        
+        /**
+         * @brief Renders all node groups
+         */
+        void renderNodeGroups();
+
+        /**
+         * @brief Find a node by ID in the current model
+         * @param nodeId The ID of the node to find
+         * @return Pointer to the found node or nullptr if not found
+         */
+        nodes::NodeBase* findNodeById(nodes::NodeId nodeId);
 
       private:
         void show(nodes::NodeBase & node);
@@ -89,6 +120,26 @@ namespace gladius::ui
                      nodes::VariantType & val);
 
         bool typeControl(std::string const & label, std::type_index & typeIndex);
+        
+        /**
+         * @brief Checks if the provided tag is already assigned to a group
+         * @param tag The tag to check
+         * @return Whether the tag exists in the current groups
+         */
+        [[nodiscard]] bool hasGroup(const std::string& tag) const;
+        
+        /**
+         * @brief Calculates the bounds of a node group
+         * @param group The group to calculate bounds for
+         */
+        void calculateGroupBounds(NodeGroup& group);
+        
+        /**
+         * @brief Generates a color for a group based on its tag
+         * @param tag The group's tag
+         * @return A color for the group
+         */
+        ImVec4 generateGroupColor(const std::string& tag) const;
 
         int m_currentLinkId = 0;
         bool m_parameterChanged{false};
@@ -122,6 +173,9 @@ namespace gladius::ui
         float m_uiScale = 1.0f;
 
         std::unordered_map<nodes::NodeId, ColumnWidths> m_columnWidths;
+        
+        /// Storage for node groups organized by tag
+        std::unordered_map<std::string, NodeGroup> m_nodeGroups;
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };

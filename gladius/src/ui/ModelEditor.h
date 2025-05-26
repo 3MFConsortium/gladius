@@ -103,6 +103,11 @@ namespace gladius::ui
         void showDeleteUnusedResourcesDialog();
         void validate();
 
+        /// Group/tag management functionality
+        void showGroupAssignmentDialog();
+        void assignSelectedNodesToGroup(const std::string& groupName);
+        std::vector<std::string> getAllExistingTags() const;
+
         void undo();
         void redo();
         
@@ -162,6 +167,12 @@ namespace gladius::ui
 
         // Library browser
         LibraryBrowser m_libraryBrowser;
+
+        /// Group assignment dialog state
+        bool m_showGroupAssignmentDialog{false};
+        std::string m_newGroupName;
+        std::string m_selectedExistingGroup;
+        std::vector<std::string> m_existingGroups;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

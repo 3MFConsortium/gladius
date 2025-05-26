@@ -1,5 +1,3 @@
-
-
 #include "NodeView.h"
 
 #include "Assembly.h"
@@ -18,9 +16,11 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fmt/format.h>
 #include <set>
+#include <unordered_map>
 
 namespace ed = ax::NodeEditor;
 
@@ -306,53 +306,18 @@ namespace gladius::ui
     {
         m_uiScale = ImGui::GetIO().FontGlobalScale * 2.0f;
 
-        const auto styleIter = NodeColors.find(baseNode.getCategory());
+        const auto colorIter = m_nodeTypeToColor.find(typeid(baseNode));
         m_popStyle = false;
-        if (styleIter != std::end(NodeColors))
+        if (colorIter != std::end(m_nodeTypeToColor))
         {
-            const auto style = styleIter->second;
-
-            auto nodeColorIter = m_nodeTypeToColor.find(typeid(baseNode));
-            if (nodeColorIter != std::end(m_nodeTypeToColor))
-            {
-                const auto & winBgCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-                const auto & nodeColor = nodeColorIter->second;
-                ImVec4 bgColor = ImVec4(0.95f * winBgCol.x + 0.05f * nodeColor.x,
-                                        0.95f * winBgCol.y + 0.05f * nodeColor.y,
-                                        0.95f * winBgCol.z + 0.05f * nodeColor.z,
-                                        1.0f);
-                ImVec4 hoverColor =
-                  ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
-                ImVec4 borderColor =
-                  ImVec4(nodeColor.x * 0.8f, nodeColor.y * 0.8f, nodeColor.z * 0.8f, 1.0f);
-
-                PushStyleColor(ed::StyleColor_NodeBg, bgColor);
-                PushStyleColor(ed::StyleColor_NodeBorder, nodeColor);
-                PushStyleColor(ed::StyleColor_HovNodeBorder, nodeColor);
-
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, bgColor);
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
-            }
-            else
-            {
-
-                const auto & winBgCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-                auto & styleCol = style.color.Value;
-                PushStyleColor(ed::StyleColor_NodeBg,
-                               ImVec4((0.95f * winBgCol.x + 0.05f * styleCol.x),
-                                      (0.95f * winBgCol.y + 0.05f * styleCol.y),
-                                      (0.95f * winBgCol.z + 0.05f * styleCol.z),
-                                      1.0f));
-
-                PushStyleColor(ed::StyleColor_NodeBorder, style.color);
-                PushStyleColor(ed::StyleColor_HovNodeBorder, style.hoveredColor);
-
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, static_cast<ImU32>(style.color));
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
-            }
-
+            const auto color = colorIter->second;
+            ed::PushStyleColor(ed::StyleColor_NodeBorder, color);
+            ed::PushStyleColor(
+              ed::StyleColor_NodeBg,
+              ImColor(color.x * 0.1f, color.y * 0.1f, color.z * 0.1f, 0.9f));
             m_popStyle = true;
         }
+
         ed::BeginNode(baseNode.getId());
         ImGui::PushID(baseNode.getId());
 
@@ -360,20 +325,23 @@ namespace gladius::ui
         std::string displayName = baseNode.getDisplayName();
         if (ImGui::InputText("", &displayName))
         {
-            baseNode.setDisplayName(displayName);
+            if (displayName.empty())
+            {
+                baseNode.setDisplayName(baseNode.name());
+            }
+            else
+            {
+                baseNode.setDisplayName(displayName);
+            }
+            m_parameterChanged = true;
         }
-        ImGui::PopItemWidth();
+        ImGui::PopItemWidth();      
 
         ImGui::Indent(20.f * m_uiScale);
         ImGui::SetWindowFontScale(0.8f);
         ImGui::TextUnformatted(baseNode.name().c_str());
         ImGui::SetWindowFontScale(1.f);
         ImGui::Unindent(20.f * m_uiScale);
-
-        if (m_popStyle)
-        {
-            ImGui::PopStyleColor(2);
-        }
     }
 
     void NodeView::content(NodeBase & baseNode)
@@ -391,7 +359,7 @@ namespace gladius::ui
 
         if (m_popStyle)
         {
-            ed::PopStyleColor(3);
+            ed::PopStyleColor(2); // We push 2 colors in header(), so pop 2 here
         }
         ImGui::PopID();
 
@@ -923,6 +891,8 @@ namespace gladius::ui
 
                     ImGui::PopStyleVar();
                     ed::EndPin();
+                    ImGui::PopStyleColor(); // Pop the style color for pin text
+
                     columnWidths[1] = std::max(columnWidths[1], ImGui::GetItemRectSize().x);
                     ImGui::TableNextColumn();
 
@@ -951,11 +921,10 @@ namespace gladius::ui
                           fmt::format("Add a input of {} type",
                                       typeToString(parameter.second.getTypeIndex()))
                             .c_str());
-                        ImGui::PopStyleColor();
+                        ImGui::PopStyleColor(); // Pop style color for missing input
                         columnWidths[2] = std::max(columnWidths[2], ImGui::GetItemRectSize().x);
                         ImGui::SetWindowFontScale(1.0f);
                     }
-                    ImGui::PopStyleColor();
                 }
                 ImGui::PopID();
 
@@ -1125,6 +1094,262 @@ namespace gladius::ui
     bool NodeView::columnWidthsAreInitialized() const
     {
         return !m_columnWidths.empty();
+    }
+
+   
+
+    nodes::NodeBase * NodeView::findNodeById(nodes::NodeId nodeId)
+    {
+        if (!m_currentModel)
+        {
+            return nullptr;
+        }
+
+        // Create a finder class that searches for a node with specific ID
+        class NodeFinder : public nodes::Visitor
+        {
+          public:
+            explicit NodeFinder(nodes::NodeId targetId)
+                : m_targetId(targetId)
+                , m_foundNode(nullptr)
+            {
+            }
+
+            void visit(nodes::NodeBase & node) override
+            {
+                if (node.getId() == m_targetId)
+                {
+                    m_foundNode = &node;
+                }
+            }
+
+            // Implement all the visit methods from the base visitor class
+            void visit(nodes::Begin & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::End & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantScalar & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantVector & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantMatrix & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Transformation & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Resource & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+
+            nodes::NodeBase * getFoundNode() const
+            {
+                return m_foundNode;
+            }
+
+          private:
+            nodes::NodeId m_targetId;
+            nodes::NodeBase * m_foundNode;
+        };
+
+        NodeFinder finder(nodeId);
+        m_currentModel->visitNodes(finder);
+        return finder.getFoundNode();
+    }
+
+    void NodeView::updateNodeGroups()
+    {
+        if (!m_currentModel)
+        {
+            m_nodeGroups.clear();
+            return;
+        }
+
+        // Clear existing groups
+        m_nodeGroups.clear();
+
+        // Collect all nodes with tags
+        class TagCollector : public nodes::Visitor
+        {
+          public:
+            std::unordered_map<std::string, std::vector<nodes::NodeId>> tagToNodes;
+
+            void visit(nodes::NodeBase & node) override
+            {
+                std::string const tag = node.getTag();
+                if (!tag.empty())
+                {
+                    tagToNodes[tag].push_back(node.getId());
+                }
+            }
+
+            // Implement all visit methods by delegating to the base method
+            void visit(nodes::Begin & node) override { visit(static_cast<nodes::NodeBase &>(node)); }
+            void visit(nodes::End & node) override { visit(static_cast<nodes::NodeBase &>(node)); }
+            void visit(nodes::ConstantScalar & node) override { visit(static_cast<nodes::NodeBase &>(node)); }
+            void visit(nodes::ConstantVector & node) override { visit(static_cast<nodes::NodeBase &>(node)); }
+            void visit(nodes::ConstantMatrix & node) override { visit(static_cast<nodes::NodeBase &>(node)); }
+            void visit(nodes::Transformation & node) override { visit(static_cast<nodes::NodeBase &>(node)); }
+            void visit(nodes::Resource & node) override { visit(static_cast<nodes::NodeBase &>(node)); }
+        };
+
+        TagCollector collector;
+        m_currentModel->visitNodes(collector);
+
+        // Create groups for each tag
+        for (auto const & [tag, nodeIds] : collector.tagToNodes)
+        {
+            if (nodeIds.size() > 1) // Only create groups with multiple nodes
+            {
+                NodeGroup group;
+                group.tag = tag;
+                group.nodes = nodeIds;
+                group.color = generateGroupColor(tag);
+                group.minBound = ImVec2(0, 0);
+                group.maxBound = ImVec2(500, 500);
+
+                m_nodeGroups[tag] = std::move(group);
+            }
+        }
+    }
+
+    void NodeView::renderNodeGroups()
+    {
+        if (m_nodeGroups.empty())
+        {
+            return;
+        }
+
+        // Calculate bounds for all groups
+        for (auto & [tag, group] : m_nodeGroups)
+        {
+            calculateGroupBounds(group);
+        }
+
+        // Render group backgrounds
+        ImDrawList * drawList = ImGui::GetWindowDrawList();
+        if (!drawList)
+        {
+            return;
+        }
+
+        for (auto const & [tag, group] : m_nodeGroups)
+        {
+            // Only render if bounds are valid
+            if (group.minBound.x < group.maxBound.x && group.minBound.y < group.maxBound.y)
+            {
+                // Add padding around the group
+                float const padding = 15.0f * m_uiScale;
+                ImVec2 const paddedMin = ImVec2(group.minBound.x - padding, group.minBound.y - padding);
+                ImVec2 const paddedMax = ImVec2(group.maxBound.x + padding, group.maxBound.y + padding);
+
+                // Draw background rectangle with low alpha
+                ImU32 const bgColor = ImGui::ColorConvertFloat4ToU32(
+                    ImVec4(group.color.x, group.color.y, group.color.z, 0.15f));
+                drawList->AddRectFilled(paddedMin, paddedMax, bgColor, 8.0f * m_uiScale);
+
+                // Draw border
+                ImU32 const borderColor = ImGui::ColorConvertFloat4ToU32(
+                    ImVec4(group.color.x, group.color.y, group.color.z, 0.6f));
+                drawList->AddRect(paddedMin, paddedMax, borderColor, 8.0f * m_uiScale, 0, 2.0f * m_uiScale);
+
+                // Draw tag label at top-left corner
+                ImVec2 const labelPos = ImVec2(paddedMin.x + 8.0f * m_uiScale, paddedMin.y + 4.0f * m_uiScale);
+                ImU32 const textColor = ImGui::ColorConvertFloat4ToU32(
+                    ImVec4(group.color.x, group.color.y, group.color.z, 0.9f));
+                
+                drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.8f, labelPos, textColor, tag.c_str());
+            }
+        }
+    }
+
+    bool NodeView::hasGroup(std::string const & tag) const
+    {
+        return m_nodeGroups.find(tag) != m_nodeGroups.end();
+    }
+
+    void NodeView::calculateGroupBounds(NodeGroup & group)
+    {
+        if (group.nodes.empty())
+        {
+            return;
+        }
+
+        // Reset boundsan
+        group.minBound = ImVec2(FLT_MAX, FLT_MAX);
+        group.maxBound = ImVec2(-FLT_MAX, -FLT_MAX);
+
+        // Calculate bounds from all nodes in the group
+        for (nodes::NodeId const nodeId : group.nodes)
+        {
+            // Get node position from ImGui Node Editor
+            ImVec2 const nodePos = ed::GetNodePosition(nodeId);
+            ImVec2 const nodeSize = ed::GetNodeSize(nodeId);
+
+            // Update bounds
+            group.minBound.x = std::min(group.minBound.x, nodePos.x);
+            group.minBound.y = std::min(group.minBound.y, nodePos.y);
+            group.maxBound.x = std::max(group.maxBound.x, nodePos.x + nodeSize.x);
+            group.maxBound.y = std::max(group.maxBound.y, nodePos.y + nodeSize.y);
+        }
+    }
+
+    ImVec4 NodeView::generateGroupColor(std::string const & tag) const
+    {
+        // Generate a color based on the hash of the tag for consistency
+        std::size_t const hash = std::hash<std::string>{}(tag);
+        
+        // Use the hash to generate RGB values
+        float const hue = static_cast<float>(hash % 360) / 360.0f;
+        float const saturation = 0.7f;
+        float const value = 0.8f;
+        
+        // Convert HSV to RGB
+        auto const hsvToRgb = [](float h, float s, float v) -> ImVec4
+        {
+            float r, g, b;
+            int const i = static_cast<int>(h * 6.0f);
+            float const f = h * 6.0f - static_cast<float>(i);
+            float const p = v * (1.0f - s);
+            float const q = v * (1.0f - f * s);
+            float const t = v * (1.0f - (1.0f - f) * s);
+
+            switch (i % 6)
+            {
+            case 0: r = v, g = t, b = p; break;
+            case 1: r = q, g = v, b = p; break;
+            case 2: r = p, g = v, b = t; break;
+            case 3: r = p, g = q, b = v; break;
+            case 4: r = t, g = p, b = v; break;
+            case 5: r = v, g = p, b = q; break;
+            default: r = g = b = 0.0f; break;
+            }
+            
+            return ImVec4(r, g, b, 1.0f);
+        };
+        
+        return hsvToRgb(hue, saturation, value);
+    }
+
+    void NodeView::setUiScale(float scale)
+    {
+        m_uiScale = scale;
+    }
+
+    float NodeView::getUiScale() const
+    {
+        return m_uiScale;
     }
 
 } // namespace gladius::ui
