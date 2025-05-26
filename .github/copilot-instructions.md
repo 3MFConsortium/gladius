@@ -5,6 +5,9 @@
 - **Naming**: camelCase for variables/functions, PascalCase for classes/structs, UPPER_CASE for constants/macros.
 - **Comments**: Use Doxygen-style comments.
 - **Missing Information**: If information is missing, ask for clarification.
+- **KISS Principle**: Keep it simple, stupid. Avoid unnecessary complexity.
+- **DRY Principle**: Don't repeat yourself. Avoid code duplication.
+- **YAGNI Principle**: You aren't gonna need it. Avoid adding features until they are necessary.
 
 ## Code Structure
 - **Headers**: Use `.h` for declarations, `.cpp` for definitions.
