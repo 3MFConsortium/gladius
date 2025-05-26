@@ -17,26 +17,18 @@ namespace gladius::ui::tests
             m_model = std::make_shared<nodes::Model>();
             m_nodeView = std::make_unique<NodeView>();
             
-            // Create test nodes with tags
-            m_node1Id = m_model->generateNodeId();
-            m_node2Id = m_model->generateNodeId();
-            m_node3Id = m_model->generateNodeId();
-            
-            auto node1 = std::make_unique<nodes::NodeBase>();
-            node1->setId(m_node1Id);
+            // Create test nodes with tags using the create() method
+            auto* node1 = m_model->create<nodes::ConstantScalar>();
             node1->setTag("test_group");
+            m_node1Id = node1->getId();
             
-            auto node2 = std::make_unique<nodes::NodeBase>();
-            node2->setId(m_node2Id);
+            auto* node2 = m_model->create<nodes::ConstantScalar>();
             node2->setTag("test_group");
+            m_node2Id = node2->getId();
             
-            auto node3 = std::make_unique<nodes::NodeBase>();
-            node3->setId(m_node3Id);
+            auto* node3 = m_model->create<nodes::ConstantScalar>();
             node3->setTag("other_group");
-            
-            m_model->addNode(std::move(node1));
-            m_model->addNode(std::move(node2));
-            m_model->addNode(std::move(node3));
+            m_node3Id = node3->getId();
             
             m_nodeView->setCurrentModel(m_model);
             m_nodeView->updateNodeGroups();

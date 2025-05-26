@@ -107,6 +107,9 @@ namespace gladius::ui
         void showGroupAssignmentDialog();
         void assignSelectedNodesToGroup(const std::string& groupName);
         std::vector<std::string> getAllExistingTags() const;
+        
+        /// Handle group node selection - automatically select all nodes in a group when group node is selected
+        void handleGroupNodeSelection();
 
         void undo();
         void redo();

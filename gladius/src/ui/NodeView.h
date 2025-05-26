@@ -88,6 +88,19 @@ namespace gladius::ui
          * @return true if the tag was successfully replaced, false otherwise
          */
         bool replaceGroupTag(const std::string& oldTag, const std::string& newTag);
+        
+        /**
+         * @brief Get access to the node groups map
+         * @return const reference to the node groups map
+         */
+        const std::unordered_map<std::string, NodeGroup>& getNodeGroups() const;
+        
+        /**
+         * @brief Checks if the provided tag is already assigned to a group
+         * @param tag The tag to check
+         * @return Whether the tag exists in the current groups
+         */
+        [[nodiscard]] bool hasGroup(const std::string& tag) const;
 
       private:
         void show(nodes::NodeBase & node);
@@ -128,13 +141,6 @@ namespace gladius::ui
                      nodes::VariantType & val);
 
         bool typeControl(std::string const & label, std::type_index & typeIndex);
-        
-        /**
-         * @brief Checks if the provided tag is already assigned to a group
-         * @param tag The tag to check
-         * @return Whether the tag exists in the current groups
-         */
-        [[nodiscard]] bool hasGroup(const std::string& tag) const;
         
         /**
          * @brief Calculates the bounds of a node group

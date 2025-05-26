@@ -927,6 +927,13 @@ namespace gladius::ui
                 }
                 onCreateNode();
                 onDeleteNode();
+                
+                // Handle group node selection - automatically select all nodes in a group
+                // when a group node is selected
+               // if (ed::HasSelectionChanged())
+                {
+                    handleGroupNodeSelection();
+                }
 
                 // Render node group last, to prioritize node interaction
                 m_nodeViewVisitor.renderNodeGroups();
@@ -1887,36 +1894,6 @@ namespace gladius::ui
                     tags.insert(tag);
                 }
             }
-
-            // Implement all visit methods by delegating to the base method
-            void visit(nodes::Begin & node) override
-            {
-                visit(static_cast<nodes::NodeBase &>(node));
-            }
-            void visit(nodes::End & node) override
-            {
-                visit(static_cast<nodes::NodeBase &>(node));
-            }
-            void visit(nodes::ConstantScalar & node) override
-            {
-                visit(static_cast<nodes::NodeBase &>(node));
-            }
-            void visit(nodes::ConstantVector & node) override
-            {
-                visit(static_cast<nodes::NodeBase &>(node));
-            }
-            void visit(nodes::ConstantMatrix & node) override
-            {
-                visit(static_cast<nodes::NodeBase &>(node));
-            }
-            void visit(nodes::Transformation & node) override
-            {
-                visit(static_cast<nodes::NodeBase &>(node));
-            }
-            void visit(nodes::Resource & node) override
-            {
-                visit(static_cast<nodes::NodeBase &>(node));
-            }
         };
 
         TagCollector collector(uniqueTags);
@@ -1925,5 +1902,52 @@ namespace gladius::ui
         // Convert set to vector
         tags.assign(uniqueTags.begin(), uniqueTags.end());
         return tags;
+    }
+
+    void ModelEditor::handleGroupNodeSelection()
+    {
+        auto selection = selectedNodes(m_editorContext);
+        
+        // Only handle single node selection to avoid conflicts
+        if (selection.size() != 1)
+        {
+            return;
+        }
+        
+        ed::NodeId selectedNodeId = selection.front();
+        
+        // Check if this is a group node (created with hash-based ID in renderNodeGroups)
+        // Group nodes are background nodes that represent the visual grouping
+        bool isGroupNode = false;
+        std::string groupTag;
+        
+        // Search through all existing groups to see if this ID matches a group node
+        for (const auto & [tag, group] : m_nodeViewVisitor.getNodeGroups())
+        {
+            ed::NodeId groupId = ed::NodeId(std::hash<std::string>{}(tag));
+            if (groupId == selectedNodeId)
+            {
+                isGroupNode = true;
+                groupTag = tag;
+                break;
+            }
+        }
+        
+        if (isGroupNode && !groupTag.empty())
+        {
+            // Clear current selection
+            ed::ClearSelection();
+            
+            // Select all nodes that belong to this group
+            bool first = true;
+            for (const auto & [nodeId, modelNode] : *m_currentModel)
+            {
+                if (modelNode->getTag() == groupTag)
+                {
+                    ed::SelectNode(ed::NodeId(nodeId), !first);
+                    first = false;
+                }
+            }
+        }
     }
 } // namespace gladius::ui// Add the LibraryBrowser management methods to ModelEditor.cpp

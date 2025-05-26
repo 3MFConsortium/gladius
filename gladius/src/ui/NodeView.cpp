@@ -1189,8 +1189,6 @@ namespace gladius::ui
                 if (!tag.empty())
                 {
                     tagToNodes[tag].push_back(node.getId());
-                    // Print debug information
-                    std::cout << "Node ID: " << node.getId() << ", Tag: " << tag << std::endl;
                 }
             }
         };
@@ -1474,6 +1472,11 @@ namespace gladius::ui
     float NodeView::getUiScale() const
     {
         return m_uiScale;
+    }
+
+    const std::unordered_map<std::string, NodeGroup>& NodeView::getNodeGroups() const
+    {
+        return m_nodeGroups;
     }
 
 } // namespace gladius::ui
