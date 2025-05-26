@@ -928,6 +928,9 @@ namespace gladius::ui
                 onCreateNode();
                 onDeleteNode();
                 
+                // Handle group movement - detect when nodes are moved and move their group members
+                m_nodeViewVisitor.handleGroupMovement();
+                
                 // Handle group node selection - automatically select all nodes in a group
                 // when a group node is selected
                // if (ed::HasSelectionChanged())
@@ -1938,7 +1941,7 @@ namespace gladius::ui
             // Clear current selection
             ed::ClearSelection();
             
-            // Select all nodes that belong to this group
+            // Select all nodes that belong to this group using the improved method
             bool first = true;
             for (const auto & [nodeId, modelNode] : *m_currentModel)
             {

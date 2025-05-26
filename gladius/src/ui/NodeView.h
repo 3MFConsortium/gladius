@@ -79,7 +79,7 @@ namespace gladius::ui
          * @param nodeId The ID of the node to find
          * @return Pointer to the found node or nullptr if not found
          */
-        nodes::NodeBase* findNodeById(nodes::NodeId nodeId);
+        nodes::NodeBase* findNodeById(nodes::NodeId nodeId) const;
         
         /**
          * @brief Replace the tag of all nodes in a group
@@ -101,6 +101,19 @@ namespace gladius::ui
          * @return Whether the tag exists in the current groups
          */
         [[nodiscard]] bool hasGroup(const std::string& tag) const;
+        
+        /**
+         * @brief Gets all nodes that belong to the same group as the specified node
+         * @param nodeId The ID of the node to find group members for
+         * @return Vector of node IDs in the same group, or empty vector if not in a group
+         */
+        std::vector<nodes::NodeId> getNodesInSameGroup(nodes::NodeId nodeId) const;
+        
+        /**
+         * @brief Handles group movement when a group node is moved
+         * Called during the editor update loop to detect group node movement and synchronize all nodes in the group
+         */
+        void handleGroupMovement();
 
       private:
         void show(nodes::NodeBase & node);
@@ -195,6 +208,10 @@ namespace gladius::ui
         std::string m_editingTag;
         std::string m_editingTagBuffer;
         bool m_isEditingTag = false;
+        
+        /// Group node position tracking for group movement (stores positions of group nodes, not individual model nodes)
+        std::unordered_map<nodes::NodeId, ImVec2> m_previousNodePositions;
+        bool m_skipGroupMovement = false; // Flag to prevent infinite loops during programmatic movement
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };
