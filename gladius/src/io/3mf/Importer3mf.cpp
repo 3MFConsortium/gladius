@@ -501,6 +501,8 @@ namespace gladius::io
                 }
             }
             newNode->setUniqueName(node3mf->GetIdentifier());
+            // tag
+            newNode->setTag(node3mf->GetTag());
             model->registerInputs(*newNode);
             model->registerOutputs(*newNode);
             idToNode[makeValidVariableName(node3mf->GetIdentifier())] = newNode;
