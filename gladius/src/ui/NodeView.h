@@ -173,6 +173,9 @@ namespace gladius::ui
         float m_uiScale = 1.0f;
 
         std::unordered_map<nodes::NodeId, ColumnWidths> m_columnWidths;
+        
+        /// Storage for node groups organized by tag
+        std::unordered_map<std::string, NodeGroup> m_nodeGroups;
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };

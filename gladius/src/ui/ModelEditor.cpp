@@ -913,12 +913,18 @@ namespace gladius::ui
 
                 ed::Begin("Model Editor");
 
+                // Render node group backgrounds first (behind nodes)
+                m_nodeViewVisitor.renderNodeGroups();
+
                 m_nodeViewVisitor.setAssembly(m_assembly);
                 m_nodeViewVisitor.setModelEditor(this);
                 if (m_currentModel)
                 {                    
                     m_nodeWidthsInitialized = m_nodeViewVisitor.columnWidthsAreInitialized();
                     m_currentModel->visitNodes(m_nodeViewVisitor);
+                    
+                    // Update node groups after nodes are rendered and positioned
+                    m_nodeViewVisitor.updateNodeGroups();
                 }
                 onCreateNode();
                 onDeleteNode();
