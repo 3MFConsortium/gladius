@@ -1007,6 +1007,7 @@ namespace gladius::ui
     void MainWindow::open(const std::filesystem::path & filename)
     {
         m_currentAssemblyFileName = filename;
+        m_welcomeScreen.hide();
         m_doc->loadNonBlocking(filename);
         resetEditorState();
         m_renderWindow.centerView();
