@@ -869,7 +869,8 @@ namespace gladius::ui
                     auto selection = selectedNodes(m_editorContext);
                     if (!selection.empty())
                     {
-                        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group")))
+                        if (ImGui::MenuItem(
+                              reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group")))
                         {
                             m_existingGroups = getAllExistingTags();
                             m_newGroupName.clear();
@@ -890,7 +891,8 @@ namespace gladius::ui
                     else
                     {
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
-                        ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group"));
+                        ImGui::MenuItem(
+                          reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group"));
                         ImGui::PopStyleColor();
 
                         if (ImGui::IsItemHovered())
@@ -913,21 +915,21 @@ namespace gladius::ui
 
                 ed::Begin("Model Editor");
 
-                // Render node group backgrounds first (behind nodes)
-                m_nodeViewVisitor.renderNodeGroups();
-
                 m_nodeViewVisitor.setAssembly(m_assembly);
                 m_nodeViewVisitor.setModelEditor(this);
                 if (m_currentModel)
-                {                    
+                {
                     m_nodeWidthsInitialized = m_nodeViewVisitor.columnWidthsAreInitialized();
                     m_currentModel->visitNodes(m_nodeViewVisitor);
-                    
+
                     // Update node groups after nodes are rendered and positioned
                     m_nodeViewVisitor.updateNodeGroups();
                 }
                 onCreateNode();
                 onDeleteNode();
+
+                // Render node group last, to prioritize node interaction
+                m_nodeViewVisitor.renderNodeGroups();
 
                 ed::End();
                 ed::PopStyleColor();
@@ -1008,7 +1010,6 @@ namespace gladius::ui
         }
         m_doc = std::move(document);
         setAssembly(m_doc->getAssembly());
-
 
         if (m_doc)
         {
@@ -1735,11 +1736,14 @@ namespace gladius::ui
             ImGui::OpenPopup("Assign Nodes to Group");
         }
 
-        if (ImGui::BeginPopupModal("Assign Nodes to Group", &m_showGroupAssignmentDialog, ImGuiWindowFlags_AlwaysAutoResize))
+        if (ImGui::BeginPopupModal("Assign Nodes to Group",
+                                   &m_showGroupAssignmentDialog,
+                                   ImGuiWindowFlags_AlwaysAutoResize))
         {
             auto selection = selectedNodes(m_editorContext);
-            
-            ImGui::TextUnformatted(fmt::format("Assign {} selected node(s) to a group:", selection.size()).c_str());
+
+            ImGui::TextUnformatted(
+              fmt::format("Assign {} selected node(s) to a group:", selection.size()).c_str());
             ImGui::Separator();
 
             // Option 1: Create new group
@@ -1753,22 +1757,24 @@ namespace gladius::ui
             ImGui::PopItemWidth();
 
             ImGui::SameLine();
-            bool canCreateNew = !m_newGroupName.empty() && 
-                              std::find(m_existingGroups.begin(), m_existingGroups.end(), m_newGroupName) == m_existingGroups.end();
-            
+            bool canCreateNew =
+              !m_newGroupName.empty() &&
+              std::find(m_existingGroups.begin(), m_existingGroups.end(), m_newGroupName) ==
+                m_existingGroups.end();
+
             if (!canCreateNew)
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
             }
-            
+
             if (ImGui::Button("Create Group") && canCreateNew)
             {
                 assignSelectedNodesToGroup(m_newGroupName);
                 m_showGroupAssignmentDialog = false;
             }
-            
+
             if (!canCreateNew)
             {
                 ImGui::PopStyleColor(3);
@@ -1792,8 +1798,8 @@ namespace gladius::ui
             {
                 ImGui::Separator();
                 ImGui::TextUnformatted("Or select existing group:");
-                
-                for (const auto& groupName : m_existingGroups)
+
+                for (const auto & groupName : m_existingGroups)
                 {
                     bool isSelected = (m_selectedExistingGroup == groupName);
                     if (ImGui::Selectable(groupName.c_str(), isSelected))
@@ -1823,7 +1829,7 @@ namespace gladius::ui
         }
     }
 
-    void ModelEditor::assignSelectedNodesToGroup(const std::string& groupName)
+    void ModelEditor::assignSelectedNodesToGroup(const std::string & groupName)
     {
         if (!m_currentModel || groupName.empty())
         {
@@ -1831,16 +1837,16 @@ namespace gladius::ui
         }
 
         auto selection = selectedNodes(m_editorContext);
-        
+
         // Create undo restore point
         createUndoRestorePoint("Assign nodes to group: " + groupName);
 
-        for (const auto& nodeId : selection)
+        for (const auto & nodeId : selection)
         {
             auto nodeOpt = m_currentModel->getNode(static_cast<nodes::NodeId>(nodeId.Get()));
             if (nodeOpt.has_value())
             {
-                auto& node = *nodeOpt.value();
+                auto & node = *nodeOpt.value();
                 node.setTag(groupName);
             }
         }
@@ -1865,14 +1871,17 @@ namespace gladius::ui
         // Create a visitor to collect all tags
         class TagCollector : public nodes::Visitor
         {
-        public:
-            std::set<std::string>& tags;
-            
-            explicit TagCollector(std::set<std::string>& tagSet) : tags(tagSet) {}
+          public:
+            std::set<std::string> & tags;
 
-            void visit(nodes::NodeBase& node) override
+            explicit TagCollector(std::set<std::string> & tagSet)
+                : tags(tagSet)
             {
-                const std::string& tag = node.getTag();
+            }
+
+            void visit(nodes::NodeBase & node) override
+            {
+                const std::string & tag = node.getTag();
                 if (!tag.empty())
                 {
                     tags.insert(tag);
@@ -1880,13 +1889,34 @@ namespace gladius::ui
             }
 
             // Implement all visit methods by delegating to the base method
-            void visit(nodes::Begin& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
-            void visit(nodes::End& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
-            void visit(nodes::ConstantScalar& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
-            void visit(nodes::ConstantVector& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
-            void visit(nodes::ConstantMatrix& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
-            void visit(nodes::Transformation& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
-            void visit(nodes::Resource& node) override { visit(static_cast<nodes::NodeBase&>(node)); }
+            void visit(nodes::Begin & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::End & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantScalar & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantVector & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::ConstantMatrix & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Transformation & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
+            void visit(nodes::Resource & node) override
+            {
+                visit(static_cast<nodes::NodeBase &>(node));
+            }
         };
 
         TagCollector collector(uniqueTags);

@@ -80,6 +80,14 @@ namespace gladius::ui
          * @return Pointer to the found node or nullptr if not found
          */
         nodes::NodeBase* findNodeById(nodes::NodeId nodeId);
+        
+        /**
+         * @brief Replace the tag of all nodes in a group
+         * @param oldTag The current tag to replace
+         * @param newTag The new tag to assign to all nodes in the group
+         * @return true if the tag was successfully replaced, false otherwise
+         */
+        bool replaceGroupTag(const std::string& oldTag, const std::string& newTag);
 
       private:
         void show(nodes::NodeBase & node);
@@ -176,6 +184,11 @@ namespace gladius::ui
         
         /// Storage for node groups organized by tag
         std::unordered_map<std::string, NodeGroup> m_nodeGroups;
+        
+        /// Tag editing state
+        std::string m_editingTag;
+        std::string m_editingTagBuffer;
+        bool m_isEditingTag = false;
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };

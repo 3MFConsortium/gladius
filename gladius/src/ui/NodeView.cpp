@@ -1239,7 +1239,7 @@ namespace gladius::ui
                 // Add padding around the group
                 constexpr float PADDING = 20.0f;
                 ImVec2 const paddedMin =
-                  ImVec2(group.minBound.x - PADDING, group.minBound.y - PADDING);
+                  ImVec2(group.minBound.x - PADDING, group.minBound.y - PADDING - 50.0f);
                 ImVec2 const paddedMax =
                   ImVec2(group.maxBound.x + PADDING, group.maxBound.y + PADDING);
                 ImVec2 const groupSize =
@@ -1261,7 +1261,7 @@ namespace gladius::ui
                 // Put the z order of the group node to the back
                 ed::SetNodeZPosition(groupId, -100.0f);
                 ed::BeginNode(groupId);
-               
+
                 ed::BeginGroupHint(groupId);
                 ed::SetNodePosition(groupId, paddedMin);
 
@@ -1270,7 +1270,7 @@ namespace gladius::ui
                 ImVec2 const nodeScreenPos = ed::GetNodePosition(groupId);
 
                 // Draw background rectangle with group color (semi-transparent)
-                ImVec4 const bgColor = ImVec4(group.color.x, group.color.y, group.color.z, 0.0f);
+                ImVec4 const bgColor = ImVec4(group.color.x, group.color.y, group.color.z, 0.4f);
                 ImU32 const bgColorU32 = ImGui::ColorConvertFloat4ToU32(bgColor);
                 drawList->AddRectFilled(
                   nodeScreenPos,
@@ -1278,10 +1278,6 @@ namespace gladius::ui
                   bgColorU32,
                   8.0f);
 
-                // Create a dummy widget to establish the node size
-                ImGui::InvisibleButton("##group_background", groupSize);
-
-                // Draw the tag with background
                 ImVec2 const tagScreenPos =
                   ImVec2(nodeScreenPos.x + TAG_PADDING, nodeScreenPos.y - TAG_PADDING);
                 ImVec2 const tagBgMin = ImVec2(tagScreenPos.x - 14.0f, tagScreenPos.y - 12.0f);
@@ -1291,20 +1287,40 @@ namespace gladius::ui
                 // Draw tag background
                 ImVec4 const tagBgColor = ImVec4(group.color.x, group.color.y, group.color.z, 0.8f);
                 ImU32 const tagBgColorU32 = ImGui::ColorConvertFloat4ToU32(tagBgColor);
-                drawList->AddRectFilled(tagBgMin, tagBgMax, tagBgColorU32, 4.0f);
 
-                // Draw tag border
-                ImU32 const tagBorderColorU32 =
-                  ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 1.0f, 0.8f));
-                drawList->AddRect(tagBgMin, tagBgMax, tagBorderColorU32, 4.0f, 0, 1.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
+                ImGui::PushStyleColor(ImGuiCol_FrameBg,
+                                      IM_COL32(0, 0, 0, 0)); // Transparent background
+                ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImU32(tagBgColorU32));
+                ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImU32(tagBgColorU32));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
-                // Draw tag text
-                drawList->AddText(tagScreenPos, IM_COL32(255, 255, 255, 255), tag.c_str());
+                // Use unique ID for each tag input
+                ImGui::PushID(("tag_input_" + tag).c_str());
+
+                static std::string inputBuffer;
+                inputBuffer = tag;
+                ImGui::SetNextItemWidth(tagSize.x + 20.0f);
+                if (ImGui::InputText("##tag_input",
+                                     &inputBuffer,
+                                     ImGuiInputTextFlags_EnterReturnsTrue |
+                                       ImGuiInputTextFlags_AutoSelectAll))
+                {
+                    if (!inputBuffer.empty() && inputBuffer != tag)
+                    {
+                        replaceGroupTag(tag, inputBuffer);
+                    }
+                }
+
+                ImGui::PopID();
+                ImGui::PopStyleVar(2);
+                ImGui::PopStyleColor(4);
 
                 ed::EndGroupHint();
                 ed::EndNode();
 
-                ed::PopStyleVar(); // Pop the node border width style
+                ed::PopStyleVar();   // Pop the node border width style
                 ed::PopStyleColor(); // Pop the node background color style
             }
         }
@@ -1313,6 +1329,47 @@ namespace gladius::ui
     bool NodeView::hasGroup(std::string const & tag) const
     {
         return m_nodeGroups.find(tag) != m_nodeGroups.end();
+    }
+
+    bool NodeView::replaceGroupTag(const std::string & oldTag, const std::string & newTag)
+    {
+        if (!m_currentModel || oldTag.empty() || newTag.empty() || oldTag == newTag)
+        {
+            return false;
+        }
+
+        // Check if the old tag exists
+        auto groupIt = m_nodeGroups.find(oldTag);
+        if (groupIt == m_nodeGroups.end())
+        {
+            return false;
+        }
+
+        // Update all nodes in the group with the new tag
+        for (nodes::NodeId nodeId : groupIt->second.nodes)
+        {
+            if (auto * node = findNodeById(nodeId))
+            {
+                node->setTag(newTag);
+            }
+        }
+
+        // Update the group data structure
+        NodeGroup updatedGroup = std::move(groupIt->second);
+        updatedGroup.tag = newTag;
+        m_nodeGroups.erase(groupIt);
+        m_nodeGroups[newTag] = std::move(updatedGroup);
+
+        // Mark model as modified
+        if (m_modelEditor)
+        {
+            m_modelEditor->markModelAsModified();
+        }
+
+        m_parameterChanged = true;
+        m_modelChanged = true;
+
+        return true;
     }
 
     void NodeView::calculateGroupBounds(NodeGroup & group)
