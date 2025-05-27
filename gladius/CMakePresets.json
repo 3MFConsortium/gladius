@@ -22,7 +22,8 @@
                 "VCPKG_TARGET_TRIPLET": "x64-windows-gladius",
                 "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
                 "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
-                "CMAKE_BUILD_PARALLEL_LEVEL": "8"
+                "CMAKE_BUILD_PARALLEL_LEVEL": "8",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
@@ -80,6 +81,88 @@
             }
         },
         {
+            "name": "windows-clang-base",
+            "description": "Target Windows with Clang compiler.",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "installDir": "$env{CML}/gladius/gladius-1.2.12",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                    "type": "FILEPATH"
+                },
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_CXX_FLAGS": "-fms-extensions -fms-compatibility",
+                "CMAKE_CXX_FLAGS_DEBUG": "",
+                "CMAKE_CXX_FLAGS_RELEASE": "-O2 -DNDEBUG",
+                "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG",
+                "CMAKE_C_FLAGS": "-fms-extensions -fms-compatibility",
+                "CMAKE_C_FLAGS_DEBUG": "",
+                "CMAKE_C_FLAGS_RELEASE": "-O2 -DNDEBUG",
+                "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG",
+                "USE_CACHE": "true",
+                "ENABLE_ASAN": "false",
+                "VCPKG_TARGET_TRIPLET": "x64-windows-gladius",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/vcpkg-triplets",
+                "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
+                "CMAKE_BUILD_PARALLEL_LEVEL": "8",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "x64-clang-debug",
+            "displayName": "x64 Clang Debug",
+            "description": "Target Windows (64-bit) with Clang compiler. (Debug)",
+            "inherits": "windows-clang-base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS_DEBUG": "-g -O0 -D_DEBUG",
+                "CMAKE_C_FLAGS_DEBUG": "-g -O0 -D_DEBUG",
+                "ENABLE_TRACY": "false",
+                "ENABLE_ASAN": "false"
+            }
+        },
+        {
+            "name": "x64-clang-release",
+            "displayName": "x64 Clang Release",
+            "description": "Target Windows (64-bit) with Clang compiler. (Release)",
+            "inherits": "windows-clang-base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS_RELEASE": "-O2 -DNDEBUG",
+                "CMAKE_C_FLAGS_RELEASE": "-O2 -DNDEBUG",
+                "ENABLE_TRACY": "false"
+            }
+        },
+        {
+            "name": "x64-clang-release-debug",
+            "displayName": "x64 Clang Release with Debug",
+            "description": "Target Windows (64-bit) with Clang compiler. (RelWithDebInfo)",
+            "inherits": "x64-clang-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG",
+                "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG",
+                "ENABLE_TRACY": "false",
+                "ENABLE_ASAN": "false"
+            }
+        },
+        {
             "name": "linux-base",
             "displayName": "Default Clang",
             "description": "Using compilers: C = /usr/bin/clang, CXX = /usr/bin/clang++",
@@ -89,8 +172,8 @@
                 "CMAKE_C_COMPILER": "/usr/bin/clang",
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
                 "USE_CACHE": "true",
-                "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports"
-
+                "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
