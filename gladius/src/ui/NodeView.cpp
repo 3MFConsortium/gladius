@@ -1264,30 +1264,8 @@ namespace gladius::ui
 
                 ed::BeginGroupHint(groupId);
 
-                // Only set the position if the group node is not being moved by the user
-                // Check if we have a previous position tracked for this group node
-                auto prevPosIt = m_previousNodePositions.find(static_cast<nodes::NodeId>(groupId.Get()));
-                if (prevPosIt == m_previousNodePositions.end())
-                {
-                    // No previous position tracked, set it to the calculated bounds
-                    ed::SetNodePosition(groupId, paddedMin);
-                }
-                else
-                {
-                    // Check if the current position matches what we expect (within threshold)
-                    ImVec2 const currentPos = ed::GetNodePosition(groupId);
-                    ImVec2 const expectedPos = paddedMin;
-                    constexpr float POSITION_THRESHOLD = 1.0f;
-                    
-                    if (std::abs(currentPos.x - expectedPos.x) < POSITION_THRESHOLD && 
-                        std::abs(currentPos.y - expectedPos.y) < POSITION_THRESHOLD)
-                    {
-                        // Position matches expected bounds, safe to update
-                        ed::SetNodePosition(groupId, paddedMin);
-                    }
-                    // If position doesn't match, the user is dragging - don't overwrite
-                }
-              
+                ed::SetNodePosition(groupId, paddedMin);
+
                 // Style the group node with semi-transparent background
                 ImDrawList * drawList = ImGui::GetWindowDrawList();
                 ImVec2 const nodeScreenPos = ed::GetNodePosition(groupId);
@@ -1499,7 +1477,7 @@ namespace gladius::ui
         return m_uiScale;
     }
 
-    const std::unordered_map<std::string, NodeGroup>& NodeView::getNodeGroups() const
+    const std::unordered_map<std::string, NodeGroup> & NodeView::getNodeGroups() const
     {
         return m_nodeGroups;
     }
@@ -1510,75 +1488,77 @@ namespace gladius::ui
         {
             return {};
         }
-        
+
         // Find the node to get its tag
-        nodes::NodeBase* node = findNodeById(nodeId);
+        nodes::NodeBase * node = findNodeById(nodeId);
         if (!node)
         {
             return {};
         }
-        
+
         std::string const nodeTag = node->getTag();
         if (nodeTag.empty())
         {
             return {}; // Node is not in a group
         }
-        
+
         // Find the group and return all nodes in it
         auto groupIt = m_nodeGroups.find(nodeTag);
         if (groupIt != m_nodeGroups.end())
         {
             return groupIt->second.nodes;
         }
-        
+
         return {};
     }
-    
+
     void NodeView::handleGroupMovement()
     {
         if (m_nodeGroups.empty() || m_skipGroupMovement)
         {
             return;
         }
-        
+
         // Check each group node for position changes
         for (const auto & [tag, group] : m_nodeGroups)
         {
             // Generate the group node ID (same way as in renderNodeGroups)
             ed::NodeId const groupNodeId = ed::NodeId(std::hash<std::string>{}(tag));
-            
+
             ImVec2 const currentPos = ed::GetNodePosition(groupNodeId);
-            
+
             // Check if we have a previous position for this group node
-            auto prevPosIt = m_previousNodePositions.find(static_cast<nodes::NodeId>(groupNodeId.Get()));
+            auto prevPosIt =
+              m_previousNodePositions.find(static_cast<nodes::NodeId>(groupNodeId.Get()));
             if (prevPosIt == m_previousNodePositions.end())
             {
                 // Store the initial position
                 m_previousNodePositions[static_cast<nodes::NodeId>(groupNodeId.Get())] = currentPos;
                 continue;
             }
-            
+
             ImVec2 const previousPos = prevPosIt->second;
-            
-            // Calculate movement delta (with small threshold to avoid floating point precision issues)
+
+            // Calculate movement delta (with small threshold to avoid floating point precision
+            // issues)
             constexpr float MOVEMENT_THRESHOLD = 0.5f;
             ImVec2 const delta = ImVec2(currentPos.x - previousPos.x, currentPos.y - previousPos.y);
-            
+
             if (std::abs(delta.x) > MOVEMENT_THRESHOLD || std::abs(delta.y) > MOVEMENT_THRESHOLD)
             {
                 // Group node has moved, move all nodes in the group by the same delta
                 m_skipGroupMovement = true; // Prevent recursion
-                
+
                 for (nodes::NodeId const nodeId : group.nodes)
                 {
                     ImVec2 const nodeCurrentPos = ed::GetNodePosition(nodeId);
-                    ImVec2 const newPos = ImVec2(nodeCurrentPos.x + delta.x, 
-                                                nodeCurrentPos.y + delta.y);
+                    ImVec2 const newPos =
+                      ImVec2(nodeCurrentPos.x + delta.x, nodeCurrentPos.y + delta.y);
                     ed::SetNodePosition(nodeId, newPos);
                 }
-                
+
                 m_skipGroupMovement = false; // Re-enable group movement
-                
+
                 // Update the stored position for the group node
                 m_previousNodePositions[static_cast<nodes::NodeId>(groupNodeId.Get())] = currentPos;
             }
