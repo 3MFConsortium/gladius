@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <fmt/format.h>
 #include <set>
+#include <unordered_map>
 
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
@@ -1358,24 +1359,73 @@ namespace gladius::ui
             return depth;
         };
 
-        // Step 1: Assign Layers
+        // Step 1: Assign Layers (with group analysis)
         std::map<int, std::vector<nodes::NodeBase *>> layers;
         std::map<int, float> layersWidth;
+        
+        // Analyze group constraints before layer assignment
+        auto groupInfos = analyzeGroupDepthConstraints(depthMap);
+        auto groupPlacements = optimizeGroupPlacements(groupInfos, layers);
+        
+        // Create a map from node ID to preferred depth based on group constraints
+        std::unordered_map<nodes::NodeId, int> nodeToPreferredDepth;
+        for (const auto& placement : groupPlacements)
+        {
+            auto groupInfoIt = std::find_if(groupInfos.begin(), groupInfos.end(),
+                [&placement](const GroupDepthInfo& info) { return info.tag == placement.tag; });
+            if (groupInfoIt != groupInfos.end())
+            {
+                for (nodes::NodeId nodeId : groupInfoIt->nodeIds)
+                {
+                    nodeToPreferredDepth[nodeId] = placement.chosenDepth;
+                }
+            }
+        }
+        
+        // Assign nodes to layers, considering group preferences
         for (auto & [id, node] : *currentModel())
         {
-            auto const depth = (id == beginId) ? 0 : determineDepth(id);
+            int depth;
+            auto preferredIt = nodeToPreferredDepth.find(id);
+            if (preferredIt != nodeToPreferredDepth.end())
+            {
+                // Use group-preferred depth if available and valid
+                depth = preferredIt->second;
+            }
+            else
+            {
+                // Fall back to original depth calculation
+                depth = (id == beginId) ? 0 : determineDepth(id);
+            }
+            
             layers[depth].push_back(node.get());
             auto const nodeWidth = ed::GetNodeSize(node->getId()).x;
             layersWidth[depth] = std::max(layersWidth[depth], nodeWidth);
         }
 
-        // Step 2: Order Nodes within Layers (simple topological order for now)
+        // Step 2: Order Nodes within Layers (group-aware clustering)
         for (auto & [depth, nodes] : layers)
         {
+            // Sort by group tag first, then by execution order within groups
             std::sort(nodes.begin(),
                       nodes.end(),
                       [](nodes::NodeBase * a, nodes::NodeBase * b)
-                      { return a->getOrder() < b->getOrder(); });
+                      {
+                          const std::string& tagA = a->getTag();
+                          const std::string& tagB = b->getTag();
+                          
+                          // Group nodes by tag first
+                          if (tagA != tagB)
+                          {
+                              // Empty tags go last
+                              if (tagA.empty()) return false;
+                              if (tagB.empty()) return true;
+                              return tagA < tagB;
+                          }
+                          
+                          // Within same group (or both ungrouped), sort by execution order
+                          return a->getOrder() < b->getOrder();
+                      });
         }
 
         std::vector<float> layerX;
@@ -1386,33 +1436,8 @@ namespace gladius::ui
             x += width + distance;
         }
 
-        // Step 3: Assign Coordinates
-        for (auto & [depth, nodes] : layers)
-        {
-            // substract distance from every second layer to create a zigzag pattern
-            float y = (depth % 2 == 0) ? 0.f : -distance;
-            for (auto & node : nodes)
-            {
-                auto & pos = node->screenPos();
-                auto nodeWidth = ed::GetNodeSize(node->getId()).x;
-                auto nodeHeight = ed::GetNodeSize(node->getId()).y;
-                if (nodeWidth == 0.f || nodeHeight == 0.f)
-                {
-                    bool isResourceNode = dynamic_cast<nodes::Resource *>(node) != nullptr;
-                    if (isResourceNode)
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        return;
-                    }
-                }
-                pos.x = layerX.at(depth);
-                pos.y = y;
-                y += nodeHeight + distance; // Adjust y position to avoid overlap
-            }
-        }
+        // Step 3: Apply group-aware coordinate assignment
+        applyGroupAwareCoordinates(layers, layerX, distance);
 
         currentModel()->markAsLayouted();
 
@@ -1953,4 +1978,181 @@ namespace gladius::ui
             }
         }
     }
-} // namespace gladius::ui// Add the LibraryBrowser management methods to ModelEditor.cpp
+
+    std::vector<ModelEditor::GroupDepthInfo> ModelEditor::analyzeGroupDepthConstraints(const std::unordered_map<nodes::NodeId, int>& depthMap) const
+    {
+        std::vector<GroupDepthInfo> groupInfos;
+        
+        if (!currentModel())
+        {
+            return groupInfos;
+        }
+        
+        // Get node groups from the NodeView
+        const auto& nodeGroups = m_nodeViewVisitor.getNodeGroups();
+        
+        for (const auto& [tag, group] : nodeGroups)
+        {
+            GroupDepthInfo groupInfo;
+            groupInfo.tag = tag;
+            groupInfo.nodeIds = group.nodes;
+            groupInfo.minRequiredDepth = std::numeric_limits<int>::max();
+            groupInfo.maxRequiredDepth = std::numeric_limits<int>::min();
+            groupInfo.hasDepthConstraints = false;
+            
+            // Analyze depth constraints for each node in the group
+            for (nodes::NodeId nodeId : group.nodes)
+            {
+                auto depthIt = depthMap.find(nodeId);
+                if (depthIt != depthMap.end())
+                {
+                    int nodeDepth = depthIt->second;
+                    groupInfo.minRequiredDepth = std::min(groupInfo.minRequiredDepth, nodeDepth);
+                    groupInfo.maxRequiredDepth = std::max(groupInfo.maxRequiredDepth, nodeDepth);
+                    groupInfo.hasDepthConstraints = true;
+                }
+            }
+            
+            // Determine if the group can be moved together
+            if (groupInfo.hasDepthConstraints)
+            {
+                // Check if all nodes in the group can be placed at the same depth
+                // without violating topological constraints
+                int depthRange = groupInfo.maxRequiredDepth - groupInfo.minRequiredDepth;
+                groupInfo.canBeMovedTogether = (depthRange <= 1); // Allow small range for flexibility
+                
+                // Reset to a single target depth if they can be moved together
+                if (groupInfo.canBeMovedTogether)
+                {
+                    // Use the maximum required depth to ensure all dependencies are satisfied
+                    groupInfo.minRequiredDepth = groupInfo.maxRequiredDepth;
+                }
+            }
+            else
+            {
+                // No depth constraints means the group can be moved freely
+                groupInfo.minRequiredDepth = 0;
+                groupInfo.maxRequiredDepth = 0;
+                groupInfo.canBeMovedTogether = true;
+            }
+            
+            groupInfos.push_back(groupInfo);
+        }
+        
+        return groupInfos;
+    }
+
+    float ModelEditor::calculateGroupPlacementCost(const GroupDepthInfo& groupInfo, int targetDepth, const std::map<int, std::vector<nodes::NodeBase*>>& layers) const
+    {
+        float cost = 0.0f;
+        
+        // Cost for violating depth constraints
+        if (groupInfo.hasDepthConstraints)
+        {
+            if (targetDepth < groupInfo.minRequiredDepth)
+            {
+                cost += (groupInfo.minRequiredDepth - targetDepth) * 100.0f; // High penalty for constraint violation
+            }
+            if (targetDepth > groupInfo.maxRequiredDepth + 1) // Allow some flexibility
+            {
+                cost += (targetDepth - groupInfo.maxRequiredDepth - 1) * 50.0f; // Moderate penalty for suboptimal placement
+            }
+        }
+        
+        // Cost for layer congestion (prefer layers with fewer nodes)
+        auto layerIt = layers.find(targetDepth);
+        if (layerIt != layers.end())
+        {
+            cost += layerIt->second.size() * 10.0f; // Penalty for crowded layers
+        }
+        
+        return cost;
+    }
+
+    std::vector<ModelEditor::GroupPlacementOption> ModelEditor::optimizeGroupPlacements(const std::vector<GroupDepthInfo>& groupInfos, const std::map<int, std::vector<nodes::NodeBase*>>& layers) const
+    {
+        std::vector<GroupPlacementOption> placements;
+        
+        for (const auto& groupInfo : groupInfos)
+        {
+            if (!groupInfo.canBeMovedTogether || groupInfo.nodeIds.empty())
+            {
+                continue; // Skip groups that can't be moved together or have no nodes
+            }
+            
+            GroupPlacementOption bestPlacement;
+            bestPlacement.tag = groupInfo.tag;
+            bestPlacement.placementCost = std::numeric_limits<float>::max();
+            
+            // Try different depths around the required range
+            int searchStart = std::max(0, groupInfo.minRequiredDepth - 1);
+            int searchEnd = groupInfo.maxRequiredDepth + 2;
+            
+            for (int depth = searchStart; depth <= searchEnd; ++depth)
+            {
+                float cost = calculateGroupPlacementCost(groupInfo, depth, layers);
+                
+                if (cost < bestPlacement.placementCost)
+                {
+                    bestPlacement.chosenDepth = depth;
+                    bestPlacement.placementCost = cost;
+                }
+            }
+            
+            placements.push_back(bestPlacement);
+        }
+        
+        return placements;
+    }
+
+    void ModelEditor::applyGroupAwareCoordinates(std::map<int, std::vector<nodes::NodeBase*>>& layers, const std::vector<float>& layerX, float distance)
+    {
+        constexpr float GROUP_SPACING_MULTIPLIER = 1.5f; // Extra spacing between groups
+        
+        for (auto & [depth, nodes] : layers)
+        {
+            float y = (depth % 2 == 0) ? 0.f : -distance; // Zigzag pattern
+            std::string currentGroupTag;
+            bool firstInGroup = true;
+            
+            for (auto & node : nodes)
+            {
+                auto & pos = node->screenPos();
+                auto nodeWidth = ed::GetNodeSize(node->getId()).x;
+                auto nodeHeight = ed::GetNodeSize(node->getId()).y;
+                
+                if (nodeWidth == 0.f || nodeHeight == 0.f)
+                {
+                    bool isResourceNode = dynamic_cast<nodes::Resource *>(node) != nullptr;
+                    if (isResourceNode)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                
+                // Add extra spacing between different groups
+                const std::string& nodeTag = node->getTag();
+                if (!nodeTag.empty() && nodeTag != currentGroupTag)
+                {
+                    if (!currentGroupTag.empty() && !firstInGroup)
+                    {
+                        // Add extra spacing when switching to a new group
+                        y += distance * GROUP_SPACING_MULTIPLIER;
+                    }
+                    currentGroupTag = nodeTag;
+                    firstInGroup = true;
+                }
+                
+                pos.x = layerX.at(depth);
+                pos.y = y;
+                y += nodeHeight + distance;
+                firstInGroup = false;
+            }
+        }
+    }
+
+} // namespace gladius::ui

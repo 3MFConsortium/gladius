@@ -176,6 +176,30 @@ namespace gladius::ui
         std::string m_newGroupName;
         std::string m_selectedExistingGroup;
         std::vector<std::string> m_existingGroups;
+
+        /// Group-aware auto layout functionality
+        struct GroupDepthInfo
+        {
+            std::string tag;
+            int minRequiredDepth{0};
+            int maxRequiredDepth{0};
+            std::vector<nodes::NodeId> nodeIds;
+            bool canBeMovedTogether{true};
+            bool hasDepthConstraints{false};
+        };
+        
+        struct GroupPlacementOption
+        {
+            std::string tag;
+            int chosenDepth{0};
+            float placementCost{0.0f};
+        };
+        
+        /// Helper methods for group-aware auto layout
+        std::vector<GroupDepthInfo> analyzeGroupDepthConstraints(const std::unordered_map<nodes::NodeId, int>& depthMap) const;
+        float calculateGroupPlacementCost(const GroupDepthInfo& groupInfo, int targetDepth, const std::map<int, std::vector<nodes::NodeBase*>>& layers) const;
+        std::vector<GroupPlacementOption> optimizeGroupPlacements(const std::vector<GroupDepthInfo>& groupInfos, const std::map<int, std::vector<nodes::NodeBase*>>& layers) const;
+        void applyGroupAwareCoordinates(std::map<int, std::vector<nodes::NodeBase*>>& layers, const std::vector<float>& layerX, float distance);
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);
