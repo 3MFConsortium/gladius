@@ -32,6 +32,9 @@ namespace gladius::ui
             float groupSpacingMultiplier = 1.5f;           ///< Extra spacing factor between groups
             float minGroupSpacing = 40.0f;                 ///< Minimum spacing between group boundaries
             int maxOverlapResolutionIterations = 10;       ///< Max iterations for overlap resolution
+            int maxCrossingReductionIterations = 5;        ///< Max iterations for crossing reduction
+            float crossingReductionConvergenceThreshold = 5.0f; ///< Threshold for crossing reduction convergence
+            float linkDistanceWeight = 1.0f;               ///< Weight for link distance optimization
         };
 
         /**
@@ -133,6 +136,93 @@ namespace gladius::ui
         std::unordered_map<nodes::NodeId, int> determineDepth(
             const nodes::graph::IDirectedGraph& graph,
             nodes::NodeId beginId);
+
+        /**
+         * @brief Optimizes Y positions to reduce crossings and minimize link distances
+         * 
+         * @param layers Map of depth to nodes in that layer
+         * @param model Node model for accessing graph connectivity
+         * @param config Layout configuration
+         */
+        void optimizeYPositions(
+            std::map<int, std::vector<nodes::NodeBase*>>& layers,
+            nodes::Model& model,
+            const LayoutConfig& config);
+
+        /**
+         * @brief Calculates barycenter Y position for a node based on its neighbors
+         * 
+         * @param node Target node
+         * @param layers All layers with nodes
+         * @param model Node model for accessing connectivity
+         * @return Calculated barycenter Y position
+         */
+        float calculateBarycenter(
+            nodes::NodeBase* node,
+            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+            nodes::Model& model) const;
+
+        /**
+         * @brief Counts edge crossings between two adjacent layers
+         * 
+         * @param leftLayer Nodes in the left layer
+         * @param rightLayer Nodes in the right layer
+         * @param model Node model for accessing connectivity
+         * @return Number of edge crossings
+         */
+        int countCrossings(
+            const std::vector<nodes::NodeBase*>& leftLayer,
+            const std::vector<nodes::NodeBase*>& rightLayer,
+            nodes::Model& model) const;
+
+        /**
+         * @brief Calculates total weighted link distance for all edges
+         * 
+         * @param layers All layers with nodes
+         * @param model Node model for accessing connectivity
+         * @return Total weighted link distance
+         */
+        float calculateTotalLinkDistance(
+            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+            nodes::Model& model) const;
+
+        /**
+         * @brief Updates group bounds after Y position changes
+         * 
+         * @param layers All layers with nodes
+         * @param config Layout configuration
+         */
+        void updateGroupBounds(
+            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+            const LayoutConfig& config);
+
+        /**
+         * @brief Checks if a node position violates group boundary constraints
+         * 
+         * @param node Node to check
+         * @param newY Proposed Y position
+         * @param layers All layers with nodes
+         * @return True if position is valid
+         */
+        bool isPositionValid(
+            nodes::NodeBase* node,
+            float newY,
+            const std::map<int, std::vector<nodes::NodeBase*>>& layers) const;
+
+        /**
+         * @brief Optimizes Y positions for nodes in a single layer
+         * 
+         * @param layerNodes Nodes in the layer to optimize
+         * @param layers All layers with nodes
+         * @param model Node model for accessing connectivity
+         * @param config Layout configuration
+         * @return True if positions were changed
+         */
+        bool optimizeLayerYPositions(
+            std::vector<nodes::NodeBase*>& layerNodes,
+            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+            nodes::Model& model,
+            const LayoutConfig& config);
     };
 
 } // namespace gladius::ui

@@ -151,7 +151,10 @@ namespace gladius::ui
         // Step 3: Apply group-aware coordinate assignment
         applyGroupAwareCoordinates(layers, layerXPositions, originalIndividualDepths, config);
         
-        // Step 4: Resolve any group overlaps
+        // Step 4: Optimize Y positions to reduce crossings and minimize link distances
+        optimizeYPositions(layers, model, config);
+        
+        // Step 5: Resolve any group overlaps
         resolveGroupOverlaps(layers, config);
 
         model.markAsLayouted();
@@ -766,6 +769,365 @@ namespace gladius::ui
     {
         // Use existing GraphAlgorithms function
         return nodes::graph::determineDepth(graph, beginId);
+    }
+
+    void NodeLayoutEngine::optimizeYPositions(
+        std::map<int, std::vector<nodes::NodeBase*>>& layers,
+        nodes::Model& model,
+        const LayoutConfig& config)
+    {
+        if (layers.size() < 2)
+        {
+            return; // No optimization needed for single layer
+        }
+
+        float previousTotalDistance = calculateTotalLinkDistance(layers, model);
+        
+        // Iterative crossing reduction using barycenter method
+        for (int iteration = 0; iteration < config.maxCrossingReductionIterations; ++iteration)
+        {
+            bool hasImprovement = false;
+            
+            // Process layers from left to right, then right to left
+            bool forwardPass = (iteration % 2 == 0);
+            
+            if (forwardPass)
+            {
+                // Forward pass: left to right
+                for (auto& [depth, nodes] : layers)
+                {
+                    if (optimizeLayerYPositions(nodes, layers, model, config))
+                    {
+                        hasImprovement = true;
+                    }
+                }
+            }
+            else
+            {
+                // Backward pass: right to left
+                for (auto it = layers.rbegin(); it != layers.rend(); ++it)
+                {
+                    if (optimizeLayerYPositions(it->second, layers, model, config))
+                    {
+                        hasImprovement = true;
+                    }
+                }
+            }
+            
+            // Check for convergence
+            float currentTotalDistance = calculateTotalLinkDistance(layers, model);
+            float improvement = previousTotalDistance - currentTotalDistance;
+            
+            if (improvement < config.crossingReductionConvergenceThreshold)
+            {
+                break; // Converged
+            }
+            
+            previousTotalDistance = currentTotalDistance;
+        }
+        
+        // Update group bounds after Y position changes
+        updateGroupBounds(layers, config);
+    }
+
+    bool NodeLayoutEngine::optimizeLayerYPositions(
+        std::vector<nodes::NodeBase*>& layerNodes,
+        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+        nodes::Model& model,
+        const LayoutConfig& config)
+    {
+        if (layerNodes.size() < 2)
+        {
+            return false; // No optimization needed
+        }
+
+        // Calculate barycenter for each node and create sorting pairs
+        std::vector<std::pair<float, nodes::NodeBase*>> nodeBarycenterPairs;
+        nodeBarycenterPairs.reserve(layerNodes.size());
+
+        for (auto* node : layerNodes)
+        {
+            float barycenter = calculateBarycenter(node, layers, model);
+            nodeBarycenterPairs.emplace_back(barycenter, node);
+        }
+
+        // Sort nodes by barycenter value
+        std::sort(nodeBarycenterPairs.begin(), nodeBarycenterPairs.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        // Check if order changed
+        bool orderChanged = false;
+        for (size_t i = 0; i < layerNodes.size(); ++i)
+        {
+            if (layerNodes[i] != nodeBarycenterPairs[i].second)
+            {
+                orderChanged = true;
+                break;
+            }
+        }
+
+        if (!orderChanged)
+        {
+            return false; // No change needed
+        }
+
+        // Apply new ordering and recalculate Y positions
+        for (size_t i = 0; i < nodeBarycenterPairs.size(); ++i)
+        {
+            layerNodes[i] = nodeBarycenterPairs[i].second;
+        }
+
+        // Recalculate Y positions based on new order
+        float currentY = 0.0f;
+        for (auto* node : layerNodes)
+        {
+            auto nodeSize = ed::GetNodeSize(node->getId());
+            if (nodeSize.y <= 0.0f)
+            {
+                nodeSize.y = 100.0f; // Default height
+            }
+
+            // Check group constraints before applying position
+            if (isPositionValid(node, currentY, layers))
+            {
+                node->screenPos().y = currentY;
+            }
+            else
+            {
+                // Keep original position if new position violates constraints
+                currentY = node->screenPos().y;
+            }
+
+            currentY += nodeSize.y + config.nodeDistance;
+        }
+
+        return true;
+    }
+
+    float NodeLayoutEngine::calculateBarycenter(
+        nodes::NodeBase* node,
+        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+        nodes::Model& model) const
+    {
+        auto const graph = model.getGraph();
+        auto const nodeId = node->getId();
+        
+        // Find connected nodes in adjacent layers
+        std::vector<float> neighborYPositions;
+        
+        // Check all layers for connected nodes
+        for (const auto& [depth, layerNodes] : layers)
+        {
+            for (auto* otherNode : layerNodes)
+            {
+                auto const otherNodeId = otherNode->getId();
+                
+                // Skip self
+                if (nodeId == otherNodeId)
+                {
+                    continue;
+                }
+                
+                // Check if nodes are connected (either direction)
+                bool isConnected = graph.isDirectlyDependingOn(nodeId, otherNodeId) ||
+                                 graph.isDirectlyDependingOn(otherNodeId, nodeId);
+                
+                if (isConnected)
+                {
+                    neighborYPositions.push_back(otherNode->screenPos().y);
+                }
+            }
+        }
+        
+        // Calculate barycenter (average Y position of neighbors)
+        if (neighborYPositions.empty())
+        {
+            return node->screenPos().y; // No neighbors, keep current position
+        }
+        
+        float sum = 0.0f;
+        for (float y : neighborYPositions)
+        {
+            sum += y;
+        }
+        
+        return sum / static_cast<float>(neighborYPositions.size());
+    }
+
+    int NodeLayoutEngine::countCrossings(
+        const std::vector<nodes::NodeBase*>& leftLayer,
+        const std::vector<nodes::NodeBase*>& rightLayer,
+        nodes::Model& model) const
+    {
+        auto const graph = model.getGraph();
+        int crossings = 0;
+        
+        // For each pair of edges, check if they cross
+        for (size_t i = 0; i < leftLayer.size(); ++i)
+        {
+            for (size_t j = 0; j < rightLayer.size(); ++j)
+            {
+                auto const leftNodeId = leftLayer[i]->getId();
+                auto const rightNodeId = rightLayer[j]->getId();
+                
+                // Check if there's an edge from left to right
+                if (!graph.isDirectlyDependingOn(rightNodeId, leftNodeId))
+                {
+                    continue;
+                }
+                
+                // Check against all other edges for crossings
+                for (size_t k = i + 1; k < leftLayer.size(); ++k)
+                {
+                    for (size_t l = 0; l < j; ++l) // Only check edges that could cross
+                    {
+                        auto const otherLeftNodeId = leftLayer[k]->getId();
+                        auto const otherRightNodeId = rightLayer[l]->getId();
+                        
+                        if (graph.isDirectlyDependingOn(otherRightNodeId, otherLeftNodeId))
+                        {
+                            crossings++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        return crossings;
+    }
+
+    float NodeLayoutEngine::calculateTotalLinkDistance(
+        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+        nodes::Model& model) const
+    {
+        auto const graph = model.getGraph();
+        float totalDistance = 0.0f;
+        
+        // Calculate weighted distance for all edges
+        for (const auto& [depth, layerNodes] : layers)
+        {
+            for (auto* node : layerNodes)
+            {
+                auto const nodeId = node->getId();
+                auto const nodePos = node->screenPos();
+                
+                // Check connections to all other nodes
+                for (const auto& [otherDepth, otherLayerNodes] : layers)
+                {
+                    for (auto* otherNode : otherLayerNodes)
+                    {
+                        auto const otherNodeId = otherNode->getId();
+                        
+                        if (nodeId == otherNodeId)
+                        {
+                            continue;
+                        }
+                        
+                        // Check if nodes are connected
+                        if (graph.isDirectlyDependingOn(otherNodeId, nodeId))
+                        {
+                            auto const otherNodePos = otherNode->screenPos();
+                            float dx = nodePos.x - otherNodePos.x;
+                            float dy = nodePos.y - otherNodePos.y;
+                            float distance = std::sqrt(dx * dx + dy * dy);
+                            totalDistance += distance;
+                        }
+                    }
+                }
+            }
+        }
+        
+        return totalDistance;
+    }
+
+    void NodeLayoutEngine::updateGroupBounds(
+        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
+        const LayoutConfig& config)
+    {
+        constexpr float GROUP_PADDING = 40.0f;
+        std::unordered_map<std::string, ImVec2> groupMinBounds;
+        std::unordered_map<std::string, ImVec2> groupMaxBounds;
+        
+        // Calculate new group bounds based on current node positions
+        for (const auto& [depth, layerNodes] : layers)
+        {
+            for (auto* node : layerNodes)
+            {
+                const std::string& tag = node->getTag();
+                if (tag.empty())
+                {
+                    continue; // Skip ungrouped nodes
+                }
+                
+                auto const& pos = node->screenPos();
+                auto const nodeSize = ed::GetNodeSize(node->getId());
+                
+                auto minBound = ImVec2(pos.x - GROUP_PADDING, pos.y - GROUP_PADDING);
+                auto maxBound = ImVec2(pos.x + nodeSize.x + GROUP_PADDING, 
+                                     pos.y + nodeSize.y + GROUP_PADDING);
+                
+                if (groupMinBounds.find(tag) == groupMinBounds.end())
+                {
+                    groupMinBounds[tag] = minBound;
+                    groupMaxBounds[tag] = maxBound;
+                }
+                else
+                {
+                    groupMinBounds[tag].x = std::min(groupMinBounds[tag].x, minBound.x);
+                    groupMinBounds[tag].y = std::min(groupMinBounds[tag].y, minBound.y);
+                    groupMaxBounds[tag].x = std::max(groupMaxBounds[tag].x, maxBound.x);
+                    groupMaxBounds[tag].y = std::max(groupMaxBounds[tag].y, maxBound.y);
+                }
+            }
+        }
+        
+        // Group bounds are now calculated and could be stored/used if needed
+        // For now, we'll let the resolveGroupOverlaps method handle any conflicts
+    }
+
+    bool NodeLayoutEngine::isPositionValid(
+        nodes::NodeBase* node,
+        float newY,
+        const std::map<int, std::vector<nodes::NodeBase*>>& layers) const
+    {
+        const std::string& nodeTag = node->getTag();
+        
+        // If node is not in a group, position is always valid for this check
+        if (nodeTag.empty())
+        {
+            return true;
+        }
+        
+        // For grouped nodes, ensure they don't move outside their group's extent
+        // This is a simplified check - more sophisticated validation could be added
+        constexpr float GROUP_TOLERANCE = 50.0f;
+        
+        // Find other nodes in the same group to determine valid Y range
+        float minGroupY = std::numeric_limits<float>::max();
+        float maxGroupY = std::numeric_limits<float>::lowest();
+        bool foundGroupMembers = false;
+        
+        for (const auto& [depth, layerNodes] : layers)
+        {
+            for (auto* otherNode : layerNodes)
+            {
+                if (otherNode->getTag() == nodeTag && otherNode != node)
+                {
+                    foundGroupMembers = true;
+                    float otherY = otherNode->screenPos().y;
+                    minGroupY = std::min(minGroupY, otherY);
+                    maxGroupY = std::max(maxGroupY, otherY);
+                }
+            }
+        }
+        
+        if (!foundGroupMembers)
+        {
+            return true; // No other group members to constrain against
+        }
+        
+        // Allow some tolerance around the group's Y extent
+        return (newY >= minGroupY - GROUP_TOLERANCE && newY <= maxGroupY + GROUP_TOLERANCE);
     }
 
 } // namespace gladius::ui
