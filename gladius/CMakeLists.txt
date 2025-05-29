@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.12)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Options
+option(ENABLE_OPENCL_TESTS "Enable tests that require OpenCL" ON)
+
 set(CPACK_PACKAGE_VERSION_MAJOR "1")
 set(CPACK_PACKAGE_VERSION_MINOR "2")
 set(CPACK_PACKAGE_VERSION_PATCH "12")

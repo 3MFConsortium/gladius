@@ -4,6 +4,19 @@ include(GoogleTest)
 
 set(BINARY ${CMAKE_PROJECT_NAME}_test)
 file(GLOB_RECURSE TEST_SOURCES LIST_DIRECTORIES false *.h *.cpp)
+
+# Remove OpenCL-requiring tests if disabled
+if(NOT ENABLE_OPENCL_TESTS)
+    list(REMOVE_ITEM TEST_SOURCES 
+        "${CMAKE_CURRENT_SOURCE_DIR}/Assembly_tests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ComputeCore_tests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/CliReader_tests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ToCommandStreamVisitor_tests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Builder_tests.cpp"
+    )
+    message(STATUS "OpenCL tests disabled - excluding OpenCL-requiring unit tests")
+endif()
+
 set(SOURCES ${TEST_SOURCES})
 add_executable(${BINARY} ${TEST_SOURCES})
 
