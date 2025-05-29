@@ -16,6 +16,11 @@ Consider also adding tests for the features you implement.
     - add a way to restore from a backup
     - add a session ID to the backup file name, so that it doesn't get overwritten
     - offer to restore the backup in the welcome dialog
+9. function parser to parse the function code and create the nodes and connections automatically
+10. dialog to add a function from a mathematical expression
+11. text based function editor, allow switching between text and node editor
+12. gsls import
+13. gsls export (e.g. shadertoy)
 
 ## Done
 

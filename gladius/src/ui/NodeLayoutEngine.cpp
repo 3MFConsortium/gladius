@@ -269,183 +269,198 @@ namespace gladius::ui
         const std::unordered_map<nodes::NodeId, int>& originalIndividualDepths,
         const LayoutConfig& config)
     {
-        // First, organize nodes by their groups
-        std::map<std::string, std::vector<nodes::NodeBase*>> allGroupedNodes;
-        std::vector<nodes::NodeBase*> allUngroupedNodes;
+        // Create a mapping from nodes to their actual topological depths
+        std::map<nodes::NodeBase*, int> nodeToActualDepth;
         
-        // Group nodes by their tags across all layers
-        for (auto& [depth, nodes] : layers)
+        // First, identify the global min and max topological depths
+        int minTopologicalDepth = std::numeric_limits<int>::max();
+        int maxTopologicalDepth = std::numeric_limits<int>::min();
+        
+        for (auto& [layer, nodes] : layers)
         {
             for (auto* node : nodes)
             {
-                const std::string& nodeTag = node->getTag();
-                if (nodeTag.empty())
-                {
-                    allUngroupedNodes.push_back(node);
-                }
-                else
-                {
-                    allGroupedNodes[nodeTag].push_back(node);
-                }
-            }
-        }
-        
-        // Now let's place the ungrouped nodes first by layer
-        std::map<int, float> layerHeights; // Track the height used in each layer
-        
-        // Position ungrouped nodes in their respective layers
-        for (auto* node : allUngroupedNodes)
-        {
-            // Determine the layer for this node
-            int nodeLayer = -1;
-            for (const auto& [depth, layerNodes] : layers)
-            {
-                if (std::find(layerNodes.begin(), layerNodes.end(), node) != layerNodes.end())
-                {
-                    nodeLayer = depth;
-                    break;
-                }
-            }
-            
-            if (nodeLayer == -1) continue; // Skip if we couldn't find the layer
-            
-            auto& pos = node->screenPos();
-            auto nodeWidth = ed::GetNodeSize(node->getId()).x;
-            auto nodeHeight = ed::GetNodeSize(node->getId()).y;
-            
-            if (nodeWidth == 0.0f || nodeHeight == 0.0f)
-            {
-                bool isResourceNode = dynamic_cast<nodes::Resource*>(node) != nullptr;
-                if (isResourceNode)
-                {
-                    continue;
-                }
-                else
-                {
-                    return;
-                }
-            }
-            
-            float startY = (nodeLayer % 2 == 0) ? 0.0f : -config.nodeDistance;
-            if (layerHeights.find(nodeLayer) == layerHeights.end())
-            {
-                layerHeights[nodeLayer] = startY;
-            }
-            
-            pos.x = layerXPositions.at(nodeLayer);
-            pos.y = layerHeights[nodeLayer];
-            layerHeights[nodeLayer] += nodeHeight + config.nodeDistance;
-        }
-        
-        // Now place each group using layered layout internally
-        float groupStartX = 0.0f;
-        for (const auto& [tag, groupNodes] : allGroupedNodes)
-        {
-            if (groupNodes.empty()) continue;
-            
-            // Sort nodes within group by their original topological depth
-            std::vector<nodes::NodeBase*> sortedGroupNodes = groupNodes;
-            std::sort(sortedGroupNodes.begin(), sortedGroupNodes.end(),
-                [&originalIndividualDepths](nodes::NodeBase* a, nodes::NodeBase* b)
-                {
-                    int depthA = originalIndividualDepths.count(a->getId()) ? originalIndividualDepths.at(a->getId()) : 0;
-                    int depthB = originalIndividualDepths.count(b->getId()) ? originalIndividualDepths.at(b->getId()) : 0;
-                    return depthA < depthB; // Maintain topological order within group
-                });
-            
-            // Group the nodes by their topological depth
-            std::map<int, std::vector<nodes::NodeBase*>> groupInternalLayers;
-            for (auto* node : sortedGroupNodes)
-            {
-                int nodeTopologicalDepth = originalIndividualDepths.count(node->getId()) ? 
+                int topologicalDepth = originalIndividualDepths.count(node->getId()) ? 
                     originalIndividualDepths.at(node->getId()) : 0;
-                groupInternalLayers[nodeTopologicalDepth].push_back(node);
+                nodeToActualDepth[node] = topologicalDepth;
+                minTopologicalDepth = std::min(minTopologicalDepth, topologicalDepth);
+                maxTopologicalDepth = std::max(maxTopologicalDepth, topologicalDepth);
             }
-            
-            // Find the hosting layer for this group (use the layer of the first node)
-            int hostLayer = -1;
-            for (const auto& [depth, layerNodes] : layers)
+        }
+        
+        // Create a mapping from topological depth to nodes (grouped by tags)
+        std::map<int, std::map<std::string, std::vector<nodes::NodeBase*>>> depthToTaggedNodes;
+        std::map<int, std::vector<nodes::NodeBase*>> depthToUngroupedNodes;
+        
+        // Organize nodes by their topological depth and groups
+        for (auto& [layer, nodes] : layers)
+        {
+            for (auto* node : nodes)
             {
-                if (std::find(layerNodes.begin(), layerNodes.end(), sortedGroupNodes[0]) != layerNodes.end())
+                int topologicalDepth = nodeToActualDepth[node];
+                const std::string& tag = node->getTag();
+                
+                if (tag.empty())
                 {
-                    hostLayer = depth;
-                    break;
+                    depthToUngroupedNodes[topologicalDepth].push_back(node);
+                }
+                else
+                {
+                    depthToTaggedNodes[topologicalDepth][tag].push_back(node);
+                }
+            }
+        }
+        
+        // Find all unique groups
+        std::set<std::string> allGroupTags;
+        for (auto& [depth, taggedNodes] : depthToTaggedNodes)
+        {
+            for (auto& [tag, nodes] : taggedNodes)
+            {
+                allGroupTags.insert(tag);
+            }
+        }
+        
+        // For each group, find min and max topological depths
+        std::map<std::string, std::pair<int, int>> groupDepthRanges;
+        for (const auto& tag : allGroupTags)
+        {
+            int minDepth = std::numeric_limits<int>::max();
+            int maxDepth = std::numeric_limits<int>::min();
+            
+            for (auto& [depth, taggedNodes] : depthToTaggedNodes)
+            {
+                if (taggedNodes.find(tag) != taggedNodes.end())
+                {
+                    minDepth = std::min(minDepth, depth);
+                    maxDepth = std::max(maxDepth, depth);
                 }
             }
             
-            if (hostLayer == -1) continue; // Skip if we couldn't determine the host layer
+            groupDepthRanges[tag] = {minDepth, maxDepth};
+        }
+        
+        // Now create topological columns - nodes in a column share the same topological depth
+        // Each column may contain ungrouped nodes and nodes from different groups
+        const float columnSpacing = config.nodeDistance * 1.5f;
+        float xPos = 0.0f;
+        std::map<int, float> depthToXPosition;
+        
+        // Assign X positions based on topological depth
+        for (int depth = minTopologicalDepth; depth <= maxTopologicalDepth; ++depth)
+        {
+            depthToXPosition[depth] = xPos;
             
-            // Set up the group starting position
-            float baseX = layerXPositions.at(hostLayer);
+            // Find max width among all nodes at this depth
+            float maxWidth = 0.0f;
             
-            // If we need to move to a new position to avoid ungrouped nodes
-            if (layerHeights.find(hostLayer) != layerHeights.end() && layerHeights[hostLayer] > 0)
+            // Check ungrouped nodes
+            if (depthToUngroupedNodes.find(depth) != depthToUngroupedNodes.end())
             {
-                baseX += config.nodeDistance * config.groupSpacingMultiplier;
-            }
-            
-            // Apply a layered layout within the group
-            std::map<int, float> groupLayerWidths;
-            std::map<int, float> groupLayerXPositions;
-            
-            // Determine the width needed for each internal layer
-            for (auto& [internalDepth, depthNodes] : groupInternalLayers)
-            {
-                float maxWidth = 0.0f;
-                for (auto* node : depthNodes)
+                for (auto* node : depthToUngroupedNodes[depth])
                 {
                     float nodeWidth = ed::GetNodeSize(node->getId()).x;
+                    if (nodeWidth <= 0.0f)
+                    {
+                        nodeWidth = 200.0f; // Default width
+                    }
                     maxWidth = std::max(maxWidth, nodeWidth);
                 }
-                groupLayerWidths[internalDepth] = maxWidth;
             }
             
-            // Calculate X positions for each internal layer
-            float internalX = baseX;
-            for (auto& [internalDepth, width] : groupLayerWidths)
+            // Check grouped nodes
+            if (depthToTaggedNodes.find(depth) != depthToTaggedNodes.end())
             {
-                groupLayerXPositions[internalDepth] = internalX;
-                internalX += width + config.nodeDistance * 0.75f; // Slightly tighter spacing within groups
-            }
-            
-            // Position each node within its internal layer
-            std::map<int, float> internalLayerHeights;
-            for (auto& [internalDepth, depthNodes] : groupInternalLayers)
-            {
-                float layerY = (hostLayer % 2 == 0) ? 0.0f : -config.nodeDistance;
-                if (internalLayerHeights.find(internalDepth) == internalLayerHeights.end())
+                for (auto& [tag, nodes] : depthToTaggedNodes[depth])
                 {
-                    internalLayerHeights[internalDepth] = layerY;
+                    for (auto* node : nodes)
+                    {
+                        float nodeWidth = ed::GetNodeSize(node->getId()).x;
+                        if (nodeWidth <= 0.0f)
+                        {
+                            nodeWidth = 200.0f; // Default width
+                        }
+                        maxWidth = std::max(maxWidth, nodeWidth);
+                    }
                 }
-                
-                for (auto* node : depthNodes)
+            }
+            
+            // Update X position for next column
+            xPos += maxWidth + columnSpacing;
+        }
+        
+        // Now position all nodes by their topological depth
+        // First, position ungrouped nodes
+        std::map<int, float> depthToYPosition;
+        for (int depth = minTopologicalDepth; depth <= maxTopologicalDepth; ++depth)
+        {
+            float yPos = 0.0f;
+            
+            if (depthToUngroupedNodes.find(depth) != depthToUngroupedNodes.end())
+            {
+                for (auto* node : depthToUngroupedNodes[depth])
                 {
                     auto& pos = node->screenPos();
                     auto nodeHeight = ed::GetNodeSize(node->getId()).y;
                     
-                    if (nodeHeight == 0.0f)
+                    if (nodeHeight <= 0.0f)
                     {
                         bool isResourceNode = dynamic_cast<nodes::Resource*>(node) != nullptr;
                         if (isResourceNode)
                         {
                             continue;
                         }
-                        else
-                        {
-                            return;
-                        }
+                        nodeHeight = 100.0f; // Default height
                     }
                     
-                    pos.x = groupLayerXPositions[internalDepth];
-                    pos.y = internalLayerHeights[internalDepth];
-                    internalLayerHeights[internalDepth] += nodeHeight + config.nodeDistance;
+                    pos.x = depthToXPosition[depth];
+                    pos.y = yPos;
+                    yPos += nodeHeight + config.nodeDistance;
                 }
             }
             
-            // Update the end X position for the next group
-            if (!groupLayerXPositions.empty())
+            depthToYPosition[depth] = yPos + config.nodeDistance * 2.0f; // Add extra space for groups below
+        }
+        
+        // Now position grouped nodes
+        for (const auto& tag : allGroupTags)
+        {
+            int minDepth = groupDepthRanges[tag].first;
+            int maxDepth = groupDepthRanges[tag].second;
+            
+            // Position nodes in this group across their depths
+            std::map<int, float> groupDepthToYPosition;
+            
+            for (int depth = minDepth; depth <= maxDepth; ++depth)
             {
-                groupStartX = internalX + config.nodeDistance * config.groupSpacingMultiplier;
+                if (depthToTaggedNodes.find(depth) != depthToTaggedNodes.end() &&
+                    depthToTaggedNodes[depth].find(tag) != depthToTaggedNodes[depth].end())
+                {
+                    float yPos = depthToYPosition[depth]; // Start below ungrouped nodes
+                    
+                    for (auto* node : depthToTaggedNodes[depth][tag])
+                    {
+                        auto& pos = node->screenPos();
+                        auto nodeHeight = ed::GetNodeSize(node->getId()).y;
+                        
+                        if (nodeHeight <= 0.0f)
+                        {
+                            bool isResourceNode = dynamic_cast<nodes::Resource*>(node) != nullptr;
+                            if (isResourceNode)
+                            {
+                                continue;
+                            }
+                            nodeHeight = 100.0f; // Default height
+                        }
+                        
+                        pos.x = depthToXPosition[depth];
+                        pos.y = yPos;
+                        yPos += nodeHeight + config.nodeDistance;
+                    }
+                    
+                    // Update the Y position for the next group at this depth
+                    depthToYPosition[depth] = yPos + config.nodeDistance;
+                }
             }
         }
     }
