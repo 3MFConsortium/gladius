@@ -158,9 +158,9 @@ namespace gladius::nodes::graph::tests
     {
         auto matrixOrder = topologicalSort(*matrixGraph);
         auto listOrder = topologicalSort(*listGraph);
-        
+
         EXPECT_EQ(matrixOrder.size(), listOrder.size());
-        
+
         // Note: There could be multiple valid topological orderings,
         // so we can't directly compare the vectors. We can verify that
         // the dependencies are respected in both orderings.

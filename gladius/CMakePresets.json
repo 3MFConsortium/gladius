@@ -38,7 +38,8 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_CXX_FLAGS_DEBUG": "/Z7 /RTCus /D_ITERATOR_DEBUG_LEVEL=2 /D_DEBUG /D_DISABLE_VECTOR_ANNOTATION",
                 "ENABLE_TRACY": "false",
-                "ENABLE_ASAN": "false"
+                "ENABLE_ASAN": "false",
+                "ENABLE_OPENCL_TESTS": "OFF"
             }
         },
         {
