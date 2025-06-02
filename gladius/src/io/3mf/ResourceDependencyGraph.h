@@ -1,6 +1,6 @@
 #pragma once
 
-#include "nodes/graph/DirectedGraph.h"
+#include "nodes/graph/AdjacencyListDirectedGraph.h"
 #include "nodes/graph/IDirectedGraph.h"
 #include <lib3mf_abi.hpp>
 #include <lib3mf_implicit.hpp>

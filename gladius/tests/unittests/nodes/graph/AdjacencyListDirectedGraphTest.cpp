@@ -12,11 +12,11 @@ namespace gladius::nodes::graph::tests
         void SetUp() override
         {
             // Create a directed graph using the matrix implementation
-            matrixGraph = std::make_unique<DirectedGraph>(10);
+            matrixGraph = std::make_unique<DirectedGraph>(5);
             
             // Create a directed graph using the adjacency list implementation
-            listGraph = std::make_unique<AdjacencyListDirectedGraph>(10);
-            
+            listGraph = std::make_unique<AdjacencyListDirectedGraph>(5);
+
             // Add common test data to both implementations
             setupTestGraphs();
         }
