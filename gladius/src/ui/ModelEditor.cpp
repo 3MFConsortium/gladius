@@ -1305,11 +1305,11 @@ namespace gladius::ui
         createUndoRestorePoint("Autolayout");
 
         // Use the dedicated layout engine for all layout operations
-        NodeLayoutEngine layoutEngine;
-        NodeLayoutEngine::LayoutConfig config;
+        gladius::ui::NodeLayoutEngine layoutEngine;
+        gladius::ui::NodeLayoutEngine::LayoutConfig config;
         config.nodeDistance = distance;
-        config.groupSpacingMultiplier = 1.5f;
-        config.minGroupSpacing = distance * 2.0f;
+        config.layerSpacing = distance * 1.5f;
+        config.groupPadding = distance * 0.5f;
         
         layoutEngine.performAutoLayout(*currentModel(), config);
 

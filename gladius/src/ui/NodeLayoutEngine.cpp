@@ -29,176 +29,199 @@ namespace gladius::ui
         auto const beginId = model.getBeginNode()->getId();
         auto depthMap = determineDepth(graph, beginId);
 
-        auto getDepth = [&](nodes::NodeId nodeId)
-        {
-            auto const depthIter = depthMap.find(nodeId);
-            if (depthIter != std::end(depthMap))
-            {
-                return depthIter->second;
-            }
-            return 0;
-        };
+        // Step 1: Analyze groups and separate nodes
+        auto groups = analyzeGroups(model, depthMap);
+        std::vector<nodes::NodeBase*> ungroupedNodes;
+        std::vector<nodes::NodeBase*> constantNodes;
 
-        auto getDepthCloseToSuccessor = [&](nodes::NodeId nodeId)
+        for (auto& [id, node] : model)
         {
-            auto successsor = nodes::graph::determineSuccessor(graph, nodeId);
-            int lowestDepth = std::numeric_limits<int>::max();
-            for (auto const succ : successsor)
+            if (isConstantNode(node.get()))
             {
-                auto const depthIter = depthMap.find(succ);
-                if (depthIter != std::end(depthMap))
-                {
-                    lowestDepth = std::min(lowestDepth, depthIter->second);
-                }
+                constantNodes.push_back(node.get());
             }
-
-            if (lowestDepth != std::numeric_limits<int>::max())
+            else if (node->getTag().empty())
             {
-                return lowestDepth - 1;
+                ungroupedNodes.push_back(node.get());
             }
-            return 0;
-        };
-
-        auto determineDepthForNode = [&](nodes::NodeId nodeId)
-        {
-            auto const depth = getDepth(nodeId);
-            if (depth == 0)
-            {
-                return getDepthCloseToSuccessor(nodeId);
-            }
-            return depth;
-        };
-
-        // Step 1: Assign Layers (with group analysis)
-        std::map<int, std::vector<nodes::NodeBase *>> layers;
-        std::map<int, float> layersWidth;
-        
-        // Store original individual depths for within-group sorting
-        std::unordered_map<nodes::NodeId, int> originalIndividualDepths;
-        for (auto& [nodeId, depth] : depthMap)
-        {
-            originalIndividualDepths[nodeId] = depth;
-        }
-        
-        // Analyze group constraints before layer assignment
-        auto groupInfos = analyzeGroupDepthConstraints(depthMap, model);
-        auto groupPlacements = optimizeGroupPlacements(groupInfos, layers);
-        
-        // Create a map from node ID to preferred depth based on group constraints
-        std::unordered_map<nodes::NodeId, int> nodeToPreferredDepth;
-        for (const auto& placement : groupPlacements)
-        {
-            auto groupInfoIt = std::find_if(groupInfos.begin(), groupInfos.end(),
-                [&placement](const GroupDepthInfo& info) { return info.tag == placement.tag; });
-            if (groupInfoIt != groupInfos.end())
-            {
-                for (nodes::NodeId nodeId : groupInfoIt->nodeIds)
-                {
-                    nodeToPreferredDepth[nodeId] = placement.chosenDepth;
-                }
-            }
-        }
-        
-        // Assign nodes to layers, considering group preferences
-        for (auto & [id, node] : model)
-        {
-            int depth;
-            auto preferredIt = nodeToPreferredDepth.find(id);
-            if (preferredIt != nodeToPreferredDepth.end())
-            {
-                depth = preferredIt->second;
-            }
-            else
-            {
-                depth = (id == beginId) ? 0 : determineDepthForNode(id);
-            }
-            
-            layers[depth].push_back(node.get());
-            auto const nodeWidth = ed::GetNodeSize(node->getId()).x;
-            layersWidth[depth] = std::max(layersWidth[depth], nodeWidth);
+            // Grouped nodes are already in groups
         }
 
-        // Step 2: Order Nodes within Layers (group-aware clustering)
-        for (auto & [depth, nodes] : layers)
+        // Step 2: Layout ungrouped nodes using generic algorithm
+        layoutUngroupedNodes(ungroupedNodes, depthMap, config);
+
+        // Step 3: Layout nodes within each group using generic algorithm
+        for (auto& group : groups)
         {
-            std::sort(nodes.begin(),
-                      nodes.end(),
-                      [](nodes::NodeBase * a, nodes::NodeBase * b)
-                      {
-                          const std::string& tagA = a->getTag();
-                          const std::string& tagB = b->getTag();
-                          
-                          if (tagA != tagB)
-                          {
-                              if (tagA.empty()) return false;
-                              if (tagB.empty()) return true;
-                              return tagA < tagB;
-                          }
-                          
-                          return a->getOrder() < b->getOrder();
-                      });
+            layoutNodesInGroup(group, depthMap, config);
         }
 
-        // Calculate layer X positions
-        std::map<int, float> layerXPositions;
-        float x = 0.f;
-        for (auto & [depth, width] : layersWidth)
+        // Step 4: Layout groups themselves to avoid overlaps
+        layoutGroups(groups, config);
+
+        // Step 5: Position constant nodes close to their connected nodes
+        for (auto* constantNode : constantNodes)
         {
-            layerXPositions[depth] = x;
-            x += width + config.nodeDistance;
+            auto optimalPos = calculateConstantNodePosition(constantNode, model, config);
+            constantNode->screenPos() = nodes::float2(optimalPos.x, optimalPos.y);
         }
 
-        // Step 3: Apply group-aware coordinate assignment
-        applyGroupAwareCoordinates(layers, layerXPositions, originalIndividualDepths, config);
-        
-        // Step 4: Optimize Y positions to reduce crossings and minimize link distances
-        optimizeYPositions(layers, model, config);
-        
-        // Step 5: Resolve any group overlaps
-        resolveGroupOverlaps(layers, config);
+        // Step 6: Final overlap resolution
+        resolveOverlaps(ungroupedNodes, constantNodes, groups, config);
 
         model.markAsLayouted();
     }
 
-    std::vector<NodeLayoutEngine::GroupDepthInfo> NodeLayoutEngine::analyzeGroupDepthConstraints(
-        const std::unordered_map<nodes::NodeId, int>& depthMap,
-        nodes::Model& model)
+    // ========== Generic Layout Algorithm ==========
+
+    template<typename T>
+    void NodeLayoutEngine::performLayeredLayout(std::vector<LayoutEntity<T>>& entities, const LayoutConfig& config)
     {
-        std::unordered_map<std::string, GroupDepthInfo> groupMap;
+        if (entities.empty())
+        {
+            return;
+        }
+
+        // Step 1: Arrange entities in layers based on depth
+        auto layers = arrangeInLayers(entities);
+
+        // Step 2: Calculate layer X positions
+        std::map<int, float> layerXPositions;
+        float currentX = 0.0f;
+        
+        for (auto& [depth, layerEntities] : layers)
+        {
+            layerXPositions[depth] = currentX;
+            
+            // Find maximum width in this layer
+            float maxWidth = 0.0f;
+            for (auto* entity : layerEntities)
+            {
+                maxWidth = std::max(maxWidth, entity->size.x);
+            }
+            
+            currentX += maxWidth + config.layerSpacing;
+        }
+
+        // Step 3: Position entities in Y direction within each layer
+        for (auto& [depth, layerEntities] : layers)
+        {
+            float currentY = 0.0f;
+            
+            for (auto* entity : layerEntities)
+            {
+                entity->position.x = layerXPositions[depth];
+                entity->position.y = currentY;
+                currentY += entity->size.y + config.nodeDistance;
+            }
+        }
+
+        // Step 4: Optimize positions to minimize crossings
+        optimizeLayerPositions(layers, config);
+
+        // Step 5: Apply positions back to entities
+        for (auto& entity : entities)
+        {
+            // This will be handled by the specific layout methods
+        }
+    }
+
+    // ========== Constant Node Handling ==========
+
+    bool NodeLayoutEngine::isConstantNode(nodes::NodeBase* node) const
+    {
+        auto const& nodeName = node->name();
+        return nodeName == "ConstantScalar" || 
+               nodeName == "ConstantVector" || 
+               nodeName == "ConstantMatrix";
+    }
+
+    ImVec2 NodeLayoutEngine::calculateConstantNodePosition(nodes::NodeBase* constantNode, 
+                                                          nodes::Model& model, 
+                                                          const LayoutConfig& config)
+    {
+        auto const graph = model.getGraph();
+        auto const nodeId = constantNode->getId();
+        
+        // Find connected nodes
+        std::vector<nodes::NodeBase*> connectedNodes;
+        for (auto& [id, node] : model)
+        {
+            if (id != nodeId && (graph.isDirectlyDependingOn(id, nodeId) || graph.isDirectlyDependingOn(nodeId, id)))
+            {
+                connectedNodes.push_back(node.get());
+            }
+        }
+        
+        if (connectedNodes.empty())
+        {
+            // No connections, place at origin
+            return ImVec2(0.0f, 0.0f);
+        }
+        
+        // Calculate average position of connected nodes
+        ImVec2 avgPosition(0.0f, 0.0f);
+        float minX = std::numeric_limits<float>::max();
+        
+        for (auto* connected : connectedNodes)
+        {
+            auto& pos = connected->screenPos();
+            avgPosition.x += pos.x;
+            avgPosition.y += pos.y;
+            minX = std::min(minX, pos.x);
+        }
+        
+        avgPosition.x /= static_cast<float>(connectedNodes.size());
+        avgPosition.y /= static_cast<float>(connectedNodes.size());
+        
+        // Position constant node to the left of the leftmost connected node
+        // but not further left than necessary
+        float constantX = minX - config.constantNodeOffset;
+        constantX = std::max(constantX, 0.0f); // Don't go too far left
+        
+        return ImVec2(constantX, avgPosition.y);
+    }
+
+    // ========== Group Analysis ==========
+
+    std::vector<NodeLayoutEngine::GroupInfo> NodeLayoutEngine::analyzeGroups(nodes::Model& model, 
+                                                                             const std::unordered_map<nodes::NodeId, int>& depthMap)
+    {
+        std::unordered_map<std::string, GroupInfo> groupMap;
         
         // Collect nodes by group
-        for (auto & [id, node] : model)
+        for (auto& [id, node] : model)
         {
             const std::string& tag = node->getTag();
-            if (tag.empty()) continue;
+            if (tag.empty() || isConstantNode(node.get())) 
+            {
+                continue; // Skip ungrouped and constant nodes
+            }
             
-            auto depth = depthMap.find(id);
-            int nodeDepth = (depth != depthMap.end()) ? depth->second : 0;
+            auto depthIter = depthMap.find(id);
+            int nodeDepth = (depthIter != depthMap.end()) ? depthIter->second : 0;
             
             if (groupMap.find(tag) == groupMap.end())
             {
-                groupMap[tag] = {
-                    tag,
-                    nodeDepth,
-                    nodeDepth,
-                    {id},
-                    true
-                };
+                GroupInfo newGroup;
+                newGroup.tag = tag;
+                newGroup.nodes = {node.get()};
+                newGroup.minDepth = nodeDepth;
+                newGroup.maxDepth = nodeDepth;
+                newGroup.position = ImVec2(0, 0);
+                newGroup.size = ImVec2(0, 0);
+                groupMap[tag] = std::move(newGroup);
             }
             else
             {
                 auto& groupInfo = groupMap[tag];
-                groupInfo.minRequiredDepth = std::min(groupInfo.minRequiredDepth, nodeDepth);
-                groupInfo.maxRequiredDepth = std::max(groupInfo.maxRequiredDepth, nodeDepth);
-                groupInfo.nodeIds.push_back(id);
-                
-                // Group can be moved together if depth range is reasonable
-                groupInfo.canBeMovedTogether = 
-                    (groupInfo.maxRequiredDepth - groupInfo.minRequiredDepth) <= 2;
+                groupInfo.nodes.push_back(node.get());
+                groupInfo.minDepth = std::min(groupInfo.minDepth, nodeDepth);
+                groupInfo.maxDepth = std::max(groupInfo.maxDepth, nodeDepth);
             }
         }
         
-        std::vector<GroupDepthInfo> result;
+        std::vector<GroupInfo> result;
         for (auto& [tag, info] : groupMap)
         {
             result.push_back(std::move(info));
@@ -207,927 +230,423 @@ namespace gladius::ui
         return result;
     }
 
-    std::vector<NodeLayoutEngine::GroupPlacementOption> NodeLayoutEngine::optimizeGroupPlacements(
-        const std::vector<GroupDepthInfo>& groupInfos,
-        std::map<int, std::vector<nodes::NodeBase*>>& layers)
-    {
-        std::vector<GroupPlacementOption> placements;
-        
-        for (const auto& groupInfo : groupInfos)
-        {
-            int bestDepth = groupInfo.minRequiredDepth;
-            float bestCost = std::numeric_limits<float>::max();
-            
-            // Try different depth options for this group
-            for (int depth = groupInfo.minRequiredDepth; 
-                 depth <= groupInfo.maxRequiredDepth + 1; 
-                 ++depth)
-            {
-                float cost = calculateGroupPlacementCost(groupInfo, depth, layers);
-                if (cost < bestCost)
-                {
-                    bestCost = cost;
-                    bestDepth = depth;
-                }
-            }
-            
-            placements.push_back({groupInfo.tag, bestDepth, bestCost});
-        }
-        
-        return placements;
-    }
+    // ========== Specific Layout Methods ==========
 
-    float NodeLayoutEngine::calculateGroupPlacementCost(
-        const GroupDepthInfo& groupInfo,
-        int targetDepth,
-        const std::map<int, std::vector<nodes::NodeBase*>>& layers)
+    void NodeLayoutEngine::layoutUngroupedNodes(const std::vector<nodes::NodeBase*>& ungroupedNodes,
+                                               const std::unordered_map<nodes::NodeId, int>& depthMap,
+                                               const LayoutConfig& config)
     {
-        float cost = 0.0f;
-        
-        // Penalty for fragmenting the group across multiple layers
-        if (targetDepth < groupInfo.minRequiredDepth || targetDepth > groupInfo.maxRequiredDepth)
+        if (ungroupedNodes.empty())
         {
-            cost += 100.0f; // High penalty for invalid placement
+            return;
         }
-        
-        // Penalty for placing in crowded layers
-        auto layerIt = layers.find(targetDepth);
-        if (layerIt != layers.end())
-        {
-            cost += static_cast<float>(layerIt->second.size()) * 10.0f;
-        }
-        
-        // Bonus for keeping group compact
-        if (groupInfo.canBeMovedTogether)
-        {
-            cost -= 20.0f;
-        }
-        
-        return cost;
-    }
 
-    void NodeLayoutEngine::applyGroupAwareCoordinates(
-        std::map<int, std::vector<nodes::NodeBase*>>& layers,
-        const std::map<int, float>& layerXPositions,
-        const std::unordered_map<nodes::NodeId, int>& originalIndividualDepths,
-        const LayoutConfig& config)
-    {
-        // Create a mapping from nodes to their actual topological depths
-        std::map<nodes::NodeBase*, int> nodeToActualDepth;
+        // Create entities for generic layout
+        std::vector<NodeEntity> entities;
+        entities.reserve(ungroupedNodes.size());
         
-        // First, identify the global min and max topological depths
-        int minTopologicalDepth = std::numeric_limits<int>::max();
-        int maxTopologicalDepth = std::numeric_limits<int>::min();
-        
-        for (auto& [layer, nodes] : layers)
+        for (auto* node : ungroupedNodes)
         {
-            for (auto* node : nodes)
-            {
-                int topologicalDepth = originalIndividualDepths.count(node->getId()) ? 
-                    originalIndividualDepths.at(node->getId()) : 0;
-                nodeToActualDepth[node] = topologicalDepth;
-                minTopologicalDepth = std::min(minTopologicalDepth, topologicalDepth);
-                maxTopologicalDepth = std::max(maxTopologicalDepth, topologicalDepth);
-            }
+            auto depthIter = depthMap.find(node->getId());
+            int depth = (depthIter != depthMap.end()) ? depthIter->second : 0;
+            
+            entities.emplace_back(node, depth);
+            auto& entity = entities.back();
+            entity.size = calculateEntitySize(entity);
         }
-        
-        // Create a mapping from topological depth to nodes (grouped by tags)
-        std::map<int, std::map<std::string, std::vector<nodes::NodeBase*>>> depthToTaggedNodes;
-        std::map<int, std::vector<nodes::NodeBase*>> depthToUngroupedNodes;
-        
-        // Organize nodes by their topological depth and groups
-        for (auto& [layer, nodes] : layers)
+
+        // Apply generic layered layout
+        performLayeredLayout(entities, config);
+
+        // Apply results back to nodes
+        for (size_t i = 0; i < entities.size(); ++i)
         {
-            for (auto* node : nodes)
-            {
-                int topologicalDepth = nodeToActualDepth[node];
-                const std::string& tag = node->getTag();
-                
-                if (tag.empty())
-                {
-                    depthToUngroupedNodes[topologicalDepth].push_back(node);
-                }
-                else
-                {
-                    depthToTaggedNodes[topologicalDepth][tag].push_back(node);
-                }
-            }
-        }
-        
-        // Find all unique groups
-        std::set<std::string> allGroupTags;
-        for (auto& [depth, taggedNodes] : depthToTaggedNodes)
-        {
-            for (auto& [tag, nodes] : taggedNodes)
-            {
-                allGroupTags.insert(tag);
-            }
-        }
-        
-        // For each group, find min and max topological depths
-        std::map<std::string, std::pair<int, int>> groupDepthRanges;
-        for (const auto& tag : allGroupTags)
-        {
-            int minDepth = std::numeric_limits<int>::max();
-            int maxDepth = std::numeric_limits<int>::min();
-            
-            for (auto& [depth, taggedNodes] : depthToTaggedNodes)
-            {
-                if (taggedNodes.find(tag) != taggedNodes.end())
-                {
-                    minDepth = std::min(minDepth, depth);
-                    maxDepth = std::max(maxDepth, depth);
-                }
-            }
-            
-            groupDepthRanges[tag] = {minDepth, maxDepth};
-        }
-        
-        // Now create topological columns - nodes in a column share the same topological depth
-        // Each column may contain ungrouped nodes and nodes from different groups
-        const float columnSpacing = config.nodeDistance * 1.5f;
-        float xPos = 0.0f;
-        std::map<int, float> depthToXPosition;
-        
-        // Assign X positions based on topological depth
-        for (int depth = minTopologicalDepth; depth <= maxTopologicalDepth; ++depth)
-        {
-            depthToXPosition[depth] = xPos;
-            
-            // Find max width among all nodes at this depth
-            float maxWidth = 0.0f;
-            
-            // Check ungrouped nodes
-            if (depthToUngroupedNodes.find(depth) != depthToUngroupedNodes.end())
-            {
-                for (auto* node : depthToUngroupedNodes[depth])
-                {
-                    float nodeWidth = ed::GetNodeSize(node->getId()).x;
-                    if (nodeWidth <= 0.0f)
-                    {
-                        nodeWidth = 200.0f; // Default width
-                    }
-                    maxWidth = std::max(maxWidth, nodeWidth);
-                }
-            }
-            
-            // Check grouped nodes
-            if (depthToTaggedNodes.find(depth) != depthToTaggedNodes.end())
-            {
-                for (auto& [tag, nodes] : depthToTaggedNodes[depth])
-                {
-                    for (auto* node : nodes)
-                    {
-                        float nodeWidth = ed::GetNodeSize(node->getId()).x;
-                        if (nodeWidth <= 0.0f)
-                        {
-                            nodeWidth = 200.0f; // Default width
-                        }
-                        maxWidth = std::max(maxWidth, nodeWidth);
-                    }
-                }
-            }
-            
-            // Update X position for next column
-            xPos += maxWidth + columnSpacing;
-        }
-        
-        // Now position all nodes by their topological depth
-        // First, position ungrouped nodes
-        std::map<int, float> depthToYPosition;
-        for (int depth = minTopologicalDepth; depth <= maxTopologicalDepth; ++depth)
-        {
-            float yPos = 0.0f;
-            
-            if (depthToUngroupedNodes.find(depth) != depthToUngroupedNodes.end())
-            {
-                for (auto* node : depthToUngroupedNodes[depth])
-                {
-                    auto& pos = node->screenPos();
-                    auto nodeHeight = ed::GetNodeSize(node->getId()).y;
-                    
-                    if (nodeHeight <= 0.0f)
-                    {
-                        bool isResourceNode = dynamic_cast<nodes::Resource*>(node) != nullptr;
-                        if (isResourceNode)
-                        {
-                            continue;
-                        }
-                        nodeHeight = 100.0f; // Default height
-                    }
-                    
-                    pos.x = depthToXPosition[depth];
-                    pos.y = yPos;
-                    yPos += nodeHeight + config.nodeDistance;
-                }
-            }
-            
-            depthToYPosition[depth] = yPos + config.nodeDistance * 2.0f; // Add extra space for groups below
-        }
-        
-        // Now position grouped nodes
-        for (const auto& tag : allGroupTags)
-        {
-            int minDepth = groupDepthRanges[tag].first;
-            int maxDepth = groupDepthRanges[tag].second;
-            
-            // Position nodes in this group across their depths
-            std::map<int, float> groupDepthToYPosition;
-            
-            for (int depth = minDepth; depth <= maxDepth; ++depth)
-            {
-                if (depthToTaggedNodes.find(depth) != depthToTaggedNodes.end() &&
-                    depthToTaggedNodes[depth].find(tag) != depthToTaggedNodes[depth].end())
-                {
-                    float yPos = depthToYPosition[depth]; // Start below ungrouped nodes
-                    
-                    for (auto* node : depthToTaggedNodes[depth][tag])
-                    {
-                        auto& pos = node->screenPos();
-                        auto nodeHeight = ed::GetNodeSize(node->getId()).y;
-                        
-                        if (nodeHeight <= 0.0f)
-                        {
-                            bool isResourceNode = dynamic_cast<nodes::Resource*>(node) != nullptr;
-                            if (isResourceNode)
-                            {
-                                continue;
-                            }
-                            nodeHeight = 100.0f; // Default height
-                        }
-                        
-                        pos.x = depthToXPosition[depth];
-                        pos.y = yPos;
-                        yPos += nodeHeight + config.nodeDistance;
-                    }
-                    
-                    // Update the Y position for the next group at this depth
-                    depthToYPosition[depth] = yPos + config.nodeDistance;
-                }
-            }
+            ungroupedNodes[i]->screenPos() = nodes::float2(entities[i].position.x, entities[i].position.y);
         }
     }
 
-    void NodeLayoutEngine::resolveGroupOverlaps(
-        std::map<int, std::vector<nodes::NodeBase*>>& layers,
-        const LayoutConfig& config)
+    void NodeLayoutEngine::layoutNodesInGroup(GroupInfo& groupInfo,
+                                             const std::unordered_map<nodes::NodeId, int>& depthMap,
+                                             const LayoutConfig& config)
     {
-        struct NodeBounds
+        if (groupInfo.nodes.empty())
         {
-            ImVec2 minBound;
-            ImVec2 maxBound;
+            return;
+        }
+
+        // Create entities for nodes in this group
+        std::vector<NodeEntity> entities;
+        entities.reserve(groupInfo.nodes.size());
+        
+        for (auto* node : groupInfo.nodes)
+        {
+            auto depthIter = depthMap.find(node->getId());
+            int depth = (depthIter != depthMap.end()) ? depthIter->second : 0;
             
-            bool overlaps(const NodeBounds& other, float minSpacing) const
+            entities.emplace_back(node, depth);
+            auto& entity = entities.back();
+            entity.size = calculateEntitySize(entity);
+        }
+
+        // Apply generic layered layout with tighter spacing for grouped nodes
+        LayoutConfig groupConfig = config;
+        groupConfig.nodeDistance *= 0.7f; // Tighter spacing within groups
+        groupConfig.layerSpacing *= 0.8f;
+
+        performLayeredLayout(entities, groupConfig);
+
+        // Apply results back to nodes
+        for (size_t i = 0; i < entities.size(); ++i)
+        {
+            groupInfo.nodes[i]->screenPos() = nodes::float2(entities[i].position.x, entities[i].position.y);
+        }
+
+        // Update group bounds
+        updateGroupBounds(groupInfo);
+    }
+
+    void NodeLayoutEngine::layoutGroups(std::vector<GroupInfo>& groups, const LayoutConfig& config)
+    {
+        if (groups.empty())
+        {
+            return;
+        }
+
+        // Sort groups by their minimum depth to maintain topological order
+        std::sort(groups.begin(), groups.end(),
+                 [](const GroupInfo& a, const GroupInfo& b) {
+                     return a.minDepth < b.minDepth;
+                 });
+
+        // Layout groups with sufficient spacing to avoid overlaps
+        ImVec2 currentPos(0.0f, 0.0f);
+        float maxGroupHeight = 0.0f;
+        int currentDepth = -1;
+
+        for (auto& group : groups)
+        {
+            // If we're at a new depth level, move to next "layer"
+            if (group.minDepth != currentDepth)
             {
-                return !(maxBound.x + minSpacing <= other.minBound.x || 
-                        minBound.x >= other.maxBound.x + minSpacing ||
-                        maxBound.y + minSpacing <= other.minBound.y || 
-                        minBound.y >= other.maxBound.y + minSpacing);
+                if (currentDepth != -1)
+                {
+                    currentPos.x += config.layerSpacing;
+                    currentPos.y = 0.0f; // Reset Y for new layer
+                }
+                currentDepth = group.minDepth;
             }
-        };
-        
-        struct GroupBounds : NodeBounds
-        {
-            std::string tag;
-            std::vector<nodes::NodeBase*> nodes;
-        };
-        
-        std::unordered_map<std::string, GroupBounds> groupBounds;
-        std::vector<std::pair<NodeBounds, nodes::NodeBase*>> ungroupedNodeBounds;
-        
-        constexpr float GROUP_PADDING = 40.0f;
-        constexpr float NODE_PADDING = 10.0f;
-        
-        // Calculate current bounds for each group and ungrouped node
-        for (const auto& [depth, nodes] : layers)
-        {
-            for (auto* node : nodes)
+            else
             {
-                auto& pos = node->screenPos();
+                // Same depth, stack vertically
+                currentPos.y += maxGroupHeight + config.groupPadding;
+            }
+
+            // Apply group offset to all nodes in the group
+            ImVec2 groupOffset = currentPos;
+            for (auto* node : group.nodes)
+            {
+                auto& nodePos = node->screenPos();
+                nodePos.x += groupOffset.x;
+                nodePos.y += groupOffset.y;
+            }
+
+            // Update group position and size
+            updateGroupBounds(group);
+            maxGroupHeight = std::max(maxGroupHeight, group.size.y);
+        }
+    }
+
+    void NodeLayoutEngine::resolveOverlaps(const std::vector<nodes::NodeBase*>& ungroupedNodes,
+                                         const std::vector<nodes::NodeBase*>& constantNodes,
+                                         std::vector<GroupInfo>& groups,
+                                         const LayoutConfig& config)
+    {
+        constexpr float MIN_SPACING = 20.0f;
+        const int MAX_ITERATIONS = config.maxOptimizationIterations;
+
+        for (int iteration = 0; iteration < MAX_ITERATIONS; ++iteration)
+        {
+            bool hasOverlaps = false;
+
+            // Check overlaps between ungrouped nodes and groups
+            for (auto* node : ungroupedNodes)
+            {
+                auto nodePos = node->screenPos();
                 auto nodeSize = ed::GetNodeSize(node->getId());
-                
-                if (nodeSize.x <= 0.0f || nodeSize.y <= 0.0f)
+                if (nodeSize.x <= 0.0f) nodeSize.x = 200.0f;
+                if (nodeSize.y <= 0.0f) nodeSize.y = 100.0f;
+
+                for (auto& group : groups)
                 {
-                    nodeSize = ImVec2(200.0f, 100.0f);
-                }
-                
-                const std::string& tag = node->getTag();
-                if (tag.empty())
-                {
-                    // This is an ungrouped node
-                    NodeBounds nodeBound;
-                    nodeBound.minBound = ImVec2(pos.x, pos.y);
-                    nodeBound.maxBound = ImVec2(pos.x + nodeSize.x, pos.y + nodeSize.y);
-                    ungroupedNodeBounds.push_back({nodeBound, node});
-                }
-                else
-                {
-                    // This is a grouped node
-                    if (groupBounds.find(tag) == groupBounds.end())
+                    // Check if node overlaps with group
+                    if (nodePos.x < group.position.x + group.size.x + MIN_SPACING &&
+                        nodePos.x + nodeSize.x + MIN_SPACING > group.position.x &&
+                        nodePos.y < group.position.y + group.size.y + MIN_SPACING &&
+                        nodePos.y + nodeSize.y + MIN_SPACING > group.position.y)
                     {
-                        GroupBounds newBound;
-                        newBound.tag = tag;
-                        newBound.minBound = ImVec2(pos.x - GROUP_PADDING, pos.y - GROUP_PADDING);
-                        newBound.maxBound = ImVec2(pos.x + nodeSize.x + GROUP_PADDING, pos.y + nodeSize.y + GROUP_PADDING);
-                        newBound.nodes.push_back(node);
-                        groupBounds[tag] = newBound;
-                    }
-                    else
-                    {
-                        auto& bounds = groupBounds[tag];
-                        bounds.minBound.x = std::min(bounds.minBound.x, pos.x - GROUP_PADDING);
-                        bounds.minBound.y = std::min(bounds.minBound.y, pos.y - GROUP_PADDING);
-                        bounds.maxBound.x = std::max(bounds.maxBound.x, pos.x + nodeSize.x + GROUP_PADDING);
-                        bounds.maxBound.y = std::max(bounds.maxBound.y, pos.y + nodeSize.y + GROUP_PADDING);
-                        bounds.nodes.push_back(node);
-                    }
-                }
-            }
-        }
-        
-        // Resolve overlaps iteratively
-        bool hasOverlaps = true;
-        int iteration = 0;
-        
-        while (hasOverlaps && iteration < config.maxOverlapResolutionIterations)
-        {
-            hasOverlaps = false;
-            ++iteration;
-            
-            // First, resolve overlaps between groups
-            for (auto& [tag1, bounds1] : groupBounds)
-            {
-                for (auto& [tag2, bounds2] : groupBounds)
-                {
-                    if (tag1 >= tag2) continue;
-                    
-                    if (bounds1.overlaps(bounds2, config.minGroupSpacing))
-                    {
-                        hasOverlaps = true;
+                        // Move node away from group (prefer moving right/down)
+                        float deltaX = (group.position.x + group.size.x + MIN_SPACING) - nodePos.x;
+                        float deltaY = (group.position.y + group.size.y + MIN_SPACING) - nodePos.y;
                         
-                        float horizontalOverlap = std::min(bounds1.maxBound.x, bounds2.maxBound.x) - 
-                                                 std::max(bounds1.minBound.x, bounds2.minBound.x);
-                        float verticalOverlap = std::min(bounds1.maxBound.y, bounds2.maxBound.y) - 
-                                               std::max(bounds1.minBound.y, bounds2.minBound.y);
-                        
-                        if (horizontalOverlap < verticalOverlap)
+                        if (std::abs(deltaX) < std::abs(deltaY))
                         {
-                            if (bounds1.minBound.x < bounds2.minBound.x)
-                            {
-                                float moveDistance = bounds1.maxBound.x + config.minGroupSpacing - bounds2.minBound.x;
-                                for (auto* node : bounds2.nodes)
-                                {
-                                    node->screenPos().x += moveDistance;
-                                }
-                                bounds2.minBound.x += moveDistance;
-                                bounds2.maxBound.x += moveDistance;
-                            }
-                            else
-                            {
-                                float moveDistance = bounds2.maxBound.x + config.minGroupSpacing - bounds1.minBound.x;
-                                for (auto* node : bounds1.nodes)
-                                {
-                                    node->screenPos().x += moveDistance;
-                                }
-                                bounds1.minBound.x += moveDistance;
-                                bounds1.maxBound.x += moveDistance;
-                            }
+                            node->screenPos().x += deltaX;
                         }
                         else
                         {
-                            if (bounds1.minBound.y < bounds2.minBound.y)
-                            {
-                                float moveDistance = bounds1.maxBound.y + config.minGroupSpacing - bounds2.minBound.y;
-                                for (auto* node : bounds2.nodes)
-                                {
-                                    node->screenPos().y += moveDistance;
-                                }
-                                bounds2.minBound.y += moveDistance;
-                                bounds2.maxBound.y += moveDistance;
-                            }
-                            else
-                            {
-                                float moveDistance = bounds2.maxBound.y + config.minGroupSpacing - bounds1.minBound.y;
-                                for (auto* node : bounds1.nodes)
-                                {
-                                    node->screenPos().y += moveDistance;
-                                }
-                                bounds1.minBound.y += moveDistance;
-                                bounds1.maxBound.y += moveDistance;
-                            }
+                            node->screenPos().y += deltaY;
                         }
+                        hasOverlaps = true;
                     }
                 }
             }
-            
-            // Now resolve overlaps between ungrouped nodes and groups
-            for (auto& [nodeBound, node] : ungroupedNodeBounds)
+
+            // Check overlaps between constant nodes and groups
+            for (auto* constantNode : constantNodes)
             {
-                for (auto& [tag, groupBound] : groupBounds)
+                auto nodePos = constantNode->screenPos();
+                auto nodeSize = ed::GetNodeSize(constantNode->getId());
+                if (nodeSize.x <= 0.0f) nodeSize.x = 150.0f; // Constant nodes are usually smaller
+                if (nodeSize.y <= 0.0f) nodeSize.y = 80.0f;
+
+                for (auto& group : groups)
                 {
-                    if (nodeBound.overlaps(groupBound, NODE_PADDING))
+                    // Check if constant node overlaps with group
+                    if (nodePos.x < group.position.x + group.size.x + MIN_SPACING &&
+                        nodePos.x + nodeSize.x + MIN_SPACING > group.position.x &&
+                        nodePos.y < group.position.y + group.size.y + MIN_SPACING &&
+                        nodePos.y + nodeSize.y + MIN_SPACING > group.position.y)
                     {
-                        hasOverlaps = true;
+                        // Move constant node away from group (prefer moving left since constants are typically to the left)
+                        float deltaX = group.position.x - (nodePos.x + nodeSize.x + MIN_SPACING);
+                        float deltaY = (group.position.y + group.size.y + MIN_SPACING) - nodePos.y;
                         
-                        // Update node bounds to current position (might have been moved in previous iterations)
-                        auto& pos = node->screenPos();
-                        auto nodeSize = ed::GetNodeSize(node->getId());
-                        if (nodeSize.x <= 0.0f || nodeSize.y <= 0.0f)
+                        if (std::abs(deltaX) < std::abs(deltaY) && deltaX < 0)
                         {
-                            nodeSize = ImVec2(200.0f, 100.0f);
-                        }
-                        nodeBound.minBound = ImVec2(pos.x, pos.y);
-                        nodeBound.maxBound = ImVec2(pos.x + nodeSize.x, pos.y + nodeSize.y);
-                        
-                        // Move the ungrouped node outside the group
-                        // Determine shortest direction to move
-                        float distToLeft = nodeBound.minBound.x - groupBound.minBound.x;
-                        float distToRight = groupBound.maxBound.x - nodeBound.maxBound.x;
-                        float distToTop = nodeBound.minBound.y - groupBound.minBound.y;
-                        float distToBottom = groupBound.maxBound.y - nodeBound.maxBound.y;
-                        
-                        float minDist = std::min({std::abs(distToLeft), std::abs(distToRight), 
-                                               std::abs(distToTop), std::abs(distToBottom)});
-                        
-                        if (minDist == std::abs(distToLeft) && distToLeft < 0)
-                        {
-                            // Move to the left of the group
-                            float moveDistance = groupBound.minBound.x - nodeBound.maxBound.x - NODE_PADDING;
-                            pos.x += moveDistance;
-                            nodeBound.minBound.x += moveDistance;
-                            nodeBound.maxBound.x += moveDistance;
-                        }
-                        else if (minDist == std::abs(distToRight) && distToRight < 0)
-                        {
-                            // Move to the right of the group
-                            float moveDistance = groupBound.maxBound.x - nodeBound.minBound.x + NODE_PADDING;
-                            pos.x += moveDistance;
-                            nodeBound.minBound.x += moveDistance;
-                            nodeBound.maxBound.x += moveDistance;
-                        }
-                        else if (minDist == std::abs(distToTop) && distToTop < 0)
-                        {
-                            // Move above the group
-                            float moveDistance = groupBound.minBound.y - nodeBound.maxBound.y - NODE_PADDING;
-                            pos.y += moveDistance;
-                            nodeBound.minBound.y += moveDistance;
-                            nodeBound.maxBound.y += moveDistance;
-                        }
-                        else if (minDist == std::abs(distToBottom) && distToBottom < 0)
-                        {
-                            // Move below the group
-                            float moveDistance = groupBound.maxBound.y - nodeBound.minBound.y + NODE_PADDING;
-                            pos.y += moveDistance;
-                            nodeBound.minBound.y += moveDistance;
-                            nodeBound.maxBound.y += moveDistance;
-                        }
-                    }
-                }
-            }
-            
-            // Finally resolve overlaps between ungrouped nodes
-            for (size_t i = 0; i < ungroupedNodeBounds.size(); i++)
-            {
-                auto& [boundsA, nodeA] = ungroupedNodeBounds[i];
-                
-                for (size_t j = i + 1; j < ungroupedNodeBounds.size(); j++)
-                {
-                    auto& [boundsB, nodeB] = ungroupedNodeBounds[j];
-                    
-                    if (boundsA.overlaps(boundsB, NODE_PADDING))
-                    {
-                        hasOverlaps = true;
-                        
-                        // Update node bounds to current positions
-                        auto& posA = nodeA->screenPos();
-                        auto sizeA = ed::GetNodeSize(nodeA->getId());
-                        if (sizeA.x <= 0.0f || sizeA.y <= 0.0f)
-                        {
-                            sizeA = ImVec2(200.0f, 100.0f);
-                        }
-                        boundsA.minBound = ImVec2(posA.x, posA.y);
-                        boundsA.maxBound = ImVec2(posA.x + sizeA.x, posA.y + sizeA.y);
-                        
-                        auto& posB = nodeB->screenPos();
-                        auto sizeB = ed::GetNodeSize(nodeB->getId());
-                        if (sizeB.x <= 0.0f || sizeB.y <= 0.0f)
-                        {
-                            sizeB = ImVec2(200.0f, 100.0f);
-                        }
-                        boundsB.minBound = ImVec2(posB.x, posB.y);
-                        boundsB.maxBound = ImVec2(posB.x + sizeB.x, posB.y + sizeB.y);
-                        
-                        // Resolve overlap using similar logic to group-group overlap
-                        float horizontalOverlap = std::min(boundsA.maxBound.x, boundsB.maxBound.x) - 
-                                                std::max(boundsA.minBound.x, boundsB.minBound.x);
-                        float verticalOverlap = std::min(boundsA.maxBound.y, boundsB.maxBound.y) - 
-                                              std::max(boundsA.minBound.y, boundsB.minBound.y);
-                        
-                        if (horizontalOverlap < verticalOverlap)
-                        {
-                            if (boundsA.minBound.x < boundsB.minBound.x)
-                            {
-                                float moveDistance = boundsA.maxBound.x + NODE_PADDING - boundsB.minBound.x;
-                                posB.x += moveDistance;
-                                boundsB.minBound.x += moveDistance;
-                                boundsB.maxBound.x += moveDistance;
-                            }
-                            else
-                            {
-                                float moveDistance = boundsB.maxBound.x + NODE_PADDING - boundsA.minBound.x;
-                                posA.x += moveDistance;
-                                boundsA.minBound.x += moveDistance;
-                                boundsA.maxBound.x += moveDistance;
-                            }
+                            constantNode->screenPos().x += deltaX;
                         }
                         else
                         {
-                            if (boundsA.minBound.y < boundsB.minBound.y)
-                            {
-                                float moveDistance = boundsA.maxBound.y + NODE_PADDING - boundsB.minBound.y;
-                                posB.y += moveDistance;
-                                boundsB.minBound.y += moveDistance;
-                                boundsB.maxBound.y += moveDistance;
-                            }
-                            else
-                            {
-                                float moveDistance = boundsB.maxBound.y + NODE_PADDING - boundsA.minBound.y;
-                                posA.y += moveDistance;
-                                boundsA.minBound.y += moveDistance;
-                                boundsA.maxBound.y += moveDistance;
-                            }
+                            constantNode->screenPos().y += deltaY;
                         }
+                        hasOverlaps = true;
                     }
                 }
+            }
+
+            // Check overlaps between constant nodes and ungrouped nodes
+            for (auto* constantNode : constantNodes)
+            {
+                auto constantPos = constantNode->screenPos();
+                auto constantSize = ed::GetNodeSize(constantNode->getId());
+                if (constantSize.x <= 0.0f) constantSize.x = 150.0f;
+                if (constantSize.y <= 0.0f) constantSize.y = 80.0f;
+
+                for (auto* regularNode : ungroupedNodes)
+                {
+                    auto nodePos = regularNode->screenPos();
+                    auto nodeSize = ed::GetNodeSize(regularNode->getId());
+                    if (nodeSize.x <= 0.0f) nodeSize.x = 200.0f;
+                    if (nodeSize.y <= 0.0f) nodeSize.y = 100.0f;
+
+                    // Check if constant node overlaps with regular node
+                    if (constantPos.x < nodePos.x + nodeSize.x + MIN_SPACING &&
+                        constantPos.x + constantSize.x + MIN_SPACING > nodePos.x &&
+                        constantPos.y < nodePos.y + nodeSize.y + MIN_SPACING &&
+                        constantPos.y + constantSize.y + MIN_SPACING > nodePos.y)
+                    {
+                        // Move constant node away (prefer moving left)
+                        float deltaX = nodePos.x - (constantPos.x + constantSize.x + MIN_SPACING);
+                        float deltaY = (nodePos.y + nodeSize.y + MIN_SPACING) - constantPos.y;
+                        
+                        if (std::abs(deltaX) < std::abs(deltaY) && deltaX < 0)
+                        {
+                            constantNode->screenPos().x += deltaX;
+                        }
+                        else
+                        {
+                            constantNode->screenPos().y += deltaY;
+                        }
+                        hasOverlaps = true;
+                    }
+                }
+            }
+
+            // Check overlaps between constant nodes themselves
+            for (size_t i = 0; i < constantNodes.size(); ++i)
+            {
+                auto* node1 = constantNodes[i];
+                auto pos1 = node1->screenPos();
+                auto size1 = ed::GetNodeSize(node1->getId());
+                if (size1.x <= 0.0f) size1.x = 150.0f;
+                if (size1.y <= 0.0f) size1.y = 80.0f;
+
+                for (size_t j = i + 1; j < constantNodes.size(); ++j)
+                {
+                    auto* node2 = constantNodes[j];
+                    auto pos2 = node2->screenPos();
+                    auto size2 = ed::GetNodeSize(node2->getId());
+                    if (size2.x <= 0.0f) size2.x = 150.0f;
+                    if (size2.y <= 0.0f) size2.y = 80.0f;
+
+                    // Check if constant nodes overlap
+                    if (pos1.x < pos2.x + size2.x + MIN_SPACING &&
+                        pos1.x + size1.x + MIN_SPACING > pos2.x &&
+                        pos1.y < pos2.y + size2.y + MIN_SPACING &&
+                        pos1.y + size1.y + MIN_SPACING > pos2.y)
+                    {
+                        // Move nodes apart vertically (stack them)
+                        float overlapY = (pos1.y + size1.y + MIN_SPACING) - pos2.y;
+                        if (overlapY > 0)
+                        {
+                            node2->screenPos().y += overlapY;
+                        }
+                        else
+                        {
+                            node1->screenPos().y += -overlapY;
+                        }
+                        hasOverlaps = true;
+                    }
+                }
+            }
+
+            if (!hasOverlaps)
+            {
+                break; // No more overlaps, we're done
             }
         }
     }
+
+    // ========== Helper Methods ==========
 
     std::unordered_map<nodes::NodeId, int> NodeLayoutEngine::determineDepth(
         const nodes::graph::IDirectedGraph& graph,
         nodes::NodeId beginId)
     {
-        // Use existing GraphAlgorithms function
         return nodes::graph::determineDepth(graph, beginId);
     }
 
-    void NodeLayoutEngine::optimizeYPositions(
-        std::map<int, std::vector<nodes::NodeBase*>>& layers,
-        nodes::Model& model,
-        const LayoutConfig& config)
+    template<typename T>
+    std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<T>*>> NodeLayoutEngine::arrangeInLayers(std::vector<LayoutEntity<T>>& entities)
     {
-        if (layers.size() < 2)
-        {
-            return; // No optimization needed for single layer
-        }
-
-        float previousTotalDistance = calculateTotalLinkDistance(layers, model);
+        std::map<int, std::vector<LayoutEntity<T>*>> layers;
         
-        // Iterative crossing reduction using barycenter method
-        for (int iteration = 0; iteration < config.maxCrossingReductionIterations; ++iteration)
+        for (auto& entity : entities)
         {
-            bool hasImprovement = false;
-            
-            // Process layers from left to right, then right to left
-            bool forwardPass = (iteration % 2 == 0);
-            
-            if (forwardPass)
-            {
-                // Forward pass: left to right
-                for (auto& [depth, nodes] : layers)
-                {
-                    if (optimizeLayerYPositions(nodes, layers, model, config))
-                    {
-                        hasImprovement = true;
-                    }
-                }
-            }
-            else
-            {
-                // Backward pass: right to left
-                for (auto it = layers.rbegin(); it != layers.rend(); ++it)
-                {
-                    if (optimizeLayerYPositions(it->second, layers, model, config))
-                    {
-                        hasImprovement = true;
-                    }
-                }
-            }
-            
-            // Check for convergence
-            float currentTotalDistance = calculateTotalLinkDistance(layers, model);
-            float improvement = previousTotalDistance - currentTotalDistance;
-            
-            if (improvement < config.crossingReductionConvergenceThreshold)
-            {
-                break; // Converged
-            }
-            
-            previousTotalDistance = currentTotalDistance;
+            layers[entity.depth].push_back(&entity);
         }
         
-        // Update group bounds after Y position changes
-        updateGroupBounds(layers, config);
+        // Sort within each layer (for consistent ordering)
+        for (auto& [depth, layerEntities] : layers)
+        {
+            std::sort(layerEntities.begin(), layerEntities.end(),
+                     [](const LayoutEntity<T>* a, const LayoutEntity<T>* b) {
+                         return a->item < b->item; // Pointer comparison for consistency
+                     });
+        }
+        
+        return layers;
     }
 
-    bool NodeLayoutEngine::optimizeLayerYPositions(
-        std::vector<nodes::NodeBase*>& layerNodes,
-        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-        nodes::Model& model,
-        const LayoutConfig& config)
+    template<typename T>
+    void NodeLayoutEngine::optimizeLayerPositions(std::map<int, std::vector<LayoutEntity<T>*>>& layers, 
+                                                  const LayoutConfig& config)
     {
-        if (layerNodes.size() < 2)
+        // Simple optimization: distribute entities evenly within each layer
+        for (auto& [depth, layerEntities] : layers)
         {
-            return false; // No optimization needed
-        }
-
-        // Calculate barycenter for each node and create sorting pairs
-        std::vector<std::pair<float, nodes::NodeBase*>> nodeBarycenterPairs;
-        nodeBarycenterPairs.reserve(layerNodes.size());
-
-        for (auto* node : layerNodes)
-        {
-            float barycenter = calculateBarycenter(node, layers, model);
-            nodeBarycenterPairs.emplace_back(barycenter, node);
-        }
-
-        // Sort nodes by barycenter value
-        std::sort(nodeBarycenterPairs.begin(), nodeBarycenterPairs.end(),
-                  [](const auto& a, const auto& b) { return a.first < b.first; });
-
-        // Check if order changed
-        bool orderChanged = false;
-        for (size_t i = 0; i < layerNodes.size(); ++i)
-        {
-            if (layerNodes[i] != nodeBarycenterPairs[i].second)
+            if (layerEntities.size() <= 1)
             {
-                orderChanged = true;
-                break;
-            }
-        }
-
-        if (!orderChanged)
-        {
-            return false; // No change needed
-        }
-
-        // Apply new ordering and recalculate Y positions
-        for (size_t i = 0; i < nodeBarycenterPairs.size(); ++i)
-        {
-            layerNodes[i] = nodeBarycenterPairs[i].second;
-        }
-
-        // Recalculate Y positions based on new order
-        float currentY = 0.0f;
-        for (auto* node : layerNodes)
-        {
-            auto nodeSize = ed::GetNodeSize(node->getId());
-            if (nodeSize.y <= 0.0f)
-            {
-                nodeSize.y = 100.0f; // Default height
+                continue;
             }
 
-            // Check group constraints before applying position
-            if (isPositionValid(node, currentY, layers))
-            {
-                node->screenPos().y = currentY;
-            }
-            else
-            {
-                // Keep original position if new position violates constraints
-                currentY = node->screenPos().y;
-            }
+            // Sort by current Y position
+            std::sort(layerEntities.begin(), layerEntities.end(),
+                     [](const LayoutEntity<T>* a, const LayoutEntity<T>* b) {
+                         return a->position.y < b->position.y;
+                     });
 
-            currentY += nodeSize.y + config.nodeDistance;
+            // Redistribute with consistent spacing
+            float currentY = 0.0f;
+            for (auto* entity : layerEntities)
+            {
+                entity->position.y = currentY;
+                currentY += entity->size.y + config.nodeDistance;
+            }
         }
-
-        return true;
     }
 
-    float NodeLayoutEngine::calculateBarycenter(
-        nodes::NodeBase* node,
-        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-        nodes::Model& model) const
+    ImVec2 NodeLayoutEngine::calculateEntitySize(NodeEntity& entity)
     {
-        auto const graph = model.getGraph();
-        auto const nodeId = node->getId();
-        
-        // Find connected nodes in adjacent layers
-        std::vector<float> neighborYPositions;
-        
-        // Check all layers for connected nodes
-        for (const auto& [depth, layerNodes] : layers)
-        {
-            for (auto* otherNode : layerNodes)
-            {
-                auto const otherNodeId = otherNode->getId();
-                
-                // Skip self
-                if (nodeId == otherNodeId)
-                {
-                    continue;
-                }
-                
-                // Check if nodes are connected (either direction)
-                bool isConnected = graph.isDirectlyDependingOn(nodeId, otherNodeId) ||
-                                 graph.isDirectlyDependingOn(otherNodeId, nodeId);
-                
-                if (isConnected)
-                {
-                    neighborYPositions.push_back(otherNode->screenPos().y);
-                }
-            }
-        }
-        
-        // Calculate barycenter (average Y position of neighbors)
-        if (neighborYPositions.empty())
-        {
-            return node->screenPos().y; // No neighbors, keep current position
-        }
-        
-        float sum = 0.0f;
-        for (float y : neighborYPositions)
-        {
-            sum += y;
-        }
-        
-        return sum / static_cast<float>(neighborYPositions.size());
+        auto nodeSize = ed::GetNodeSize(entity.item->getId());
+        if (nodeSize.x <= 0.0f) nodeSize.x = 200.0f; // Default width
+        if (nodeSize.y <= 0.0f) nodeSize.y = 100.0f; // Default height
+        return nodeSize;
     }
 
-    int NodeLayoutEngine::countCrossings(
-        const std::vector<nodes::NodeBase*>& leftLayer,
-        const std::vector<nodes::NodeBase*>& rightLayer,
-        nodes::Model& model) const
+    ImVec2 NodeLayoutEngine::calculateGroupSize(const GroupInfo& groupInfo)
     {
-        auto const graph = model.getGraph();
-        int crossings = 0;
-        
-        // For each pair of edges, check if they cross
-        for (size_t i = 0; i < leftLayer.size(); ++i)
+        if (groupInfo.nodes.empty())
         {
-            for (size_t j = 0; j < rightLayer.size(); ++j)
-            {
-                auto const leftNodeId = leftLayer[i]->getId();
-                auto const rightNodeId = rightLayer[j]->getId();
-                
-                // Check if there's an edge from left to right
-                if (!graph.isDirectlyDependingOn(rightNodeId, leftNodeId))
-                {
-                    continue;
-                }
-                
-                // Check against all other edges for crossings
-                for (size_t k = i + 1; k < leftLayer.size(); ++k)
-                {
-                    for (size_t l = 0; l < j; ++l) // Only check edges that could cross
-                    {
-                        auto const otherLeftNodeId = leftLayer[k]->getId();
-                        auto const otherRightNodeId = rightLayer[l]->getId();
-                        
-                        if (graph.isDirectlyDependingOn(otherRightNodeId, otherLeftNodeId))
-                        {
-                            crossings++;
-                        }
-                    }
-                }
-            }
+            return ImVec2(0, 0);
         }
-        
-        return crossings;
+
+        float minX = std::numeric_limits<float>::max();
+        float minY = std::numeric_limits<float>::max();
+        float maxX = std::numeric_limits<float>::lowest();
+        float maxY = std::numeric_limits<float>::lowest();
+
+        for (auto* node : groupInfo.nodes)
+        {
+            auto pos = node->screenPos();
+            auto size = ed::GetNodeSize(node->getId());
+            if (size.x <= 0.0f) size.x = 200.0f;
+            if (size.y <= 0.0f) size.y = 100.0f;
+
+            minX = std::min(minX, pos.x);
+            minY = std::min(minY, pos.y);
+            maxX = std::max(maxX, pos.x + size.x);
+            maxY = std::max(maxY, pos.y + size.y);
+        }
+
+        return ImVec2(maxX - minX, maxY - minY);
     }
 
-    float NodeLayoutEngine::calculateTotalLinkDistance(
-        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-        nodes::Model& model) const
+    void NodeLayoutEngine::updateGroupBounds(GroupInfo& groupInfo)
     {
-        auto const graph = model.getGraph();
-        float totalDistance = 0.0f;
-        
-        // Calculate weighted distance for all edges
-        for (const auto& [depth, layerNodes] : layers)
+        if (groupInfo.nodes.empty())
         {
-            for (auto* node : layerNodes)
-            {
-                auto const nodeId = node->getId();
-                auto const nodePos = node->screenPos();
-                
-                // Check connections to all other nodes
-                for (const auto& [otherDepth, otherLayerNodes] : layers)
-                {
-                    for (auto* otherNode : otherLayerNodes)
-                    {
-                        auto const otherNodeId = otherNode->getId();
-                        
-                        if (nodeId == otherNodeId)
-                        {
-                            continue;
-                        }
-                        
-                        // Check if nodes are connected
-                        if (graph.isDirectlyDependingOn(otherNodeId, nodeId))
-                        {
-                            auto const otherNodePos = otherNode->screenPos();
-                            float dx = nodePos.x - otherNodePos.x;
-                            float dy = nodePos.y - otherNodePos.y;
-                            float distance = std::sqrt(dx * dx + dy * dy);
-                            totalDistance += distance;
-                        }
-                    }
-                }
-            }
+            return;
         }
-        
-        return totalDistance;
+
+        float minX = std::numeric_limits<float>::max();
+        float minY = std::numeric_limits<float>::max();
+        float maxX = std::numeric_limits<float>::lowest();
+        float maxY = std::numeric_limits<float>::lowest();
+
+        for (auto* node : groupInfo.nodes)
+        {
+            auto pos = node->screenPos();
+            auto size = ed::GetNodeSize(node->getId());
+            if (size.x <= 0.0f) size.x = 200.0f;
+            if (size.y <= 0.0f) size.y = 100.0f;
+
+            minX = std::min(minX, pos.x);
+            minY = std::min(minY, pos.y);
+            maxX = std::max(maxX, pos.x + size.x);
+            maxY = std::max(maxY, pos.y + size.y);
+        }
+
+        groupInfo.position = ImVec2(minX, minY);
+        groupInfo.size = ImVec2(maxX - minX, maxY - minY);
     }
 
-    void NodeLayoutEngine::updateGroupBounds(
-        const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-        const LayoutConfig& config)
-    {
-        constexpr float GROUP_PADDING = 40.0f;
-        std::unordered_map<std::string, ImVec2> groupMinBounds;
-        std::unordered_map<std::string, ImVec2> groupMaxBounds;
-        
-        // Calculate new group bounds based on current node positions
-        for (const auto& [depth, layerNodes] : layers)
-        {
-            for (auto* node : layerNodes)
-            {
-                const std::string& tag = node->getTag();
-                if (tag.empty())
-                {
-                    continue; // Skip ungrouped nodes
-                }
-                
-                auto const& pos = node->screenPos();
-                auto const nodeSize = ed::GetNodeSize(node->getId());
-                
-                auto minBound = ImVec2(pos.x - GROUP_PADDING, pos.y - GROUP_PADDING);
-                auto maxBound = ImVec2(pos.x + nodeSize.x + GROUP_PADDING, 
-                                     pos.y + nodeSize.y + GROUP_PADDING);
-                
-                if (groupMinBounds.find(tag) == groupMinBounds.end())
-                {
-                    groupMinBounds[tag] = minBound;
-                    groupMaxBounds[tag] = maxBound;
-                }
-                else
-                {
-                    groupMinBounds[tag].x = std::min(groupMinBounds[tag].x, minBound.x);
-                    groupMinBounds[tag].y = std::min(groupMinBounds[tag].y, minBound.y);
-                    groupMaxBounds[tag].x = std::max(groupMaxBounds[tag].x, maxBound.x);
-                    groupMaxBounds[tag].y = std::max(groupMaxBounds[tag].y, maxBound.y);
-                }
-            }
-        }
-        
-        // Group bounds are now calculated and could be stored/used if needed
-        // For now, we'll let the resolveGroupOverlaps method handle any conflicts
-    }
-
-    bool NodeLayoutEngine::isPositionValid(
-        nodes::NodeBase* node,
-        float newY,
-        const std::map<int, std::vector<nodes::NodeBase*>>& layers) const
-    {
-        const std::string& nodeTag = node->getTag();
-        
-        // If node is not in a group, position is always valid for this check
-        if (nodeTag.empty())
-        {
-            return true;
-        }
-        
-        // For grouped nodes, ensure they don't move outside their group's extent
-        // This is a simplified check - more sophisticated validation could be added
-        constexpr float GROUP_TOLERANCE = 50.0f;
-        
-        // Find other nodes in the same group to determine valid Y range
-        float minGroupY = std::numeric_limits<float>::max();
-        float maxGroupY = std::numeric_limits<float>::lowest();
-        bool foundGroupMembers = false;
-        
-        for (const auto& [depth, layerNodes] : layers)
-        {
-            for (auto* otherNode : layerNodes)
-            {
-                if (otherNode->getTag() == nodeTag && otherNode != node)
-                {
-                    foundGroupMembers = true;
-                    float otherY = otherNode->screenPos().y;
-                    minGroupY = std::min(minGroupY, otherY);
-                    maxGroupY = std::max(maxGroupY, otherY);
-                }
-            }
-        }
-        
-        if (!foundGroupMembers)
-        {
-            return true; // No other group members to constrain against
-        }
-        
-        // Allow some tolerance around the group's Y extent
-        return (newY >= minGroupY - GROUP_TOLERANCE && newY <= maxGroupY + GROUP_TOLERANCE);
-    }
+    // Template instantiations
+    template void NodeLayoutEngine::performLayeredLayout<nodes::NodeBase>(std::vector<LayoutEntity<nodes::NodeBase>>&, const LayoutConfig&);
+    template void NodeLayoutEngine::performLayeredLayout<std::vector<nodes::NodeBase*>>(std::vector<LayoutEntity<std::vector<nodes::NodeBase*>>>&, const LayoutConfig&);
+    template std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<nodes::NodeBase>*>> NodeLayoutEngine::arrangeInLayers<nodes::NodeBase>(std::vector<LayoutEntity<nodes::NodeBase>>&);
+    template std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<std::vector<nodes::NodeBase*>>*>> NodeLayoutEngine::arrangeInLayers<std::vector<nodes::NodeBase*>>(std::vector<LayoutEntity<std::vector<nodes::NodeBase*>>>&);
+    template void NodeLayoutEngine::optimizeLayerPositions<nodes::NodeBase>(std::map<int, std::vector<LayoutEntity<nodes::NodeBase>*>>&, const LayoutConfig&);
+    template void NodeLayoutEngine::optimizeLayerPositions<std::vector<nodes::NodeBase*>>(std::map<int, std::vector<LayoutEntity<std::vector<nodes::NodeBase*>>*>>&, const LayoutConfig&);
 
 } // namespace gladius::ui

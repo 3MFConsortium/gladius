@@ -3,6 +3,7 @@
 #include "nodes/NodeBase.h"
 #include "nodes/Model.h" 
 #include "nodes/graph/GraphAlgorithms.h"
+#include <imgui.h>
 #include <map>
 #include <vector>
 #include <unordered_map>
@@ -13,216 +14,223 @@ namespace gladius::ui
     /**
      * @brief Dedicated engine for performing automatic layout of nodes with group awareness.
      * 
-     * This class encapsulates all auto layout functionality, making it reusable across different
-     * contexts. It provides sophisticated group-aware layout algorithms that ensure:
+     * This class encapsulates all auto layout functionality using a generic layered layout algorithm.
+     * It ensures:
      * - Groups don't overlap with other groups
      * - Ungrouped nodes stay outside group boundaries
      * - Topological ordering is maintained
-     * - Links are kept as short as possible
+     * - Constant nodes are placed close to their connected nodes
+     * - Consistent structure with nodes arranged in dependency-based layers
      */
     class NodeLayoutEngine
     {
     public:
         /**
-         * @brief Configuration parameters for the layout algorithm
+         * @brief Configuration for layout algorithm
          */
         struct LayoutConfig
         {
-            float nodeDistance = 200.0f;                    ///< Basic distance between nodes
-            float groupSpacingMultiplier = 1.5f;           ///< Extra spacing factor between groups
-            float minGroupSpacing = 40.0f;                 ///< Minimum spacing between group boundaries
-            int maxOverlapResolutionIterations = 10;       ///< Max iterations for overlap resolution
-            int maxCrossingReductionIterations = 5;        ///< Max iterations for crossing reduction
-            float crossingReductionConvergenceThreshold = 5.0f; ///< Threshold for crossing reduction convergence
-            float linkDistanceWeight = 1.0f;               ///< Weight for link distance optimization
+            float nodeDistance = 150.0f;                    ///< Basic distance between nodes
+            float layerSpacing = 250.0f;                   ///< Distance between layers
+            float groupPadding = 50.0f;                    ///< Padding around groups
+            float constantNodeOffset = 80.0f;              ///< Offset for constant nodes from their targets
+            int maxOptimizationIterations = 10;            ///< Max iterations for position optimization
+            float convergenceThreshold = 5.0f;             ///< Threshold for optimization convergence
         };
 
         /**
-         * @brief Information about group depth constraints for layout optimization
+         * @brief Generic layout entity that can represent nodes, groups, or other layout units
          */
-        struct GroupDepthInfo
+        template<typename T>
+        struct LayoutEntity
         {
-            std::string tag;                                ///< Group identifier
-            int minRequiredDepth;                          ///< Minimum depth based on dependencies
-            int maxRequiredDepth;                          ///< Maximum depth based on dependencies
-            std::vector<nodes::NodeId> nodeIds;           ///< Nodes in this group
-            bool canBeMovedTogether;                       ///< Whether group can be placed as unit
+            T* item;                                        ///< The actual item being laid out
+            int depth;                                      ///< Topological depth/layer
+            ImVec2 position;                               ///< Screen position
+            ImVec2 size;                                   ///< Size of the entity
+            std::vector<LayoutEntity<T>*> dependencies;    ///< What this entity depends on
+            std::vector<LayoutEntity<T>*> dependents;      ///< What depends on this entity
+            
+            LayoutEntity(T* item_, int depth_) : item(item_), depth(depth_), position(0.0f, 0.0f), size(0.0f, 0.0f) {}
         };
 
+        using NodeEntity = LayoutEntity<nodes::NodeBase>;
+        using GroupEntity = LayoutEntity<std::vector<nodes::NodeBase*>>;
+
         /**
-         * @brief Represents an optimized placement choice for a group
+         * @brief Information about a group for layout purposes
          */
-        struct GroupPlacementOption
+        struct GroupInfo
         {
-            std::string tag;                               ///< Group identifier
-            int chosenDepth;                               ///< Selected depth for placement
-            float placementCost;                           ///< Cost metric for this placement
+            std::string name;                              ///< Group name/tag
+            std::string tag;                               ///< Group tag (same as name, for compatibility)
+            std::vector<nodes::NodeBase*> nodes;           ///< Nodes in this group
+            int depth;                                     ///< Group depth (min depth of contained nodes)
+            int minDepth;                                  ///< Minimum depth of contained nodes
+            int maxDepth;                                  ///< Maximum depth of contained nodes
+            ImVec2 position;                               ///< Group position
+            ImVec2 size;                                   ///< Group size
+            
+            GroupInfo() : depth(0), minDepth(0), maxDepth(0), position(0.0f, 0.0f), size(0.0f, 0.0f) {}
         };
 
         /**
-         * @brief Performs automatic layout of nodes in the given model
+         * @brief Main auto-layout method
+         * 
+         * Performs complete auto-layout of all nodes in the model, handling:
+         * - Grouped vs ungrouped nodes
+         * - Topological ordering
+         * - Group boundaries and spacing
+         * - Constant node optimal positioning
+         * - Overlap resolution
          * 
          * @param model The node model to layout
          * @param config Layout configuration parameters
          */
         void performAutoLayout(nodes::Model& model, const LayoutConfig& config);
 
+        /**
+         * @brief Generic layered layout algorithm
+         * 
+         * This template method can layout any type of entity (nodes, groups, etc.)
+         * using dependency-based layers and topological sorting.
+         * 
+         * @tparam T The type of entity being laid out
+         * @param entities Vector of entities to layout
+         * @param config Layout configuration
+         */
+        template<typename T>
+        void performLayeredLayout(std::vector<LayoutEntity<T>>& entities, const LayoutConfig& config);
+
+        /**
+         * @brief Check if a node is a constant node (ConstantScalar, ConstantVector, ConstantMatrix)
+         * 
+         * @param node Node to check
+         * @return true if the node is a constant node
+         */
+        bool isConstantNode(nodes::NodeBase* node) const;
+
+        /**
+         * @brief Calculate optimal position for a constant node
+         * 
+         * Places constant nodes close to their connected nodes, typically to the left
+         * of the leftmost connected node.
+         * 
+         * @param constantNode The constant node to position
+         * @param model The node model
+         * @param config Layout configuration
+         * @return Optimal position for the constant node
+         */
+        ImVec2 calculateConstantNodePosition(nodes::NodeBase* constantNode, 
+                                           nodes::Model& model, 
+                                           const LayoutConfig& config);
+
     private:
         /**
-         * @brief Analyzes depth constraints for all groups in the model
+         * @brief Analyze groups and create GroupInfo structures
          * 
-         * @param depthMap Mapping from node ID to its topological depth
-         * @return Vector of group depth information
+         * @param model The node model
+         * @param depthMap Node depth mapping
+         * @return Vector of group information
          */
-        std::vector<GroupDepthInfo> analyzeGroupDepthConstraints(
-            const std::unordered_map<nodes::NodeId, int>& depthMap,
-            nodes::Model& model);
+        std::vector<GroupInfo> analyzeGroups(nodes::Model& model, 
+                                            const std::unordered_map<nodes::NodeId, int>& depthMap);
 
         /**
-         * @brief Optimizes placement of groups to minimize fragmentation
+         * @brief Layout ungrouped nodes using the generic algorithm
          * 
-         * @param groupInfos Information about group constraints
-         * @param layers Current layer assignments
-         * @return Optimized placement choices for each group
-         */
-        std::vector<GroupPlacementOption> optimizeGroupPlacements(
-            const std::vector<GroupDepthInfo>& groupInfos,
-            std::map<int, std::vector<nodes::NodeBase*>>& layers);
-
-        /**
-         * @brief Applies group-aware coordinate assignment to nodes
-         * 
-         * @param layers Map of depth to nodes in that layer
-         * @param layerXPositions X coordinates for each layer
-         * @param originalIndividualDepths Original topological depths for sorting within groups
+         * @param ungroupedNodes Nodes not belonging to any group
+         * @param depthMap Node depth mapping
          * @param config Layout configuration
          */
-        void applyGroupAwareCoordinates(
-            std::map<int, std::vector<nodes::NodeBase*>>& layers,
-            const std::map<int, float>& layerXPositions,
-            const std::unordered_map<nodes::NodeId, int>& originalIndividualDepths,
-            const LayoutConfig& config);
+        void layoutUngroupedNodes(const std::vector<nodes::NodeBase*>& ungroupedNodes,
+                                 const std::unordered_map<nodes::NodeId, int>& depthMap,
+                                 const LayoutConfig& config);
 
         /**
-         * @brief Resolves overlaps between group visual boundaries
+         * @brief Layout nodes within a specific group
          * 
-         * @param layers Map of depth to nodes in that layer
+         * @param groupInfo Group information with nodes to layout
+         * @param depthMap Node depth mapping
          * @param config Layout configuration
          */
-        void resolveGroupOverlaps(
-            std::map<int, std::vector<nodes::NodeBase*>>& layers,
-            const LayoutConfig& config);
+        void layoutNodesInGroup(GroupInfo& groupInfo,
+                               const std::unordered_map<nodes::NodeId, int>& depthMap,
+                               const LayoutConfig& config);
 
         /**
-         * @brief Calculates placement cost for a group at a specific depth
+         * @brief Layout groups themselves to avoid overlaps
          * 
-         * @param groupInfo Information about the group
-         * @param targetDepth Proposed depth for placement
-         * @param layers Current layer assignments
-         * @return Cost metric (lower is better)
+         * @param groups Vector of group information
+         * @param config Layout configuration
          */
-        float calculateGroupPlacementCost(
-            const GroupDepthInfo& groupInfo,
-            int targetDepth,
-            const std::map<int, std::vector<nodes::NodeBase*>>& layers);
+        void layoutGroups(std::vector<GroupInfo>& groups, const LayoutConfig& config);
+
+        /**
+         * @brief Resolve overlaps between nodes and groups
+         * 
+         * @param ungroupedNodes Ungrouped nodes
+         * @param constantNodes Constant nodes (positioned optimally)
+         * @param groups Group information
+         * @param config Layout configuration
+         */
+        void resolveOverlaps(const std::vector<nodes::NodeBase*>& ungroupedNodes,
+                           const std::vector<nodes::NodeBase*>& constantNodes,
+                           std::vector<GroupInfo>& groups,
+                           const LayoutConfig& config);
 
         /**
          * @brief Helper to determine node topological depth from dependencies
          * 
-         * @param graph The node graph
-         * @param beginId ID of the starting node
-         * @return Map from node ID to depth
+         * @param graph The dependency graph
+         * @param beginId Starting node ID
+         * @return Map of node ID to depth
          */
         std::unordered_map<nodes::NodeId, int> determineDepth(
             const nodes::graph::IDirectedGraph& graph,
             nodes::NodeId beginId);
 
         /**
-         * @brief Optimizes Y positions to reduce crossings and minimize link distances
+         * @brief Arrange entities into layers by depth
          * 
-         * @param layers Map of depth to nodes in that layer
-         * @param model Node model for accessing graph connectivity
+         * @tparam T Entity type
+         * @param entities Vector of entities
+         * @return Map of depth to entities at that depth
+         */
+        template<typename T>
+        std::map<int, std::vector<LayoutEntity<T>*>> arrangeInLayers(std::vector<LayoutEntity<T>>& entities);
+
+        /**
+         * @brief Optimize positions within layers to minimize edge crossings
+         * 
+         * @tparam T Entity type
+         * @param layers Map of depth to entities
          * @param config Layout configuration
          */
-        void optimizeYPositions(
-            std::map<int, std::vector<nodes::NodeBase*>>& layers,
-            nodes::Model& model,
-            const LayoutConfig& config);
+        template<typename T>
+        void optimizeLayerPositions(std::map<int, std::vector<LayoutEntity<T>*>>& layers, const LayoutConfig& config);
 
         /**
-         * @brief Calculates barycenter Y position for a node based on its neighbors
+         * @brief Calculate size of an entity
          * 
-         * @param node Target node
-         * @param layers All layers with nodes
-         * @param model Node model for accessing connectivity
-         * @return Calculated barycenter Y position
+         * @param entity Entity to measure
+         * @return Size of the entity
          */
-        float calculateBarycenter(
-            nodes::NodeBase* node,
-            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-            nodes::Model& model) const;
+        ImVec2 calculateEntitySize(NodeEntity& entity);
 
         /**
-         * @brief Counts edge crossings between two adjacent layers
+         * @brief Update group bounds based on contained nodes
          * 
-         * @param leftLayer Nodes in the left layer
-         * @param rightLayer Nodes in the right layer
-         * @param model Node model for accessing connectivity
-         * @return Number of edge crossings
+         * @param groupInfo Group to update
          */
-        int countCrossings(
-            const std::vector<nodes::NodeBase*>& leftLayer,
-            const std::vector<nodes::NodeBase*>& rightLayer,
-            nodes::Model& model) const;
+        void updateGroupBounds(GroupInfo& groupInfo);
 
         /**
-         * @brief Calculates total weighted link distance for all edges
+         * @brief Calculate group size based on contained nodes
          * 
-         * @param layers All layers with nodes
-         * @param model Node model for accessing connectivity
-         * @return Total weighted link distance
+         * @param groupInfo Group information
+         * @return Calculated group size
          */
-        float calculateTotalLinkDistance(
-            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-            nodes::Model& model) const;
-
-        /**
-         * @brief Updates group bounds after Y position changes
-         * 
-         * @param layers All layers with nodes
-         * @param config Layout configuration
-         */
-        void updateGroupBounds(
-            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-            const LayoutConfig& config);
-
-        /**
-         * @brief Checks if a node position violates group boundary constraints
-         * 
-         * @param node Node to check
-         * @param newY Proposed Y position
-         * @param layers All layers with nodes
-         * @return True if position is valid
-         */
-        bool isPositionValid(
-            nodes::NodeBase* node,
-            float newY,
-            const std::map<int, std::vector<nodes::NodeBase*>>& layers) const;
-
-        /**
-         * @brief Optimizes Y positions for nodes in a single layer
-         * 
-         * @param layerNodes Nodes in the layer to optimize
-         * @param layers All layers with nodes
-         * @param model Node model for accessing connectivity
-         * @param config Layout configuration
-         * @return True if positions were changed
-         */
-        bool optimizeLayerYPositions(
-            std::vector<nodes::NodeBase*>& layerNodes,
-            const std::map<int, std::vector<nodes::NodeBase*>>& layers,
-            nodes::Model& model,
-            const LayoutConfig& config);
+        ImVec2 calculateGroupSize(const GroupInfo& groupInfo);
     };
-
-} // namespace gladius::ui
+}
