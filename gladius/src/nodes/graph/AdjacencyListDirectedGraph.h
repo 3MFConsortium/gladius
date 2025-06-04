@@ -109,5 +109,8 @@ namespace gladius::nodes::graph
 
         /// Reverse adjacency list - maps each vertex to the set of vertices that depend on it
         std::unordered_map<Identifier, DependencySet> m_incomingEdges;
+
+        /// Maximum vertex ID currently in the graph (-1 if no vertices)
+        Identifier m_maxVertexId;
     };
 } // namespace gladius::nodes::graph

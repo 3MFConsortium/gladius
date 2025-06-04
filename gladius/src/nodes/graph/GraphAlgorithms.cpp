@@ -116,6 +116,12 @@ namespace gladius::nodes::graph
                            Identifier dependencyInQuestion) -> bool
     {
         ProfileFunction;
+
+        if (graph.getSize() == 0)
+        {
+            return false;
+        }
+        
         if (id < 0 || dependencyInQuestion < 0)
         {
             return false;
@@ -125,6 +131,7 @@ namespace gladius::nodes::graph
             return true;
         }
 
+      
         std::vector<bool> visited(graph.getSize(), false);
         std::queue<Identifier> nodesToVisit;
 

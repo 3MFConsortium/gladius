@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <fmt/format.h>
 #include <set>
+#include <unordered_map>
 
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
@@ -14,6 +15,7 @@
 #include "Document.h"
 #include "MeshResource.h"
 #include "ModelEditor.h"
+#include "NodeLayoutEngine.h"
 #include "NodeView.h"
 #include "Port.h"
 #include "ResourceView.h"
@@ -1300,121 +1302,16 @@ namespace gladius::ui
             return;
         }
 
-        auto const graph = currentModel()->getGraph();
-
-        if (graph.getSize() < 2)
-        {
-            return;
-        }
         createUndoRestorePoint("Autolayout");
 
-        currentModel()->updateGraphAndOrderIfNeeded();
-
-        if (!(currentModel()->getBeginNode()))
-        {
-            return;
-        }
-        auto const beginId = currentModel()->getBeginNode()->getId();
-        auto depthMap = determineDepth(graph, beginId);
-
-        auto getDepth = [&](nodes::NodeId nodeId)
-        {
-            auto const depthIter = depthMap.find(nodeId);
-            if (depthIter != std::end(depthMap))
-            {
-                return depthIter->second;
-            }
-            return 0;
-        };
-
-        auto getDepthCloseToSuccessor = [&](nodes::NodeId nodeId)
-        {
-            auto successsor = graph::determineSuccessor(graph, nodeId);
-            // find  lowest depth of the successor
-            int lowestDepth = std::numeric_limits<int>::max();
-            for (auto const succ : successsor)
-            {
-                auto const depthIter = depthMap.find(succ);
-                if (depthIter != std::end(depthMap))
-                {
-                    lowestDepth = std::min(lowestDepth, depthIter->second);
-                }
-            }
-
-            if (lowestDepth != std::numeric_limits<int>::max())
-            {
-                return lowestDepth - 1;
-            }
-            return 0;
-        };
-
-        auto determineDepth = [&](nodes::NodeId nodeId)
-        {
-            auto const depth = getDepth(nodeId);
-            if (depth == 0)
-            {
-                return getDepthCloseToSuccessor(nodeId);
-            }
-            return depth;
-        };
-
-        // Step 1: Assign Layers
-        std::map<int, std::vector<nodes::NodeBase *>> layers;
-        std::map<int, float> layersWidth;
-        for (auto & [id, node] : *currentModel())
-        {
-            auto const depth = (id == beginId) ? 0 : determineDepth(id);
-            layers[depth].push_back(node.get());
-            auto const nodeWidth = ed::GetNodeSize(node->getId()).x;
-            layersWidth[depth] = std::max(layersWidth[depth], nodeWidth);
-        }
-
-        // Step 2: Order Nodes within Layers (simple topological order for now)
-        for (auto & [depth, nodes] : layers)
-        {
-            std::sort(nodes.begin(),
-                      nodes.end(),
-                      [](nodes::NodeBase * a, nodes::NodeBase * b)
-                      { return a->getOrder() < b->getOrder(); });
-        }
-
-        std::vector<float> layerX;
-        float x = 0.f;
-        for (auto & [depth, width] : layersWidth)
-        {
-            layerX.push_back(x);
-            x += width + distance;
-        }
-
-        // Step 3: Assign Coordinates
-        for (auto & [depth, nodes] : layers)
-        {
-            // substract distance from every second layer to create a zigzag pattern
-            float y = (depth % 2 == 0) ? 0.f : -distance;
-            for (auto & node : nodes)
-            {
-                auto & pos = node->screenPos();
-                auto nodeWidth = ed::GetNodeSize(node->getId()).x;
-                auto nodeHeight = ed::GetNodeSize(node->getId()).y;
-                if (nodeWidth == 0.f || nodeHeight == 0.f)
-                {
-                    bool isResourceNode = dynamic_cast<nodes::Resource *>(node) != nullptr;
-                    if (isResourceNode)
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        return;
-                    }
-                }
-                pos.x = layerX.at(depth);
-                pos.y = y;
-                y += nodeHeight + distance; // Adjust y position to avoid overlap
-            }
-        }
-
-        currentModel()->markAsLayouted();
+        // Use the dedicated layout engine for all layout operations
+        gladius::ui::NodeLayoutEngine layoutEngine;
+        gladius::ui::NodeLayoutEngine::LayoutConfig config;
+        config.nodeDistance = distance;
+        config.layerSpacing = distance * 1.5f;
+        config.groupPadding = distance * 0.5f;
+        
+        layoutEngine.performAutoLayout(*currentModel(), config);
 
         m_nodePositionsNeedUpdate = true;
     }
@@ -1953,4 +1850,5 @@ namespace gladius::ui
             }
         }
     }
-} // namespace gladius::ui// Add the LibraryBrowser management methods to ModelEditor.cpp
+
+} // namespace gladius::ui

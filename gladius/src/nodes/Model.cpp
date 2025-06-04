@@ -315,7 +315,7 @@ namespace gladius::nodes
         return m_outPorts;
     }
 
-    const graph::DirectedGraph & Model::getGraph() const
+    const graph::AdjacencyListDirectedGraph & Model::getGraph() const
     {
         return m_graph;
     }
@@ -614,10 +614,10 @@ namespace gladius::nodes
                 m_endNode->parameter().at(FieldNames::Shape).getId());
     }
 
-    graph::DirectedGraph & Model::buildGraph()
+    graph::AdjacencyListDirectedGraph & Model::buildGraph()
     {
         m_allInputReferencesAreValid = false;
-        m_graph = graph::DirectedGraph(m_lastId);
+        m_graph = graph::AdjacencyListDirectedGraph(m_lastId);
         for (auto & [id, node] : m_nodes)
         {
             for (auto & parameter : node->parameter())
@@ -636,7 +636,7 @@ namespace gladius::nodes
                                   << parameter.second.getSource().value().uniqueName << " ("
                                   << parameter.second.getSource().value().portId
                                   << ")in m_output_ports\n";
-                        m_graph = graph::DirectedGraph(m_lastId);
+                        m_graph = graph::AdjacencyListDirectedGraph(m_lastId);
                         return m_graph;
                     }
                 }
@@ -920,7 +920,7 @@ namespace gladius::nodes
         m_lastId = 1;
         
         // Reset graph
-        m_graph = graph::DirectedGraph(0);
+        m_graph = graph::AdjacencyListDirectedGraph(0);
         m_outputOrder.clear();
         m_graphRequiresUpdate = true;
         

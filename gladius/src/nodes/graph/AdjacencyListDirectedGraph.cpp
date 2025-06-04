@@ -4,12 +4,14 @@
 namespace gladius::nodes::graph
 {
     AdjacencyListDirectedGraph::AdjacencyListDirectedGraph() :
-        IDirectedGraph(0)
+        IDirectedGraph(0),
+        m_maxVertexId(-1)
     {
     }
     
     AdjacencyListDirectedGraph::AdjacencyListDirectedGraph(std::size_t const size) :
-        IDirectedGraph(size)
+        IDirectedGraph(size),
+        m_maxVertexId(-1)
     {
     }
 
@@ -61,7 +63,12 @@ namespace gladius::nodes::graph
 
     auto AdjacencyListDirectedGraph::getSize() const -> std::size_t
     {
-        return m_vertices.size();
+        // Since the graph is directed, size is defined by the maximum vertex ID
+        if (m_vertices.empty())
+        {
+            return 0;
+        }
+        return m_maxVertexId + 1; // +1 for zero-based index
     }
 
     bool AdjacencyListDirectedGraph::isInRange(Identifier id) const
@@ -80,6 +87,19 @@ namespace gladius::nodes::graph
         
         // Remove the vertex from the vertices set
         m_vertices.erase(vertexIter);
+
+        // Update maximum vertex ID if we removed the max vertex
+        if (id == m_maxVertexId)
+        {
+            if (m_vertices.empty())
+            {
+                m_maxVertexId = -1;
+            }
+            else
+            {
+                m_maxVertexId = *std::max_element(m_vertices.begin(), m_vertices.end());
+            }
+        }
 
         // Find outgoing edges from this vertex and remove them
         auto outIter = m_outgoingEdges.find(id);
@@ -126,6 +146,12 @@ namespace gladius::nodes::graph
     void AdjacencyListDirectedGraph::addVertex(Identifier id)
     {
         m_vertices.insert(id);
+        
+        // Update maximum vertex ID
+        if (m_vertices.size() == 1 || id > m_maxVertexId)
+        {
+            m_maxVertexId = id;
+        }
     }
 
     auto AdjacencyListDirectedGraph::hasPredecessors(Identifier id) const -> bool

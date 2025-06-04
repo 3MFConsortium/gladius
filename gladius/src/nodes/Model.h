@@ -13,7 +13,7 @@
 #include "EventLogger.h"
 #include "Parameter.h"
 #include "Port.h"
-#include "graph/DirectedGraph.h"
+#include "graph/AdjacencyListDirectedGraph.h"
 #include "graph/GraphAlgorithms.h"
 #include "nodesfwd.h"
 
@@ -177,7 +177,7 @@ namespace gladius::nodes
 
         InputParameterRegistry const & getConstParameterRegistry() const;
 
-        [[nodiscard]] graph::DirectedGraph const & getGraph() const;
+        [[nodiscard]] graph::AdjacencyListDirectedGraph const & getGraph() const;
 
         auto getPortRegistry() -> PortRegistry &;
 
@@ -256,7 +256,7 @@ namespace gladius::nodes
         
       private:
         void updateOrder();
-        auto buildGraph() -> graph::DirectedGraph &;
+        auto buildGraph() -> graph::AdjacencyListDirectedGraph &;
 
         NodeRegistry m_nodes;
         PortRegistry m_outPorts;
@@ -268,7 +268,7 @@ namespace gladius::nodes
 
         NodeId m_lastId = {1};
 
-        graph::DirectedGraph m_graph{0};
+        graph::AdjacencyListDirectedGraph m_graph{0};
         graph::VertexList m_outputOrder;
         bool m_graphRequiresUpdate = true;
 

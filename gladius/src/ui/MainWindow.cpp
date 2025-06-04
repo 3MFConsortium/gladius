@@ -543,13 +543,15 @@ namespace gladius::ui
               m_parameterDirty = parameterModifiedByModelEditor || m_parameterDirty;
               m_dirty = m_parameterDirty || m_dirty;
               m_contoursDirty = m_parameterDirty || m_contoursDirty;
-              if (m_modelEditor.modelWasModified() || parameterModifiedByModelEditor)
+              bool const modelWasModified = m_modelEditor.modelWasModified();
+              bool const compileRequested = m_modelEditor.isCompileRequested();
+              
+              if (modelWasModified || parameterModifiedByModelEditor)
               {
                   try
                   {
                       m_doc->getAssembly()->updateInputsAndOutputs();
                       m_doc->updateParameterRegistration();
-                      m_modelEditor.markModelAsUpToDate();
                       markFileAsChanged();
                   }
                   catch (const std::exception & e)
@@ -559,9 +561,15 @@ namespace gladius::ui
                   }
               }
 
-              if (m_modelEditor.isCompileRequested())
+              if (compileRequested)
               {
                   refreshModel();
+              }
+              
+              // Mark model as up to date after compilation check
+              if (modelWasModified || parameterModifiedByModelEditor)
+              {
+                  m_modelEditor.markModelAsUpToDate();
               }
           });
     }

@@ -176,6 +176,7 @@ namespace gladius::ui
         std::string m_newGroupName;
         std::string m_selectedExistingGroup;
         std::vector<std::string> m_existingGroups;
+
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

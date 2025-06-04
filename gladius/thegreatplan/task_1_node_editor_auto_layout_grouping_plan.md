@@ -1,0 +1,5 @@
+Please improve the node layout engine. The goal is to arrange nodes so that nodes do not overlap with each other. Nodes not belonging to a group should be placed outside of the area spanned by groups. The louyout should be have a consistent structure, with nodes arranged in layers based on their dependencies, but also keeping nodes within a group close together. ConstantScalar, ConstantVector, and ConstantMatrix nodes should be placed close the nodes they are connected to, meaning the should be only as far left as necessary (you can use the topological depth and the y position of the connected nodes for that).
+
+1. Write a generic layout algorithm for a layered layout where the nodes are arranged in layers based on their dependencies (e.g. topological sorting). We will later use that for arranging nodes that are not part a group, nodes inside a group, and groups together with their nodes.
+
+2. Review and refactor the existing layout code to use the new generic layout algorithm to ensure that all nodes, groups, and their relationships are laid out in a consistent manner. Simplify the code as much as possible.

@@ -202,13 +202,13 @@ namespace gladius_tests
         
         // Add link from begin to addition node
         model.addLink(beginValuePortId, mathAParamId);
-        connectedMath->parameter()["b"] = nodes::VariantParameter(1.0f);
+        connectedMath->parameter()[nodes::FieldNames::B] = nodes::VariantParameter(1.0f);
         
         // Add link from addition to compose vector
         model.addLink(mathResultPortId, vectorXParamId);
-        connectedVector->parameter()["y"] = nodes::VariantParameter(0.0f);
-        connectedVector->parameter()["z"] = nodes::VariantParameter(0.0f);
-        
+        connectedVector->parameter()[nodes::FieldNames::Y] = nodes::VariantParameter(0.0f);
+        connectedVector->parameter()[nodes::FieldNames::Z] = nodes::VariantParameter(0.0f);
+
         // Link compose vector to end node
         model.addLink(vectorResultPortId, shapeParamId);
         
