@@ -589,6 +589,7 @@ namespace gladius::ui
                     if (newModel)
                     {
                         newModel->setDisplayName(m_newModelName);
+                        m_currentModel = m_assembly->findModel(newModel->getResourceId());
                         switchModel();
                         m_showAddModel = false;
                         ImGui::CloseCurrentPopup();
