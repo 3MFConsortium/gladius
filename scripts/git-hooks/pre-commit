@@ -1,0 +1,19 @@
+#!/bin/bash
+# Pre-commit hook to run clang-format on staged C/C++ files
+
+# Get list of staged C/C++ files
+to_format=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(cpp|h|hpp|c|cc|cxx)$')
+
+if [ -z "$to_format" ]; then
+    exit 0
+fi
+
+fail=0
+for file in $to_format; do
+    if [ -f "$file" ]; then
+        clang-format -i "$file"
+        git add "$file"
+    fi
+done
+
+exit $fail
