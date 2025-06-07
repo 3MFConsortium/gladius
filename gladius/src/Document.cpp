@@ -690,6 +690,61 @@ namespace gladius
         return model;
     }
 
+    nodes::Model & Document::createLevelsetFunction(std::string const & name)
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3mf model loaded");
+        }
+
+        auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
+        auto const modelId = new3mfFunc->GetModelResourceID();
+
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        m_assembly->addModelIfNotExisting(modelId);
+        auto & model = *m_assembly->getFunctions().at(modelId);
+        
+        // Create begin and end nodes
+        model.createBeginEnd();
+        model.setDisplayName(name);
+        
+        // Add pos vector input to begin node
+        model.getBeginNode()->addOutputPort(nodes::FieldNames::Pos, nodes::ParameterTypeIndex::Float3);
+        model.registerOutputs(*model.getBeginNode());
+        
+        // Add color vector output and shape scalar output to end node
+        model.getEndNode()->parameter()[nodes::FieldNames::Color] = nodes::VariantParameter(nodes::float3{0.5f, 0.5f, 0.5f});
+        model.getEndNode()->parameter()[nodes::FieldNames::Shape] = nodes::VariantParameter(float{-1.f});
+        
+        model.registerInputs(*model.getEndNode());
+        model.getBeginNode()->updateNodeIds();
+        model.getEndNode()->updateNodeIds();
+        
+        return model;
+    }
+
+    nodes::Model & Document::copyFunction(nodes::Model const & sourceModel, std::string const & name)
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3mf model loaded");
+        }
+
+        auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
+        auto const modelId = new3mfFunc->GetModelResourceID();
+
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        m_assembly->addModelIfNotExisting(modelId);
+        auto & model = *m_assembly->getFunctions().at(modelId);
+        
+        // Copy the source model
+        model = sourceModel;
+        model.setDisplayName(name);
+        model.setResourceId(modelId);
+        
+        return model;
+    }
+
     nodes::VariantParameter & Document::findParameterOrThrow(ResourceId modelId,
                                                              std::string const & nodeName,
                                                              std::string const & parameterName)

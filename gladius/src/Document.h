@@ -180,6 +180,8 @@ namespace gladius
         [[nodiscard]] Lib3MF::PModel get3mfModel() const;
 
         nodes::Model & createNewFunction();
+        nodes::Model & createLevelsetFunction(std::string const & name);
+        nodes::Model & copyFunction(nodes::Model const & sourceModel, std::string const & name);
 
         void injectSmoothingKernel(std::string const & kernel);
 

@@ -99,6 +99,10 @@ namespace gladius::ui
         void setAssembly(nodes::SharedAssembly assembly);
 
         void functionToolBox(ImVec2 mousePos);
+        
+        // New function creation methods
+        nodes::Model & createLevelsetFunction(std::string const & name);
+        nodes::Model & copyExistingFunction(nodes::Model const & sourceModel, std::string const & name);
         void meshResourceToolBox(ImVec2 mousePos);
         void showDeleteUnusedResourcesDialog();
         void validate();
@@ -128,10 +132,19 @@ namespace gladius::ui
         bool m_nodePositionsNeedUpdate{false};
         float m_nodeDistance = 50.f;
         float m_scale = 0.5f;
-        bool m_nodeWidthsInitialized = false;
-
-        std::string m_newModelName{"New_Part"};
+        bool m_nodeWidthsInitialized = false;        std::string m_newModelName{"New_Part"};
         bool m_showAddModel{false};
+        
+        // New function dialog options
+        enum class FunctionType 
+        {
+            Empty = 0,
+            CopyExisting = 1,
+            LevelsetTemplate = 2
+        };
+        
+        FunctionType m_selectedFunctionType{FunctionType::Empty};
+        int m_selectedSourceFunctionIndex{0};
 
         nodes::SharedAssembly m_assembly;
         nodes::SharedModel m_currentModel;

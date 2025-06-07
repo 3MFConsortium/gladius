@@ -524,21 +524,75 @@ namespace gladius::ui
                                 ImGui::GetIO().DisplaySize.y * 0.5f);
             ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
             ImGui::OpenPopup("Add Function");
-            if (ImGui::BeginPopupModal(
-                  "Add Function", &m_showAddModel, ImGuiWindowFlags_AlwaysAutoResize))
+            if (ImGui::BeginPopupModal("Add Function", &m_showAddModel, ImGuiWindowFlags_AlwaysAutoResize))
             {
-                ImGui::Text("Please enter the name of the new function");
+                ImGui::Text("Create a new function");
                 ImGui::Separator();
 
+                // Function name input
                 ImGui::InputText("Function name", &m_newModelName);
-                if (ImGui::Button("OK", ImVec2(120, 0)))
-                {
-                    auto & newModel = m_doc->createNewFunction();
-                    newModel.setDisplayName(m_newModelName);
-                    switchModel();
 
-                    m_showAddModel = false;
-                    ImGui::CloseCurrentPopup();
+                // Function type selection
+                static const char* functionTypes[] = { "Empty function", "Copy existing function", "Levelset template" };
+                int functionType = static_cast<int>(m_selectedFunctionType);
+                ImGui::Combo("Function type", &functionType, functionTypes, IM_ARRAYSIZE(functionTypes));
+                m_selectedFunctionType = static_cast<FunctionType>(functionType);
+
+                // If copy, show list of available functions
+                int availableFunctionCount = 0;
+                std::vector<nodes::Model*> availableFunctions;
+                std::vector<std::string> availableFunctionNames;
+                if (m_selectedFunctionType == FunctionType::CopyExisting)
+                {
+                    for (auto& [id, model] : m_assembly->getFunctions())
+                    {
+                        if (!model || model->isManaged() || model == m_currentModel)
+                            continue;
+                        availableFunctions.push_back(model.get());
+                        availableFunctionNames.push_back(model->getDisplayName().value_or("function"));
+                    }
+                    availableFunctionCount = static_cast<int>(availableFunctions.size());
+                    if (availableFunctionCount == 0)
+                    {
+                        ImGui::TextColored(ImVec4(1,0,0,1), "No user functions available to copy.");
+                    }
+                    else
+                    {
+                        if (m_selectedSourceFunctionIndex >= availableFunctionCount)
+                            m_selectedSourceFunctionIndex = 0;
+                        std::vector<const char*> cstrNames;
+                        for (auto& s : availableFunctionNames) cstrNames.push_back(s.c_str());
+                        ImGui::Combo("Source function", &m_selectedSourceFunctionIndex, cstrNames.data(), availableFunctionCount);
+                    }
+                }
+
+                bool canCreate = !m_newModelName.empty() &&
+                    (m_selectedFunctionType != FunctionType::CopyExisting || availableFunctionCount > 0);
+
+                if (canCreate && ImGui::Button("Create", ImVec2(120, 0)))
+                {
+                    nodes::Model* newModel = nullptr;
+                    switch (m_selectedFunctionType)
+                    {
+                        case FunctionType::Empty:
+                        default:
+                            newModel = &m_doc->createNewFunction();
+                            break;
+                        case FunctionType::CopyExisting:
+                            if (availableFunctionCount > 0)
+                                newModel = &m_doc->copyFunction(*availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
+                            break;
+                        case FunctionType::LevelsetTemplate:
+                            newModel = &m_doc->createLevelsetFunction(m_newModelName);
+                            break;
+                    }
+                    if (newModel)
+                    {
+                        newModel->setDisplayName(m_newModelName);
+                        switchModel();
+                        m_showAddModel = false;
+                        ImGui::CloseCurrentPopup();
+                    }
                 }
                 ImGui::SetItemDefaultFocus();
                 ImGui::SameLine();
@@ -1849,6 +1903,16 @@ namespace gladius::ui
                 }
             }
         }
+    }
+
+    nodes::Model & ModelEditor::createLevelsetFunction(std::string const & name)
+    {
+        return m_doc->createLevelsetFunction(name);
+    }
+
+    nodes::Model & ModelEditor::copyExistingFunction(nodes::Model const & sourceModel, std::string const & name)
+    {
+        return m_doc->copyFunction(sourceModel, name);
     }
 
 } // namespace gladius::ui
