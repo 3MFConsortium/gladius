@@ -276,7 +276,7 @@ namespace gladius::nodes::graph
         result.reserve(graph.getSize());
 
         std::list<BfsItem> nodesToVisit;
-        std::vector<bool> visited(graph.getSize(), false);
+        std::vector<bool> visited(graph.getSize() + 1u, false);
         visited[start] = true;
 
         auto const constexpr depth = 0;
