@@ -524,20 +524,21 @@ namespace gladius::ui
                                 ImGui::GetIO().DisplaySize.y * 0.5f);
             ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
             ImGui::OpenPopup("Add Function");
-            if (ImGui::BeginPopupModal("Add Function", &m_showAddModel, ImGuiWindowFlags_AlwaysAutoResize))
+            if (ImGui::BeginPopupModal(
+                  "Add Function", &m_showAddModel, ImGuiWindowFlags_AlwaysAutoResize))
             {
                 ImGui::Text("Create a new function");
                 ImGui::Separator();
-
 
                 // Function name input
                 ImGui::InputText("Function name", &m_newModelName);
 
                 // Check for duplicate name
                 bool nameExists = false;
-                for (auto& [id, model] : m_assembly->getFunctions())
+                for (auto & [id, model] : m_assembly->getFunctions())
                 {
-                    if (model && model->getDisplayName().has_value() && model->getDisplayName().value() == m_newModelName)
+                    if (model && model->getDisplayName().has_value() &&
+                        model->getDisplayName().value() == m_newModelName)
                     {
                         nameExists = true;
                         break;
@@ -546,62 +547,73 @@ namespace gladius::ui
                 if (nameExists)
                 {
                     ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: This name is already used for another function.");
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
+                                       "Warning: This name is already used for another function.");
                 }
 
                 // Function type selection
-                static const char* functionTypes[] = { "Empty function", "Copy existing function", "Levelset template" };
+                static const char * functionTypes[] = {
+                  "Empty function", "Copy existing function", "Levelset template"};
                 int functionType = static_cast<int>(m_selectedFunctionType);
-                ImGui::Combo("Function type", &functionType, functionTypes, IM_ARRAYSIZE(functionTypes));
+                ImGui::Combo(
+                  "Function type", &functionType, functionTypes, IM_ARRAYSIZE(functionTypes));
                 m_selectedFunctionType = static_cast<FunctionType>(functionType);
 
                 // If copy, show list of available functions
                 int availableFunctionCount = 0;
-                std::vector<nodes::Model*> availableFunctions;
+                std::vector<nodes::Model *> availableFunctions;
                 std::vector<std::string> availableFunctionNames;
                 if (m_selectedFunctionType == FunctionType::CopyExisting)
                 {
-                    for (auto& [id, model] : m_assembly->getFunctions())
+                    for (auto & [id, model] : m_assembly->getFunctions())
                     {
                         if (!model || model->isManaged() || model == m_currentModel)
                             continue;
                         availableFunctions.push_back(model.get());
-                        availableFunctionNames.push_back(model->getDisplayName().value_or("function"));
+                        availableFunctionNames.push_back(
+                          model->getDisplayName().value_or("function"));
                     }
                     availableFunctionCount = static_cast<int>(availableFunctions.size());
                     if (availableFunctionCount == 0)
                     {
-                        ImGui::TextColored(ImVec4(1,0,0,1), "No user functions available to copy.");
+                        ImGui::TextColored(ImVec4(1, 0, 0, 1),
+                                           "No user functions available to copy.");
                     }
                     else
                     {
                         if (m_selectedSourceFunctionIndex >= availableFunctionCount)
                             m_selectedSourceFunctionIndex = 0;
-                        std::vector<const char*> cstrNames;
-                        for (auto& s : availableFunctionNames) cstrNames.push_back(s.c_str());
-                        ImGui::Combo("Source function", &m_selectedSourceFunctionIndex, cstrNames.data(), availableFunctionCount);
+                        std::vector<const char *> cstrNames;
+                        for (auto & s : availableFunctionNames)
+                            cstrNames.push_back(s.c_str());
+                        ImGui::Combo("Source function",
+                                     &m_selectedSourceFunctionIndex,
+                                     cstrNames.data(),
+                                     availableFunctionCount);
                     }
                 }
 
                 bool canCreate = !m_newModelName.empty() &&
-                    (m_selectedFunctionType != FunctionType::CopyExisting || availableFunctionCount > 0);
+                                 (m_selectedFunctionType != FunctionType::CopyExisting ||
+                                  availableFunctionCount > 0);
 
                 if (canCreate && ImGui::Button("Create", ImVec2(120, 0)))
                 {
-                    nodes::Model* newModel = nullptr;
+                    nodes::Model * newModel = nullptr;
                     switch (m_selectedFunctionType)
                     {
-                        case FunctionType::Empty:
-                        default:
-                            newModel = &m_doc->createNewFunction();
-                            break;
-                        case FunctionType::CopyExisting:
-                            if (availableFunctionCount > 0)
-                                newModel = &m_doc->copyFunction(*availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
-                            break;
-                        case FunctionType::LevelsetTemplate:
-                            newModel = &m_doc->createLevelsetFunction(m_newModelName);
-                            break;
+                    case FunctionType::Empty:
+                    default:
+                        newModel = &m_doc->createNewFunction();
+                        break;
+                    case FunctionType::CopyExisting:
+                        if (availableFunctionCount > 0)
+                            newModel = &m_doc->copyFunction(
+                              *availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
+                        break;
+                    case FunctionType::LevelsetTemplate:
+                        newModel = &m_doc->createLevelsetFunction(m_newModelName);
+                        break;
                     }
                     if (newModel)
                     {
@@ -1001,13 +1013,13 @@ namespace gladius::ui
                 }
                 onCreateNode();
                 onDeleteNode();
-                
+
                 // Handle group movement - detect when nodes are moved and move their group members
                 m_nodeViewVisitor.handleGroupMovement();
-                
+
                 // Handle group node selection - automatically select all nodes in a group
                 // when a group node is selected
-               // if (ed::HasSelectionChanged())
+                // if (ed::HasSelectionChanged())
                 {
                     handleGroupNodeSelection();
                 }
@@ -1382,7 +1394,7 @@ namespace gladius::ui
         config.nodeDistance = distance;
         config.layerSpacing = distance * 1.5f;
         config.groupPadding = distance * 0.5f;
-        
+
         layoutEngine.performAutoLayout(*currentModel(), config);
 
         m_nodePositionsNeedUpdate = true;
@@ -1879,20 +1891,20 @@ namespace gladius::ui
     void ModelEditor::handleGroupNodeSelection()
     {
         auto selection = selectedNodes(m_editorContext);
-        
+
         // Only handle single node selection to avoid conflicts
         if (selection.size() != 1)
         {
             return;
         }
-        
+
         ed::NodeId selectedNodeId = selection.front();
-        
+
         // Check if this is a group node (created with hash-based ID in renderNodeGroups)
         // Group nodes are background nodes that represent the visual grouping
         bool isGroupNode = false;
         std::string groupTag;
-        
+
         // Search through all existing groups to see if this ID matches a group node
         for (const auto & [tag, group] : m_nodeViewVisitor.getNodeGroups())
         {
@@ -1904,12 +1916,12 @@ namespace gladius::ui
                 break;
             }
         }
-        
+
         if (isGroupNode && !groupTag.empty())
         {
             // Clear current selection
             ed::ClearSelection();
-            
+
             // Select all nodes that belong to this group using the improved method
             bool first = true;
             for (const auto & [nodeId, modelNode] : *m_currentModel)
@@ -1928,7 +1940,8 @@ namespace gladius::ui
         return m_doc->createLevelsetFunction(name);
     }
 
-    nodes::Model & ModelEditor::copyExistingFunction(nodes::Model const & sourceModel, std::string const & name)
+    nodes::Model & ModelEditor::copyExistingFunction(nodes::Model const & sourceModel,
+                                                     std::string const & name)
     {
         return m_doc->copyFunction(sourceModel, name);
     }
