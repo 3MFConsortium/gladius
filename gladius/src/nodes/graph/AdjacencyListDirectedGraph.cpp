@@ -3,15 +3,15 @@
 
 namespace gladius::nodes::graph
 {
-    AdjacencyListDirectedGraph::AdjacencyListDirectedGraph() :
-        IDirectedGraph(0),
-        m_maxVertexId(-1)
+    AdjacencyListDirectedGraph::AdjacencyListDirectedGraph()
+        : IDirectedGraph(0)
+        , m_maxVertexId(-1)
     {
     }
-    
-    AdjacencyListDirectedGraph::AdjacencyListDirectedGraph(std::size_t const size) :
-        IDirectedGraph(size),
-        m_maxVertexId(-1)
+
+    AdjacencyListDirectedGraph::AdjacencyListDirectedGraph(std::size_t const size)
+        : IDirectedGraph(size)
+        , m_maxVertexId(-1)
     {
     }
 
@@ -29,7 +29,7 @@ namespace gladius::nodes::graph
 
         // Add outgoing edge from id to idOfDependency
         m_outgoingEdges[id].insert(idOfDependency);
-        
+
         // Add incoming edge to idOfDependency from id
         m_incomingEdges[idOfDependency].insert(id);
     }
@@ -51,7 +51,9 @@ namespace gladius::nodes::graph
         }
     }
 
-    auto AdjacencyListDirectedGraph::isDirectlyDependingOn(Identifier id, Identifier dependencyInQuestion) const -> bool
+    auto AdjacencyListDirectedGraph::isDirectlyDependingOn(Identifier id,
+                                                           Identifier dependencyInQuestion) const
+      -> bool
     {
         auto iter = m_outgoingEdges.find(id);
         if (iter != m_outgoingEdges.end())
@@ -84,7 +86,7 @@ namespace gladius::nodes::graph
         {
             return;
         }
-        
+
         // Remove the vertex from the vertices set
         m_vertices.erase(vertexIter);
 
@@ -114,7 +116,7 @@ namespace gladius::nodes::graph
                     inIter->second.erase(id);
                 }
             }
-            
+
             // Remove all outgoing edges from this vertex
             m_outgoingEdges.erase(outIter);
         }
@@ -132,13 +134,13 @@ namespace gladius::nodes::graph
                     outDepIter->second.erase(id);
                 }
             }
-            
+
             // Remove all incoming edges to this vertex
             m_incomingEdges.erase(inIter);
         }
     }
 
-    auto AdjacencyListDirectedGraph::getVertices() const -> const DependencySet&
+    auto AdjacencyListDirectedGraph::getVertices() const -> const DependencySet &
     {
         return m_vertices;
     }
@@ -146,12 +148,9 @@ namespace gladius::nodes::graph
     void AdjacencyListDirectedGraph::addVertex(Identifier id)
     {
         m_vertices.insert(id);
-        
+
         // Update maximum vertex ID
-        if (m_vertices.size() == 1 || id > m_maxVertexId)
-        {
-            m_maxVertexId = id;
-        }
+        m_maxVertexId = std::max(m_maxVertexId, id);
     }
 
     auto AdjacencyListDirectedGraph::hasPredecessors(Identifier id) const -> bool

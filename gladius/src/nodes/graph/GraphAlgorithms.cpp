@@ -132,7 +132,7 @@ namespace gladius::nodes::graph
         }
 
       
-        std::vector<bool> visited(graph.getSize(), false);
+        std::vector<bool> visited(graph.getSize() + 1u, false);
         std::queue<Identifier> nodesToVisit;
 
         nodesToVisit.push(id);
