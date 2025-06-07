@@ -529,8 +529,25 @@ namespace gladius::ui
                 ImGui::Text("Create a new function");
                 ImGui::Separator();
 
+
                 // Function name input
                 ImGui::InputText("Function name", &m_newModelName);
+
+                // Check for duplicate name
+                bool nameExists = false;
+                for (auto& [id, model] : m_assembly->getFunctions())
+                {
+                    if (model && model->getDisplayName().has_value() && model->getDisplayName().value() == m_newModelName)
+                    {
+                        nameExists = true;
+                        break;
+                    }
+                }
+                if (nameExists)
+                {
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: This name is already used for another function.");
+                }
 
                 // Function type selection
                 static const char* functionTypes[] = { "Empty function", "Copy existing function", "Levelset template" };
