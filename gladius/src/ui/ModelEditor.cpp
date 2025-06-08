@@ -1381,10 +1381,10 @@ namespace gladius::ui
             return;
         }
 
-        if (!m_nodeWidthsInitialized)
-        {
-            return;
-        }
+        // if (!m_nodeWidthsInitialized)
+        // {
+        //     return;
+        // }
 
         createUndoRestorePoint("Autolayout");
 

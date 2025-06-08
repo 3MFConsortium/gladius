@@ -502,7 +502,7 @@ namespace gladius::nodes
 
         if (!skipCheck)
         {
-           return updateTypes();
+            return updateTypes();
         }
 
         return true;
@@ -511,19 +511,19 @@ namespace gladius::nodes
     void Model::remove(NodeId id)
     {
         const auto nodeToRemove = m_nodes.find(id);
-        
+
         // First check if the node exists
         if (nodeToRemove == std::end(m_nodes))
         {
             return;
         }
-        
+
         // Protect begin node from deletion
         if (m_beginNode && nodeToRemove->second->getId() == m_beginNode->getId())
         {
             return;
         }
-        
+
         // Protect end node from deletion
         if (m_endNode && nodeToRemove->second->getId() == m_endNode->getId())
         {
@@ -588,8 +588,12 @@ namespace gladius::nodes
     {
         m_beginNode = create<Begin>();
         m_beginNode->setDisplayName("inputs");
+        m_beginNode->screenPos() =
+          nodes::float2(0.0f, 0.0f); ///< Set initial screen position for Begin node
         m_endNode = create<End>();
         m_endNode->setDisplayName("outputs");
+        m_endNode->screenPos() =
+          nodes::float2(400.0f, 0.0f); ///< Set initial screen position for End node
     }
 
     void Model::createBeginEndWithDefaultInAndOuts()
@@ -699,7 +703,7 @@ namespace gladius::nodes
     {
         // Reset to true initially, then accumulate validation results
         m_isValid = true;
-        
+
         if (!m_allInputReferencesAreValid)
         {
             if (m_logger)
@@ -831,7 +835,7 @@ namespace gladius::nodes
 
     /**
      * @brief Simplifies the model by removing nodes that are not connected to the end node.
-     * 
+     *
      * This method identifies all nodes that cannot influence the end node (i.e.,
      * there is no path from these nodes to the end node) and removes them.
      * This helps optimize the model by eliminating unused nodes.
@@ -852,12 +856,13 @@ namespace gladius::nodes
         // Get the node ID of the end node
         NodeId const endNodeId = m_endNode->getId();
 
-        // Create a set of all nodes that are needed (directly or indirectly contribute to the end node)
+        // Create a set of all nodes that are needed (directly or indirectly contribute to the end
+        // node)
         std::set<NodeId> neededNodes;
-        
+
         // First, include the end node itself
         neededNodes.insert(endNodeId);
-        
+
         // Then add all nodes that the end node depends on
         // We need to carefully handle the dependencies
         if (m_graph.getSize() > 0 && endNodeId < static_cast<NodeId>(m_graph.getSize()))
@@ -865,7 +870,7 @@ namespace gladius::nodes
             auto endNodeDependencies = graph::determineAllDependencies(m_graph, endNodeId);
             neededNodes.insert(endNodeDependencies.begin(), endNodeDependencies.end());
         }
-        
+
         // Always include the Begin node if it exists
         if (m_beginNode)
         {
@@ -874,7 +879,7 @@ namespace gladius::nodes
 
         // Find nodes to remove (those not in the needed set)
         std::vector<NodeId> nodesToRemove;
-        for (const auto& [nodeId, node] : m_nodes)
+        for (const auto & [nodeId, node] : m_nodes)
         {
             // Skip begin and end nodes (redundant check, but for clarity)
             if (nodeId == endNodeId || (m_beginNode && nodeId == m_beginNode->getId()))
@@ -898,7 +903,7 @@ namespace gladius::nodes
         // Update the graph after removing nodes
         m_graphRequiresUpdate = true;
         updateGraphAndOrderIfNeeded();
-        
+
         return removedCount;
 
         return removedCount;
@@ -910,20 +915,20 @@ namespace gladius::nodes
         m_nodes.clear();
         m_outPorts.clear();
         m_inputParameter.clear();
-        
+
         // Reset node pointers
         m_beginNode = nullptr;
         m_endNode = nullptr;
-        
+
         // Reset IDs
         m_lastParameterId = 0;
         m_lastId = 1;
-        
+
         // Reset graph
         m_graph = graph::AdjacencyListDirectedGraph(0);
         m_outputOrder.clear();
         m_graphRequiresUpdate = true;
-        
+
         // Reset state flags
         m_allInputReferencesAreValid = false;
         m_nodesHaveBeenLayouted = false;
