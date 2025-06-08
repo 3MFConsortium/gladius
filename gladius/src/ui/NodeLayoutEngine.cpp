@@ -39,10 +39,10 @@ namespace gladius::ui
         auto const beginId = model.getBeginNode()->getId();
         auto depthMap = determineDepth(graph, beginId);
 
-        // Step 1: Analyze groups and separate nodes
-        auto groups = analyzeGroups(model, depthMap);
-        std::vector<nodes::NodeBase *> ungroupedNodes;
+        // Step 1: Separate nodes into constant, ungrouped, and identify those in groups
         std::vector<nodes::NodeBase *> constantNodes;
+        std::vector<nodes::NodeBase *> ungroupedNodesPreFilter; // Will be filtered later
+        std::vector<nodes::NodeBase *> allNonConstantNodes;     // For depth adjustment
 
         for (auto & [id, node] : model)
         {
@@ -50,12 +50,103 @@ namespace gladius::ui
             {
                 constantNodes.push_back(node.get());
             }
-            else if (node->getTag().empty())
+            else
             {
-                ungroupedNodes.push_back(node.get());
+                allNonConstantNodes.push_back(node.get());
+                if (node->getTag().empty())
+                {
+                    ungroupedNodesPreFilter.push_back(node.get());
+                }
             }
-            // Grouped nodes are already in groups
-        } // Step 2: Layout each group separately and track occupied spaces
+        }
+
+        // Step 1.5: Create an adjusted depth map to make space for constant nodes
+        auto adjustedDepthMap = depthMap; // Start with a copy
+        std::set<int> originalDepthsRequiringShift;
+
+        for (auto * ncNode : allNonConstantNodes)
+        {
+            auto ncNodeId = ncNode->getId();
+            if (depthMap.find(ncNodeId) == depthMap.end())
+                continue; // Should not happen for connected graph
+            int originalNodeDepth = depthMap[ncNodeId];
+
+            for (auto * cNode : constantNodes)
+            {
+                if (graph.isDirectlyDependingOn(ncNodeId, cNode->getId()))
+                {
+                    originalDepthsRequiringShift.insert(originalNodeDepth);
+                    break;
+                }
+            }
+        }
+
+        std::map<int, int> accumulatedShiftAtOriginalDepth;
+        int currentTotalShift = 0;
+        int maxOriginalDepth = 0;
+        if (!depthMap.empty())
+        {
+            for (auto const & [id, dVal] : depthMap)
+            {
+                maxOriginalDepth = std::max(maxOriginalDepth, dVal);
+            }
+        }
+
+        for (int d = 0; d <= maxOriginalDepth; ++d)
+        {
+            if (originalDepthsRequiringShift.count(d))
+            {
+                currentTotalShift++;
+            }
+            accumulatedShiftAtOriginalDepth[d] = currentTotalShift;
+        }
+
+        for (auto * ncNode : allNonConstantNodes)
+        {
+            auto ncNodeId = ncNode->getId();
+            if (depthMap.find(ncNodeId) != depthMap.end()) // Check if node is in original depth map
+            {
+                int originalDepth = depthMap[ncNodeId];
+                if (accumulatedShiftAtOriginalDepth.count(originalDepth))
+                {
+                    adjustedDepthMap[ncNodeId] =
+                      originalDepth + accumulatedShiftAtOriginalDepth[originalDepth];
+                }
+                else
+                {
+                    // This case should ideally not be hit if maxOriginalDepth is calculated
+                    // correctly and all non-constant nodes are in depthMap. Default to original
+                    // depth if something is off.
+                    adjustedDepthMap[ncNodeId] = originalDepth;
+                }
+            }
+        }
+        // Constant nodes do not use this depth map for their primary layering.
+
+        // Step 2: Analyze groups using the adjusted depth map
+        auto groups = analyzeGroups(model, adjustedDepthMap);
+
+        // Filter ungroupedNodes again, ensuring they are not part of any analyzed group
+        // (analyzeGroups only considers nodes with tags for groups)
+        std::vector<nodes::NodeBase *> ungroupedNodes;
+        for (auto * node : ungroupedNodesPreFilter)
+        {
+            bool inAGroup = false;
+            for (const auto & group : groups)
+            {
+                if (std::find(group.nodes.begin(), group.nodes.end(), node) != group.nodes.end())
+                {
+                    inAGroup = true;
+                    break;
+                }
+            }
+            if (!inAGroup)
+            {
+                ungroupedNodes.push_back(node);
+            }
+        }
+
+        // Step 2.5: Layout each group separately and track occupied spaces
         constexpr float GROUP_PADDING = 50.0f;
         std::vector<Rect> occupiedRects; // Rectangles representing occupied spaces
         ImVec2 nextGroupOrigin(0.0f, 0.0f);
@@ -68,7 +159,8 @@ namespace gladius::ui
                   [](const GroupInfo & a, const GroupInfo & b) { return a.minDepth < b.minDepth; });
         for (auto & group : groups)
         { // Layout nodes in group (local coordinates)
-            layoutNodesInGroup(group, depthMap, config, occupiedRects);
+            layoutNodesInGroup(
+              group, adjustedDepthMap, config, occupiedRects); // Use adjustedDepthMap
             updateGroupBounds(group);
 
             // Place group at next available position, considering occupied spaces
@@ -91,29 +183,26 @@ namespace gladius::ui
             maxX = std::max(maxX, nextGroupOrigin.x);
         }
 
-        // Step 3: Place ungrouped nodes after all groups, considering occupied spaces        if
-        // (!ungroupedNodes.empty())
-        { // Layout ungrouped nodes (local coordinates)
-            layoutUngroupedNodes(ungroupedNodes, depthMap, config, occupiedRects);
+        // Step 3: Place ungrouped nodes after all groups, considering occupied spaces
+        if (!ungroupedNodes.empty()) // Check if there are any truly ungrouped nodes
+        {                            // Layout ungrouped nodes (local coordinates)
+            layoutUngroupedNodes(
+              ungroupedNodes, adjustedDepthMap, config, occupiedRects); // Use adjustedDepthMap
 
             // Find bounding box of all groups
             float ungroupedOriginX = maxX;
             float ungroupedOriginY = 0.0f;
             if (!occupiedRects.empty())
             {
+                bool firstOccupiedRect = true;
+                float minOccupiedX = std::numeric_limits<float>::max();
+                float maxOccupiedYAtMinX = 0.0f;
+
                 for (const auto & rect : occupiedRects)
                 {
-                    // Ensure ungrouped nodes are placed below the lowest group if starting a new
-                    // "column" implicitly or if maxX is small (meaning groups didn't take much
-                    // horizontal space)
                     if (maxX < config.layerSpacing * 2)
                     { // Heuristic: if groups are narrow
                         ungroupedOriginY = std::max(ungroupedOriginY, rect.max.y + GROUP_PADDING);
-                    }
-                    else
-                    {
-                        // If groups are wide, ungrouped can start at Y=0 to the right
-                        // No change to ungroupedOriginY needed here, it stays 0.0f
                     }
                     ungroupedOriginX = std::max(ungroupedOriginX, rect.max.x + GROUP_PADDING);
                 }
@@ -612,7 +701,7 @@ namespace gladius::ui
                                            std::vector<GroupInfo> & groups,
                                            const LayoutConfig & config)
     {
-        constexpr float MIN_SPACING = 20.0f;
+        constexpr float MIN_SPACING = 50.0f;
         const int MAX_ITERATIONS = config.maxOptimizationIterations;
 
         for (int iteration = 0; iteration < MAX_ITERATIONS; ++iteration)
@@ -625,9 +714,9 @@ namespace gladius::ui
                 auto nodePos = node->screenPos();
                 auto nodeSize = ed::GetNodeSize(node->getId());
                 if (nodeSize.x <= 0.0f)
-                    nodeSize.x = 200.0f;
+                    nodeSize.x = 500.0f;
                 if (nodeSize.y <= 0.0f)
-                    nodeSize.y = 100.0f;
+                    nodeSize.y = 400.0f;
 
                 for (auto & group : groups)
                 {
@@ -637,13 +726,13 @@ namespace gladius::ui
                         nodePos.y < group.position.y + group.size.y + MIN_SPACING &&
                         nodePos.y + nodeSize.y + MIN_SPACING > group.position.y)
                     {
-                        // Move node away from group (prefer moving right/down)
+                        // Move node away from group (prefer moving left/down)
                         float deltaX = (group.position.x + group.size.x + MIN_SPACING) - nodePos.x;
                         float deltaY = (group.position.y + group.size.y + MIN_SPACING) - nodePos.y;
 
                         if (std::abs(deltaX) < std::abs(deltaY))
                         {
-                            node->screenPos().x += deltaX;
+                            node->screenPos().x -= deltaX;
                         }
                         else
                         {
@@ -660,9 +749,9 @@ namespace gladius::ui
                 auto nodePos = constantNode->screenPos();
                 auto nodeSize = ed::GetNodeSize(constantNode->getId());
                 if (nodeSize.x <= 0.0f)
-                    nodeSize.x = 150.0f; // Constant nodes are usually smaller
+                    nodeSize.x = 500.0f;
                 if (nodeSize.y <= 0.0f)
-                    nodeSize.y = 80.0f;
+                    nodeSize.y = 400.0f;
 
                 for (auto & group : groups)
                 {
@@ -679,7 +768,7 @@ namespace gladius::ui
 
                         if (std::abs(deltaX) < std::abs(deltaY) && deltaX < 0)
                         {
-                            constantNode->screenPos().x += deltaX;
+                            constantNode->screenPos().x -= deltaX;
                         }
                         else
                         {
@@ -696,18 +785,18 @@ namespace gladius::ui
                 auto constantPos = constantNode->screenPos();
                 auto constantSize = ed::GetNodeSize(constantNode->getId());
                 if (constantSize.x <= 0.0f)
-                    constantSize.x = 150.0f;
+                    constantSize.x = 500.0f;
                 if (constantSize.y <= 0.0f)
-                    constantSize.y = 80.0f;
+                    constantSize.y = 400.0f;
 
                 for (auto * regularNode : ungroupedNodes)
                 {
                     auto nodePos = regularNode->screenPos();
                     auto nodeSize = ed::GetNodeSize(regularNode->getId());
                     if (nodeSize.x <= 0.0f)
-                        nodeSize.x = 200.0f;
+                        nodeSize.x = 500.0f;
                     if (nodeSize.y <= 0.0f)
-                        nodeSize.y = 100.0f;
+                        nodeSize.y = 400.0f;
 
                     // Check if constant node overlaps with regular node
                     if (constantPos.x < nodePos.x + nodeSize.x + MIN_SPACING &&
@@ -721,7 +810,7 @@ namespace gladius::ui
 
                         if (std::abs(deltaX) < std::abs(deltaY) && deltaX < 0)
                         {
-                            constantNode->screenPos().x += deltaX;
+                            constantNode->screenPos().x -= deltaX;
                         }
                         else
                         {
@@ -739,9 +828,9 @@ namespace gladius::ui
                 auto pos1 = node1->screenPos();
                 auto size1 = ed::GetNodeSize(node1->getId());
                 if (size1.x <= 0.0f)
-                    size1.x = 150.0f;
+                    size1.x = 500.0f;
                 if (size1.y <= 0.0f)
-                    size1.y = 80.0f;
+                    size1.y = 400.0f;
 
                 for (size_t j = i + 1; j < constantNodes.size(); ++j)
                 {
@@ -749,9 +838,9 @@ namespace gladius::ui
                     auto pos2 = node2->screenPos();
                     auto size2 = ed::GetNodeSize(node2->getId());
                     if (size2.x <= 0.0f)
-                        size2.x = 150.0f;
+                        size2.x = 500.0f;
                     if (size2.y <= 0.0f)
-                        size2.y = 80.0f;
+                        size2.y = 400.0f;
 
                     // Check if constant nodes overlap
                     if (pos1.x < pos2.x + size2.x + MIN_SPACING &&
@@ -767,7 +856,7 @@ namespace gladius::ui
                         }
                         else
                         {
-                            node1->screenPos().y += -overlapY;
+                            node1->screenPos().y -= overlapY;
                         }
                         hasOverlaps = true;
                     }
@@ -848,9 +937,9 @@ namespace gladius::ui
     {
         auto nodeSize = ed::GetNodeSize(entity.item->getId());
         if (nodeSize.x <= 0.0f)
-            nodeSize.x = 200.0f; // Default width
+            nodeSize.x = 500.0f; // Default width
         if (nodeSize.y <= 0.0f)
-            nodeSize.y = 100.0f; // Default height
+            nodeSize.y = 400.0f; // Default height
         return nodeSize;
     }
 
@@ -871,9 +960,9 @@ namespace gladius::ui
             auto pos = node->screenPos();
             auto size = ed::GetNodeSize(node->getId());
             if (size.x <= 0.0f)
-                size.x = 200.0f;
+                size.x = 500.0f;
             if (size.y <= 0.0f)
-                size.y = 100.0f;
+                size.y = 400.0f;
 
             minX = std::min(minX, pos.x);
             minY = std::min(minY, pos.y);
@@ -901,9 +990,9 @@ namespace gladius::ui
             auto pos = node->screenPos();
             auto size = ed::GetNodeSize(node->getId());
             if (size.x <= 0.0f)
-                size.x = 200.0f;
+                size.x = 500.0f;
             if (size.y <= 0.0f)
-                size.y = 100.0f;
+                size.y = 400.0f;
 
             minX = std::min(minX, pos.x);
             minY = std::min(minY, pos.y);

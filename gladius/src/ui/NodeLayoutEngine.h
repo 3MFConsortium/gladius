@@ -30,12 +30,12 @@ namespace gladius::ui
          */
         struct LayoutConfig
         {
-            float nodeDistance = 150.0f;        ///< Basic distance between nodes
-            float layerSpacing = 250.0f;        ///< Distance between layers
-            float groupPadding = 50.0f;         ///< Padding around groups
-            float constantNodeOffset = 80.0f;   ///< Offset for constant nodes from their targets
-            int maxOptimizationIterations = 10; ///< Max iterations for position optimization
-            float convergenceThreshold = 5.0f;  ///< Threshold for optimization convergence
+            float nodeDistance = 200.0f;         ///< Basic distance between nodes
+            float layerSpacing = 500.0f;         ///< Distance between layers
+            float groupPadding = 200.0f;         ///< Padding around groups
+            float constantNodeOffset = 80.0f;    ///< Offset for constant nodes from their targets
+            int maxOptimizationIterations = 100; ///< Max iterations for position optimization
+            float convergenceThreshold = 5.0f;   ///< Threshold for optimization convergence
         };
 
         /**
