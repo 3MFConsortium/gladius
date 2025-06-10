@@ -105,7 +105,7 @@ jobs:
     - name: Test
       # Run only unit tests, excluding integration tests
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
-      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure -R "gladius_test"
+      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure -R "^gladius_test$"
     - name: Package_Windows
       if: runner.os == 'Windows'
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --target Generate_Installer --config ${{ matrix.build_type }}
