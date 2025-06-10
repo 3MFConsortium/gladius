@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <iostream>
 #include <thread>
 #include <tracy/Tracy.hpp>
