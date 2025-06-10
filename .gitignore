@@ -8,6 +8,7 @@ gladius/.vs/gladius/v15/Browse.VC.db
 gladius/.vs/
 gladius/build/
 build/
+build_*/
 gladius/.vscode/
 .vscode/
 gladius/src/.clangd/
