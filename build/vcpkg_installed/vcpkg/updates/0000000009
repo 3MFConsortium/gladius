@@ -1,0 +1,8 @@
+Package: snappy
+Version: 1.2.1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-linux
+Multi-Arch: same
+Abi: 119daf7ce9725dc8578f0f2764a86e555bedcaecbc37022eb798c436fe5d59fa
+Description: A fast compressor/decompressor.
+Status: install ok installed
