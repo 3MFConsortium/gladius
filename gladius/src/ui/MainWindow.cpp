@@ -474,6 +474,7 @@ namespace gladius::ui
                 meshExportDialog();
                 cliExportDialog();
                 mainMenu();
+                showExitPopUp();
 
                 if (m_shortcutSettingsDialog.isVisible())
                 {
