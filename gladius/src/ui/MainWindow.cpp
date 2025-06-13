@@ -475,6 +475,7 @@ namespace gladius::ui
                 cliExportDialog();
                 mainMenu();
                 showExitPopUp();
+                showSaveBeforeFileOperationPopUp();
 
                 if (m_shortcutSettingsDialog.isVisible())
                 {
@@ -612,6 +613,14 @@ namespace gladius::ui
 
     void MainWindow::newModel()
     {
+        if (m_fileChanged)
+        {
+            m_pendingFileOperation = PendingFileOperation::NewModel;
+            m_pendingOpenFilename.reset();
+            m_showSaveBeforeFileOperation = true;
+            return;
+        }
+        
         m_doc->newFromTemplate();
         resetEditorState();
         m_renderWindow.centerView();
@@ -984,6 +993,14 @@ namespace gladius::ui
 
     void MainWindow::open()
     {
+        if (m_fileChanged)
+        {
+            m_pendingFileOperation = PendingFileOperation::OpenFile;
+            m_pendingOpenFilename.reset();
+            m_showSaveBeforeFileOperation = true;
+            return;
+        }
+        
         const auto filename = queryLoadFilename({{"*.3mf"}});
         if (filename.has_value())
         {
@@ -1015,6 +1032,14 @@ namespace gladius::ui
 
     void MainWindow::open(const std::filesystem::path & filename)
     {
+        if (m_fileChanged)
+        {
+            m_pendingFileOperation = PendingFileOperation::OpenFile;
+            m_pendingOpenFilename = filename;
+            m_showSaveBeforeFileOperation = true;
+            return;
+        }
+        
         m_currentAssemblyFileName = filename;
         m_welcomeScreen.hide();
         m_doc->loadNonBlocking(filename);
@@ -1205,6 +1230,303 @@ namespace gladius::ui
                     saveAs();
                     m_showSaveBeforeExit = false;
                     std::exit(EXIT_SUCCESS);
+                }
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    void MainWindow::showSaveBeforeFileOperationPopUp()
+    {
+        if (!m_showSaveBeforeFileOperation)
+        {
+            return;
+        }
+
+        auto constexpr windowTitle = "Do you want to save before continuing?";
+        if (!ImGui::IsPopupOpen(windowTitle))
+        {
+            ImGui::OpenPopup(windowTitle);
+        }
+        const ImGuiWindowFlags windowFlags =
+          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+
+        if (ImGui::BeginPopupModal(windowTitle, nullptr, windowFlags))
+        {
+            ImGui::NewLine();
+            ImGui::NewLine();
+
+            if (m_currentAssemblyFileName)
+            {
+                const char* operationText = (m_pendingFileOperation == PendingFileOperation::NewModel) 
+                    ? "creating a new model" : "opening a file";
+                
+                ImGui::TextUnformatted(
+                  fmt::format("{} \nhas changed. \nDo you want to save before {}?",
+                              m_currentAssemblyFileName.value().string(), operationText)
+                    .c_str());
+
+                ImGui::NewLine();
+                ImGui::NewLine();
+
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.4f, 0.f, 0.f, 1.f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.f, 0.f, 0.f, 1.f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.f, 0.f, 1.f));
+                if (ImGui::Button(
+                      reinterpret_cast<const char *>(ICON_FA_TIMES "\tContinue without saving")))
+                {
+                    // Proceed with the pending operation without saving
+                    if (m_pendingFileOperation == PendingFileOperation::NewModel)
+                    {
+                        m_doc->newFromTemplate();
+                        resetEditorState();
+                        m_renderWindow.centerView();
+                    }
+                    else if (m_pendingFileOperation == PendingFileOperation::OpenFile)
+                    {
+                        if (m_pendingOpenFilename.has_value())
+                        {
+                            // Direct file open (e.g., from recent files)
+                            m_currentAssemblyFileName = m_pendingOpenFilename.value();
+                            m_welcomeScreen.hide();
+                            m_doc->loadNonBlocking(m_pendingOpenFilename.value());
+                            resetEditorState();
+                            m_renderWindow.centerView();
+                            addToRecentFiles(m_pendingOpenFilename.value());
+                        }
+                        else
+                        {
+                            // Open file dialog
+                            const auto filename = queryLoadFilename({{"*.3mf"}});
+                            if (filename.has_value())
+                            {
+                                m_currentAssemblyFileName = filename.value();
+                                m_welcomeScreen.hide();
+                                m_doc->loadNonBlocking(filename.value());
+                                resetEditorState();
+                                m_renderWindow.centerView();
+                                addToRecentFiles(filename.value());
+                            }
+                        }
+                    }
+                    
+                    m_showSaveBeforeFileOperation = false;
+                    m_pendingFileOperation = PendingFileOperation::None;
+                    m_pendingOpenFilename.reset();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::PopStyleColor(3);
+
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    m_showSaveBeforeFileOperation = false;
+                    m_pendingFileOperation = PendingFileOperation::None;
+                    m_pendingOpenFilename.reset();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_SAVE "\tSave")))
+                {
+                    save();
+                    
+                    // After saving, proceed with the pending operation
+                    if (m_pendingFileOperation == PendingFileOperation::NewModel)
+                    {
+                        m_doc->newFromTemplate();
+                        resetEditorState();
+                        m_renderWindow.centerView();
+                    }
+                    else if (m_pendingFileOperation == PendingFileOperation::OpenFile)
+                    {
+                        if (m_pendingOpenFilename.has_value())
+                        {
+                            // Direct file open (e.g., from recent files)
+                            m_currentAssemblyFileName = m_pendingOpenFilename.value();
+                            m_welcomeScreen.hide();
+                            m_doc->loadNonBlocking(m_pendingOpenFilename.value());
+                            resetEditorState();
+                            m_renderWindow.centerView();
+                            addToRecentFiles(m_pendingOpenFilename.value());
+                        }
+                        else
+                        {
+                            // Open file dialog
+                            const auto filename = queryLoadFilename({{"*.3mf"}});
+                            if (filename.has_value())
+                            {
+                                m_currentAssemblyFileName = filename.value();
+                                m_welcomeScreen.hide();
+                                m_doc->loadNonBlocking(filename.value());
+                                resetEditorState();
+                                m_renderWindow.centerView();
+                                addToRecentFiles(filename.value());
+                            }
+                        }
+                    }
+                    
+                    m_showSaveBeforeFileOperation = false;
+                    m_pendingFileOperation = PendingFileOperation::None;
+                    m_pendingOpenFilename.reset();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_SAVE "\tSave As")))
+                {
+                    saveAs();
+                    
+                    // After saving, proceed with the pending operation
+                    if (m_pendingFileOperation == PendingFileOperation::NewModel)
+                    {
+                        m_doc->newFromTemplate();
+                        resetEditorState();
+                        m_renderWindow.centerView();
+                    }
+                    else if (m_pendingFileOperation == PendingFileOperation::OpenFile)
+                    {
+                        if (m_pendingOpenFilename.has_value())
+                        {
+                            // Direct file open (e.g., from recent files)
+                            m_currentAssemblyFileName = m_pendingOpenFilename.value();
+                            m_welcomeScreen.hide();
+                            m_doc->loadNonBlocking(m_pendingOpenFilename.value());
+                            resetEditorState();
+                            m_renderWindow.centerView();
+                            addToRecentFiles(m_pendingOpenFilename.value());
+                        }
+                        else
+                        {
+                            // Open file dialog
+                            const auto filename = queryLoadFilename({{"*.3mf"}});
+                            if (filename.has_value())
+                            {
+                                m_currentAssemblyFileName = filename.value();
+                                m_welcomeScreen.hide();
+                                m_doc->loadNonBlocking(filename.value());
+                                resetEditorState();
+                                m_renderWindow.centerView();
+                                addToRecentFiles(filename.value());
+                            }
+                        }
+                    }
+                    
+                    m_showSaveBeforeFileOperation = false;
+                    m_pendingFileOperation = PendingFileOperation::None;
+                    m_pendingOpenFilename.reset();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            else
+            {
+                const char* operationText = (m_pendingFileOperation == PendingFileOperation::NewModel) 
+                    ? "creating a new model" : "opening a file";
+                    
+                ImGui::TextUnformatted(
+                  fmt::format("The current assembly has not been saved yet. \nDo you want to save before {}?", operationText)
+                    .c_str());
+
+                ImGui::NewLine();
+                ImGui::NewLine();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.4f, 0.f, 0.f, 1.f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.f, 0.f, 0.f, 1.f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.f, 0.f, 1.f));
+                if (ImGui::Button(
+                      reinterpret_cast<const char *>(ICON_FA_TIMES "\tContinue without saving")))
+                {
+                    // Proceed with the pending operation without saving
+                    if (m_pendingFileOperation == PendingFileOperation::NewModel)
+                    {
+                        m_doc->newFromTemplate();
+                        resetEditorState();
+                        m_renderWindow.centerView();
+                    }
+                    else if (m_pendingFileOperation == PendingFileOperation::OpenFile)
+                    {
+                        if (m_pendingOpenFilename.has_value())
+                        {
+                            // Direct file open (e.g., from recent files)
+                            m_currentAssemblyFileName = m_pendingOpenFilename.value();
+                            m_welcomeScreen.hide();
+                            m_doc->loadNonBlocking(m_pendingOpenFilename.value());
+                            resetEditorState();
+                            m_renderWindow.centerView();
+                            addToRecentFiles(m_pendingOpenFilename.value());
+                        }
+                        else
+                        {
+                            // Open file dialog
+                            const auto filename = queryLoadFilename({{"*.3mf"}});
+                            if (filename.has_value())
+                            {
+                                m_currentAssemblyFileName = filename.value();
+                                m_welcomeScreen.hide();
+                                m_doc->loadNonBlocking(filename.value());
+                                resetEditorState();
+                                m_renderWindow.centerView();
+                                addToRecentFiles(filename.value());
+                            }
+                        }
+                    }
+                    
+                    m_showSaveBeforeFileOperation = false;
+                    m_pendingFileOperation = PendingFileOperation::None;
+                    m_pendingOpenFilename.reset();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::PopStyleColor(3);
+
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel"))
+                {
+                    m_showSaveBeforeFileOperation = false;
+                    m_pendingFileOperation = PendingFileOperation::None;
+                    m_pendingOpenFilename.reset();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_SAVE "\tSave As")))
+                {
+                    saveAs();
+                    
+                    // After saving, proceed with the pending operation
+                    if (m_pendingFileOperation == PendingFileOperation::NewModel)
+                    {
+                        m_doc->newFromTemplate();
+                        resetEditorState();
+                        m_renderWindow.centerView();
+                    }
+                    else if (m_pendingFileOperation == PendingFileOperation::OpenFile)
+                    {
+                        if (m_pendingOpenFilename.has_value())
+                        {
+                            // Direct file open (e.g., from recent files)
+                            m_currentAssemblyFileName = m_pendingOpenFilename.value();
+                            m_welcomeScreen.hide();
+                            m_doc->loadNonBlocking(m_pendingOpenFilename.value());
+                            resetEditorState();
+                            m_renderWindow.centerView();
+                            addToRecentFiles(m_pendingOpenFilename.value());
+                        }
+                        else
+                        {
+                            // Open file dialog
+                            const auto filename = queryLoadFilename({{"*.3mf"}});
+                            if (filename.has_value())
+                            {
+                                m_currentAssemblyFileName = filename.value();
+                                m_welcomeScreen.hide();
+                                m_doc->loadNonBlocking(filename.value());
+                                resetEditorState();
+                                m_renderWindow.centerView();
+                                addToRecentFiles(filename.value());
+                            }
+                        }
+                    }
+                    
+                    m_showSaveBeforeFileOperation = false;
+                    m_pendingFileOperation = PendingFileOperation::None;
+                    m_pendingOpenFilename.reset();
+                    ImGui::CloseCurrentPopup();
                 }
             }
             ImGui::EndPopup();
