@@ -1027,8 +1027,18 @@ namespace gladius::ui
                 // Render node group last, to prioritize node interaction
                 m_nodeViewVisitor.renderNodeGroups();
 
+                // Check for group double-clicks and handle them AFTER rendering (so bounds are updated)
+                std::string doubleClickedGroup = m_nodeViewVisitor.checkForGroupDoubleClick();
+                if (!doubleClickedGroup.empty())
+                {
+                    m_nodeViewVisitor.handleGroupDoubleClick(doubleClickedGroup);
+                }
+
                 ed::End();
                 ed::PopStyleColor();
+
+                // Process any pending group selections after the editor has processed input
+                m_nodeViewVisitor.processPendingGroupSelection();
 
                 if (m_nodeViewVisitor.haveParameterChanged())
                 {

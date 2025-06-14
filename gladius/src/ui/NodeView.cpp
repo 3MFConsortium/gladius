@@ -1565,4 +1565,124 @@ namespace gladius::ui
         }
     }
 
+    void NodeView::handleGroupDoubleClick(std::string const & groupTag)
+    {
+        if (groupTag.empty())
+        {
+            return;
+        }
+
+        // Find the group
+        auto groupIt = m_nodeGroups.find(groupTag);
+        if (groupIt == m_nodeGroups.end())
+        {
+            return;
+        }
+
+        // Store the group tag for deferred selection
+        // This allows the node editor to process the click normally first
+        m_pendingGroupSelection = groupTag;
+        m_hasPendingGroupSelection = true;
+    }
+
+    void NodeView::processPendingGroupSelection()
+    {
+        if (!m_hasPendingGroupSelection || m_pendingGroupSelection.empty() || !m_currentModel)
+        {
+            return;
+        }
+        
+        // Clear the current selection and select all nodes in the group
+        ed::ClearSelection();
+        
+        bool first = true;
+        for (const auto & [nodeId, modelNode] : *m_currentModel)
+        {
+            if (modelNode && modelNode->getTag() == m_pendingGroupSelection)
+            {
+                ed::SelectNode(ed::NodeId(nodeId), !first);
+                first = false;
+            }
+        }
+        
+        // Clear the pending selection
+        m_pendingGroupSelection.clear();
+        m_hasPendingGroupSelection = false;
+    }
+
+    std::string NodeView::checkForGroupDoubleClick() const
+    {
+        // Only check for double-clicks if there are groups and the mouse was double-clicked
+        if (m_nodeGroups.empty() || !ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        {
+            return "";
+        }
+
+        // Get the mouse position in screen coordinates
+        ImVec2 const mousePos = ImGui::GetMousePos();
+
+        // Check each group to see if the mouse is over its rectangle
+        for (const auto & [tag, group] : m_nodeGroups)
+        {
+            if (group.nodes.empty())
+            {
+                continue;
+            }
+
+            // Calculate fresh bounds for this group (same logic as calculateGroupBounds)
+            ImVec2 minBound = ImVec2(FLT_MAX, FLT_MAX);
+            ImVec2 maxBound = ImVec2(-FLT_MAX, -FLT_MAX);
+            bool hasValidNodes = false;
+
+            // Calculate bounds from all nodes in the group
+            for (nodes::NodeId const nodeId : group.nodes)
+            {
+                // Get node position from ImGui Node Editor
+                ImVec2 const nodePos = ed::GetNodePosition(nodeId);
+                ImVec2 const nodeSize = ed::GetNodeSize(nodeId);
+
+                // Skip nodes with invalid positions or sizes
+                if (nodeSize.x <= 0.0f || nodeSize.y <= 0.0f)
+                {
+                    continue;
+                }
+
+                hasValidNodes = true;
+
+                // Update bounds
+                minBound.x = std::min(minBound.x, nodePos.x);
+                minBound.y = std::min(minBound.y, nodePos.y);
+                maxBound.x = std::max(maxBound.x, nodePos.x + nodeSize.x);
+                maxBound.y = std::max(maxBound.y, nodePos.y + nodeSize.y);
+            }
+
+            // Only check if bounds are valid
+            if (!hasValidNodes || minBound.x >= maxBound.x || minBound.y >= maxBound.y)
+            {
+                continue;
+            }
+
+            // Calculate the group rectangle with padding (same as in renderNodeGroups)
+            constexpr float PADDING = 20.0f;
+            ImVec2 const paddedMin =
+              ImVec2(minBound.x - PADDING, minBound.y - PADDING - 50.0f);
+            ImVec2 const paddedMax =
+              ImVec2(maxBound.x + PADDING, maxBound.y + PADDING);
+            ImVec2 const groupSize =
+              ImVec2(paddedMax.x - paddedMin.x, paddedMax.y - paddedMin.y);
+
+            // Get the group node ID and position (this returns screen coordinates)
+            ed::NodeId const groupId = ed::NodeId(std::hash<std::string>{}(tag));
+            ImVec2 const nodeScreenPos = ed::GetNodePosition(groupId);
+
+            // Check if mouse is within the group rectangle bounds (in screen coordinates)
+            if (mousePos.x >= nodeScreenPos.x && mousePos.x <= nodeScreenPos.x + groupSize.x &&
+                mousePos.y >= nodeScreenPos.y && mousePos.y <= nodeScreenPos.y + groupSize.y)
+            {
+                return tag;
+            }
+        }
+
+        return "";
+    }
 }

@@ -115,6 +115,24 @@ namespace gladius::ui
          */
         void handleGroupMovement();
 
+        /**
+         * @brief Handles double-click on group rectangles to select all nodes in the group
+         * @param groupTag The tag of the group that was double-clicked
+         */
+        void handleGroupDoubleClick(const std::string& groupTag);
+        
+        /**
+         * @brief Processes any pending group selection that needs to be applied
+         * Should be called after the node editor has processed input
+         */
+        void processPendingGroupSelection();
+        
+        /**
+         * @brief Checks for double-clicks on group rectangles and returns the group tag if found
+         * @return The tag of the group that was double-clicked, or empty string if none
+         */
+        std::string checkForGroupDoubleClick() const;
+
       private:
         void show(nodes::NodeBase & node);
         void header(nodes::NodeBase & node);
@@ -212,6 +230,10 @@ namespace gladius::ui
         /// Group node position tracking for group movement (stores positions of group nodes, not individual model nodes)
         std::unordered_map<nodes::NodeId, ImVec2> m_previousNodePositions;
         bool m_skipGroupMovement = false; // Flag to prevent infinite loops during programmatic movement
+        
+        /// Double-click group selection state
+        std::string m_pendingGroupSelection;
+        bool m_hasPendingGroupSelection = false;
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };
