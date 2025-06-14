@@ -359,4 +359,27 @@ namespace gladius_tests
         EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::End>(model), 1);
     }
 
+    TEST_F(Model, VisitNodes_DisconnectedBeginAndEnd_AllNodesAreVisited)
+    {
+        nodes::Model model;
+        model.createBeginEnd();
+        
+        // Custom visitor that counts all node visits via the base NodeBase method
+        class NodeCountVisitor : public nodes::Visitor
+        {
+        public:
+            int count = 0;
+            void visit(nodes::NodeBase &) override { ++count; }
+        } visitor;
+        
+        model.visitNodes(visitor);
+        
+        // Should visit both Begin and End nodes, even though they have no connections
+        EXPECT_EQ(visitor.count, 2);
+        
+        // Verify both Begin and End nodes are present
+        EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::Begin>(model), 1);
+        EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::End>(model), 1);
+    }
+
 }
