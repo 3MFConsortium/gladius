@@ -119,19 +119,13 @@ namespace gladius::ui
          * @brief Handles double-click on group rectangles to select all nodes in the group
          * @param groupTag The tag of the group that was double-clicked
          */
-        void handleGroupDoubleClick(const std::string& groupTag);
-        
-        /**
-         * @brief Processes any pending group selection that needs to be applied
-         * Should be called after the node editor has processed input
-         */
-        void processPendingGroupSelection();
+        void handleGroupClick(const std::string& groupTag);
         
         /**
          * @brief Checks for double-clicks on group rectangles and returns the group tag if found
          * @return The tag of the group that was double-clicked, or empty string if none
          */
-        std::string checkForGroupDoubleClick() const;
+        std::string checkForGroupClick() const;
 
       private:
         void show(nodes::NodeBase & node);

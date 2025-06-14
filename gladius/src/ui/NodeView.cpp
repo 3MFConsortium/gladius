@@ -1565,7 +1565,7 @@ namespace gladius::ui
         }
     }
 
-    void NodeView::handleGroupDoubleClick(std::string const & groupTag)
+    void NodeView::handleGroupClick(std::string const & groupTag)
     {
         if (groupTag.empty() || !m_currentModel)
         {
@@ -1598,62 +1598,13 @@ namespace gladius::ui
             ed::SelectNode(nodesToSelect[i], i > 0); // First node clears selection, others add to it
         }
         
-        // Navigate to the selection to ensure it's visible and focused
-        if (!nodesToSelect.empty())
-        {
-            ed::NavigateToSelection(true);
-        }
     }
 
-    void NodeView::processPendingGroupSelection()
-    {
-        if (!m_hasPendingGroupSelection || m_pendingGroupSelection.empty() || !m_currentModel)
-        {
-            return;
-        }
-        
-        // Decrement frame counter and only process when it reaches zero
-        if (m_groupSelectionFrame > 0)
-        {
-            m_groupSelectionFrame--;
-            return;
-        }
-        
-        // Clear the current selection and select all nodes in the group
-        ed::ClearSelection();
-        
-        // Collect all nodes in the group first
-        std::vector<ed::NodeId> nodesToSelect;
-        for (const auto & [nodeId, modelNode] : *m_currentModel)
-        {
-            if (modelNode && modelNode->getTag() == m_pendingGroupSelection)
-            {
-                nodesToSelect.push_back(ed::NodeId(nodeId));
-            }
-        }
-        
-        // Select all nodes in the group
-        for (size_t i = 0; i < nodesToSelect.size(); ++i)
-        {
-            ed::SelectNode(nodesToSelect[i], i > 0); // First node clears selection, others add to it
-        }
-        
-        // Navigate to the selection to ensure it's visible and focused
-        if (!nodesToSelect.empty())
-        {
-            ed::NavigateToSelection(true);
-        }
-        
-        // Clear the pending selection
-        m_pendingGroupSelection.clear();
-        m_hasPendingGroupSelection = false;
-        m_groupSelectionFrame = 0;
-    }
 
-    std::string NodeView::checkForGroupDoubleClick() const
+    std::string NodeView::checkForGroupClick() const
     {
         // Only check for double-clicks if there are groups and the background was double-clicked
-        if (m_nodeGroups.empty() || !ed::IsBackgroundDoubleClicked())
+        if (m_nodeGroups.empty() || !ed::IsBackgroundClicked())
         {
             return "";
         }

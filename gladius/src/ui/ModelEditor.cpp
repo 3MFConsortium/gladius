@@ -1021,10 +1021,10 @@ namespace gladius::ui
                 m_nodeViewVisitor.renderNodeGroups();
 
                 // Check for group double-clicks and handle them AFTER rendering (so bounds are updated)
-                std::string doubleClickedGroup = m_nodeViewVisitor.checkForGroupDoubleClick();
+                std::string doubleClickedGroup = m_nodeViewVisitor.checkForGroupClick();
                 if (!doubleClickedGroup.empty())
                 {
-                    m_nodeViewVisitor.handleGroupDoubleClick(doubleClickedGroup);
+                    m_nodeViewVisitor.handleGroupClick(doubleClickedGroup);
                 }
 
                 ed::End();
