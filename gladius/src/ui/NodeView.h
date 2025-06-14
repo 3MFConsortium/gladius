@@ -234,6 +234,7 @@ namespace gladius::ui
         /// Double-click group selection state
         std::string m_pendingGroupSelection;
         bool m_hasPendingGroupSelection = false;
+        int m_groupSelectionFrame = 0; // Frame counter for deferred selection
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };
