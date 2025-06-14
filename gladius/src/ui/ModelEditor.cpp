@@ -553,17 +553,18 @@ namespace gladius::ui
 
                 // Function type selection
                 static const char * functionTypes[] = {
-                  "Empty function", "Copy existing function", "Levelset template"};
+                  "Empty function", "Copy existing function", "Levelset template", "Wrap existing function"};
                 int functionType = static_cast<int>(m_selectedFunctionType);
                 ImGui::Combo(
                   "Function type", &functionType, functionTypes, IM_ARRAYSIZE(functionTypes));
                 m_selectedFunctionType = static_cast<FunctionType>(functionType);
 
-                // If copy, show list of available functions
+                // If copy or wrap, show list of available functions
                 int availableFunctionCount = 0;
                 std::vector<nodes::Model *> availableFunctions;
                 std::vector<std::string> availableFunctionNames;
-                if (m_selectedFunctionType == FunctionType::CopyExisting)
+                if (m_selectedFunctionType == FunctionType::CopyExisting || 
+                    m_selectedFunctionType == FunctionType::WrapExisting)
                 {
                     for (auto & [id, model] : m_assembly->getFunctions())
                     {
@@ -594,7 +595,8 @@ namespace gladius::ui
                 }
 
                 bool canCreate = !m_newModelName.empty() &&
-                                 (m_selectedFunctionType != FunctionType::CopyExisting ||
+                                 ((m_selectedFunctionType != FunctionType::CopyExisting && 
+                                   m_selectedFunctionType != FunctionType::WrapExisting) ||
                                   availableFunctionCount > 0);
 
                 if (canCreate && ImGui::Button("Create", ImVec2(120, 0)))
@@ -609,6 +611,11 @@ namespace gladius::ui
                     case FunctionType::CopyExisting:
                         if (availableFunctionCount > 0)
                             newModel = &m_doc->copyFunction(
+                              *availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
+                        break;
+                    case FunctionType::WrapExisting:
+                        if (availableFunctionCount > 0)
+                            newModel = &m_doc->wrapExistingFunction(
                               *availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
                         break;
                     case FunctionType::LevelsetTemplate:

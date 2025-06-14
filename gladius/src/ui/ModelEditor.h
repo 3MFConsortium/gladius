@@ -139,7 +139,8 @@ namespace gladius::ui
         {
             Empty = 0,
             CopyExisting = 1,
-            LevelsetTemplate = 2
+            LevelsetTemplate = 2,
+            WrapExisting = 3
         };
 
         FunctionType m_selectedFunctionType{FunctionType::Empty};
