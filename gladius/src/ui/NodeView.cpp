@@ -1650,64 +1650,45 @@ namespace gladius::ui
         if (!m_isDraggingGroup && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             std::string const groupUnderMouse = getGroupUnderMouseHeader(mousePos);
-
-            // Debug output
-            if (!groupUnderMouse.empty())
-            {
-                printf("DEBUG: Found group under mouse: %s\n", groupUnderMouse.c_str());
-            }
-            else
-            {
-                printf("DEBUG: No group under mouse at pos (%.1f, %.1f)\n", mousePos.x, mousePos.y);
-            }
-
             if (!groupUnderMouse.empty())
             {
                 // Start dragging this group
-                printf("DEBUG: Starting group drag for: %s\n", groupUnderMouse.c_str());
                 m_isDraggingGroup = true;
                 m_draggingGroup = groupUnderMouse;
                 m_groupDragStartPos = mousePos;
-                printf("DEBUG: m_isDraggingGroup is now: %s\n",
-                       m_isDraggingGroup ? "true" : "false");
             }
         }
 
         // Handle active dragging
-        if (m_isDraggingGroup)
+        if (m_isDraggingGroup && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
-            printf("DEBUG: In dragging mode, checking if mouse is dragging...\n");
-            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+            auto groupIt = m_nodeGroups.find(m_draggingGroup);
+            if (groupIt != m_nodeGroups.end())
             {
-                printf("DEBUG: Mouse is dragging, applying movement...\n");
-                auto groupIt = m_nodeGroups.find(m_draggingGroup);
-                if (groupIt != m_nodeGroups.end())
+                // Calculate drag delta for this frame
+                ImVec2 const currentMousePos = ImGui::GetMousePos();
+                ImVec2 const frameDelta = ImVec2(currentMousePos.x - m_groupDragStartPos.x,
+                                                 currentMousePos.y - m_groupDragStartPos.y);
+
+                // Only apply movement if there's significant delta to avoid jitter
+                if (std::abs(frameDelta.x) > 0.5f || std::abs(frameDelta.y) > 0.5f)
                 {
-                    // Calculate drag delta for this frame
-                    ImVec2 const currentMousePos = ImGui::GetMousePos();
-                    ImVec2 const frameDelta = ImVec2(currentMousePos.x - m_groupDragStartPos.x,
-                                                     currentMousePos.y - m_groupDragStartPos.y);
+                    // Apply delta to all nodes in the group
+                    m_skipGroupMovement = true; // Prevent handleGroupMovement from interfering
 
-                    // Only apply movement if there's significant delta to avoid jitter
-                    if (std::abs(frameDelta.x) > 0.5f || std::abs(frameDelta.y) > 0.5f)
+                    for (nodes::NodeId const nodeId : groupIt->second.nodes)
                     {
-                        // Apply delta to all nodes in the group
-                        m_skipGroupMovement = true; // Prevent handleGroupMovement from interfering
-
-                        for (nodes::NodeId const nodeId : groupIt->second.nodes)
-                        {
-                            // Get current position and apply this frame's delta
-                            ImVec2 const currentPos = ed::GetNodePosition(nodeId);
-                            ImVec2 const newPos =
-                              ImVec2(currentPos.x + frameDelta.x, currentPos.y + frameDelta.y);
-                            ed::SetNodePosition(nodeId, newPos);
-                        }
-
-                        m_skipGroupMovement = false;
-
-                        // Update start position for next frame to avoid accumulating error
-                        m_groupDragStartPos = currentMousePos;
+                        // Get current position and apply this frame's delta
+                        ImVec2 const currentPos = ed::GetNodePosition(nodeId);
+                        ImVec2 const newPos =
+                          ImVec2(currentPos.x + frameDelta.x, currentPos.y + frameDelta.y);
+                        ed::SetNodePosition(nodeId, newPos);
                     }
+
+                    m_skipGroupMovement = false;
+
+                    // Update start position for next frame to avoid accumulating error
+                    m_groupDragStartPos = currentMousePos;
                 }
             }
         }
@@ -1715,7 +1696,6 @@ namespace gladius::ui
         // End dragging
         if (m_isDraggingGroup && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
         {
-            printf("DEBUG: Ending group drag\n");
             m_isDraggingGroup = false;
             m_draggingGroup.clear();
         }
@@ -1723,20 +1703,11 @@ namespace gladius::ui
 
     std::string NodeView::getGroupUnderMouseHeader(const ImVec2 & mousePos) const
     {
-        // Debug output
-        printf("DEBUG: getGroupUnderMouseHeader called with mouse at (%.1f, %.1f)\n",
-               mousePos.x,
-               mousePos.y);
-        printf("DEBUG: Number of groups: %zu\n", m_nodeGroups.size());
-
         // Check each group to see if the mouse is over its header/border area
         for (const auto & [tag, group] : m_nodeGroups)
         {
-            printf("DEBUG: Checking group '%s' with %zu nodes\n", tag.c_str(), group.nodes.size());
-
             if (group.nodes.empty())
             {
-                printf("DEBUG: Group '%s' has no nodes, skipping\n", tag.c_str());
                 continue;
             }
 
@@ -1770,16 +1741,8 @@ namespace gladius::ui
             // Only check if bounds are valid
             if (!hasValidNodes || minBound.x >= maxBound.x || minBound.y >= maxBound.y)
             {
-                printf("DEBUG: Group '%s' has invalid bounds or no valid nodes\n", tag.c_str());
                 continue;
             }
-
-            printf("DEBUG: Group '%s' bounds: min(%.1f, %.1f) max(%.1f, %.1f)\n",
-                   tag.c_str(),
-                   minBound.x,
-                   minBound.y,
-                   maxBound.x,
-                   maxBound.y);
 
             // Calculate the group rectangle with padding (same as in renderNodeGroups)
             constexpr float PADDING = 20.0f;
@@ -1793,13 +1756,6 @@ namespace gladius::ui
 
             // Use the calculated bounds directly as the group rectangle position
             ImVec2 const groupRectPos = paddedMin;
-
-            printf("DEBUG: Group '%s' padded rect: pos(%.1f, %.1f) size(%.1f, %.1f)\n",
-                   tag.c_str(),
-                   groupRectPos.x,
-                   groupRectPos.y,
-                   groupSize.x,
-                   groupSize.y);
 
             // Define header area (top part of the group)
             ImRect const headerRect(groupRectPos.x,
@@ -1829,21 +1785,12 @@ namespace gladius::ui
             bool inRightBorder = rightBorder.Contains(mousePos);
             bool inBottomBorder = bottomBorder.Contains(mousePos);
 
-            printf("DEBUG: Group '%s' mouse check: header=%d left=%d right=%d bottom=%d\n",
-                   tag.c_str(),
-                   inHeader,
-                   inLeftBorder,
-                   inRightBorder,
-                   inBottomBorder);
-
             if (inHeader || inLeftBorder || inRightBorder || inBottomBorder)
             {
-                printf("DEBUG: Mouse is over group '%s' draggable area!\n", tag.c_str());
                 return tag;
             }
         }
 
-        printf("DEBUG: Mouse not over any group header/border\n");
         return "";
     }
 
