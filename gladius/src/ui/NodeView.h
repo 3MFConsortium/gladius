@@ -6,10 +6,10 @@
 #include <imgui.h>
 #include <map>
 #include <optional>
+#include <string>
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
-#include <string>
 #include <vector>
 
 namespace gladius::ui
@@ -22,13 +22,13 @@ namespace gladius::ui
     /**
      * @brief Structure that holds information about a group of nodes
      */
-    struct NodeGroup 
+    struct NodeGroup
     {
-        std::string tag;                   ///< The tag that all nodes in this group share
-        std::vector<nodes::NodeId> nodes;  ///< The nodes that belong to this group
-        ImVec2 minBound;                   ///< The minimum bound of the group (top-left)
-        ImVec2 maxBound;                   ///< The maximum bound of the group (bottom-right)
-        ImVec4 color;                      ///< The color for this group
+        std::string tag;                  ///< The tag that all nodes in this group share
+        std::vector<nodes::NodeId> nodes; ///< The nodes that belong to this group
+        ImVec2 minBound;                  ///< The minimum bound of the group (top-left)
+        ImVec2 maxBound;                  ///< The maximum bound of the group (bottom-right)
+        ImVec4 color;                     ///< The color for this group
     };
 
     class NodeView : public nodes::Visitor
@@ -63,12 +63,12 @@ namespace gladius::ui
         [[nodiscard]] float getUiScale() const;
 
         bool columnWidthsAreInitialized() const;
-        
+
         /**
          * @brief Updates the node group mapping based on current model
          */
         void updateNodeGroups();
-        
+
         /**
          * @brief Renders all node groups
          */
@@ -79,91 +79,92 @@ namespace gladius::ui
          * @param nodeId The ID of the node to find
          * @return Pointer to the found node or nullptr if not found
          */
-        nodes::NodeBase* findNodeById(nodes::NodeId nodeId) const;
-        
+        nodes::NodeBase * findNodeById(nodes::NodeId nodeId) const;
+
         /**
          * @brief Replace the tag of all nodes in a group
          * @param oldTag The current tag to replace
          * @param newTag The new tag to assign to all nodes in the group
          * @return true if the tag was successfully replaced, false otherwise
          */
-        bool replaceGroupTag(const std::string& oldTag, const std::string& newTag);
-        
+        bool replaceGroupTag(const std::string & oldTag, const std::string & newTag);
+
         /**
          * @brief Get access to the node groups map
          * @return const reference to the node groups map
          */
-        const std::unordered_map<std::string, NodeGroup>& getNodeGroups() const;
-        
+        const std::unordered_map<std::string, NodeGroup> & getNodeGroups() const;
+
         /**
          * @brief Checks if the provided tag is already assigned to a group
          * @param tag The tag to check
          * @return Whether the tag exists in the current groups
          */
-        [[nodiscard]] bool hasGroup(const std::string& tag) const;
-        
+        [[nodiscard]] bool hasGroup(const std::string & tag) const;
+
         /**
          * @brief Gets all nodes that belong to the same group as the specified node
          * @param nodeId The ID of the node to find group members for
          * @return Vector of node IDs in the same group, or empty vector if not in a group
          */
         std::vector<nodes::NodeId> getNodesInSameGroup(nodes::NodeId nodeId) const;
-        
+
         /**
          * @brief Handles group movement when a group node is moved
-         * Called during the editor update loop to detect group node movement and synchronize all nodes in the group
+         * Called during the editor update loop to detect group node movement and synchronize all
+         * nodes in the group
          */
         void handleGroupMovement();
-        
+
         /**
          * @brief Handles group dragging via header/border areas
          * Should be called before rendering groups to handle mouse input
          */
         void handleGroupDragging();
-        
+
         /**
          * @brief Checks if selection rectangle should be suppressed due to group dragging
          * @return true if selection rectangle should be suppressed
          */
         bool shouldSuppressSelectionRect() const;
-        
+
         /**
          * @brief Alternative: Handle group dragging with modifier key (Ctrl+drag anywhere in group)
          * @param requireModifier If true, requires Ctrl key to be held for group dragging
          */
         void handleGroupDraggingWithModifier(bool requireModifier = true);
-        
+
         /**
          * @brief Alternative: Handle group dragging with right mouse button
          * Right-click and drag anywhere in group to move entire group
          */
         void handleGroupDraggingRightClick();
-        
+
         /**
          * @brief Handles double-click on group rectangles to select all nodes in the group
          * @param groupTag The tag of the group that was double-clicked
          */
-        void handleGroupClick(const std::string& groupTag);
-        
+        void handleGroupClick(const std::string & groupTag);
+
         /**
          * @brief Checks for double-clicks on group rectangles and returns the group tag if found
          * @return The tag of the group that was double-clicked, or empty string if none
          */
         std::string checkForGroupClick() const;
-        
+
         /**
          * @brief Checks if the mouse is over a group header or border area (for dragging)
          * @param mousePos The mouse position in screen coordinates
          * @return The tag of the group under the mouse header/border, or empty string if none
          */
-        std::string getGroupUnderMouseHeader(const ImVec2& mousePos) const;
-        
+        std::string getGroupUnderMouseHeader(const ImVec2 & mousePos) const;
+
         /**
          * @brief Checks if the mouse is over the interior (content area) of any group
-         * @param mousePos The mouse position in screen coordinates  
+         * @param mousePos The mouse position in screen coordinates
          * @return true if mouse is over group interior (should allow selection rectangle)
          */
-        bool isMouseOverGroupInterior(const ImVec2& mousePos) const;
+        bool isMouseOverGroupInterior(const ImVec2 & mousePos) const;
 
       private:
         void show(nodes::NodeBase & node);
@@ -204,13 +205,13 @@ namespace gladius::ui
                      nodes::VariantType & val);
 
         bool typeControl(std::string const & label, std::type_index & typeIndex);
-        
+
         /**
          * @brief Calculates the bounds of a node group
          * @param group The group to calculate bounds for
          */
-        void calculateGroupBounds(NodeGroup& group);
-        
+        void calculateGroupBounds(NodeGroup & group);
+
         /**
          * @brief Calculate group rectangle with padding and header
          * @param group The group to calculate bounds for
@@ -218,14 +219,14 @@ namespace gladius::ui
          * @param maxOut Output maximum bounds (bottom-right)
          * @return true if the group has valid nodes and bounds were calculated
          */
-        bool calculateGroupRect(const NodeGroup& group, ImVec2& minOut, ImVec2& maxOut) const;
-        
+        bool calculateGroupRect(const NodeGroup & group, ImVec2 & minOut, ImVec2 & maxOut) const;
+
         /**
          * @brief Generate a consistent color for a group based on its tag
          * @param tag The group tag to generate color for
          * @return RGBA color for the group
          */
-        ImVec4 generateGroupColor(const std::string& tag) const;
+        ImVec4 generateGroupColor(const std::string & tag) const;
 
         int m_currentLinkId = 0;
         bool m_parameterChanged{false};
@@ -259,24 +260,26 @@ namespace gladius::ui
         float m_uiScale = 1.0f;
 
         std::unordered_map<nodes::NodeId, ColumnWidths> m_columnWidths;
-        
+
         /// Storage for node groups organized by tag
         std::unordered_map<std::string, NodeGroup> m_nodeGroups;
-        
+
         /// Tag editing state
         std::string m_editingTag;
         std::string m_editingTagBuffer;
         bool m_isEditingTag = false;
-        
-        /// Group node position tracking for group movement (stores positions of group nodes, not individual model nodes)
+
+        /// Group node position tracking for group movement (stores positions of group nodes, not
+        /// individual model nodes)
         std::unordered_map<nodes::NodeId, ImVec2> m_previousNodePositions;
-        bool m_skipGroupMovement = false; // Flag to prevent infinite loops during programmatic movement
-        
+        bool m_skipGroupMovement =
+          false; // Flag to prevent infinite loops during programmatic movement
+
         /// Double-click group selection state
         std::string m_pendingGroupSelection;
         bool m_hasPendingGroupSelection = false;
         int m_groupSelectionFrame = 0; // Frame counter for deferred selection
-        
+
         /// Group dragging state
         std::string m_draggingGroup;
         bool m_isDraggingGroup = false;
