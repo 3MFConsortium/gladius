@@ -1567,7 +1567,7 @@ namespace gladius::ui
 
     void NodeView::handleGroupDoubleClick(std::string const & groupTag)
     {
-        if (groupTag.empty())
+        if (groupTag.empty() || !m_currentModel)
         {
             return;
         }
@@ -1579,11 +1579,30 @@ namespace gladius::ui
             return;
         }
 
-        // Store the group tag for deferred selection with a 2-frame delay
-        // This allows the node editor to complete all its input processing
-        m_pendingGroupSelection = groupTag;
-        m_hasPendingGroupSelection = true;
-        m_groupSelectionFrame = 2; // Wait 2 frames
+        // Immediately select all nodes in the group since we've consumed the mouse input
+        ed::ClearSelection();
+        
+        // Collect all nodes in the group first
+        std::vector<ed::NodeId> nodesToSelect;
+        for (const auto & [nodeId, modelNode] : *m_currentModel)
+        {
+            if (modelNode && modelNode->getTag() == groupTag)
+            {
+                nodesToSelect.push_back(ed::NodeId(nodeId));
+            }
+        }
+        
+        // Select all nodes in the group
+        for (size_t i = 0; i < nodesToSelect.size(); ++i)
+        {
+            ed::SelectNode(nodesToSelect[i], i > 0); // First node clears selection, others add to it
+        }
+        
+        // Navigate to the selection to ensure it's visible and focused
+        if (!nodesToSelect.empty())
+        {
+            ed::NavigateToSelection(true);
+        }
     }
 
     void NodeView::processPendingGroupSelection()
@@ -1633,8 +1652,8 @@ namespace gladius::ui
 
     std::string NodeView::checkForGroupDoubleClick() const
     {
-        // Only check for double-clicks if there are groups and the mouse was double-clicked
-        if (m_nodeGroups.empty() || !ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        // Only check for double-clicks if there are groups and the background was double-clicked
+        if (m_nodeGroups.empty() || !ed::IsBackgroundDoubleClicked())
         {
             return "";
         }

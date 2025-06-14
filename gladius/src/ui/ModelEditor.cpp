@@ -1017,13 +1017,6 @@ namespace gladius::ui
                 // Handle group movement - detect when nodes are moved and move their group members
                 m_nodeViewVisitor.handleGroupMovement();
 
-                // Handle group node selection - automatically select all nodes in a group
-                // when a group node is selected
-                // if (ed::HasSelectionChanged())
-                {
-                    handleGroupNodeSelection();
-                }
-
                 // Render node group last, to prioritize node interaction
                 m_nodeViewVisitor.renderNodeGroups();
 
@@ -1036,9 +1029,6 @@ namespace gladius::ui
 
                 ed::End();
                 ed::PopStyleColor();
-
-                // Process any pending group selections after the editor has processed input
-                m_nodeViewVisitor.processPendingGroupSelection();
 
                 if (m_nodeViewVisitor.haveParameterChanged())
                 {
@@ -1896,53 +1886,6 @@ namespace gladius::ui
         // Convert set to vector
         tags.assign(uniqueTags.begin(), uniqueTags.end());
         return tags;
-    }
-
-    void ModelEditor::handleGroupNodeSelection()
-    {
-        auto selection = selectedNodes(m_editorContext);
-
-        // Only handle single node selection to avoid conflicts
-        if (selection.size() != 1)
-        {
-            return;
-        }
-
-        ed::NodeId selectedNodeId = selection.front();
-
-        // Check if this is a group node (created with hash-based ID in renderNodeGroups)
-        // Group nodes are background nodes that represent the visual grouping
-        bool isGroupNode = false;
-        std::string groupTag;
-
-        // Search through all existing groups to see if this ID matches a group node
-        for (const auto & [tag, group] : m_nodeViewVisitor.getNodeGroups())
-        {
-            ed::NodeId groupId = ed::NodeId(std::hash<std::string>{}(tag));
-            if (groupId == selectedNodeId)
-            {
-                isGroupNode = true;
-                groupTag = tag;
-                break;
-            }
-        }
-
-        if (isGroupNode && !groupTag.empty())
-        {
-            // Clear current selection
-            ed::ClearSelection();
-
-            // Select all nodes that belong to this group using the improved method
-            bool first = true;
-            for (const auto & [nodeId, modelNode] : *m_currentModel)
-            {
-                if (modelNode->getTag() == groupTag)
-                {
-                    ed::SelectNode(ed::NodeId(nodeId), !first);
-                    first = false;
-                }
-            }
-        }
     }
 
     nodes::Model & ModelEditor::createLevelsetFunction(std::string const & name)
