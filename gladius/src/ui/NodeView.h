@@ -3,7 +3,7 @@
 #include "../nodes/Model.h"
 #include "Style.h"
 
-#include "imgui.h"
+#include <imgui.h>
 #include <map>
 #include <optional>
 #include <typeindex>
@@ -212,9 +212,18 @@ namespace gladius::ui
         void calculateGroupBounds(NodeGroup& group);
         
         /**
-         * @brief Generates a color for a group based on its tag
-         * @param tag The group's tag
-         * @return A color for the group
+         * @brief Calculate group rectangle with padding and header
+         * @param group The group to calculate bounds for
+         * @param minOut Output minimum bounds (top-left)
+         * @param maxOut Output maximum bounds (bottom-right)
+         * @return true if the group has valid nodes and bounds were calculated
+         */
+        bool calculateGroupRect(const NodeGroup& group, ImVec2& minOut, ImVec2& maxOut) const;
+        
+        /**
+         * @brief Generate a consistent color for a group based on its tag
+         * @param tag The group tag to generate color for
+         * @return RGBA color for the group
          */
         ImVec4 generateGroupColor(const std::string& tag) const;
 
