@@ -1002,7 +1002,6 @@ namespace gladius::ui
                     BeginPin(pinId, ed::PinKind::Output);
                     ImGui::SetWindowFontScale(1.5f); // Scale up the font by 1.5
                     ImGui::TextUnformatted(reinterpret_cast<const char *>(ICON_FA_CARET_RIGHT));
-                    columnWidths[7] = std::max(columnWidths[7], ImGui::GetItemRectSize().x);
                     ImGui::SetWindowFontScale(1.0f); // Reset the font scale to default
 
                     ed::EndPin();
@@ -1228,6 +1227,10 @@ namespace gladius::ui
             calculateGroupBounds(group);
         }
 
+        // Get mouse position for hover effects
+        ImVec2 const mousePos = ImGui::GetMousePos();
+        std::string const hoveredGroupHeader = getGroupUnderMouseHeader(mousePos);
+
         for (auto const & [tag, group] : m_nodeGroups)
         {
             // Only render if bounds are valid
@@ -1238,8 +1241,11 @@ namespace gladius::ui
 
                 // Add padding around the group
                 constexpr float PADDING = 20.0f;
+                constexpr float HEADER_HEIGHT = 50.0f;
+                constexpr float BORDER_WIDTH = 10.0f;
+
                 ImVec2 const paddedMin =
-                  ImVec2(group.minBound.x - PADDING, group.minBound.y - PADDING - 50.0f);
+                  ImVec2(group.minBound.x - PADDING, group.minBound.y - PADDING - HEADER_HEIGHT);
                 ImVec2 const paddedMax =
                   ImVec2(group.maxBound.x + PADDING, group.maxBound.y + PADDING);
                 ImVec2 const groupSize =
@@ -1248,10 +1254,13 @@ namespace gladius::ui
                 // Calculate tag dimensions for positioning
                 ImVec2 const tagSize = ImGui::CalcTextSize(tag.c_str());
                 constexpr float TAG_PADDING = 20.0f;
-                constexpr float TAG_HEIGHT = 50.0f;
 
                 // Position tag at top-left with some offset
                 ImVec2 const tagPos = ImVec2(paddedMin.x + TAG_PADDING, paddedMin.y + TAG_PADDING);
+
+                // Determine if this group's header is hovered for visual feedback
+                bool const isHeaderHovered = (hoveredGroupHeader == tag);
+
                 // Set node color based on group color
                 ed::PushStyleColor(ed::StyleColor_NodeBg,
                                    ImVec4(group.color.x, group.color.y, group.color.z, 0.2f));
@@ -1278,6 +1287,69 @@ namespace gladius::ui
                   ImVec2(nodeScreenPos.x + groupSize.x, nodeScreenPos.y + groupSize.y),
                   bgColorU32,
                   8.0f);
+
+                // Draw draggable header area with visual feedback
+                ImVec4 headerColor =
+                  isHeaderHovered
+                    ? ImVec4(group.color.x + 0.2f, group.color.y + 0.2f, group.color.z + 0.2f, 0.8f)
+                    : ImVec4(group.color.x, group.color.y, group.color.z, 0.6f);
+                ImU32 const headerColorU32 = ImGui::ColorConvertFloat4ToU32(headerColor);
+
+                drawList->AddRectFilled(
+                  nodeScreenPos,
+                  ImVec2(nodeScreenPos.x + groupSize.x, nodeScreenPos.y + HEADER_HEIGHT),
+                  headerColorU32,
+                  8.0f,
+                  ImDrawFlags_RoundCornersTop);
+
+                // Draw draggable border areas with visual feedback
+                if (isHeaderHovered)
+                {
+                    ImU32 const borderHighlight = ImGui::ColorConvertFloat4ToU32(ImVec4(
+                      group.color.x + 0.3f, group.color.y + 0.3f, group.color.z + 0.3f, 0.7f));
+
+                    // Left border
+                    drawList->AddRectFilled(
+                      ImVec2(nodeScreenPos.x, nodeScreenPos.y + HEADER_HEIGHT),
+                      ImVec2(nodeScreenPos.x + BORDER_WIDTH, nodeScreenPos.y + groupSize.y),
+                      borderHighlight,
+                      0.0f);
+
+                    // Right border
+                    drawList->AddRectFilled(
+                      ImVec2(nodeScreenPos.x + groupSize.x - BORDER_WIDTH,
+                             nodeScreenPos.y + HEADER_HEIGHT),
+                      ImVec2(nodeScreenPos.x + groupSize.x, nodeScreenPos.y + groupSize.y),
+                      borderHighlight,
+                      0.0f);
+
+                    // Bottom border
+                    drawList->AddRectFilled(ImVec2(nodeScreenPos.x + BORDER_WIDTH,
+                                                   nodeScreenPos.y + groupSize.y - BORDER_WIDTH),
+                                            ImVec2(nodeScreenPos.x + groupSize.x - BORDER_WIDTH,
+                                                   nodeScreenPos.y + groupSize.y),
+                                            borderHighlight,
+                                            8.0f,
+                                            ImDrawFlags_RoundCornersBottom);
+                }
+
+                // Draw drag handle icon in header
+                if (isHeaderHovered)
+                {
+                    ImVec2 const handlePos =
+                      ImVec2(nodeScreenPos.x + groupSize.x - 30.0f, nodeScreenPos.y + 15.0f);
+                    ImU32 const handleColor = IM_COL32(255, 255, 255, 200);
+
+                    // Draw simple grip lines
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        float const y = handlePos.y + i * 6.0f;
+                        drawList->AddLine(ImVec2(handlePos.x, y),
+                                          ImVec2(handlePos.x + 16.0f, y),
+                                          handleColor,
+                                          2.0f);
+                    }
+                }
 
                 ImVec2 const tagScreenPos =
                   ImVec2(nodeScreenPos.x + TAG_PADDING, nodeScreenPos.y - TAG_PADDING);
@@ -1564,59 +1636,107 @@ namespace gladius::ui
             }
         }
     }
-
-    void NodeView::handleGroupClick(std::string const & groupTag)
+    void NodeView::handleGroupDragging()
     {
-        if (groupTag.empty() || !m_currentModel)
+        if (m_nodeGroups.empty())
         {
             return;
         }
 
-        // Find the group
-        auto groupIt = m_nodeGroups.find(groupTag);
-        if (groupIt == m_nodeGroups.end())
-        {
-            return;
-        }
+        ImVec2 const mousePos = ImGui::GetMousePos();
+        ImGuiIO const & io = ImGui::GetIO();
 
-        // Immediately select all nodes in the group since we've consumed the mouse input
-        ed::ClearSelection();
-        
-        // Collect all nodes in the group first
-        std::vector<ed::NodeId> nodesToSelect;
-        for (const auto & [nodeId, modelNode] : *m_currentModel)
+        // Check for starting a drag operation
+        if (!m_isDraggingGroup && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            if (modelNode && modelNode->getTag() == groupTag)
+            std::string const groupUnderMouse = getGroupUnderMouseHeader(mousePos);
+
+            // Debug output
+            if (!groupUnderMouse.empty())
             {
-                nodesToSelect.push_back(ed::NodeId(nodeId));
+                printf("DEBUG: Found group under mouse: %s\n", groupUnderMouse.c_str());
+            }
+            else
+            {
+                printf("DEBUG: No group under mouse at pos (%.1f, %.1f)\n", mousePos.x, mousePos.y);
+            }
+
+            if (!groupUnderMouse.empty())
+            {
+                // Start dragging this group
+                printf("DEBUG: Starting group drag for: %s\n", groupUnderMouse.c_str());
+                m_isDraggingGroup = true;
+                m_draggingGroup = groupUnderMouse;
+                m_groupDragStartPos = mousePos;
+                printf("DEBUG: m_isDraggingGroup is now: %s\n",
+                       m_isDraggingGroup ? "true" : "false");
             }
         }
-        
-        // Select all nodes in the group
-        for (size_t i = 0; i < nodesToSelect.size(); ++i)
+
+        // Handle active dragging
+        if (m_isDraggingGroup)
         {
-            ed::SelectNode(nodesToSelect[i], i > 0); // First node clears selection, others add to it
+            printf("DEBUG: In dragging mode, checking if mouse is dragging...\n");
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+            {
+                printf("DEBUG: Mouse is dragging, applying movement...\n");
+                auto groupIt = m_nodeGroups.find(m_draggingGroup);
+                if (groupIt != m_nodeGroups.end())
+                {
+                    // Calculate drag delta for this frame
+                    ImVec2 const currentMousePos = ImGui::GetMousePos();
+                    ImVec2 const frameDelta = ImVec2(currentMousePos.x - m_groupDragStartPos.x,
+                                                     currentMousePos.y - m_groupDragStartPos.y);
+
+                    // Only apply movement if there's significant delta to avoid jitter
+                    if (std::abs(frameDelta.x) > 0.5f || std::abs(frameDelta.y) > 0.5f)
+                    {
+                        // Apply delta to all nodes in the group
+                        m_skipGroupMovement = true; // Prevent handleGroupMovement from interfering
+
+                        for (nodes::NodeId const nodeId : groupIt->second.nodes)
+                        {
+                            // Get current position and apply this frame's delta
+                            ImVec2 const currentPos = ed::GetNodePosition(nodeId);
+                            ImVec2 const newPos =
+                              ImVec2(currentPos.x + frameDelta.x, currentPos.y + frameDelta.y);
+                            ed::SetNodePosition(nodeId, newPos);
+                        }
+
+                        m_skipGroupMovement = false;
+
+                        // Update start position for next frame to avoid accumulating error
+                        m_groupDragStartPos = currentMousePos;
+                    }
+                }
+            }
         }
-        
+
+        // End dragging
+        if (m_isDraggingGroup && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        {
+            printf("DEBUG: Ending group drag\n");
+            m_isDraggingGroup = false;
+            m_draggingGroup.clear();
+        }
     }
 
-
-    std::string NodeView::checkForGroupClick() const
+    std::string NodeView::getGroupUnderMouseHeader(const ImVec2 & mousePos) const
     {
-        // Only check for double-clicks if there are groups and the background was double-clicked
-        if (m_nodeGroups.empty() || !ed::IsBackgroundClicked())
-        {
-            return "";
-        }
+        // Debug output
+        printf("DEBUG: getGroupUnderMouseHeader called with mouse at (%.1f, %.1f)\n",
+               mousePos.x,
+               mousePos.y);
+        printf("DEBUG: Number of groups: %zu\n", m_nodeGroups.size());
 
-        // Get the mouse position in screen coordinates
-        ImVec2 const mousePos = ImGui::GetMousePos();
-
-        // Check each group to see if the mouse is over its rectangle
+        // Check each group to see if the mouse is over its header/border area
         for (const auto & [tag, group] : m_nodeGroups)
         {
+            printf("DEBUG: Checking group '%s' with %zu nodes\n", tag.c_str(), group.nodes.size());
+
             if (group.nodes.empty())
             {
+                printf("DEBUG: Group '%s' has no nodes, skipping\n", tag.c_str());
                 continue;
             }
 
@@ -1650,30 +1770,194 @@ namespace gladius::ui
             // Only check if bounds are valid
             if (!hasValidNodes || minBound.x >= maxBound.x || minBound.y >= maxBound.y)
             {
+                printf("DEBUG: Group '%s' has invalid bounds or no valid nodes\n", tag.c_str());
                 continue;
             }
 
+            printf("DEBUG: Group '%s' bounds: min(%.1f, %.1f) max(%.1f, %.1f)\n",
+                   tag.c_str(),
+                   minBound.x,
+                   minBound.y,
+                   maxBound.x,
+                   maxBound.y);
+
             // Calculate the group rectangle with padding (same as in renderNodeGroups)
             constexpr float PADDING = 20.0f;
+            constexpr float HEADER_HEIGHT = 50.0f;
+            constexpr float BORDER_WIDTH = 10.0f; // Draggable border width
+
             ImVec2 const paddedMin =
-              ImVec2(minBound.x - PADDING, minBound.y - PADDING - 50.0f);
-            ImVec2 const paddedMax =
-              ImVec2(maxBound.x + PADDING, maxBound.y + PADDING);
-            ImVec2 const groupSize =
-              ImVec2(paddedMax.x - paddedMin.x, paddedMax.y - paddedMin.y);
+              ImVec2(minBound.x - PADDING, minBound.y - PADDING - HEADER_HEIGHT);
+            ImVec2 const paddedMax = ImVec2(maxBound.x + PADDING, maxBound.y + PADDING);
+            ImVec2 const groupSize = ImVec2(paddedMax.x - paddedMin.x, paddedMax.y - paddedMin.y);
 
-            // Get the group node ID and position (this returns screen coordinates)
-            ed::NodeId const groupId = ed::NodeId(std::hash<std::string>{}(tag));
-            ImVec2 const nodeScreenPos = ed::GetNodePosition(groupId);
+            // Use the calculated bounds directly as the group rectangle position
+            ImVec2 const groupRectPos = paddedMin;
 
-            // Check if mouse is within the group rectangle bounds (in screen coordinates)
-            if (mousePos.x >= nodeScreenPos.x && mousePos.x <= nodeScreenPos.x + groupSize.x &&
-                mousePos.y >= nodeScreenPos.y && mousePos.y <= nodeScreenPos.y + groupSize.y)
+            printf("DEBUG: Group '%s' padded rect: pos(%.1f, %.1f) size(%.1f, %.1f)\n",
+                   tag.c_str(),
+                   groupRectPos.x,
+                   groupRectPos.y,
+                   groupSize.x,
+                   groupSize.y);
+
+            // Define header area (top part of the group)
+            ImRect const headerRect(groupRectPos.x,
+                                    groupRectPos.y,
+                                    groupRectPos.x + groupSize.x,
+                                    groupRectPos.y + HEADER_HEIGHT);
+
+            // Define border areas (edges of the group excluding interior)
+            ImRect const leftBorder(groupRectPos.x,
+                                    groupRectPos.y + HEADER_HEIGHT,
+                                    groupRectPos.x + BORDER_WIDTH,
+                                    groupRectPos.y + groupSize.y);
+
+            ImRect const rightBorder(groupRectPos.x + groupSize.x - BORDER_WIDTH,
+                                     groupRectPos.y + HEADER_HEIGHT,
+                                     groupRectPos.x + groupSize.x,
+                                     groupRectPos.y + groupSize.y);
+
+            ImRect const bottomBorder(groupRectPos.x + BORDER_WIDTH,
+                                      groupRectPos.y + groupSize.y - BORDER_WIDTH,
+                                      groupRectPos.x + groupSize.x - BORDER_WIDTH,
+                                      groupRectPos.y + groupSize.y);
+
+            // Check if mouse is in header or any border area
+            bool inHeader = headerRect.Contains(mousePos);
+            bool inLeftBorder = leftBorder.Contains(mousePos);
+            bool inRightBorder = rightBorder.Contains(mousePos);
+            bool inBottomBorder = bottomBorder.Contains(mousePos);
+
+            printf("DEBUG: Group '%s' mouse check: header=%d left=%d right=%d bottom=%d\n",
+                   tag.c_str(),
+                   inHeader,
+                   inLeftBorder,
+                   inRightBorder,
+                   inBottomBorder);
+
+            if (inHeader || inLeftBorder || inRightBorder || inBottomBorder)
             {
+                printf("DEBUG: Mouse is over group '%s' draggable area!\n", tag.c_str());
                 return tag;
             }
         }
 
+        printf("DEBUG: Mouse not over any group header/border\n");
         return "";
     }
-}
+
+    bool NodeView::isMouseOverGroupInterior(const ImVec2 & mousePos) const
+    {
+        // Check each group to see if the mouse is over its interior (content) area
+        for (const auto & [tag, group] : m_nodeGroups)
+        {
+            if (group.nodes.empty())
+            {
+                continue;
+            }
+
+            // Calculate bounds (same logic as above)
+            ImVec2 minBound = ImVec2(FLT_MAX, FLT_MAX);
+            ImVec2 maxBound = ImVec2(-FLT_MAX, -FLT_MAX);
+            bool hasValidNodes = false;
+
+            for (nodes::NodeId const nodeId : group.nodes)
+            {
+                ImVec2 const nodePos = ed::GetNodePosition(nodeId);
+                ImVec2 const nodeSize = ed::GetNodeSize(nodeId);
+
+                if (nodeSize.x <= 0.0f || nodeSize.y <= 0.0f)
+                {
+                    continue;
+                }
+
+                hasValidNodes = true;
+                minBound.x = std::min(minBound.x, nodePos.x);
+                minBound.y = std::min(minBound.y, nodePos.y);
+                maxBound.x = std::max(maxBound.x, nodePos.x + nodeSize.x);
+                maxBound.y = std::max(maxBound.y, nodePos.y + nodeSize.y);
+            }
+
+            if (!hasValidNodes || minBound.x >= maxBound.x || minBound.y >= maxBound.y)
+            {
+                continue;
+            }
+
+            constexpr float PADDING = 20.0f;
+            constexpr float HEADER_HEIGHT = 50.0f;
+            constexpr float BORDER_WIDTH = 10.0f;
+
+            ImVec2 const paddedMin =
+              ImVec2(minBound.x - PADDING, minBound.y - PADDING - HEADER_HEIGHT);
+            ImVec2 const paddedMax = ImVec2(maxBound.x + PADDING, maxBound.y + PADDING);
+            ImVec2 const groupSize = ImVec2(paddedMax.x - paddedMin.x, paddedMax.y - paddedMin.y);
+
+            // Use the calculated bounds directly as the group rectangle position
+            ImVec2 const groupRectPos = paddedMin;
+
+            // Define interior area (excluding header and borders)
+            ImRect const interiorRect(groupRectPos.x + BORDER_WIDTH,
+                                      groupRectPos.y + HEADER_HEIGHT,
+                                      groupRectPos.x + groupSize.x - BORDER_WIDTH,
+                                      groupRectPos.y + groupSize.y - BORDER_WIDTH);
+
+            if (interiorRect.Contains(mousePos))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool NodeView::shouldSuppressSelectionRect() const
+    {
+        // Suppress selection rectangle if we're currently dragging a group
+        if (m_isDraggingGroup)
+        {
+            return true;
+        }
+
+        // Also suppress if mouse is over a group header (indicating potential drag start)
+        ImVec2 const mousePos = ImGui::GetMousePos();
+        return !getGroupUnderMouseHeader(mousePos).empty();
+    }
+
+    std::string NodeView::checkForGroupClick() const
+    {
+        // Only check for double-clicks if there are groups and the background was double-clicked
+        if (m_nodeGroups.empty() || !ed::IsBackgroundClicked())
+        {
+            return "";
+        }
+
+        // Get the mouse position in screen coordinates
+        ImVec2 const mousePos = ImGui::GetMousePos();
+        return getGroupUnderMouseHeader(mousePos);
+    }
+
+    void NodeView::handleGroupClick(const std::string & groupTag)
+    {
+        if (groupTag.empty() || !m_currentModel)
+        {
+            return;
+        }
+
+        // Find the group
+        auto groupIt = m_nodeGroups.find(groupTag);
+        if (groupIt == m_nodeGroups.end())
+        {
+            return;
+        }
+
+        // Clear current selection
+        ed::ClearSelection();
+
+        // Select all nodes in the group
+        for (nodes::NodeId const nodeId : groupIt->second.nodes)
+        {
+            ed::SelectNode(nodeId, true); // append = true to add to selection
+        }
+    }
+} // namespace gladius::ui

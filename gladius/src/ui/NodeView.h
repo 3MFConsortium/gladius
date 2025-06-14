@@ -114,7 +114,31 @@ namespace gladius::ui
          * Called during the editor update loop to detect group node movement and synchronize all nodes in the group
          */
         void handleGroupMovement();
-
+        
+        /**
+         * @brief Handles group dragging via header/border areas
+         * Should be called before rendering groups to handle mouse input
+         */
+        void handleGroupDragging();
+        
+        /**
+         * @brief Checks if selection rectangle should be suppressed due to group dragging
+         * @return true if selection rectangle should be suppressed
+         */
+        bool shouldSuppressSelectionRect() const;
+        
+        /**
+         * @brief Alternative: Handle group dragging with modifier key (Ctrl+drag anywhere in group)
+         * @param requireModifier If true, requires Ctrl key to be held for group dragging
+         */
+        void handleGroupDraggingWithModifier(bool requireModifier = true);
+        
+        /**
+         * @brief Alternative: Handle group dragging with right mouse button
+         * Right-click and drag anywhere in group to move entire group
+         */
+        void handleGroupDraggingRightClick();
+        
         /**
          * @brief Handles double-click on group rectangles to select all nodes in the group
          * @param groupTag The tag of the group that was double-clicked
@@ -126,6 +150,20 @@ namespace gladius::ui
          * @return The tag of the group that was double-clicked, or empty string if none
          */
         std::string checkForGroupClick() const;
+        
+        /**
+         * @brief Checks if the mouse is over a group header or border area (for dragging)
+         * @param mousePos The mouse position in screen coordinates
+         * @return The tag of the group under the mouse header/border, or empty string if none
+         */
+        std::string getGroupUnderMouseHeader(const ImVec2& mousePos) const;
+        
+        /**
+         * @brief Checks if the mouse is over the interior (content area) of any group
+         * @param mousePos The mouse position in screen coordinates  
+         * @return true if mouse is over group interior (should allow selection rectangle)
+         */
+        bool isMouseOverGroupInterior(const ImVec2& mousePos) const;
 
       private:
         void show(nodes::NodeBase & node);
@@ -229,6 +267,11 @@ namespace gladius::ui
         std::string m_pendingGroupSelection;
         bool m_hasPendingGroupSelection = false;
         int m_groupSelectionFrame = 0; // Frame counter for deferred selection
+        
+        /// Group dragging state
+        std::string m_draggingGroup;
+        bool m_isDraggingGroup = false;
+        ImVec2 m_groupDragStartPos;
 
         ColumnWidths & getOrCreateColumnWidths(nodes::NodeId nodeId);
     };

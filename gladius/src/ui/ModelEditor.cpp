@@ -1017,10 +1017,14 @@ namespace gladius::ui
                 // Handle group movement - detect when nodes are moved and move their group members
                 m_nodeViewVisitor.handleGroupMovement();
 
+                // Handle group dragging via header/border areas - must be called before rendering
+                m_nodeViewVisitor.handleGroupDragging();
+
                 // Render node group last, to prioritize node interaction
                 m_nodeViewVisitor.renderNodeGroups();
 
-                // Check for group double-clicks and handle them AFTER rendering (so bounds are updated)
+                // Check for group double-clicks and handle them AFTER rendering (so bounds are
+                // updated)
                 std::string doubleClickedGroup = m_nodeViewVisitor.checkForGroupClick();
                 if (!doubleClickedGroup.empty())
                 {
