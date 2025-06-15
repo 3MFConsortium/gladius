@@ -25,8 +25,6 @@ namespace gladius::ui
         bool update(float deltaTime_ms);
 
         void centerView(BoundingBox const & bbox);
-
-        void adjustDistanceToTarget(BoundingBox const & bbox);
         void adjustDistanceToTarget(BoundingBox const & bbox, float viewportWidth, float viewportHeight);
         void setAngle(float pitch, float yaw);
         void rotate(float pitch, float yaw);

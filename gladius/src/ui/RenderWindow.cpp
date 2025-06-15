@@ -11,12 +11,12 @@
 #include "../ImageRGBA.h"
 #include "../TimeMeasurement.h"
 #include "../io/MeshExporter.h"
-#include <nodes/Model.h>
 #include "GLView.h"
 #include "Profiling.h"
 #include "Widgets.h"
 #include "compute/ComputeCore.h"
 #include "imgui.h"
+#include <nodes/Model.h>
 
 namespace gladius::ui
 {
@@ -25,7 +25,8 @@ namespace gladius::ui
     void RenderWindow::initialize(ComputeCore * core, GLView * view)
     {
         m_core = core;
-        m_view = view;        auto & settings = m_core->getResourceContext()->getRenderingSettings();
+        m_view = view;
+        auto & settings = m_core->getResourceContext()->getRenderingSettings();
         m_renderWindowState.renderQuality = settings.quality;
         m_renderWindowState.renderQualityWhileMoving = settings.quality * 0.5f;
     }
@@ -42,9 +43,8 @@ namespace gladius::ui
         auto token = m_core->requestComputeToken();
         if (token)
         {
-               render(m_renderWindowState);
+            render(m_renderWindowState);
         }
-   
 
         auto const img = m_core->getResultImage();
 
@@ -77,7 +77,7 @@ namespace gladius::ui
 
             toggleButton({reinterpret_cast<const char *>(ICON_FA_ROBOT "\tHQ")},
                          &m_enableHQRendering);
-                         
+
             int renderingFlags = m_core->getResourceContext()->getRenderingSettings().flags;
 
             // submenu for rendering flags
@@ -93,16 +93,16 @@ namespace gladius::ui
                 flagsChanged |= ImGui::CheckboxFlags(
                   "Show Coordinate System", &renderingFlags, RF_SHOW_COORDINATE_SYSTEM);
 
-                ImGui::Separator();                // Quality slider
+                ImGui::Separator(); // Quality slider
                 float quality = m_core->getResourceContext()->getRenderingSettings().quality;
                 ImGui::SetNextItemWidth(150.f * m_uiScale);
                 bool qualityChanged = ImGui::SliderFloat("Quality", &quality, 0.1f, 2.0f);
-                
+
                 if (ImGui::IsItemHovered())
                 {
                     ImGui::SetTooltip("Rendering quality (0.1 = Fast, 2.0 = Highest Quality)");
                 }
-                  if (qualityChanged)
+                if (qualityChanged)
                 {
                     m_core->getResourceContext()->getRenderingSettings().quality = quality;
                     m_renderWindowState.renderQuality = quality;
@@ -457,7 +457,7 @@ namespace gladius::ui
     {
         // Isometric view: pitch = -35.26°, yaw = 45° (standard CAD isometric)
         float const pitch = -std::atan(1.0f / std::sqrt(2.0f)); // ~-35.26 degrees
-        float const yaw = CL_M_PI_F / 4.0f; // 45 degrees
+        float const yaw = CL_M_PI_F / 4.0f;                     // 45 degrees
         m_camera.setAngle(pitch, yaw);
         invalidateView();
     }
@@ -472,7 +472,7 @@ namespace gladius::ui
 
     void RenderWindow::frameAll()
     {
-        centerView(); // Same as center view for now
+        centerView();  // Same as center view for now
         zoomExtents(); // Zoom to fit all objects in view
     }
 
@@ -558,8 +558,8 @@ namespace gladius::ui
         if (!m_viewHistory.empty() && m_currentViewIndex > 0)
         {
             m_currentViewIndex--;
-            auto const& view = m_viewHistory[m_currentViewIndex];
-            
+            auto const & view = m_viewHistory[m_currentViewIndex];
+
             // Restore the view (this would require camera API support)
             // For now, we'll invalidate the view
             invalidateView();
@@ -571,8 +571,8 @@ namespace gladius::ui
         if (!m_viewHistory.empty() && m_currentViewIndex < m_viewHistory.size() - 1)
         {
             m_currentViewIndex++;
-            auto const& view = m_viewHistory[m_currentViewIndex];
-            
+            auto const & view = m_viewHistory[m_currentViewIndex];
+
             // Restore the view (this would require camera API support)
             // For now, we'll invalidate the view
             invalidateView();
@@ -584,19 +584,19 @@ namespace gladius::ui
         // Save current camera state using available methods
         auto eyePos = m_camera.getEyePosition();
         auto lookAt = m_camera.getLookAt();
-        
+
         m_savedView.position = Vector3{eyePos.x, eyePos.y, eyePos.z};
         m_savedView.target = Vector3{lookAt.x, lookAt.y, lookAt.z};
         m_savedView.up = Vector3{0.0f, 0.0f, 1.0f}; // Assuming Z-up
-        m_savedView.distance = 100.0f; // Default distance since we can't access private members
+        m_savedView.distance = 100.0f;    // Default distance since we can't access private members
         m_savedView.isPerspective = true; // Default to perspective
         m_hasSavedView = true;
-        
+
         // Also add to history
         CameraView currentView = m_savedView;
         m_viewHistory.push_back(currentView);
         m_currentViewIndex = m_viewHistory.size() - 1;
-        
+
         // Limit history size
         if (m_viewHistory.size() > 20)
         {
@@ -689,7 +689,10 @@ namespace gladius::ui
                 if (boundingBoxValid)
                 {
                     m_camera.centerView(bb);
-                    m_camera.adjustDistanceToTarget(bb, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
+                    m_camera.adjustDistanceToTarget(
+                      bb, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
+
+                    m_centerViewRequested = false;
                 }
             }
 
@@ -699,9 +702,9 @@ namespace gladius::ui
                 m_camera.setLookAt({200.0, 200.0, 50.0});
             }
 
-            m_centerViewRequested = false;
             invalidateView();
-        }        if (state.isMoving)
+        }
+        if (state.isMoving)
         {
             if (m_preComputedSdfDirty)
             {
