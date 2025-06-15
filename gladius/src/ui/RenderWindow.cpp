@@ -77,16 +77,17 @@ namespace gladius::ui
 
             // Toggle for permanent centering
             if (ImGui::MenuItem(
-                  reinterpret_cast<const char *>(ICON_FA_CROSSHAIRS "\tPermanent Centering"), 
-                  nullptr, 
+                  reinterpret_cast<const char *>(ICON_FA_CROSSHAIRS "\tPermanent Centering"),
+                  nullptr,
                   m_permanentCenteringEnabled))
             {
                 togglePermanentCentering();
             }
-            
+
             if (ImGui::IsItemHovered())
             {
-                ImGui::SetTooltip("Automatically center view when model changes or camera moves\nShortcut: Ctrl+.");
+                ImGui::SetTooltip("Automatically center view when model changes, camera moves, or "
+                                  "viewport resizes\nShortcut: Ctrl+.");
             }
 
             toggleButton({reinterpret_cast<const char *>(ICON_FA_ROBOT "\tHQ")},
@@ -219,7 +220,7 @@ namespace gladius::ui
             fabs(prevRenderWindowSize.y - m_renderWindowSize_px.y) > tolerance)
         {
             invalidateView();
-            
+
             // Mark viewport size as changed for permanent centering
             if (m_permanentCenteringEnabled)
             {
@@ -347,7 +348,7 @@ namespace gladius::ui
         m_preComputedSdfDirty = true;
         m_parameterDirty = true;
         m_renderWindowState.renderingStepSize = 1;
-        
+
         // Mark model as modified for permanent centering
         m_modelModifiedSinceLastCenter = true;
     }
@@ -685,8 +686,8 @@ namespace gladius::ui
     {
         m_cameraMode = CameraMode::Orbit;
         m_flyModeEnabled = false;
-        
-        // Reset to isometric view 
+
+        // Reset to isometric view
         setIsometricView();
     }
 
@@ -698,7 +699,7 @@ namespace gladius::ui
     void RenderWindow::setPermanentCentering(bool enabled)
     {
         m_permanentCenteringEnabled = enabled;
-        
+
         if (enabled)
         {
             // Initialize tracking state
@@ -732,25 +733,25 @@ namespace gladius::ui
         {
             return false;
         }
-        
+
         // Always recalculate if model was modified
         if (m_modelModifiedSinceLastCenter)
         {
             return true;
         }
-        
+
         // Always recalculate if viewport size changed
         if (m_viewportSizeChangedSinceLastCenter)
         {
             return true;
         }
-        
+
         // Check if camera has moved
         if (!m_lastCameraStateValid)
         {
             return true;
         }
-        
+
         auto const currentState = getCurrentCameraState();
         return currentState != m_lastCameraState;
     }
@@ -758,25 +759,25 @@ namespace gladius::ui
     RenderWindow::CameraState RenderWindow::getCurrentCameraState()
     {
         CameraState state;
-        
+
         // Get current camera parameters - we need to access these through the public API
         auto const eyePos = m_camera.getEyePosition();
         auto const lookAt = m_camera.getLookAt();
-        
+
         state.lookAt = Position{lookAt.x, lookAt.y, lookAt.z};
-        
+
         // For pitch/yaw and distance, we'd need to compute them from eye position and look at
         // Since we don't have direct access, we'll use the eye position as a proxy for changes
         Position const eyePosition{eyePos.x, eyePos.y, eyePos.z};
         Position const lookAtPosition{lookAt.x, lookAt.y, lookAt.z};
         Position const eyeToLookAt = lookAtPosition - eyePosition;
-        
+
         state.distance = eyeToLookAt.norm();
-        
+
         // Calculate pitch and yaw from the eye-to-lookat vector
         state.pitch = std::asin(eyeToLookAt.z() / state.distance);
         state.yaw = std::atan2(eyeToLookAt.y(), eyeToLookAt.x());
-        
+
         return state;
     }
 
@@ -819,7 +820,7 @@ namespace gladius::ui
 
         // Handle both manual center requests and permanent centering
         bool const shouldCenter = m_centerViewRequested || shouldRecalculateCenter();
-        
+
         if (shouldCenter)
         {
             bool boundingBoxValid = m_core->getBoundingBox().has_value();
@@ -844,7 +845,7 @@ namespace gladius::ui
                         m_viewportSizeChangedSinceLastCenter = false;
                         m_lastViewportSize = m_renderWindowSize_px;
                     }
-                    
+
                     m_centerViewRequested = false;
                 }
             }
@@ -853,7 +854,7 @@ namespace gladius::ui
             {
                 // just set the look at point to the center of the build platform
                 m_camera.setLookAt({200.0, 200.0, 50.0});
-                
+
                 // Update tracking state for permanent centering
                 if (m_permanentCenteringEnabled)
                 {
