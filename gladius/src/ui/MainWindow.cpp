@@ -69,7 +69,7 @@ namespace gladius::ui
         // Initialize keyboard shortcuts
         initializeShortcuts();
 
-        m_renderWindow.initialize(m_core.get(), &m_mainView, m_shortcutManager);
+        m_renderWindow.initialize(m_core.get(), &m_mainView, m_shortcutManager, m_configManager);
         LOG_LOCATION
         m_core->getPreviewRenderProgram()->setOnProgramSwapCallBack([&]()
                                                                     { onPreviewProgramSwap(); });

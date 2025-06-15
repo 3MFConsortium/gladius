@@ -14,6 +14,15 @@
 namespace gladius::ui
 {
     class ShortcutManager;
+}
+
+namespace gladius
+{
+    class ConfigManager;
+}
+
+namespace gladius::ui
+{
     using TimeStamp =
       std::chrono::time_point<std::chrono::system_clock,
                               std::chrono::duration<long, std::ratio<1, 1000000000>>>;
@@ -36,7 +45,7 @@ namespace gladius::ui
     {
       public:
         explicit RenderWindow() = default;
-        void initialize(ComputeCore * core, GLView * view, std::shared_ptr<ShortcutManager> shortcutManager);
+        void initialize(ComputeCore * core, GLView * view, std::shared_ptr<ShortcutManager> shortcutManager, gladius::ConfigManager * configManager);
 
         void renderWindow();
         void updateCamera();
@@ -114,6 +123,7 @@ namespace gladius::ui
 
         ComputeCore * m_core;
         std::shared_ptr<ShortcutManager> m_shortcutManager;
+        gladius::ConfigManager * m_configManager;
 
         std::atomic<bool> m_dirty{true};
         std::atomic<bool> m_parameterDirty{false};

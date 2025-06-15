@@ -6,6 +6,7 @@
 
 #include "../CLMath.h"
 #include "../ComputeContext.h"
+#include "../ConfigManager.h"
 #include "../ContourExtractor.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
 #include "../ImageRGBA.h"
@@ -25,14 +26,24 @@ namespace gladius::ui
 
     void RenderWindow::initialize(ComputeCore * core,
                                   GLView * view,
-                                  std::shared_ptr<ShortcutManager> shortcutManager)
+                                  std::shared_ptr<ShortcutManager> shortcutManager,
+                                  gladius::ConfigManager * configManager)
     {
         m_core = core;
         m_view = view;
         m_shortcutManager = shortcutManager;
+        m_configManager = configManager;
+        
         auto & settings = m_core->getResourceContext()->getRenderingSettings();
         m_renderWindowState.renderQuality = settings.quality;
         m_renderWindowState.renderQualityWhileMoving = settings.quality * 0.5f;
+        
+        // Load permanent centering state from config
+        if (m_configManager)
+        {
+            m_permanentCenteringEnabled = m_configManager->getValue<bool>(
+                "renderWindow", "permanentCenteringEnabled", false);
+        }
     }
 
     void RenderWindow::renderWindow()
@@ -715,6 +726,13 @@ namespace gladius::ui
     void RenderWindow::setPermanentCentering(bool enabled)
     {
         m_permanentCenteringEnabled = enabled;
+
+        // Save to config
+        if (m_configManager)
+        {
+            m_configManager->setValue("renderWindow", "permanentCenteringEnabled", enabled);
+            m_configManager->save();
+        }
 
         if (enabled)
         {
