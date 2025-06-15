@@ -73,6 +73,13 @@ namespace gladius::ui
         void showCreateNodePopup();
 
         /**
+         * @brief Switch to a specific function by its ResourceId
+         * @param functionId The ResourceId of the function to switch to
+         * @return true if the function was found and switched to, false otherwise
+         */
+        bool switchToFunction(nodes::ResourceId functionId);
+
+        /**
          * @brief Check if mouse is hovering over the model editor
          * @return true if the model editor is being hovered
          */

@@ -9,6 +9,7 @@
 #include "Style.h"
 #include "Widgets.h"
 #include "nodesfwd.h"
+#include "nodes/DerivedNodes.h"
 
 #include "imguinodeeditor.h"
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
@@ -301,6 +302,22 @@ namespace gladius::ui
     {
         header(baseNode);
         content(baseNode);
+
+        // Check for double-click on FunctionCall nodes to navigate to referenced function
+        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && 
+            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+        {
+            auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode);
+            if (functionCallNode && m_modelEditor)
+            {
+                nodes::ResourceId functionId = functionCallNode->getFunctionId();
+                if (functionId != 0) // Check if function ID is valid
+                {
+                    m_modelEditor->switchToFunction(functionId);
+                }
+            }
+        }
+
         footer(baseNode);
     }
 

@@ -1744,6 +1744,24 @@ namespace gladius::ui
         ImGui::OpenPopup("Create Node");
     }
 
+    bool ModelEditor::switchToFunction(nodes::ResourceId functionId)
+    {
+        if (!m_assembly)
+        {
+            return false;
+        }
+
+        auto functionModel = m_assembly->findModel(functionId);
+        if (!functionModel)
+        {
+            return false;
+        }
+
+        m_currentModel = functionModel;
+        switchModel();
+        return true;
+    }
+
     bool ModelEditor::isHovered() const
     {
         // Check if any of the editor windows are hovered
