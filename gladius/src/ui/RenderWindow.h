@@ -7,11 +7,13 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <vector>
 #include <CL/cl_platform.h>
 
 namespace gladius::ui
 {
+    class ShortcutManager;
     using TimeStamp =
       std::chrono::time_point<std::chrono::system_clock,
                               std::chrono::duration<long, std::ratio<1, 1000000000>>>;
@@ -34,7 +36,7 @@ namespace gladius::ui
     {
       public:
         explicit RenderWindow() = default;
-        void initialize(ComputeCore * core, GLView * view);
+        void initialize(ComputeCore * core, GLView * view, std::shared_ptr<ShortcutManager> shortcutManager);
 
         void renderWindow();
         void updateCamera();
@@ -111,6 +113,7 @@ namespace gladius::ui
         GLView * m_view{};
 
         ComputeCore * m_core;
+        std::shared_ptr<ShortcutManager> m_shortcutManager;
 
         std::atomic<bool> m_dirty{true};
         std::atomic<bool> m_parameterDirty{false};

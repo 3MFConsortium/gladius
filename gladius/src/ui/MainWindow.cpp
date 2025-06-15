@@ -66,7 +66,10 @@ namespace gladius::ui
 
         using namespace gladius;
 
-        m_renderWindow.initialize(m_core.get(), &m_mainView);
+        // Initialize keyboard shortcuts
+        initializeShortcuts();
+
+        m_renderWindow.initialize(m_core.get(), &m_mainView, m_shortcutManager);
         LOG_LOCATION
         m_core->getPreviewRenderProgram()->setOnProgramSwapCallBack([&]()
                                                                     { onPreviewProgramSwap(); });
@@ -112,9 +115,6 @@ namespace gladius::ui
 
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
-
-        // Initialize keyboard shortcuts
-        initializeShortcuts();
 
         nodeEditor();
         newModel();
@@ -181,7 +181,7 @@ namespace gladius::ui
                 refreshModel();
             }
         }
-        
+
         if (ImGui::CollapsingHeader("Keyboard Shortcuts"))
         {
             if (ImGui::Button("Configure Shortcuts"))
@@ -192,23 +192,28 @@ namespace gladius::ui
             if (ImGui::Button("Reset to Defaults") && m_shortcutManager)
             {
                 m_shortcutManager->resetAllShortcutsToDefault();
-                m_logger->addEvent({"Keyboard shortcuts reset to defaults", events::Severity::Info});
+                m_logger->addEvent(
+                  {"Keyboard shortcuts reset to defaults", events::Severity::Info});
             }
-            
+
             ImGui::Text("Use Ctrl+K to open the keyboard shortcuts dialog");
             ImGui::Separator();
-            
+
             // Show a few common shortcuts
             ImGui::Text("Common Shortcuts:");
             if (m_shortcutManager)
             {
-                ImGui::Text("New: %s", m_shortcutManager->getShortcut("file.new").toString().c_str());
-                ImGui::Text("Open: %s", m_shortcutManager->getShortcut("file.open").toString().c_str());
-                ImGui::Text("Save: %s", m_shortcutManager->getShortcut("file.save").toString().c_str());
-                ImGui::Text("Save As: %s", m_shortcutManager->getShortcut("file.saveAs").toString().c_str());
+                ImGui::Text("New: %s",
+                            m_shortcutManager->getShortcut("file.new").toString().c_str());
+                ImGui::Text("Open: %s",
+                            m_shortcutManager->getShortcut("file.open").toString().c_str());
+                ImGui::Text("Save: %s",
+                            m_shortcutManager->getShortcut("file.save").toString().c_str());
+                ImGui::Text("Save As: %s",
+                            m_shortcutManager->getShortcut("file.saveAs").toString().c_str());
             }
         }
-        
+
         auto z = m_core->getSliceHeight();
         ImGui::SliderFloat("Slice Position [mm]", &z, -20.f, 300.);
 
@@ -223,8 +228,6 @@ namespace gladius::ui
             m_logView.show();
         }
         ImGui::End();
-
-
     }
 
     void MainWindow::setup()
@@ -441,13 +444,13 @@ namespace gladius::ui
                             m_mainView.setFullScreen(true);
                         }
                     }
-                    
+
                     // Add keyboard shortcuts button
                     if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_KEYBOARD "\tShortcuts")))
                     {
                         showShortcutSettings();
                     }
-                    
+
                     if (m_currentAssemblyFileName)
                     {
                         if (m_fileChanged)
@@ -547,7 +550,7 @@ namespace gladius::ui
               m_contoursDirty = m_parameterDirty || m_contoursDirty;
               bool const modelWasModified = m_modelEditor.modelWasModified();
               bool const compileRequested = m_modelEditor.isCompileRequested();
-              
+
               if (modelWasModified || parameterModifiedByModelEditor)
               {
                   try
@@ -567,7 +570,7 @@ namespace gladius::ui
               {
                   refreshModel();
               }
-              
+
               // Mark model as up to date after compilation check
               if (modelWasModified || parameterModifiedByModelEditor)
               {
@@ -620,7 +623,7 @@ namespace gladius::ui
             m_showSaveBeforeFileOperation = true;
             return;
         }
-        
+
         m_doc->newFromTemplate();
         resetEditorState();
         m_renderWindow.centerView();
@@ -633,7 +636,7 @@ namespace gladius::ui
         {
             processShortcuts(ShortcutContext::RenderWindow);
         }
-        
+
         m_renderWindow.renderWindow();
     }
 
@@ -891,8 +894,9 @@ namespace gladius::ui
                 closeMenu();
                 m_mainView.setViewSettingsVisible(true);
             }
-            
-            if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_KEYBOARD "\tKeyboard Shortcuts")))
+
+            if (ImGui::MenuItem(
+                  reinterpret_cast<const char *>(ICON_FA_KEYBOARD "\tKeyboard Shortcuts")))
             {
                 closeMenu();
                 showShortcutSettings();
@@ -938,7 +942,7 @@ namespace gladius::ui
     {
         updateContours();
         m_isSlicePreviewVisible = m_sliceView.render(*m_core, m_mainView);
-        
+
         // Process slice window shortcuts if visible and hovered
         if (m_isSlicePreviewVisible && m_sliceView.isHovered())
         {
@@ -1000,7 +1004,7 @@ namespace gladius::ui
             m_showSaveBeforeFileOperation = true;
             return;
         }
-        
+
         const auto filename = queryLoadFilename({{"*.3mf"}});
         if (filename.has_value())
         {
@@ -1039,7 +1043,7 @@ namespace gladius::ui
             m_showSaveBeforeFileOperation = true;
             return;
         }
-        
+
         m_currentAssemblyFileName = filename;
         m_welcomeScreen.hide();
         m_doc->loadNonBlocking(filename);
@@ -1258,12 +1262,15 @@ namespace gladius::ui
 
             if (m_currentAssemblyFileName)
             {
-                const char* operationText = (m_pendingFileOperation == PendingFileOperation::NewModel) 
-                    ? "creating a new model" : "opening a file";
-                
+                const char * operationText =
+                  (m_pendingFileOperation == PendingFileOperation::NewModel)
+                    ? "creating a new model"
+                    : "opening a file";
+
                 ImGui::TextUnformatted(
                   fmt::format("{} \nhas changed. \nDo you want to save before {}?",
-                              m_currentAssemblyFileName.value().string(), operationText)
+                              m_currentAssemblyFileName.value().string(),
+                              operationText)
                     .c_str());
 
                 ImGui::NewLine();
@@ -1309,7 +1316,7 @@ namespace gladius::ui
                             }
                         }
                     }
-                    
+
                     m_showSaveBeforeFileOperation = false;
                     m_pendingFileOperation = PendingFileOperation::None;
                     m_pendingOpenFilename.reset();
@@ -1329,7 +1336,7 @@ namespace gladius::ui
                 if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_SAVE "\tSave")))
                 {
                     save();
-                    
+
                     // After saving, proceed with the pending operation
                     if (m_pendingFileOperation == PendingFileOperation::NewModel)
                     {
@@ -1364,7 +1371,7 @@ namespace gladius::ui
                             }
                         }
                     }
-                    
+
                     m_showSaveBeforeFileOperation = false;
                     m_pendingFileOperation = PendingFileOperation::None;
                     m_pendingOpenFilename.reset();
@@ -1374,7 +1381,7 @@ namespace gladius::ui
                 if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_SAVE "\tSave As")))
                 {
                     saveAs();
-                    
+
                     // After saving, proceed with the pending operation
                     if (m_pendingFileOperation == PendingFileOperation::NewModel)
                     {
@@ -1409,7 +1416,7 @@ namespace gladius::ui
                             }
                         }
                     }
-                    
+
                     m_showSaveBeforeFileOperation = false;
                     m_pendingFileOperation = PendingFileOperation::None;
                     m_pendingOpenFilename.reset();
@@ -1418,11 +1425,15 @@ namespace gladius::ui
             }
             else
             {
-                const char* operationText = (m_pendingFileOperation == PendingFileOperation::NewModel) 
-                    ? "creating a new model" : "opening a file";
-                    
+                const char * operationText =
+                  (m_pendingFileOperation == PendingFileOperation::NewModel)
+                    ? "creating a new model"
+                    : "opening a file";
+
                 ImGui::TextUnformatted(
-                  fmt::format("The current assembly has not been saved yet. \nDo you want to save before {}?", operationText)
+                  fmt::format(
+                    "The current assembly has not been saved yet. \nDo you want to save before {}?",
+                    operationText)
                     .c_str());
 
                 ImGui::NewLine();
@@ -1467,7 +1478,7 @@ namespace gladius::ui
                             }
                         }
                     }
-                    
+
                     m_showSaveBeforeFileOperation = false;
                     m_pendingFileOperation = PendingFileOperation::None;
                     m_pendingOpenFilename.reset();
@@ -1487,7 +1498,7 @@ namespace gladius::ui
                 if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_SAVE "\tSave As")))
                 {
                     saveAs();
-                    
+
                     // After saving, proceed with the pending operation
                     if (m_pendingFileOperation == PendingFileOperation::NewModel)
                     {
@@ -1522,7 +1533,7 @@ namespace gladius::ui
                             }
                         }
                     }
-                    
+
                     m_showSaveBeforeFileOperation = false;
                     m_pendingFileOperation = PendingFileOperation::None;
                     m_pendingOpenFilename.reset();
@@ -1695,486 +1706,488 @@ namespace gladius::ui
         }
 
         // Create shortcut manager
-        m_shortcutManager = std::make_shared<ShortcutManager>(std::shared_ptr<ConfigManager>(m_configManager, [](ConfigManager*){}));
+        m_shortcutManager = std::make_shared<ShortcutManager>(
+          std::shared_ptr<ConfigManager>(m_configManager, [](ConfigManager *) {}));
         m_shortcutSettingsDialog.setShortcutManager(m_shortcutManager);
 
         // Register global shortcuts
-        m_shortcutManager->registerAction(
-            "file.new", "New", "Create a new model",
-            ShortcutContext::Global,
-            ShortcutCombo(ImGuiKey_N, true), // Ctrl+N
-            [this]() { newModel(); });
+        m_shortcutManager->registerAction("file.new",
+                                          "New",
+                                          "Create a new model",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_N, true), // Ctrl+N
+                                          [this]() { newModel(); });
+
+        m_shortcutManager->registerAction("file.open",
+                                          "Open",
+                                          "Open an existing model",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_O, true), // Ctrl+O
+                                          [this]() { open(); });
+
+        m_shortcutManager->registerAction("file.save",
+                                          "Save",
+                                          "Save the current model",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_S, true), // Ctrl+S
+                                          [this]() { save(); });
 
         m_shortcutManager->registerAction(
-            "file.open", "Open", "Open an existing model",
-            ShortcutContext::Global,
-            ShortcutCombo(ImGuiKey_O, true), // Ctrl+O
-            [this]() { open(); });
+          "file.saveAs",
+          "Save As",
+          "Save the current model with a new name",
+          ShortcutContext::Global,
+          ShortcutCombo(ImGuiKey_S, true, false, true), // Ctrl+Shift+S
+          [this]() { saveAs(); });
 
         m_shortcutManager->registerAction(
-            "file.save", "Save", "Save the current model",
-            ShortcutContext::Global,
-            ShortcutCombo(ImGuiKey_S, true), // Ctrl+S
-            [this]() { save(); });
+          "edit.library",
+          "Toggle Library Browser",
+          "Show or hide the library browser",
+          ShortcutContext::Global,
+          ShortcutCombo(ImGuiKey_B, true), // Ctrl+B
+          [this]()
+          {
+              m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");
+              m_modelEditor.toggleLibraryVisibility();
+              m_isLibraryBrowserVisible = m_modelEditor.isLibraryVisible();
+          });
 
-        m_shortcutManager->registerAction(
-            "file.saveAs", "Save As", "Save the current model with a new name",
-            ShortcutContext::Global,
-            ShortcutCombo(ImGuiKey_S, true, false, true), // Ctrl+Shift+S
-            [this]() { saveAs(); });
-
-        m_shortcutManager->registerAction(
-            "edit.library", "Toggle Library Browser", "Show or hide the library browser",
-            ShortcutContext::Global,
-            ShortcutCombo(ImGuiKey_B, true), // Ctrl+B
-            [this]() { 
-                m_modelEditor.setLibraryRootDirectory(getAppDir() / "examples");
-                m_modelEditor.toggleLibraryVisibility();
-                m_isLibraryBrowserVisible = m_modelEditor.isLibraryVisible();
-            });
-
-        m_shortcutManager->registerAction(
-            "view.resetView", "Reset View", "Reset the camera view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_R), // R
-            [this]() { m_renderWindow.centerView(); });
+        m_shortcutManager->registerAction("view.resetView",
+                                          "Reset View",
+                                          "Reset the camera view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_R), // R
+                                          [this]() { m_renderWindow.centerView(); });
 
         // Model editor shortcuts
-        m_shortcutManager->registerAction(
-            "edit.undo", "Undo", "Undo the last action",
-            ShortcutContext::ModelEditor,
-            ShortcutCombo(ImGuiKey_Z, true), // Ctrl+Z
-            [this]() { 
-                // Handle this in the UI code since undo/redo are private
-                if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
-                    ed::NavigateToContent(); 
-                }
-            });
+        m_shortcutManager->registerAction("edit.undo",
+                                          "Undo",
+                                          "Undo the last action",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_Z, true), // Ctrl+Z
+                                          [this]()
+                                          {
+                                              // Handle this in the UI code since undo/redo are
+                                              // private
+                                              if (ImGui::GetIO().KeyCtrl &&
+                                                  ImGui::IsKeyPressed(ImGuiKey_Z, false))
+                                              {
+                                                  ed::NavigateToContent();
+                                              }
+                                          });
 
-        m_shortcutManager->registerAction(
-            "edit.redo", "Redo", "Redo the last undone action",
-            ShortcutContext::ModelEditor,
-            ShortcutCombo(ImGuiKey_Y, true), // Ctrl+Y
-            [this]() { 
-                // Handle this in the UI code since undo/redo are private
-                if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-                    ed::NavigateToContent();
-                }
-            });
+        m_shortcutManager->registerAction("edit.redo",
+                                          "Redo",
+                                          "Redo the last undone action",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_Y, true), // Ctrl+Y
+                                          [this]()
+                                          {
+                                              // Handle this in the UI code since undo/redo are
+                                              // private
+                                              if (ImGui::GetIO().KeyCtrl &&
+                                                  ImGui::IsKeyPressed(ImGuiKey_Y, false))
+                                              {
+                                                  ed::NavigateToContent();
+                                              }
+                                          });
 
-        m_shortcutManager->registerAction(
-            "edit.compile", "Compile Model", "Compile the current model",
-            ShortcutContext::ModelEditor,
-            ShortcutCombo(ImGuiKey_F5), // F5
-            [this]() { 
-                // The model editor will handle compilation based on the F5 key press
-                // We'll let the native ImGui input handling take care of this
-            });
+        m_shortcutManager->registerAction("edit.compile",
+                                          "Compile Model",
+                                          "Compile the current model",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_F5), // F5
+                                          [this]()
+                                          {
+                                              // The model editor will handle compilation based on
+                                              // the F5 key press We'll let the native ImGui input
+                                              // handling take care of this
+                                          });
 
         // Add shortcut for showing settings dialog
-        m_shortcutManager->registerAction(
-            "view.shortcuts", "Keyboard Shortcuts", "Show keyboard shortcuts dialog",
-            ShortcutContext::Global,
-            ShortcutCombo(ImGuiKey_K, true), // Ctrl+K
-            [this]() { showShortcutSettings(); });
+        m_shortcutManager->registerAction("view.shortcuts",
+                                          "Keyboard Shortcuts",
+                                          "Show keyboard shortcuts dialog",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_K, true), // Ctrl+K
+                                          [this]() { showShortcutSettings(); });
 
         // Model editor shortcuts - Compile implicit function
-        m_shortcutManager->registerAction(
-            "model.compileImplicit", "Compile Implicit Function", "Manually compile the implicit function",
-            ShortcutContext::ModelEditor,
-            ShortcutCombo(ImGuiKey_F7), // F7
-            [this]() { 
-                m_modelEditor.requestManualCompile();
-            });
+        m_shortcutManager->registerAction("model.compileImplicit",
+                                          "Compile Implicit Function",
+                                          "Manually compile the implicit function",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_F7), // F7
+                                          [this]() { m_modelEditor.requestManualCompile(); });
 
         // Standard CAD view shortcuts for RenderWindow
         // Based on industry standards (Blender, 3ds Max, Maya, AutoCAD, SolidWorks)
-        
+
         // Basic view controls
         m_shortcutManager->registerAction(
-            "camera.centerView", "Center View", "Center the camera view on the model",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Period), // . (standard in many CAD apps)
-            [this]() { 
-                m_renderWindow.centerView(); 
-            });
+          "camera.centerView",
+          "Center View",
+          "Center the camera view on the model",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_Period), // . (standard in many CAD apps)
+          [this]() { m_renderWindow.centerView(); });
 
         m_shortcutManager->registerAction(
-            "camera.togglePermanentCentering", "Toggle Permanent Centering", "Toggle automatic view centering when model or camera changes",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Period, true), // Ctrl+. for permanent centering
-            [this]() { 
-                m_renderWindow.togglePermanentCentering(); 
-            });
+          "camera.togglePermanentCentering",
+          "Toggle Permanent Centering",
+          "Toggle automatic view centering when model or camera changes",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_Period, true), // Ctrl+. for permanent centering
+          [this]() { m_renderWindow.togglePermanentCentering(); });
 
-        m_shortcutManager->registerAction(
-            "camera.frameAll", "Frame All", "Frame all objects in view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Home), // Home key
-            [this]() { 
-                m_renderWindow.frameAll(); 
-            });
+        m_shortcutManager->registerAction("camera.frameAll",
+                                          "Frame All",
+                                          "Frame all objects in view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Home), // Home key
+                                          [this]() { m_renderWindow.frameAll(); });
 
         // Orthographic views (Numpad standard)
-        m_shortcutManager->registerAction(
-            "camera.frontView", "Front View", "Set camera to front view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad1), // Numpad 1
-            [this]() { 
-                m_renderWindow.setFrontView(); 
-            });
+        m_shortcutManager->registerAction("camera.frontView",
+                                          "Front View",
+                                          "Set camera to front view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad1), // Numpad 1
+                                          [this]() { m_renderWindow.setFrontView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.backView", "Back View", "Set camera to back view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad1, true), // Ctrl+Numpad 1
-            [this]() { 
-                m_renderWindow.setBackView(); 
-            });
+        m_shortcutManager->registerAction("camera.backView",
+                                          "Back View",
+                                          "Set camera to back view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad1, true), // Ctrl+Numpad 1
+                                          [this]() { m_renderWindow.setBackView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.rightView", "Right View", "Set camera to right view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad3), // Numpad 3
-            [this]() { 
-                m_renderWindow.setRightView(); 
-            });
+        m_shortcutManager->registerAction("camera.rightView",
+                                          "Right View",
+                                          "Set camera to right view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad3), // Numpad 3
+                                          [this]() { m_renderWindow.setRightView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.leftView", "Left View", "Set camera to left view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad3, true), // Ctrl+Numpad 3
-            [this]() { 
-                m_renderWindow.setLeftView(); 
-            });
+        m_shortcutManager->registerAction("camera.leftView",
+                                          "Left View",
+                                          "Set camera to left view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad3, true), // Ctrl+Numpad 3
+                                          [this]() { m_renderWindow.setLeftView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.topView", "Top View", "Set camera to top view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad7), // Numpad 7
-            [this]() { 
-                m_renderWindow.setTopView(); 
-            });
+        m_shortcutManager->registerAction("camera.topView",
+                                          "Top View",
+                                          "Set camera to top view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad7), // Numpad 7
+                                          [this]() { m_renderWindow.setTopView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.bottomView", "Bottom View", "Set camera to bottom view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad7, true), // Ctrl+Numpad 7
-            [this]() { 
-                m_renderWindow.setBottomView(); 
-            });
+        m_shortcutManager->registerAction("camera.bottomView",
+                                          "Bottom View",
+                                          "Set camera to bottom view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad7, true), // Ctrl+Numpad 7
+                                          [this]() { m_renderWindow.setBottomView(); });
 
         // Isometric and perspective views
-        m_shortcutManager->registerAction(
-            "camera.isoView", "Isometric View", "Set camera to isometric view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad0), // Numpad 0
-            [this]() { 
-                m_renderWindow.setIsometricView(); 
-            });
+        m_shortcutManager->registerAction("camera.isoView",
+                                          "Isometric View",
+                                          "Set camera to isometric view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad0), // Numpad 0
+                                          [this]() { m_renderWindow.setIsometricView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.perspectiveToggle", "Toggle Perspective/Orthographic", "Toggle between perspective and orthographic projection",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad5), // Numpad 5
-            [this]() { 
-                m_renderWindow.togglePerspective(); 
-            });
+        m_shortcutManager->registerAction("camera.perspectiveToggle",
+                                          "Toggle Perspective/Orthographic",
+                                          "Toggle between perspective and orthographic projection",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad5), // Numpad 5
+                                          [this]() { m_renderWindow.togglePerspective(); });
 
         // Alternative view shortcuts for keyboards without numpad
-        m_shortcutManager->registerAction(
-            "camera.frontViewAlt", "Front View (Alt)", "Set camera to front view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_1), // 1
-            [this]() { 
-                m_renderWindow.setFrontView(); 
-            });
+        m_shortcutManager->registerAction("camera.frontViewAlt",
+                                          "Front View (Alt)",
+                                          "Set camera to front view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_1), // 1
+                                          [this]() { m_renderWindow.setFrontView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.rightViewAlt", "Right View (Alt)", "Set camera to right view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_3), // 3
-            [this]() { 
-                m_renderWindow.setRightView(); 
-            });
+        m_shortcutManager->registerAction("camera.rightViewAlt",
+                                          "Right View (Alt)",
+                                          "Set camera to right view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_3), // 3
+                                          [this]() { m_renderWindow.setRightView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.topViewAlt", "Top View (Alt)", "Set camera to top view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_7), // 7
-            [this]() { 
-                m_renderWindow.setTopView(); 
-            });
+        m_shortcutManager->registerAction("camera.topViewAlt",
+                                          "Top View (Alt)",
+                                          "Set camera to top view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_7), // 7
+                                          [this]() { m_renderWindow.setTopView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.backViewAlt", "Back View (Alt)", "Set camera to back view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_1, true), // Ctrl+1
-            [this]() { 
-                m_renderWindow.setBackView(); 
-            });
+        m_shortcutManager->registerAction("camera.backViewAlt",
+                                          "Back View (Alt)",
+                                          "Set camera to back view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_1, true), // Ctrl+1
+                                          [this]() { m_renderWindow.setBackView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.leftViewAlt", "Left View (Alt)", "Set camera to left view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_3, true), // Ctrl+3
-            [this]() { 
-                m_renderWindow.setLeftView(); 
-            });
+        m_shortcutManager->registerAction("camera.leftViewAlt",
+                                          "Left View (Alt)",
+                                          "Set camera to left view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_3, true), // Ctrl+3
+                                          [this]() { m_renderWindow.setLeftView(); });
 
-        m_shortcutManager->registerAction(
-            "camera.bottomViewAlt", "Bottom View (Alt)", "Set camera to bottom view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_7, true), // Ctrl+7
-            [this]() { 
-                m_renderWindow.setBottomView(); 
-            });
+        m_shortcutManager->registerAction("camera.bottomViewAlt",
+                                          "Bottom View (Alt)",
+                                          "Set camera to bottom view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_7, true), // Ctrl+7
+                                          [this]() { m_renderWindow.setBottomView(); });
 
         // Camera movement shortcuts
-        m_shortcutManager->registerAction(
-            "camera.panLeft", "Pan Left", "Pan camera to the left",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad4), // Numpad 4
-            [this]() { 
-                m_renderWindow.panLeft(); 
-            });
+        m_shortcutManager->registerAction("camera.panLeft",
+                                          "Pan Left",
+                                          "Pan camera to the left",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad4), // Numpad 4
+                                          [this]() { m_renderWindow.panLeft(); });
 
-        m_shortcutManager->registerAction(
-            "camera.panRight", "Pan Right", "Pan camera to the right",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad6), // Numpad 6
-            [this]() { 
-                m_renderWindow.panRight(); 
-            });
+        m_shortcutManager->registerAction("camera.panRight",
+                                          "Pan Right",
+                                          "Pan camera to the right",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad6), // Numpad 6
+                                          [this]() { m_renderWindow.panRight(); });
 
-        m_shortcutManager->registerAction(
-            "camera.panUp", "Pan Up", "Pan camera up",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad8), // Numpad 8
-            [this]() { 
-                m_renderWindow.panUp(); 
-            });
+        m_shortcutManager->registerAction("camera.panUp",
+                                          "Pan Up",
+                                          "Pan camera up",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad8), // Numpad 8
+                                          [this]() { m_renderWindow.panUp(); });
 
-        m_shortcutManager->registerAction(
-            "camera.panDown", "Pan Down", "Pan camera down",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad2), // Numpad 2
-            [this]() { 
-                m_renderWindow.panDown(); 
-            });
+        m_shortcutManager->registerAction("camera.panDown",
+                                          "Pan Down",
+                                          "Pan camera down",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Keypad2), // Numpad 2
+                                          [this]() { m_renderWindow.panDown(); });
 
         // Rotation shortcuts
         m_shortcutManager->registerAction(
-            "camera.rotateLeft", "Rotate Left", "Rotate camera to the left",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad4, false, true), // Shift+Numpad 4
-            [this]() { 
-                m_renderWindow.rotateLeft(); 
-            });
+          "camera.rotateLeft",
+          "Rotate Left",
+          "Rotate camera to the left",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_Keypad4, false, true), // Shift+Numpad 4
+          [this]() { m_renderWindow.rotateLeft(); });
 
         m_shortcutManager->registerAction(
-            "camera.rotateRight", "Rotate Right", "Rotate camera to the right",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad6, false, true), // Shift+Numpad 6
-            [this]() { 
-                m_renderWindow.rotateRight(); 
-            });
+          "camera.rotateRight",
+          "Rotate Right",
+          "Rotate camera to the right",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_Keypad6, false, true), // Shift+Numpad 6
+          [this]() { m_renderWindow.rotateRight(); });
 
         m_shortcutManager->registerAction(
-            "camera.rotateUp", "Rotate Up", "Rotate camera up",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad8, false, true), // Shift+Numpad 8
-            [this]() { 
-                m_renderWindow.rotateUp(); 
-            });
+          "camera.rotateUp",
+          "Rotate Up",
+          "Rotate camera up",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_Keypad8, false, true), // Shift+Numpad 8
+          [this]() { m_renderWindow.rotateUp(); });
 
         m_shortcutManager->registerAction(
-            "camera.rotateDown", "Rotate Down", "Rotate camera down",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Keypad2, false, true), // Shift+Numpad 2
-            [this]() { 
-                m_renderWindow.rotateDown(); 
-            });
+          "camera.rotateDown",
+          "Rotate Down",
+          "Rotate camera down",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_Keypad2, false, true), // Shift+Numpad 2
+          [this]() { m_renderWindow.rotateDown(); });
 
         // Zoom shortcuts for RenderWindow (CAD standard)
-        m_shortcutManager->registerAction(
-            "camera.zoomIn", "Zoom In", "Zoom in the camera view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_KeypadAdd), // Numpad +
-            [this]() { 
-                m_renderWindow.zoomIn(); 
-            });
+        m_shortcutManager->registerAction("camera.zoomIn",
+                                          "Zoom In",
+                                          "Zoom in the camera view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_KeypadAdd), // Numpad +
+                                          [this]() { m_renderWindow.zoomIn(); });
 
-        m_shortcutManager->registerAction(
-            "camera.zoomOut", "Zoom Out", "Zoom out the camera view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_KeypadSubtract), // Numpad -
-            [this]() { 
-                m_renderWindow.zoomOut(); 
-            });
+        m_shortcutManager->registerAction("camera.zoomOut",
+                                          "Zoom Out",
+                                          "Zoom out the camera view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_KeypadSubtract), // Numpad -
+                                          [this]() { m_renderWindow.zoomOut(); });
 
-        m_shortcutManager->registerAction(
-            "camera.zoomInAlt", "Zoom In (Alt)", "Zoom in the camera view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Equal, true), // Ctrl+=
-            [this]() { 
-                m_renderWindow.zoomIn(); 
-            });
+        m_shortcutManager->registerAction("camera.zoomInAlt",
+                                          "Zoom In (Alt)",
+                                          "Zoom in the camera view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Equal, true), // Ctrl+=
+                                          [this]() { m_renderWindow.zoomIn(); });
 
-        m_shortcutManager->registerAction(
-            "camera.zoomOutAlt", "Zoom Out (Alt)", "Zoom out the camera view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Minus, true), // Ctrl+-
-            [this]() { 
-                m_renderWindow.zoomOut(); 
-            });
+        m_shortcutManager->registerAction("camera.zoomOutAlt",
+                                          "Zoom Out (Alt)",
+                                          "Zoom out the camera view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Minus, true), // Ctrl+-
+                                          [this]() { m_renderWindow.zoomOut(); });
 
-        m_shortcutManager->registerAction(
-            "camera.zoomExtents", "Zoom Extents", "Zoom to fit all objects in view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_KeypadMultiply), // Numpad *
-            [this]() { 
-                m_renderWindow.zoomExtents(); 
-            });
+        m_shortcutManager->registerAction("camera.zoomExtents",
+                                          "Zoom Extents",
+                                          "Zoom to fit all objects in view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_KeypadMultiply), // Numpad *
+                                          [this]() { m_renderWindow.zoomExtents(); });
 
-        m_shortcutManager->registerAction(
-            "camera.zoomSelected", "Zoom Selected", "Zoom to fit selected objects",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_KeypadDivide), // Numpad /
-            [this]() { 
-                m_renderWindow.zoomSelected(); 
-            });
+        m_shortcutManager->registerAction("camera.zoomSelected",
+                                          "Zoom Selected",
+                                          "Zoom to fit selected objects",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_KeypadDivide), // Numpad /
+                                          [this]() { m_renderWindow.zoomSelected(); });
 
-        m_shortcutManager->registerAction(
-            "camera.resetZoom", "Reset Zoom", "Reset the camera zoom level",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_0, true), // Ctrl+0
-            [this]() { 
-                m_renderWindow.resetZoom(); 
-            });
+        m_shortcutManager->registerAction("camera.resetZoom",
+                                          "Reset Zoom",
+                                          "Reset the camera zoom level",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_0, true), // Ctrl+0
+                                          [this]() { m_renderWindow.resetZoom(); });
 
         // CAD-specific view shortcuts
         m_shortcutManager->registerAction(
-            "camera.previousView", "Previous View", "Go to previous view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_LeftArrow, false, true), // Shift+Left Arrow
-            [this]() { 
-                m_renderWindow.previousView(); 
-            });
+          "camera.previousView",
+          "Previous View",
+          "Go to previous view",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_LeftArrow, false, true), // Shift+Left Arrow
+          [this]() { m_renderWindow.previousView(); });
 
         m_shortcutManager->registerAction(
-            "camera.nextView", "Next View", "Go to next view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_RightArrow, false, true), // Shift+Right Arrow
-            [this]() { 
-                m_renderWindow.nextView(); 
-            });
+          "camera.nextView",
+          "Next View",
+          "Go to next view",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_RightArrow, false, true), // Shift+Right Arrow
+          [this]() { m_renderWindow.nextView(); });
+
+        m_shortcutManager->registerAction("camera.saveView",
+                                          "Save View",
+                                          "Save current view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_V, true), // Ctrl+V
+                                          [this]() { m_renderWindow.saveCurrentView(); });
 
         m_shortcutManager->registerAction(
-            "camera.saveView", "Save View", "Save current view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_V, true), // Ctrl+V
-            [this]() { 
-                m_renderWindow.saveCurrentView(); 
-            });
-
-        m_shortcutManager->registerAction(
-            "camera.restoreView", "Restore View", "Restore saved view",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_V, true, false, true), // Ctrl+Shift+V
-            [this]() { 
-                m_renderWindow.restoreSavedView(); 
-            });
+          "camera.restoreView",
+          "Restore View",
+          "Restore saved view",
+          ShortcutContext::RenderWindow,
+          ShortcutCombo(ImGuiKey_V, true, false, true), // Ctrl+Shift+V
+          [this]() { m_renderWindow.restoreSavedView(); });
 
         // Fly/Walk mode shortcuts
-        m_shortcutManager->registerAction(
-            "camera.flyMode", "Toggle Fly Mode", "Toggle fly/walk camera mode",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_F), // F
-            [this]() { 
-                m_renderWindow.toggleFlyMode(); 
-            });
+        m_shortcutManager->registerAction("camera.flyMode",
+                                          "Toggle Fly Mode",
+                                          "Toggle fly/walk camera mode",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_F), // F
+                                          [this]() { m_renderWindow.toggleFlyMode(); });
 
         // Additional professional CAD shortcuts
-        m_shortcutManager->registerAction(
-            "camera.orbitMode", "Orbit Mode", "Enter orbit camera mode",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_O), // O
-            [this]() { 
-                m_renderWindow.setOrbitMode(); 
-            });
+        m_shortcutManager->registerAction("camera.orbitMode",
+                                          "Orbit Mode",
+                                          "Enter orbit camera mode",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_O), // O
+                                          [this]() { m_renderWindow.setOrbitMode(); });
 
-        m_shortcutManager->registerAction(
-            "camera.panMode", "Pan Mode", "Enter pan camera mode",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_P), // P
-            [this]() { 
-                m_renderWindow.setPanMode(); 
-            });
+        m_shortcutManager->registerAction("camera.panMode",
+                                          "Pan Mode",
+                                          "Enter pan camera mode",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_P), // P
+                                          [this]() { m_renderWindow.setPanMode(); });
 
-        m_shortcutManager->registerAction(
-            "camera.zoomMode", "Zoom Mode", "Enter zoom camera mode",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_Z), // Z
-            [this]() { 
-                m_renderWindow.setZoomMode(); 
-            });
+        m_shortcutManager->registerAction("camera.zoomMode",
+                                          "Zoom Mode",
+                                          "Enter zoom camera mode",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Z), // Z
+                                          [this]() { m_renderWindow.setZoomMode(); });
 
-        m_shortcutManager->registerAction(
-            "camera.resetOrientation", "Reset Orientation", "Reset camera orientation only",
-            ShortcutContext::RenderWindow,
-            ShortcutCombo(ImGuiKey_R, true), // Ctrl+R
-            [this]() { 
-                m_renderWindow.resetOrientation(); 
-            });
+        m_shortcutManager->registerAction("camera.resetOrientation",
+                                          "Reset Orientation",
+                                          "Reset camera orientation only",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_R, true), // Ctrl+R
+                                          [this]() { m_renderWindow.resetOrientation(); });
 
         // Model editor node shortcuts
-        m_shortcutManager->registerAction(
-            "model.autoLayout", "Auto Layout", "Automatically arrange nodes in the editor",
-            ShortcutContext::ModelEditor,
-            ShortcutCombo(ImGuiKey_L, true), // Ctrl+L
-            [this]() { 
-                m_modelEditor.autoLayoutNodes(200.0f); // Use default distance
-            });
+        m_shortcutManager->registerAction("model.autoLayout",
+                                          "Auto Layout",
+                                          "Automatically arrange nodes in the editor",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_L, true), // Ctrl+L
+                                          [this]()
+                                          {
+                                              m_modelEditor.autoLayoutNodes(
+                                                200.0f); // Use default distance
+                                          });
 
-        m_shortcutManager->registerAction(
-            "model.createNode", "Create Node", "Open the create node menu",
-            ShortcutContext::ModelEditor,
-            ShortcutCombo(ImGuiKey_Space), // Space
-            [this]() { 
-                m_modelEditor.showCreateNodePopup(); 
-            });
-            
+        m_shortcutManager->registerAction("model.createNode",
+                                          "Create Node",
+                                          "Open the create node menu",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_Space), // Space
+                                          [this]() { m_modelEditor.showCreateNodePopup(); });
+
         // Slice preview shortcuts
-        m_shortcutManager->registerAction(
-            "sliceview.zoomin", "Zoom In", "Zoom in slice view",
-            ShortcutContext::SlicePreview,
-            ShortcutCombo(ImGuiKey_Equal, true), // Ctrl+=
-            [this]() { 
-                if (m_isSlicePreviewVisible) {
-                    m_sliceView.zoomIn(); 
-                }
-            });
-            
-        m_shortcutManager->registerAction(
-            "sliceview.zoomout", "Zoom Out", "Zoom out slice view",
-            ShortcutContext::SlicePreview,
-            ShortcutCombo(ImGuiKey_Minus, true), // Ctrl+-
-            [this]() { 
-                if (m_isSlicePreviewVisible) {
-                    m_sliceView.zoomOut(); 
-                }
-            });
-            
-        m_shortcutManager->registerAction(
-            "sliceview.reset", "Reset View", "Reset the slice view",
-            ShortcutContext::SlicePreview,
-            ShortcutCombo(ImGuiKey_R), // R
-            [this]() { 
-                if (m_isSlicePreviewVisible) {
-                    m_sliceView.resetView(); 
-                }
-            });
+        m_shortcutManager->registerAction("sliceview.zoomin",
+                                          "Zoom In",
+                                          "Zoom in slice view",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo(ImGuiKey_Equal, true), // Ctrl+=
+                                          [this]()
+                                          {
+                                              if (m_isSlicePreviewVisible)
+                                              {
+                                                  m_sliceView.zoomIn();
+                                              }
+                                          });
+
+        m_shortcutManager->registerAction("sliceview.zoomout",
+                                          "Zoom Out",
+                                          "Zoom out slice view",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo(ImGuiKey_Minus, true), // Ctrl+-
+                                          [this]()
+                                          {
+                                              if (m_isSlicePreviewVisible)
+                                              {
+                                                  m_sliceView.zoomOut();
+                                              }
+                                          });
+
+        m_shortcutManager->registerAction("sliceview.reset",
+                                          "Reset View",
+                                          "Reset the slice view",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo(ImGuiKey_R), // R
+                                          [this]()
+                                          {
+                                              if (m_isSlicePreviewVisible)
+                                              {
+                                                  m_sliceView.resetView();
+                                              }
+                                          });
     }
 
     void MainWindow::processShortcuts(ShortcutContext activeContext)
@@ -2198,7 +2211,7 @@ namespace gladius::ui
         }
 
         // Get current rendering settings
-        auto& renderSettings = m_core->getResourceContext()->getRenderingSettings();
+        auto & renderSettings = m_core->getResourceContext()->getRenderingSettings();
 
         // Create JSON object for render settings
         nlohmann::json renderJson;
@@ -2206,20 +2219,21 @@ namespace gladius::ui
         renderJson["weightDistToNb"] = renderSettings.weightDistToNb;
         renderJson["weightMidPoint"] = renderSettings.weightMidPoint;
         renderJson["normalOffset"] = renderSettings.normalOffset;
-        renderJson["sdfVisEnabled"] = m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
+        renderJson["sdfVisEnabled"] =
+          m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
 
         // Save to config
         m_configManager->setValue("rendering", "settings", renderJson);
-        
+
         // Save shortcuts too
         if (m_shortcutManager)
         {
             m_shortcutManager->saveShortcuts();
         }
-        
+
         // Write to disk
         m_configManager->save();
-        
+
         // Log success
         m_logger->addEvent({"Rendering settings saved", events::Severity::Info});
     }
@@ -2233,7 +2247,7 @@ namespace gladius::ui
 
         // Get render settings from config (or use default empty object if not found)
         nlohmann::json renderJson = m_configManager->getValue<nlohmann::json>(
-            "rendering", "settings", nlohmann::json::object());
+          "rendering", "settings", nlohmann::json::object());
 
         // Skip if there are no saved settings
         if (renderJson.empty())
@@ -2242,37 +2256,37 @@ namespace gladius::ui
         }
 
         // Get current rendering settings to update
-        auto& renderSettings = m_core->getResourceContext()->getRenderingSettings();
+        auto & renderSettings = m_core->getResourceContext()->getRenderingSettings();
 
         // Update settings from config
         if (renderJson.contains("quality"))
         {
             renderSettings.quality = renderJson["quality"].get<float>();
         }
-        
+
         if (renderJson.contains("weightDistToNb"))
         {
             renderSettings.weightDistToNb = renderJson["weightDistToNb"].get<float>();
         }
-        
+
         if (renderJson.contains("weightMidPoint"))
         {
             renderSettings.weightMidPoint = renderJson["weightMidPoint"].get<float>();
         }
-        
+
         if (renderJson.contains("normalOffset"))
         {
             renderSettings.normalOffset = renderJson["normalOffset"].get<float>();
         }
-        
+
         if (renderJson.contains("sdfVisEnabled"))
         {
             m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(
-                renderJson["sdfVisEnabled"].get<bool>());
+              renderJson["sdfVisEnabled"].get<bool>());
         }
-        
+
         // Load shortcuts too (this happens automatically when m_shortcutManager is created)
-        
+
         // Log success
         m_logger->addEvent({"Rendering settings loaded", events::Severity::Info});
     }

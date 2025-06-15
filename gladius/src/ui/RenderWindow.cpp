@@ -13,6 +13,7 @@
 #include "../io/MeshExporter.h"
 #include "GLView.h"
 #include "Profiling.h"
+#include "ShortcutManager.h"
 #include "Widgets.h"
 #include "compute/ComputeCore.h"
 #include "imgui.h"
@@ -22,10 +23,13 @@ namespace gladius::ui
 {
     using namespace std;
 
-    void RenderWindow::initialize(ComputeCore * core, GLView * view)
+    void RenderWindow::initialize(ComputeCore * core,
+                                  GLView * view,
+                                  std::shared_ptr<ShortcutManager> shortcutManager)
     {
         m_core = core;
         m_view = view;
+        m_shortcutManager = shortcutManager;
         auto & settings = m_core->getResourceContext()->getRenderingSettings();
         m_renderWindowState.renderQuality = settings.quality;
         m_renderWindowState.renderQualityWhileMoving = settings.quality * 0.5f;
@@ -86,8 +90,20 @@ namespace gladius::ui
 
             if (ImGui::IsItemHovered())
             {
+                std::string shortcutText = "No shortcut assigned";
+                if (m_shortcutManager)
+                {
+                    auto shortcut =
+                      m_shortcutManager->getShortcut("camera.togglePermanentCentering");
+                    if (!shortcut.isEmpty())
+                    {
+                        shortcutText = shortcut.toString();
+                    }
+                }
+
                 ImGui::SetTooltip("Automatically center view when model changes, camera moves, or "
-                                  "viewport resizes\nShortcut: Ctrl+.");
+                                  "viewport resizes\nShortcut: %s",
+                                  shortcutText.c_str());
             }
 
             toggleButton({reinterpret_cast<const char *>(ICON_FA_ROBOT "\tHQ")},
