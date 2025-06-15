@@ -1725,6 +1725,25 @@ namespace gladius::ui
         m_libraryBrowser.refreshDirectories();
     }
 
+    void ModelEditor::requestManualCompile()
+    {
+        m_isManualCompileRequested = true;
+    }
+
+    void ModelEditor::autoLayoutNodes(float distance)
+    {
+        autoLayout(distance);
+    }
+
+    void ModelEditor::showCreateNodePopup()
+    {
+        // Get current mouse position and show the create node popup
+        ImVec2 currentMousePos = ImGui::GetMousePos();
+        showPopupMenu([&, currentMousePos]() { createNodePopup(-1, currentMousePos); });
+        m_showCreateNodePopUp = true;
+        ImGui::OpenPopup("Create Node");
+    }
+
     bool ModelEditor::isHovered() const
     {
         // Check if any of the editor windows are hovered

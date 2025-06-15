@@ -3,9 +3,12 @@
 #include "GLView.h"
 #include "OrbitalCamera.h"
 #include "compute/ComputeCore.h"
+#include "../types.h"
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <vector>
+#include <CL/cl_platform.h>
 
 namespace gladius::ui
 {
@@ -44,6 +47,47 @@ namespace gladius::ui
         void show();
 
         void centerView();
+
+        // Camera view methods
+        void setTopView();
+        void setFrontView();
+        void setLeftView();
+        void setRightView();
+        void setBackView();
+        void setBottomView();
+        void setIsometricView();
+        void togglePerspective();
+
+        // Zoom methods
+        void zoomIn();
+        void zoomOut();
+        void resetZoom();
+        void zoomExtents();
+        void zoomSelected();
+        void frameAll();
+
+        // Camera movement methods
+        void panLeft();
+        void panRight();
+        void panUp();
+        void panDown();
+        void rotateLeft();
+        void rotateRight();
+        void rotateUp();
+        void rotateDown();
+
+        // View management
+        void previousView();
+        void nextView();
+        void saveCurrentView();
+        void restoreSavedView();
+
+        // Camera modes
+        void toggleFlyMode();
+        void setOrbitMode();
+        void setPanMode();
+        void setZoomMode();
+        void resetOrientation();
 
         [[nodiscard]] bool isVisible() const;
 
@@ -84,5 +128,37 @@ namespace gladius::ui
         TimeStamp m_lastLowResRenderTime;
 
         float m_uiScale = 1.0f;
+
+        // View management
+        struct CameraView
+        {
+            Vector3 position;
+            Vector3 target;
+            Vector3 up;
+            float distance;
+            bool isPerspective;
+        };
+        
+        std::vector<CameraView> m_viewHistory;
+        size_t m_currentViewIndex = 0;
+        CameraView m_savedView;
+        bool m_hasSavedView = false;
+        
+        // Camera modes
+        enum class CameraMode
+        {
+            Orbit,
+            Pan,
+            Zoom,
+            Fly
+        };
+        
+        CameraMode m_cameraMode = CameraMode::Orbit;
+        bool m_flyModeEnabled = false;
+        
+        // Camera movement parameters
+        float m_panSensitivity = 0.1f;
+        float m_rotateSensitivity = 0.02f;
+        float m_zoomSensitivity = 0.1f;
     };
 }

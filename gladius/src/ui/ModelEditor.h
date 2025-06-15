@@ -67,6 +67,11 @@ namespace gladius::ui
         [[nodiscard]] bool isLibraryVisible() const;
         void refreshLibraryDirectories();
 
+        // Public methods for keyboard shortcuts
+        void requestManualCompile();
+        void autoLayoutNodes(float distance = 200.0f);
+        void showCreateNodePopup();
+
         /**
          * @brief Check if mouse is hovering over the model editor
          * @return true if the model editor is being hovered

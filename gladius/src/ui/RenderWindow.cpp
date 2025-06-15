@@ -1,6 +1,7 @@
 #include "RenderWindow.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 #include "../CLMath.h"
@@ -410,61 +411,242 @@ namespace gladius::ui
         invalidateView();
     }
 
-    bool RenderWindow::isVisible() const
+    void RenderWindow::setTopView()
     {
-        return m_isVisible;
+        // Top view: looking down the Z axis (pitch = +90°, yaw = 0°)
+        m_camera.setAngle(CL_M_PI_F / 2.0f, 0.0f);
+        invalidateView();
     }
 
-    bool RenderWindow::isHovered() const
+    void RenderWindow::setFrontView()
     {
-        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
+        // Front view: looking along the Y axis (pitch = 0°, yaw = -90°)
+        m_camera.setAngle(0.0f, -CL_M_PI_F / 2.0f);
+        invalidateView();
     }
 
-    void RenderWindow::handleKeyInput()
+    void RenderWindow::setLeftView()
     {
-        float deltaTime = ImGui::GetIO().DeltaTime;
-        float amount = 5.f * deltaTime;
+        // Left view: looking along the X axis (pitch = 0°, yaw = 0°)
+        m_camera.setAngle(0.0f, 0.0f);
+        invalidateView();
+    }
 
-        int key_press_count_up = ImGui::GetKeyPressedAmount((ImGuiKey_UpArrow), deltaTime, 0.01f);
-        if (key_press_count_up > 0)
-        {
-            ImGui::SetKeyboardFocusHere();
-            // rotate up
-            m_camera.rotate(amount * key_press_count_up, 0.0f);
-            invalidateView();
-        }
+    void RenderWindow::setRightView()
+    {
+        // Right view: looking along the negative X axis (pitch = 0°, yaw = 180°)
+        m_camera.setAngle(0.0f, CL_M_PI_F);
+        invalidateView();
+    }
 
-        int key_press_count_down =
-          ImGui::GetKeyPressedAmount((ImGuiKey_DownArrow), deltaTime, 0.01f);
-        if (key_press_count_down > 0)
-        {
-            ImGui::SetKeyboardFocusHere();
-            // rotate down
-            m_camera.rotate(-1.f * amount * key_press_count_down, 0.0f);
-            invalidateView();
-        }
+    void RenderWindow::setBackView()
+    {
+        // Back view: looking along the negative Y axis (pitch = 0°, yaw = 90°)
+        m_camera.setAngle(0.0f, CL_M_PI_F / 2.0f);
+        invalidateView();
+    }
 
-        int key_press_count_left =
-          ImGui::GetKeyPressedAmount((ImGuiKey_LeftArrow), deltaTime, 0.01f);
-        if (key_press_count_left > 0)
-        {
-            ImGui::SetKeyboardFocusHere();
-            // rotate left
-            m_camera.rotate(0.0f, -1.f * amount * key_press_count_left);
-            invalidateView();
-        }
+    void RenderWindow::setBottomView()
+    {
+        // Bottom view: looking up the Z axis (pitch = -90°, yaw = 0°)
+        m_camera.setAngle(-CL_M_PI_F / 2.0f, 0.0f);
+        invalidateView();
+    }
 
-        int key_press_count_right =
-          ImGui::GetKeyPressedAmount((ImGuiKey_RightArrow), deltaTime, 0.01f);
-        if (key_press_count_right > 0)
+    void RenderWindow::setIsometricView()
+    {
+        // Isometric view: pitch = -35.26°, yaw = 45° (standard CAD isometric)
+        float const pitch = -std::atan(1.0f / std::sqrt(2.0f)); // ~-35.26 degrees
+        float const yaw = CL_M_PI_F / 4.0f; // 45 degrees
+        m_camera.setAngle(pitch, yaw);
+        invalidateView();
+    }
+
+    void RenderWindow::togglePerspective()
+    {
+        // This would require camera implementation to support orthographic/perspective toggle
+        // For now, we'll save current view and restore it
+        saveCurrentView();
+        invalidateView();
+    }
+
+    void RenderWindow::frameAll()
+    {
+        centerView(); // Same as center view for now
+    }
+
+    void RenderWindow::zoomExtents()
+    {
+        // Zoom to fit all objects in view
+        if (m_core->updateBBox() && m_core->getBoundingBox().has_value())
         {
-            ImGui::SetKeyboardFocusHere();
-            // rotate right
-            m_camera.rotate(0.0f, amount * key_press_count_right);
+            auto const bbox = m_core->getBoundingBox().value();
+            m_camera.adjustDistanceToTarget(bbox);
             invalidateView();
         }
     }
 
+    void RenderWindow::zoomSelected()
+    {
+        // For now, same as zoom extents since we don't have selection
+        zoomExtents();
+    }
+
+    void RenderWindow::panLeft()
+    {
+        // Get current look at position and move it left
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x - m_panSensitivity, currentLookAt.y, currentLookAt.z};
+        m_camera.setLookAt(newLookAt);
+        invalidateView();
+    }
+
+    void RenderWindow::panRight()
+    {
+        // Get current look at position and move it right
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x + m_panSensitivity, currentLookAt.y, currentLookAt.z};
+        m_camera.setLookAt(newLookAt);
+        invalidateView();
+    }
+
+    void RenderWindow::panUp()
+    {
+        // Get current look at position and move it up
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x, currentLookAt.y, currentLookAt.z + m_panSensitivity};
+        m_camera.setLookAt(newLookAt);
+        invalidateView();
+    }
+
+    void RenderWindow::panDown()
+    {
+        // Get current look at position and move it down
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x, currentLookAt.y, currentLookAt.z - m_panSensitivity};
+        m_camera.setLookAt(newLookAt);
+        invalidateView();
+    }
+
+    void RenderWindow::rotateLeft()
+    {
+        m_camera.rotate(0.0f, -m_rotateSensitivity);
+        invalidateView();
+    }
+
+    void RenderWindow::rotateRight()
+    {
+        m_camera.rotate(0.0f, m_rotateSensitivity);
+        invalidateView();
+    }
+
+    void RenderWindow::rotateUp()
+    {
+        m_camera.rotate(m_rotateSensitivity, 0.0f);
+        invalidateView();
+    }
+
+    void RenderWindow::rotateDown()
+    {
+        m_camera.rotate(-m_rotateSensitivity, 0.0f);
+        invalidateView();
+    }
+
+    void RenderWindow::previousView()
+    {
+        if (!m_viewHistory.empty() && m_currentViewIndex > 0)
+        {
+            m_currentViewIndex--;
+            auto const& view = m_viewHistory[m_currentViewIndex];
+            
+            // Restore the view (this would require camera API support)
+            // For now, we'll invalidate the view
+            invalidateView();
+        }
+    }
+
+    void RenderWindow::nextView()
+    {
+        if (!m_viewHistory.empty() && m_currentViewIndex < m_viewHistory.size() - 1)
+        {
+            m_currentViewIndex++;
+            auto const& view = m_viewHistory[m_currentViewIndex];
+            
+            // Restore the view (this would require camera API support)
+            // For now, we'll invalidate the view
+            invalidateView();
+        }
+    }
+
+    void RenderWindow::saveCurrentView()
+    {
+        // Save current camera state using available methods
+        auto eyePos = m_camera.getEyePosition();
+        auto lookAt = m_camera.getLookAt();
+        
+        m_savedView.position = Vector3{eyePos.x, eyePos.y, eyePos.z};
+        m_savedView.target = Vector3{lookAt.x, lookAt.y, lookAt.z};
+        m_savedView.up = Vector3{0.0f, 0.0f, 1.0f}; // Assuming Z-up
+        m_savedView.distance = 100.0f; // Default distance since we can't access private members
+        m_savedView.isPerspective = true; // Default to perspective
+        m_hasSavedView = true;
+        
+        // Also add to history
+        CameraView currentView = m_savedView;
+        m_viewHistory.push_back(currentView);
+        m_currentViewIndex = m_viewHistory.size() - 1;
+        
+        // Limit history size
+        if (m_viewHistory.size() > 20)
+        {
+            m_viewHistory.erase(m_viewHistory.begin());
+            if (m_currentViewIndex > 0)
+            {
+                m_currentViewIndex--;
+            }
+        }
+    }
+
+    void RenderWindow::restoreSavedView()
+    {
+        if (m_hasSavedView)
+        {
+            // Restore the saved view (this would require camera API support)
+            // For now, we'll invalidate the view
+            invalidateView();
+        }
+    }
+
+    void RenderWindow::toggleFlyMode()
+    {
+        m_flyModeEnabled = !m_flyModeEnabled;
+        m_cameraMode = m_flyModeEnabled ? CameraMode::Fly : CameraMode::Orbit;
+        invalidateView();
+    }
+
+    void RenderWindow::setOrbitMode()
+    {
+        m_cameraMode = CameraMode::Orbit;
+        m_flyModeEnabled = false;
+    }
+
+    void RenderWindow::setPanMode()
+    {
+        m_cameraMode = CameraMode::Pan;
+        m_flyModeEnabled = false;
+    }
+
+    void RenderWindow::setZoomMode()
+    {
+        m_cameraMode = CameraMode::Zoom;
+        m_flyModeEnabled = false;
+    }
+
+    void RenderWindow::resetOrientation()
+    {
+        // Reset to a neutral orientation (isometric view)
+        setIsometricView();
+    }
     void RenderWindow::render(RenderWindowState & state)
     {
         ProfileFunction;
@@ -654,6 +836,46 @@ namespace gladius::ui
         {
             m_core->invalidatePreCompSdf();
             m_core->precomputeSdfForWholeBuildPlatform();
+            invalidateView();
+        }
+    }
+
+    bool RenderWindow::isVisible() const
+    {
+        return m_isVisible;
+    }
+
+    bool RenderWindow::isHovered() const
+    {
+        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
+    }
+
+    void RenderWindow::handleKeyInput()
+    {
+        // Handle keyboard input - this can be extended later
+        // For now, this is just a placeholder implementation
+    }
+
+    void RenderWindow::zoomIn()
+    {
+        m_camera.zoom(-0.1f); // Negative zoom means zoom in
+        invalidateView();
+    }
+
+    void RenderWindow::zoomOut()
+    {
+        m_camera.zoom(0.1f); // Positive zoom means zoom out
+        invalidateView();
+    }
+
+    void RenderWindow::resetZoom()
+    {
+        // Reset to a reasonable default distance
+        // We need to access the private members, so let's use the centerView logic
+        if (m_core->updateBBox() && m_core->getBoundingBox().has_value())
+        {
+            auto const bbox = m_core->getBoundingBox().value();
+            m_camera.adjustDistanceToTarget(bbox);
             invalidateView();
         }
     }
