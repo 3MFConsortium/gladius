@@ -219,6 +219,12 @@ namespace gladius::ui
             fabs(prevRenderWindowSize.y - m_renderWindowSize_px.y) > tolerance)
         {
             invalidateView();
+            
+            // Mark viewport size as changed for permanent centering
+            if (m_permanentCenteringEnabled)
+            {
+                m_viewportSizeChangedSinceLastCenter = true;
+            }
         }
 
         ImGui::Image(reinterpret_cast<void *>(static_cast<intptr_t>(textureId)),
@@ -698,11 +704,14 @@ namespace gladius::ui
             // Initialize tracking state
             updateCameraStateTracking();
             m_modelModifiedSinceLastCenter = true; // Force initial centering
+            m_lastViewportSize = m_renderWindowSize_px;
+            m_viewportSizeChangedSinceLastCenter = false;
         }
         else
         {
             // Clear tracking state when disabled
             m_lastCameraStateValid = false;
+            m_viewportSizeChangedSinceLastCenter = false;
         }
     }
 
@@ -726,6 +735,12 @@ namespace gladius::ui
         
         // Always recalculate if model was modified
         if (m_modelModifiedSinceLastCenter)
+        {
+            return true;
+        }
+        
+        // Always recalculate if viewport size changed
+        if (m_viewportSizeChangedSinceLastCenter)
         {
             return true;
         }
@@ -826,6 +841,8 @@ namespace gladius::ui
                     {
                         updateCameraStateTracking();
                         m_modelModifiedSinceLastCenter = false;
+                        m_viewportSizeChangedSinceLastCenter = false;
+                        m_lastViewportSize = m_renderWindowSize_px;
                     }
                     
                     m_centerViewRequested = false;
@@ -842,6 +859,8 @@ namespace gladius::ui
                 {
                     updateCameraStateTracking();
                     m_modelModifiedSinceLastCenter = false;
+                    m_viewportSizeChangedSinceLastCenter = false;
+                    m_lastViewportSize = m_renderWindowSize_px;
                 }
             }
 
