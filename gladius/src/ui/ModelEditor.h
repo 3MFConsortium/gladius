@@ -80,7 +80,7 @@ namespace gladius::ui
 
       private:
         void readBackNodePositions();
-        void autoLayout(float distance);
+        void autoLayout();
         void applyNodePositions();
         void placeTransformation(nodes::NodeBase & createdNode,
                                  std::vector<ed::NodeId> & selection) const;

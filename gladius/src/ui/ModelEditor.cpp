@@ -845,7 +845,7 @@ namespace gladius::ui
                 {
                     if (ImGui::MenuItem("Autolayout"))
                     {
-                        autoLayout(m_nodeDistance);
+                        autoLayout();
                     }
                     if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_COMPRESS_ARROWS_ALT
                                                                        "\tCenter View")))
@@ -1082,7 +1082,7 @@ namespace gladius::ui
 
         if (!m_currentModel->hasBeenLayouted() && m_nodeWidthsInitialized)
         {
-            autoLayout(m_nodeDistance);
+            autoLayout();
         }
 
         m_parameterDirty = parameterChanged;
@@ -1385,7 +1385,7 @@ namespace gladius::ui
         m_nodePositionsNeedUpdate = false;
     }
 
-    void ModelEditor::autoLayout(float distance)
+    void ModelEditor::autoLayout()
     {
         if (currentModel() == nullptr)
         {
@@ -1402,9 +1402,9 @@ namespace gladius::ui
         // Use the dedicated layout engine for all layout operations
         gladius::ui::NodeLayoutEngine layoutEngine;
         gladius::ui::NodeLayoutEngine::LayoutConfig config;
-        config.nodeDistance = distance;
-        config.layerSpacing = distance * 1.5f;
-        config.groupPadding = distance * 0.5f;
+        config.nodeDistance = m_nodeDistance;
+        config.layerSpacing = m_nodeDistance * 1.5f;
+        config.groupPadding = m_nodeDistance * 0.5f;
 
         layoutEngine.performAutoLayout(*currentModel(), config);
 
@@ -1732,7 +1732,7 @@ namespace gladius::ui
 
     void ModelEditor::autoLayoutNodes(float distance)
     {
-        autoLayout(distance);
+        autoLayout();
     }
 
     void ModelEditor::showCreateNodePopup()
