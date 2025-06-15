@@ -1800,6 +1800,14 @@ namespace gladius::ui
             });
 
         m_shortcutManager->registerAction(
+            "camera.togglePermanentCentering", "Toggle Permanent Centering", "Toggle automatic view centering when model or camera changes",
+            ShortcutContext::RenderWindow,
+            ShortcutCombo(ImGuiKey_Period, true), // Ctrl+. for permanent centering
+            [this]() { 
+                m_renderWindow.togglePermanentCentering(); 
+            });
+
+        m_shortcutManager->registerAction(
             "camera.frameAll", "Frame All", "Frame all objects in view",
             ShortcutContext::RenderWindow,
             ShortcutCombo(ImGuiKey_Home), // Home key

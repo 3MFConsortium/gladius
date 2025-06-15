@@ -75,6 +75,20 @@ namespace gladius::ui
                 }
             }
 
+            // Toggle for permanent centering
+            if (ImGui::MenuItem(
+                  reinterpret_cast<const char *>(ICON_FA_CROSSHAIRS "\tPermanent Centering"), 
+                  nullptr, 
+                  m_permanentCenteringEnabled))
+            {
+                togglePermanentCentering();
+            }
+            
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Automatically center view when model changes or camera moves\nShortcut: Ctrl+.");
+            }
+
             toggleButton({reinterpret_cast<const char *>(ICON_FA_ROBOT "\tHQ")},
                          &m_enableHQRendering);
 
@@ -327,6 +341,9 @@ namespace gladius::ui
         m_preComputedSdfDirty = true;
         m_parameterDirty = true;
         m_renderWindowState.renderingStepSize = 1;
+        
+        // Mark model as modified for permanent centering
+        m_modelModifiedSinceLastCenter = true;
     }
 
     void RenderWindow::renderScene(RenderWindowState & state)
@@ -415,6 +432,7 @@ namespace gladius::ui
     {
         // Top view: looking down the Z axis (pitch = +90°, yaw = 0°)
         m_camera.setAngle(CL_M_PI_F / 2.0f, 0.0f);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -422,6 +440,7 @@ namespace gladius::ui
     {
         // Front view: looking along the Y axis (pitch = 0°, yaw = -90°)
         m_camera.setAngle(0.0f, -CL_M_PI_F / 2.0f);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -429,6 +448,7 @@ namespace gladius::ui
     {
         // Left view: looking along the X axis (pitch = 0°, yaw = 0°)
         m_camera.setAngle(0.0f, 0.0f);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -436,6 +456,7 @@ namespace gladius::ui
     {
         // Right view: looking along the negative X axis (pitch = 0°, yaw = 180°)
         m_camera.setAngle(0.0f, CL_M_PI_F);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -443,6 +464,7 @@ namespace gladius::ui
     {
         // Back view: looking along the negative Y axis (pitch = 0°, yaw = 90°)
         m_camera.setAngle(0.0f, CL_M_PI_F / 2.0f);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -450,6 +472,7 @@ namespace gladius::ui
     {
         // Bottom view: looking up the Z axis (pitch = -90°, yaw = 0°)
         m_camera.setAngle(-CL_M_PI_F / 2.0f, 0.0f);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -459,6 +482,7 @@ namespace gladius::ui
         float const pitch = -std::atan(1.0f / std::sqrt(2.0f)); // ~-35.26 degrees
         float const yaw = CL_M_PI_F / 4.0f;                     // 45 degrees
         m_camera.setAngle(pitch, yaw);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -499,6 +523,7 @@ namespace gladius::ui
         auto currentLookAt = m_camera.getLookAt();
         Position newLookAt{currentLookAt.x - m_panSensitivity, currentLookAt.y, currentLookAt.z};
         m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -508,6 +533,7 @@ namespace gladius::ui
         auto currentLookAt = m_camera.getLookAt();
         Position newLookAt{currentLookAt.x + m_panSensitivity, currentLookAt.y, currentLookAt.z};
         m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -517,6 +543,7 @@ namespace gladius::ui
         auto currentLookAt = m_camera.getLookAt();
         Position newLookAt{currentLookAt.x, currentLookAt.y, currentLookAt.z + m_panSensitivity};
         m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -526,30 +553,35 @@ namespace gladius::ui
         auto currentLookAt = m_camera.getLookAt();
         Position newLookAt{currentLookAt.x, currentLookAt.y, currentLookAt.z - m_panSensitivity};
         m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
     void RenderWindow::rotateLeft()
     {
         m_camera.rotate(0.0f, -m_rotateSensitivity);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
     void RenderWindow::rotateRight()
     {
         m_camera.rotate(0.0f, m_rotateSensitivity);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
     void RenderWindow::rotateUp()
     {
         m_camera.rotate(m_rotateSensitivity, 0.0f);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
     void RenderWindow::rotateDown()
     {
         m_camera.rotate(-m_rotateSensitivity, 0.0f);
+        onCameraManuallyMoved();
         invalidateView();
     }
 
@@ -645,9 +677,104 @@ namespace gladius::ui
 
     void RenderWindow::resetOrientation()
     {
-        // Reset to a neutral orientation (isometric view)
+        m_cameraMode = CameraMode::Orbit;
+        m_flyModeEnabled = false;
+        
+        // Reset to isometric view 
         setIsometricView();
     }
+
+    void RenderWindow::togglePermanentCentering()
+    {
+        setPermanentCentering(!m_permanentCenteringEnabled);
+    }
+
+    void RenderWindow::setPermanentCentering(bool enabled)
+    {
+        m_permanentCenteringEnabled = enabled;
+        
+        if (enabled)
+        {
+            // Initialize tracking state
+            updateCameraStateTracking();
+            m_modelModifiedSinceLastCenter = true; // Force initial centering
+        }
+        else
+        {
+            // Clear tracking state when disabled
+            m_lastCameraStateValid = false;
+        }
+    }
+
+    bool RenderWindow::isPermanentCenteringEnabled() const
+    {
+        return m_permanentCenteringEnabled;
+    }
+
+    void RenderWindow::updateCameraStateTracking()
+    {
+        m_lastCameraState = getCurrentCameraState();
+        m_lastCameraStateValid = true;
+    }
+
+    bool RenderWindow::shouldRecalculateCenter()
+    {
+        if (!m_permanentCenteringEnabled)
+        {
+            return false;
+        }
+        
+        // Always recalculate if model was modified
+        if (m_modelModifiedSinceLastCenter)
+        {
+            return true;
+        }
+        
+        // Check if camera has moved
+        if (!m_lastCameraStateValid)
+        {
+            return true;
+        }
+        
+        auto const currentState = getCurrentCameraState();
+        return currentState != m_lastCameraState;
+    }
+
+    RenderWindow::CameraState RenderWindow::getCurrentCameraState()
+    {
+        CameraState state;
+        
+        // Get current camera parameters - we need to access these through the public API
+        auto const eyePos = m_camera.getEyePosition();
+        auto const lookAt = m_camera.getLookAt();
+        
+        state.lookAt = Position{lookAt.x, lookAt.y, lookAt.z};
+        
+        // For pitch/yaw and distance, we'd need to compute them from eye position and look at
+        // Since we don't have direct access, we'll use the eye position as a proxy for changes
+        Position const eyePosition{eyePos.x, eyePos.y, eyePos.z};
+        Position const lookAtPosition{lookAt.x, lookAt.y, lookAt.z};
+        Position const eyeToLookAt = lookAtPosition - eyePosition;
+        
+        state.distance = eyeToLookAt.norm();
+        
+        // Calculate pitch and yaw from the eye-to-lookat vector
+        state.pitch = std::asin(eyeToLookAt.z() / state.distance);
+        state.yaw = std::atan2(eyeToLookAt.y(), eyeToLookAt.x());
+        
+        return state;
+    }
+
+    void RenderWindow::onCameraManuallyMoved()
+    {
+        // When camera is manually moved, disable permanent centering temporarily
+        // until the next model update or manual center request
+        if (m_permanentCenteringEnabled)
+        {
+            updateCameraStateTracking();
+        }
+    }
+
     void RenderWindow::render(RenderWindowState & state)
     {
         ProfileFunction;
@@ -675,9 +802,11 @@ namespace gladius::ui
             m_view->startAnimationMode();
         }
 
-        if (m_centerViewRequested)
+        // Handle both manual center requests and permanent centering
+        bool const shouldCenter = m_centerViewRequested || shouldRecalculateCenter();
+        
+        if (shouldCenter)
         {
-
             bool boundingBoxValid = m_core->getBoundingBox().has_value();
             if (boundingBoxValid)
             {
@@ -692,6 +821,13 @@ namespace gladius::ui
                     m_camera.adjustDistanceToTarget(
                       bb, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
 
+                    // Update tracking state for permanent centering
+                    if (m_permanentCenteringEnabled)
+                    {
+                        updateCameraStateTracking();
+                        m_modelModifiedSinceLastCenter = false;
+                    }
+                    
                     m_centerViewRequested = false;
                 }
             }
@@ -700,6 +836,13 @@ namespace gladius::ui
             {
                 // just set the look at point to the center of the build platform
                 m_camera.setLookAt({200.0, 200.0, 50.0});
+                
+                // Update tracking state for permanent centering
+                if (m_permanentCenteringEnabled)
+                {
+                    updateCameraStateTracking();
+                    m_modelModifiedSinceLastCenter = false;
+                }
             }
 
             invalidateView();

@@ -88,6 +88,11 @@ namespace gladius::ui
         void setPanMode();
         void setZoomMode();
         void resetOrientation();
+        
+        // Permanent centering
+        void togglePermanentCentering();
+        void setPermanentCentering(bool enabled);
+        [[nodiscard]] bool isPermanentCenteringEnabled() const;
 
         [[nodiscard]] bool isVisible() const;
 
@@ -160,5 +165,40 @@ namespace gladius::ui
         float m_panSensitivity = 0.1f;
         float m_rotateSensitivity = 0.02f;
         float m_zoomSensitivity = 0.1f;
+        
+        // Permanent centering state
+        bool m_permanentCenteringEnabled = false;
+        bool m_lastCameraStateValid = false;
+        
+        // Camera state tracking for permanent centering
+        struct CameraState 
+        {
+            Position lookAt;
+            float pitch;
+            float yaw;
+            float distance;
+            
+            bool operator==(CameraState const & other) const
+            {
+                return lookAt.isApprox(other.lookAt, 1e-6f) &&
+                       std::abs(pitch - other.pitch) < 1e-6f &&
+                       std::abs(yaw - other.yaw) < 1e-6f &&
+                       std::abs(distance - other.distance) < 1e-6f;
+            }
+            
+            bool operator!=(CameraState const & other) const
+            {
+                return !(*this == other);
+            }
+        };
+        
+        CameraState m_lastCameraState;
+        bool m_modelModifiedSinceLastCenter = false;
+        
+        // Helper methods for permanent centering
+        void updateCameraStateTracking();
+        bool shouldRecalculateCenter();
+        CameraState getCurrentCameraState();
+        void onCameraManuallyMoved();
     };
 }
