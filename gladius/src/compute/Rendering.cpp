@@ -418,7 +418,8 @@ namespace gladius
         auto backupViewPerspectiveMat = m_resources->getModelViewPerspectiveMat();
 
         ui::OrbitalCamera thumbnailCamera;
-        thumbnailCamera.adjustDistanceToTarget(bb);
+        const auto thumbnailSize = 256.0f;
+        thumbnailCamera.adjustDistanceToTarget(bb, thumbnailSize, thumbnailSize);
         thumbnailCamera.centerView(bb);
         thumbnailCamera.setAngle(0.6f, -2.0f);
 

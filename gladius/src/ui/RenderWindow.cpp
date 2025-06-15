@@ -473,6 +473,7 @@ namespace gladius::ui
     void RenderWindow::frameAll()
     {
         centerView(); // Same as center view for now
+        zoomExtents(); // Zoom to fit all objects in view
     }
 
     void RenderWindow::zoomExtents()
@@ -481,7 +482,7 @@ namespace gladius::ui
         if (m_core->updateBBox() && m_core->getBoundingBox().has_value())
         {
             auto const bbox = m_core->getBoundingBox().value();
-            m_camera.adjustDistanceToTarget(bbox);
+            m_camera.adjustDistanceToTarget(bbox, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
             invalidateView();
         }
     }
@@ -688,7 +689,7 @@ namespace gladius::ui
                 if (boundingBoxValid)
                 {
                     m_camera.centerView(bb);
-                    m_camera.adjustDistanceToTarget(bb);
+                    m_camera.adjustDistanceToTarget(bb, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
                 }
             }
 
@@ -875,7 +876,7 @@ namespace gladius::ui
         if (m_core->updateBBox() && m_core->getBoundingBox().has_value())
         {
             auto const bbox = m_core->getBoundingBox().value();
-            m_camera.adjustDistanceToTarget(bbox);
+            m_camera.adjustDistanceToTarget(bbox, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
             invalidateView();
         }
     }
