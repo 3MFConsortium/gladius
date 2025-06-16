@@ -1140,9 +1140,11 @@ namespace gladius
 
         ui::OrbitalCamera thumbnailCamera;
         const auto thumbnailSize = 256.0f;
-        thumbnailCamera.adjustDistanceToTarget(bb, thumbnailSize, thumbnailSize);
-        thumbnailCamera.centerView(bb);
+
         thumbnailCamera.setAngle(0.6f, -2.0f);
+        thumbnailCamera.centerView(bb);
+        thumbnailCamera.update(10000.f);
+        thumbnailCamera.adjustDistanceToTarget(bb, thumbnailSize, thumbnailSize);
 
         thumbnailCamera.update(10000.f);
 

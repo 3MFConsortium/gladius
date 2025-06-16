@@ -1287,6 +1287,8 @@ namespace gladius::ui
                     {
                         m_doc->newFromTemplate();
                         resetEditorState();
+                        m_modelFileName.clear();
+                        m_currentAssemblyFileName.reset();
                         m_renderWindow.centerView();
                     }
                     else if (m_pendingFileOperation == PendingFileOperation::OpenFile)
