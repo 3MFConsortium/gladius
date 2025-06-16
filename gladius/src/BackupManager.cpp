@@ -50,6 +50,9 @@ namespace gladius
             // Copy the source file to backup location
             std::filesystem::copy_file(sourceFile, backupPath, std::filesystem::copy_options::overwrite_existing);
             
+            // Clean up old backups to keep only the most recent ones
+            cleanupOldBackups(MAX_BACKUP_FILES);
+            
             m_lastBackupTime = now;
             return true;
         }
