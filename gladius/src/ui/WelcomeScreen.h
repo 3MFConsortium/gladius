@@ -5,10 +5,18 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include "BackupManager.h"
 #include "ThreemfThumbnailExtractor.h"
 
 namespace gladius::ui
 {
+    /// Tab identifiers for the welcome screen
+    enum class WelcomeTab
+    {
+        RecentFiles,
+        RestoreBackup
+    };
+
     /**
      * @brief Formats a timestamp in a human-readable format
      *
@@ -90,6 +98,20 @@ namespace gladius::ui
          */
         void hide();
         
+        /**
+         * @brief Sets the backup manager for accessing backup files
+         * 
+         * @param backupManager Pointer to the backup manager
+         */
+        void setBackupManager(const BackupManager* backupManager);
+        
+        /**
+         * @brief Sets the callback function for restoring a backup file
+         * 
+         * @param callback The function to call when a backup should be restored
+         */
+        void setRestoreBackupCallback(std::function<void(const std::filesystem::path&)> callback);
+        
     private:
         /// Callback for when a file should be opened
         std::function<void(const std::filesystem::path&)> m_openFileCallback;
@@ -121,7 +143,28 @@ namespace gladius::ui
         /// Flag to indicate if thumbnails need to be regenerated
         bool m_needsRefresh = true;
         
+        /// Callback for when a backup should be restored
+        std::function<void(const std::filesystem::path&)> m_restoreBackupCallback;
+        
+        /// Pointer to backup manager for accessing backup files
+        const BackupManager* m_backupManager = nullptr;
+        
+        /// Currently active tab
+        WelcomeTab m_activeTab = WelcomeTab::RecentFiles;
+        
+        /// Flag to indicate if backup tab should be selected by default
+        bool m_preferBackupTab = false;
+        
         /// Update the thumbnail info based on recent files list
         void updateThumbnailInfos();
+        
+        /// Render the recent files tab
+        void renderRecentFilesTab(float availableWidth);
+        
+        /// Render the restore backup tab
+        void renderRestoreBackupTab(float availableWidth);
+        
+        /// Update active tab based on available backups
+        void updateActiveTab();
     };
 }

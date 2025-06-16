@@ -113,6 +113,17 @@ namespace gladius::ui
         // Set the logger for the welcome screen
         m_welcomeScreen.setLogger(m_logger);
 
+        // Set backup manager for the welcome screen
+        m_welcomeScreen.setBackupManager(&m_doc->getBackupManager());
+
+        // Set backup restore callback
+        m_welcomeScreen.setRestoreBackupCallback(
+          [this](const std::filesystem::path & backupPath)
+          {
+              open(backupPath);
+              m_welcomeScreen.hide();
+          });
+
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
 

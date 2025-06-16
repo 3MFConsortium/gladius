@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BackupManager.h"
 #include "BitmapChannel.h"
 #include "Mesh.h"
 #include "compute/ComputeCore.h"
@@ -275,6 +276,20 @@ namespace gladius
          */
         bool validateAssembly() const;
 
+        /**
+         * @brief Get the backup manager instance
+         *
+         * @return BackupManager& Reference to the backup manager
+         */
+        BackupManager& getBackupManager();
+
+        /**
+         * @brief Get the backup manager instance (const version)
+         *
+         * @return const BackupManager& Const reference to the backup manager
+         */
+        const BackupManager& getBackupManager() const;
+
         void updateFlatAssembly();
 
       private:
@@ -322,6 +337,9 @@ namespace gladius
 
         /// Mutex for protecting m_assembly
         mutable std::mutex m_assemblyMutex;
+
+        /// Backup manager for handling file backups
+        BackupManager m_backupManager;
     };
 
     using SharedDocument = std::shared_ptr<Document>;

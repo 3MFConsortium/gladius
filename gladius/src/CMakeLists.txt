@@ -7,6 +7,8 @@ list(APPEND SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutSettingsDialog.h
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutSettingsDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/BackupManager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/BackupManager.cpp
 )
 
 add_library(${BINARY}_lib STATIC ${SOURCES})

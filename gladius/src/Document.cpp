@@ -1,4 +1,6 @@
 #include "Document.h"
+
+#include "BackupManager.h"
 #include "CliReader.h"
 #include "CliWriter.h"
 #include "FileChooser.h"
@@ -83,6 +85,9 @@ namespace gladius
 
         newModel();
         resetGeneratorContext();
+        
+        // Initialize backup manager
+        m_backupManager.initialize();
     }
 
     void Document::refreshModelAsync()
@@ -205,26 +210,40 @@ namespace gladius
 
     void Document::saveBackup()
     {
-        // skip back up, if the last backup is less than 1 minutes ago
-        if (m_lastBackupTime.time_since_epoch().count() > 0 &&
-            std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now() -
-                                                             m_lastBackupTime)
-                .count() < 1)
+        // Use the new BackupManager for improved backup handling
+        try
         {
-            return;
+            // Create a temporary file for the backup
+            auto tempDir = std::filesystem::temp_directory_path();
+            auto tempBackupFile = tempDir / "gladius_temp_backup.3mf";
+            
+            // Save current model to temporary file
+            saveAs(tempBackupFile, false);
+            
+            // Get original filename for backup naming
+            std::string originalName = "untitled";
+            if (m_currentAssemblyFileName.has_value() && !m_currentAssemblyFileName->empty())
+            {
+                originalName = m_currentAssemblyFileName->stem().string();
+            }
+            
+            // Create backup using BackupManager
+            m_backupManager.createBackup(tempBackupFile, originalName);
+            
+            // Clean up temporary file
+            if (std::filesystem::exists(tempBackupFile))
+            {
+                std::filesystem::remove(tempBackupFile);
+            }
+            
+            // Update backup time
+            m_lastBackupTime = std::chrono::system_clock::now();
         }
-
-        // save a backup of the current model in temp directory
-        auto tempDir = std::filesystem::temp_directory_path();
-        auto backupDir = tempDir / "gladius";
-        if (!std::filesystem::exists(backupDir))
+        catch (const std::exception& e)
         {
-            std::filesystem::create_directory(backupDir);
+            // Backup failure shouldn't crash the application
+            // Could log error here if logging is available
         }
-
-        auto backupFile = backupDir / "backup.3mf";
-        saveAs(backupFile, false);
-        m_lastBackupTime = std::chrono::system_clock::now();
     }
 
     bool Document::refreshModelIfNoCompilationIsRunning()
@@ -1400,5 +1419,15 @@ namespace gladius
         }
         
         return true;
+    }
+
+    BackupManager& Document::getBackupManager()
+    {
+        return m_backupManager;
+    }
+
+    const BackupManager& Document::getBackupManager() const
+    {
+        return m_backupManager;
     }
 }
