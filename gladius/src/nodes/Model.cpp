@@ -622,6 +622,14 @@ namespace gladius::nodes
     {
         m_allInputReferencesAreValid = false;
         m_graph = graph::AdjacencyListDirectedGraph(m_lastId);
+        
+        // Add all nodes as vertices to ensure they are included in topological sort
+        // even if they have no connections
+        for (auto const & [id, node] : m_nodes)
+        {
+            m_graph.addVertex(id);
+        }
+        
         for (auto & [id, node] : m_nodes)
         {
             for (auto & parameter : node->parameter())

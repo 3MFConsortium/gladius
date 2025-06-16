@@ -1,16 +1,16 @@
 #pragma once
 
 #include "../nodes/History.h"
+#include "LibraryBrowser.h"
 #include "NodeView.h"
 #include "imguinodeeditor.h"
-#include "LibraryBrowser.h"
 
 #include <filesystem>
 #include <string>
 
 #include "Outline.h"
-#include "Style.h"
 #include "ResourceView.h"
+#include "Style.h"
 #include "compute/ComputeCore.h"
 #include "nodes/Assembly.h"
 #include "nodes/Model.h"
@@ -61,11 +61,23 @@ namespace gladius::ui
         void markPrimitiveDataAsUpToDate();
 
         // Library browser methods
-        void setLibraryRootDirectory(const std::filesystem::path& directory);
+        void setLibraryRootDirectory(const std::filesystem::path & directory);
         void toggleLibraryVisibility();
         void setLibraryVisibility(bool visible);
         [[nodiscard]] bool isLibraryVisible() const;
         void refreshLibraryDirectories();
+
+        // Public methods for keyboard shortcuts
+        void requestManualCompile();
+        void autoLayoutNodes(float distance = 200.0f);
+        void showCreateNodePopup();
+
+        /**
+         * @brief Switch to a specific function by its ResourceId
+         * @param functionId The ResourceId of the function to switch to
+         * @return true if the function was found and switched to, false otherwise
+         */
+        bool switchToFunction(nodes::ResourceId functionId);
 
         /**
          * @brief Check if mouse is hovering over the model editor
@@ -75,7 +87,7 @@ namespace gladius::ui
 
       private:
         void readBackNodePositions();
-        void autoLayout(float distance);
+        void autoLayout();
         void applyNodePositions();
         void placeTransformation(nodes::NodeBase & createdNode,
                                  std::vector<ed::NodeId> & selection) const;
@@ -99,27 +111,25 @@ namespace gladius::ui
         void setAssembly(nodes::SharedAssembly assembly);
 
         void functionToolBox(ImVec2 mousePos);
-        
+
         // New function creation methods
         nodes::Model & createLevelsetFunction(std::string const & name);
-        nodes::Model & copyExistingFunction(nodes::Model const & sourceModel, std::string const & name);
+        nodes::Model & copyExistingFunction(nodes::Model const & sourceModel,
+                                            std::string const & name);
         void meshResourceToolBox(ImVec2 mousePos);
         void showDeleteUnusedResourcesDialog();
         void validate();
 
         /// Group/tag management functionality
         void showGroupAssignmentDialog();
-        void assignSelectedNodesToGroup(const std::string& groupName);
+        void assignSelectedNodesToGroup(const std::string & groupName);
         std::vector<std::string> getAllExistingTags() const;
-        
-        /// Handle group node selection - automatically select all nodes in a group when group node is selected
-        void handleGroupNodeSelection();
 
         void undo();
         void redo();
-        
+
         // Helper method to check if a string matches the current filter
-        bool matchesNodeFilter(const std::string& text) const;
+        bool matchesNodeFilter(const std::string & text) const;
 
         void pushNodeColor(nodes::NodeBase & node);
         void popNodeColor(nodes::NodeBase & node);
@@ -132,17 +142,19 @@ namespace gladius::ui
         bool m_nodePositionsNeedUpdate{false};
         float m_nodeDistance = 50.f;
         float m_scale = 0.5f;
-        bool m_nodeWidthsInitialized = false;        std::string m_newModelName{"New_Part"};
+        bool m_nodeWidthsInitialized = false;
+        std::string m_newModelName{"New_Part"};
         bool m_showAddModel{false};
-        
+
         // New function dialog options
-        enum class FunctionType 
+        enum class FunctionType
         {
             Empty = 0,
             CopyExisting = 1,
-            LevelsetTemplate = 2
+            LevelsetTemplate = 2,
+            WrapExisting = 3
         };
-        
+
         FunctionType m_selectedFunctionType{FunctionType::Empty};
         int m_selectedSourceFunctionIndex{0};
 
@@ -177,7 +189,7 @@ namespace gladius::ui
         // Confirmation dialog for removing unused resources
         bool m_showDeleteUnusedResourcesConfirmation = false;
         std::vector<Lib3MF::PResource> m_unusedResources;
-        
+
         // Node filtering
         std::string m_nodeFilterText;
 
@@ -189,7 +201,6 @@ namespace gladius::ui
         std::string m_newGroupName;
         std::string m_selectedExistingGroup;
         std::vector<std::string> m_existingGroups;
-
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

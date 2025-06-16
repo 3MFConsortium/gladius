@@ -182,6 +182,7 @@ namespace gladius
         nodes::Model & createNewFunction();
         nodes::Model & createLevelsetFunction(std::string const & name);
         nodes::Model & copyFunction(nodes::Model const & sourceModel, std::string const & name);
+        nodes::Model & wrapExistingFunction(nodes::Model & sourceModel, std::string const & name);
 
         void injectSmoothingKernel(std::string const & kernel);
 

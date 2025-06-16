@@ -745,6 +745,94 @@ namespace gladius
         return model;
     }
 
+    nodes::Model & Document::wrapExistingFunction(nodes::Model & sourceModel, std::string const & name)
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3mf model loaded");
+        }
+
+        auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
+        auto const modelId = new3mfFunc->GetModelResourceID();
+
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        m_assembly->addModelIfNotExisting(modelId);
+        auto & model = *m_assembly->getFunctions().at(modelId);
+        
+        // Create begin and end nodes with same inputs and outputs as source
+        model.createBeginEnd();
+        model.setDisplayName(name);
+        
+        // Copy inputs from source model
+        auto const & sourceInputs = sourceModel.getInputs();
+        for (auto const & [inputName, inputPort] : sourceInputs)
+        {
+            model.getBeginNode()->addOutputPort(inputName, inputPort.getTypeIndex());
+        }
+        model.registerOutputs(*model.getBeginNode());
+        
+        // Copy outputs from source model  
+        auto const & sourceOutputs = sourceModel.getOutputs();
+        for (auto const & [outputName, outputPort] : sourceOutputs)
+        {
+            model.getEndNode()->parameter()[outputName] = nodes::createVariantTypeFromTypeIndex(outputPort.getTypeIndex());
+        }
+        model.registerInputs(*model.getEndNode());
+        
+        // Create Resource node for the source function
+        auto resourceNode = model.create<nodes::Resource>();
+        resourceNode->parameter().at(nodes::FieldNames::ResourceId) = nodes::VariantParameter(sourceModel.getResourceId());
+        
+        // Create FunctionCall node
+        auto functionCallNode = model.create<nodes::FunctionCall>();
+        functionCallNode->parameter()
+          .at(nodes::FieldNames::FunctionId)
+          .setInputFromPort(resourceNode->getOutputs().at(nodes::FieldNames::Value));
+        
+        // Set display name to source function name
+        auto sourceFunctionName = sourceModel.getDisplayName();
+        if (sourceFunctionName.has_value())
+        {
+            functionCallNode->setDisplayName(sourceFunctionName.value());
+        }
+        
+        // Update the function call node's inputs and outputs to match the source model
+        functionCallNode->updateInputsAndOutputs(sourceModel);
+        model.registerInputs(*functionCallNode);
+        model.registerOutputs(*functionCallNode);
+        
+        // Connect begin node outputs to function call inputs
+        for (auto const & [inputName, inputPort] : sourceInputs)
+        {
+            auto beginOutputIter = model.getBeginNode()->getOutputs().find(inputName);
+            auto functionInputIter = functionCallNode->parameter().find(inputName);
+            
+            if (beginOutputIter != model.getBeginNode()->getOutputs().end() && 
+                functionInputIter != functionCallNode->parameter().end())
+            {
+                functionInputIter->second.setInputFromPort(beginOutputIter->second);
+            }
+        }
+        
+        // Connect function call outputs to end node inputs
+        for (auto const & [outputName, outputPort] : sourceOutputs)
+        {
+            auto functionOutputIter = functionCallNode->getOutputs().find(outputName);
+            auto endInputIter = model.getEndNode()->parameter().find(outputName);
+            
+            if (functionOutputIter != functionCallNode->getOutputs().end() && 
+                endInputIter != model.getEndNode()->parameter().end())
+            {
+                endInputIter->second.setInputFromPort(functionOutputIter->second);
+            }
+        }
+        
+        model.getBeginNode()->updateNodeIds();
+        model.getEndNode()->updateNodeIds();
+        
+        return model;
+    }
+
     nodes::VariantParameter & Document::findParameterOrThrow(ResourceId modelId,
                                                              std::string const & nodeName,
                                                              std::string const & parameterName)

@@ -553,17 +553,18 @@ namespace gladius::ui
 
                 // Function type selection
                 static const char * functionTypes[] = {
-                  "Empty function", "Copy existing function", "Levelset template"};
+                  "Empty function", "Copy existing function", "Levelset template", "Wrap existing function"};
                 int functionType = static_cast<int>(m_selectedFunctionType);
                 ImGui::Combo(
                   "Function type", &functionType, functionTypes, IM_ARRAYSIZE(functionTypes));
                 m_selectedFunctionType = static_cast<FunctionType>(functionType);
 
-                // If copy, show list of available functions
+                // If copy or wrap, show list of available functions
                 int availableFunctionCount = 0;
                 std::vector<nodes::Model *> availableFunctions;
                 std::vector<std::string> availableFunctionNames;
-                if (m_selectedFunctionType == FunctionType::CopyExisting)
+                if (m_selectedFunctionType == FunctionType::CopyExisting || 
+                    m_selectedFunctionType == FunctionType::WrapExisting)
                 {
                     for (auto & [id, model] : m_assembly->getFunctions())
                     {
@@ -594,7 +595,8 @@ namespace gladius::ui
                 }
 
                 bool canCreate = !m_newModelName.empty() &&
-                                 (m_selectedFunctionType != FunctionType::CopyExisting ||
+                                 ((m_selectedFunctionType != FunctionType::CopyExisting && 
+                                   m_selectedFunctionType != FunctionType::WrapExisting) ||
                                   availableFunctionCount > 0);
 
                 if (canCreate && ImGui::Button("Create", ImVec2(120, 0)))
@@ -609,6 +611,11 @@ namespace gladius::ui
                     case FunctionType::CopyExisting:
                         if (availableFunctionCount > 0)
                             newModel = &m_doc->copyFunction(
+                              *availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
+                        break;
+                    case FunctionType::WrapExisting:
+                        if (availableFunctionCount > 0)
+                            newModel = &m_doc->wrapExistingFunction(
                               *availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
                         break;
                     case FunctionType::LevelsetTemplate:
@@ -838,7 +845,7 @@ namespace gladius::ui
                 {
                     if (ImGui::MenuItem("Autolayout"))
                     {
-                        autoLayout(m_nodeDistance);
+                        autoLayout();
                     }
                     if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_COMPRESS_ARROWS_ALT
                                                                        "\tCenter View")))
@@ -1017,15 +1024,19 @@ namespace gladius::ui
                 // Handle group movement - detect when nodes are moved and move their group members
                 m_nodeViewVisitor.handleGroupMovement();
 
-                // Handle group node selection - automatically select all nodes in a group
-                // when a group node is selected
-                // if (ed::HasSelectionChanged())
-                {
-                    handleGroupNodeSelection();
-                }
+                // Handle group dragging via header/border areas - must be called before rendering
+                m_nodeViewVisitor.handleGroupDragging();
 
                 // Render node group last, to prioritize node interaction
                 m_nodeViewVisitor.renderNodeGroups();
+
+                // Check for group double-clicks and handle them AFTER rendering (so bounds are
+                // updated)
+                std::string doubleClickedGroup = m_nodeViewVisitor.checkForGroupClick();
+                if (!doubleClickedGroup.empty())
+                {
+                    m_nodeViewVisitor.handleGroupClick(doubleClickedGroup);
+                }
 
                 ed::End();
                 ed::PopStyleColor();
@@ -1071,7 +1082,7 @@ namespace gladius::ui
 
         if (!m_currentModel->hasBeenLayouted() && m_nodeWidthsInitialized)
         {
-            autoLayout(m_nodeDistance);
+            autoLayout();
         }
 
         m_parameterDirty = parameterChanged;
@@ -1374,7 +1385,7 @@ namespace gladius::ui
         m_nodePositionsNeedUpdate = false;
     }
 
-    void ModelEditor::autoLayout(float distance)
+    void ModelEditor::autoLayout()
     {
         if (currentModel() == nullptr)
         {
@@ -1391,9 +1402,9 @@ namespace gladius::ui
         // Use the dedicated layout engine for all layout operations
         gladius::ui::NodeLayoutEngine layoutEngine;
         gladius::ui::NodeLayoutEngine::LayoutConfig config;
-        config.nodeDistance = distance;
-        config.layerSpacing = distance * 1.5f;
-        config.groupPadding = distance * 0.5f;
+        config.nodeDistance = m_nodeDistance;
+        config.layerSpacing = m_nodeDistance * 1.5f;
+        config.groupPadding = m_nodeDistance * 0.5f;
 
         layoutEngine.performAutoLayout(*currentModel(), config);
 
@@ -1714,6 +1725,43 @@ namespace gladius::ui
         m_libraryBrowser.refreshDirectories();
     }
 
+    void ModelEditor::requestManualCompile()
+    {
+        m_isManualCompileRequested = true;
+    }
+
+    void ModelEditor::autoLayoutNodes(float distance)
+    {
+        autoLayout();
+    }
+
+    void ModelEditor::showCreateNodePopup()
+    {
+        // Get current mouse position and show the create node popup
+        ImVec2 currentMousePos = ImGui::GetMousePos();
+        showPopupMenu([&, currentMousePos]() { createNodePopup(-1, currentMousePos); });
+        m_showCreateNodePopUp = true;
+        ImGui::OpenPopup("Create Node");
+    }
+
+    bool ModelEditor::switchToFunction(nodes::ResourceId functionId)
+    {
+        if (!m_assembly)
+        {
+            return false;
+        }
+
+        auto functionModel = m_assembly->findModel(functionId);
+        if (!functionModel)
+        {
+            return false;
+        }
+
+        m_currentModel = functionModel;
+        switchModel();
+        return true;
+    }
+
     bool ModelEditor::isHovered() const
     {
         // Check if any of the editor windows are hovered
@@ -1886,53 +1934,6 @@ namespace gladius::ui
         // Convert set to vector
         tags.assign(uniqueTags.begin(), uniqueTags.end());
         return tags;
-    }
-
-    void ModelEditor::handleGroupNodeSelection()
-    {
-        auto selection = selectedNodes(m_editorContext);
-
-        // Only handle single node selection to avoid conflicts
-        if (selection.size() != 1)
-        {
-            return;
-        }
-
-        ed::NodeId selectedNodeId = selection.front();
-
-        // Check if this is a group node (created with hash-based ID in renderNodeGroups)
-        // Group nodes are background nodes that represent the visual grouping
-        bool isGroupNode = false;
-        std::string groupTag;
-
-        // Search through all existing groups to see if this ID matches a group node
-        for (const auto & [tag, group] : m_nodeViewVisitor.getNodeGroups())
-        {
-            ed::NodeId groupId = ed::NodeId(std::hash<std::string>{}(tag));
-            if (groupId == selectedNodeId)
-            {
-                isGroupNode = true;
-                groupTag = tag;
-                break;
-            }
-        }
-
-        if (isGroupNode && !groupTag.empty())
-        {
-            // Clear current selection
-            ed::ClearSelection();
-
-            // Select all nodes that belong to this group using the improved method
-            bool first = true;
-            for (const auto & [nodeId, modelNode] : *m_currentModel)
-            {
-                if (modelNode->getTag() == groupTag)
-                {
-                    ed::SelectNode(ed::NodeId(nodeId), !first);
-                    first = false;
-                }
-            }
-        }
     }
 
     nodes::Model & ModelEditor::createLevelsetFunction(std::string const & name)

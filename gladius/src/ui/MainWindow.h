@@ -28,6 +28,13 @@ namespace ed = ax::NodeEditor;
 
 namespace gladius::ui
 {
+    enum class PendingFileOperation
+    {
+        None,
+        NewModel,
+        OpenFile
+    };
+
     class MainWindow
     {
       public:
@@ -79,6 +86,7 @@ namespace gladius::ui
         void meshExportDialog();
         void cliExportDialog();
         void showExitPopUp();
+        void showSaveBeforeFileOperationPopUp();
         void logViewer();
 
         void refreshModel();
@@ -141,6 +149,9 @@ namespace gladius::ui
         bool m_showMainMenu{false};
         bool m_isSlicePreviewVisible{false};
         bool m_showSaveBeforeExit{false};
+        bool m_showSaveBeforeFileOperation{false};
+        PendingFileOperation m_pendingFileOperation{PendingFileOperation::None};
+        std::optional<std::filesystem::path> m_pendingOpenFilename;
 
         float m_mainMenuPosX{-400.f}; // used for the move in animation
 

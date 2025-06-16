@@ -15,26 +15,25 @@
 #include <lodepng.h>
 
 #include "CliReader.h"
-#include "compute/Rendering.h"
-#include "Mesh.h"
-#include "ToCommandStreamVisitor.h"
-#include "ToOCLVisitor.h"
-#include "gpgpu.h"
 #include "Contour.h"
+#include "Mesh.h"
 #include "Profiling.h"
 #include "RenderProgram.h"
 #include "ResourceContext.h"
 #include "SlicerProgram.h"
+#include "ToCommandStreamVisitor.h"
+#include "ToOCLVisitor.h"
+#include "compute/Rendering.h"
+#include "gpgpu.h"
 #include "nodes/GraphFlattener.h"
 #include "nodes/OptimizeOutputs.h"
 
 namespace gladius
 {
     Rendering::Rendering(SharedComputeContext context,
-                            RequiredCapabilities requiredCapabilities,
-                             events::SharedLogger logger)
-        : 
-         m_ComputeContext(context)
+                         RequiredCapabilities requiredCapabilities,
+                         events::SharedLogger logger)
+        : m_ComputeContext(context)
         , m_capabilities(requiredCapabilities)
         , m_resources(std::make_shared<ResourceContext>(context))
         , m_eventLogger(logger)
@@ -48,14 +47,12 @@ namespace gladius
         ProfileFunction std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         m_resources = std::make_shared<ResourceContext>(m_ComputeContext);
         createBuffer();
-   
+
         m_optimizedRenderProgram = std::make_unique<RenderProgram>(m_ComputeContext, m_resources);
         m_previewRenderProgram = std::make_unique<RenderProgram>(m_ComputeContext, m_resources);
         m_previewRenderProgram->setEnableVdb(false);
 
         m_optimizedRenderProgram->buildKernelLib();
-
-
     }
 
     void Rendering::reset()
@@ -63,7 +60,6 @@ namespace gladius
         ProfileFunction std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
 
         m_boundingBox.reset();
-
 
         setSliceHeight(0.f);
     }
@@ -98,7 +94,6 @@ namespace gladius
         m_resources->allocatePreComputedSdf();
     }
 
-   
     const std::optional<BoundingBox> & Rendering::getBoundingBox() const
     {
         return m_boundingBox;
@@ -127,7 +122,6 @@ namespace gladius
         init();
     }
 
-
     void Rendering::throwIfNoOpenGL() const
     {
         if (m_capabilities == RequiredCapabilities::ComputeOnly)
@@ -140,7 +134,6 @@ namespace gladius
     {
         return *m_ComputeContext;
     }
-
 
     void Rendering::logMsg(std::string msg) const
     {
@@ -202,7 +195,6 @@ namespace gladius
         return m_resultImage.get();
     }
 
-
     cl_float Rendering::getSliceHeight() const
     {
         return m_sliceHeight_mm;
@@ -257,7 +249,7 @@ namespace gladius
     }
 
     void Rendering::renderResultImageInterOp(DistanceMap & sourceImage,
-                                               GLImageBuffer & targetImage) const
+                                             GLImageBuffer & targetImage) const
     {
         ProfileFunction std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
 
@@ -286,7 +278,7 @@ namespace gladius
     }
 
     void Rendering::renderResultImageReadPixel(DistanceMap & sourceImage,
-                                                 GLImageBuffer & targetImage) const
+                                               GLImageBuffer & targetImage) const
     {
         ProfileFunction
 
@@ -334,7 +326,7 @@ namespace gladius
         }
         std::lock_guard<std::recursive_mutex> lock(m_computeMutex, std::adopt_lock);
         throwIfNoOpenGL();
-        // recompileIfRequired(); 
+        // recompileIfRequired();
 
         // if (getBestRenderProgram()->isCompilationInProgress())
         // {
@@ -365,7 +357,6 @@ namespace gladius
 
         glFinish();
 
-
         m_resources->getRenderingSettings().approximation = AM_ONLY_PRECOMPSDF;
 
         // getBestRenderProgram()->renderScene(*m_primitives,
@@ -378,7 +369,6 @@ namespace gladius
         //   *m_lowResPreviewImage, *m_resultImage, 0, m_resultImage->getHeight());
         m_resultImage->invalidateContent();
     }
-
 
     PlainImage Rendering::createThumbnail()
     {
@@ -418,9 +408,11 @@ namespace gladius
         auto backupViewPerspectiveMat = m_resources->getModelViewPerspectiveMat();
 
         ui::OrbitalCamera thumbnailCamera;
-        thumbnailCamera.adjustDistanceToTarget(bb);
+        const auto thumbnailSize = 256.0f;
         thumbnailCamera.centerView(bb);
         thumbnailCamera.setAngle(0.6f, -2.0f);
+
+        thumbnailCamera.adjustDistanceToTarget(bb, thumbnailSize, thumbnailSize);
 
         thumbnailCamera.update(10000.f);
 
@@ -492,7 +484,8 @@ namespace gladius
                         image.data,
                         static_cast<unsigned int>(image.width),
                         static_cast<unsigned int>(image.height));
-    }    void Rendering::applyCamera(ui::OrbitalCamera const & camera)
+    }
+    void Rendering::applyCamera(ui::OrbitalCamera const & camera)
     {
         getResourceContext().setEyePosition(camera.getEyePosition());
         getResourceContext().setModelViewPerspectiveMat(camera.computeModelViewPerspectiveMatrix());
