@@ -2148,7 +2148,7 @@ namespace gladius::ui
                                           "Create Node",
                                           "Open the create node menu",
                                           ShortcutContext::ModelEditor,
-                                          ShortcutCombo(ImGuiKey_Space), // Space
+                                          ShortcutCombo(ImGuiKey_G, true), // Ctrl+G
                                           [this]() { m_modelEditor.showCreateNodePopup(); });
 
         // Slice preview shortcuts
