@@ -102,9 +102,6 @@ namespace gladius
         
         /// Last backup time
         std::chrono::system_clock::time_point m_lastBackupTime;
-        
-        /// Maximum number of backup files to keep
-        static constexpr size_t MAX_BACKUP_FILES = 10;
 
         /**
          * @brief Generate a unique session ID
