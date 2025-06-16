@@ -1,11 +1,31 @@
 #include "WelcomeScreen.h"
 #include "IconsFontAwesome5.h"
 #include "imgui.h"
+#include <chrono>
 #include <fmt/format.h>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 
 namespace gladius::ui
 {
+    /**
+     * @brief Thread-safe cross-platform function to convert time_t to tm structure
+     *
+     * @param timer The time_t value to convert
+     * @param result Pointer to tm structure to store the result
+     * @return std::tm* Pointer to the result tm structure, or nullptr on error
+     */
+    std::tm * safeLocaltime(std::time_t const * timer, std::tm * result)
+    {
+#ifdef _WIN32
+        // Use localtime_s on Windows (thread-safe)
+        return (localtime_s(result, timer) == 0) ? result : nullptr;
+#else
+        // Use localtime_r on POSIX systems (thread-safe)
+        return localtime_r(timer, result);
+#endif
+    }
 
     /**
      * @brief Formats a timestamp in a human-readable format
@@ -22,20 +42,27 @@ namespace gladius::ui
     {
         // Get current time
         std::time_t const now = std::time(nullptr);
-        std::tm const * nowInfo = std::localtime(&now);
-        std::tm const * timeInfo = std::localtime(&timestamp);
 
-        // Calculate days difference by converting to struct tm and comparing
+        // Use thread-safe localtime alternatives
+        std::tm nowInfo{};
+        std::tm timeInfo{};
+
+        if (safeLocaltime(&now, &nowInfo) == nullptr ||
+            safeLocaltime(&timestamp, &timeInfo) == nullptr)
+        {
+            // Fallback to simple format if localtime fails
+            return fmt::format("{}", timestamp);
+        } // Calculate days difference by converting to struct tm and comparing
         int const daysDiff = static_cast<int>(
           (now - timestamp) / (60 * 60 * 24) +
-          (nowInfo->tm_hour < timeInfo->tm_hour ||
-               (nowInfo->tm_hour == timeInfo->tm_hour && nowInfo->tm_min < timeInfo->tm_min)
+          (nowInfo.tm_hour < timeInfo.tm_hour ||
+               (nowInfo.tm_hour == timeInfo.tm_hour && nowInfo.tm_min < timeInfo.tm_min)
              ? 1
              : 0));
 
         // Format time part "HH:MM"
         char timePartStr[16];
-        std::strftime(timePartStr, sizeof(timePartStr), "%H:%M", timeInfo);
+        std::strftime(timePartStr, sizeof(timePartStr), "%H:%M", &timeInfo);
 
         if (daysDiff == 0)
         {
@@ -51,21 +78,21 @@ namespace gladius::ui
         {
             // This week
             char dayNameStr[16];
-            std::strftime(dayNameStr, sizeof(dayNameStr), "%A", timeInfo);
+            std::strftime(dayNameStr, sizeof(dayNameStr), "%A", &timeInfo);
             return fmt::format("{} at {}", dayNameStr, timePartStr);
         }
-        else if (timeInfo->tm_year == nowInfo->tm_year)
+        else if (timeInfo.tm_year == nowInfo.tm_year)
         {
             // This year
             char monthDayStr[16];
-            std::strftime(monthDayStr, sizeof(monthDayStr), "%b %d", timeInfo);
+            std::strftime(monthDayStr, sizeof(monthDayStr), "%b %d", &timeInfo);
             return fmt::format("{} at {}", monthDayStr, timePartStr);
         }
         else
         {
             // Older
             char dateStr[64];
-            std::strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M", timeInfo);
+            std::strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M", &timeInfo);
             return dateStr;
         }
     }
@@ -215,7 +242,6 @@ namespace gladius::ui
             ImGui::SetWindowFontScale(1.0f);
             ImGui::PopFont();
 
-           
             ImGui::Spacing();
 
             // Main content split: left side for buttons, right side for recent files
@@ -247,7 +273,6 @@ namespace gladius::ui
                     m_isVisible = false;
                 }
             }
-
 
             ImGui::PopStyleVar();
             ImGui::EndChild();
@@ -576,8 +601,8 @@ namespace gladius::ui
                     std::string timeStr = formatTimeForHuman(info.timestamp);
 
                     textSize = ImGui::CalcTextSize(timeStr.c_str());
-                    ImGui::SetCursorPos(ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f,
-                                               ImGui::GetCursorPosY()));
+                    ImGui::SetCursorPos(
+                      ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, ImGui::GetCursorPosY()));
                     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", timeStr.c_str());
 
                     ImGui::EndGroup();
