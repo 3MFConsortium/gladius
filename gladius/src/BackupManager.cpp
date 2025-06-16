@@ -214,11 +214,11 @@ namespace gladius
         BackupInfo info;
         info.filePath = filename;
 
-        // Expected format: backup_YYYYMMDD_HHMMSS_sessionid_originalname.3mf
+        // Expected format: YYYYMMDD_HHMMSS_sessionid_originalname.3mf
         std::string name = filename.stem().string();
         
         // Use regex to parse the filename
-        std::regex pattern(R"(backup_(\d{8})_(\d{6})_([^_]+)_(.+))");
+        std::regex pattern(R"((\d{8})_(\d{6})_([^_]+)_(.+))");
         std::smatch match;
         
         if (std::regex_match(name, match, pattern))
@@ -252,7 +252,40 @@ namespace gladius
             }
         }
 
-        // Try fallback pattern for legacy backups
+        // Try legacy pattern for old backup files that still have "backup_" prefix
+        std::regex legacyPattern(R"(backup_(\d{8})_(\d{6})_([^_]+)_(.+))");
+        if (std::regex_match(name, match, legacyPattern))
+        {
+            try
+            {
+                // Parse date and time
+                std::string dateStr = match[1].str();
+                std::string timeStr = match[2].str();
+                std::string sessionId = match[3].str();
+                std::string originalName = match[4].str();
+
+                // Convert to time_point
+                std::tm tm = {};
+                std::istringstream ss(dateStr + timeStr);
+                ss >> std::get_time(&tm, "%Y%m%d%H%M%S");
+                
+                if (!ss.fail())
+                {
+                    auto time_t_val = std::mktime(&tm);
+                    info.timestamp = std::chrono::system_clock::from_time_t(time_t_val);
+                    info.originalFileName = originalName;
+                    info.isFromPreviousSession = (sessionId != m_currentSessionId);
+                    
+                    return info;
+                }
+            }
+            catch (const std::exception& e)
+            {
+                // Return empty info on parse error
+            }
+        }
+
+        // Try fallback pattern for very old legacy backups
         if (name == "backup")
         {
             try
@@ -278,14 +311,13 @@ namespace gladius
 
     std::string BackupManager::generateBackupFilename(const std::string& originalFileName) const
     {
-        // Generate filename: backup_YYYYMMDD_HHMMSS_sessionid_originalname.3mf
+        // Generate filename: YYYYMMDD_HHMMSS_sessionid_originalname.3mf
         auto now = std::chrono::system_clock::now();
         auto time_t_val = std::chrono::system_clock::to_time_t(now);
         auto tm = *std::localtime(&time_t_val);
 
         std::ostringstream oss;
-        oss << "backup_"
-            << std::put_time(&tm, "%Y%m%d_%H%M%S")
+        oss << std::put_time(&tm, "%Y%m%d_%H%M%S")
             << "_" << m_currentSessionId
             << "_" << originalFileName
             << ".3mf";
