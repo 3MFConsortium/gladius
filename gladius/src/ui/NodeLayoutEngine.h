@@ -152,21 +152,6 @@ namespace gladius::ui
          */
         bool isConstantNode(nodes::NodeBase * node) const;
 
-        /**
-         * @brief Calculate optimal position for a constant node
-         *
-         * Places constant nodes close to their connected nodes, typically to the left
-         * of the leftmost connected node.
-         *
-         * @param constantNode The constant node to position
-         * @param model The node model
-         * @param config Layout configuration
-         * @return Optimal position for the constant node
-         */
-        ImVec2 calculateConstantNodePosition(nodes::NodeBase * constantNode,
-                                             nodes::Model & model,
-                                             const LayoutConfig & config);
-
       private:
         /**
          * @brief Analyze groups and create GroupInfo structures
@@ -210,19 +195,6 @@ namespace gladius::ui
          * @param config Layout configuration
          */
         void layoutGroups(std::vector<GroupInfo> & groups, const LayoutConfig & config);
-
-        /**
-         * @brief Resolve overlaps between nodes and groups
-         *
-         * @param ungroupedNodes Ungrouped nodes
-         * @param constantNodes Constant nodes (positioned optimally)
-         * @param groups Group information
-         * @param config Layout configuration
-         */
-        void resolveOverlaps(const std::vector<nodes::NodeBase *> & ungroupedNodes,
-                             const std::vector<nodes::NodeBase *> & constantNodes,
-                             std::vector<GroupInfo> & groups,
-                             const LayoutConfig & config);
 
         /**
          * @brief Helper to determine node topological depth from dependencies
