@@ -125,13 +125,14 @@ namespace gladius::ui
         }
     }
 
-    void WelcomeScreen::setBackupManager(const BackupManager* backupManager)
+    void WelcomeScreen::setBackupManager(const BackupManager * backupManager)
     {
         m_backupManager = backupManager;
         updateActiveTab();
     }
 
-    void WelcomeScreen::setRestoreBackupCallback(std::function<void(const std::filesystem::path&)> callback)
+    void WelcomeScreen::setRestoreBackupCallback(
+      std::function<void(const std::filesystem::path &)> callback)
     {
         m_restoreBackupCallback = std::move(callback);
     }
@@ -317,8 +318,11 @@ namespace gladius::ui
             {
                 // Recent Files tab
                 bool recentFilesSelected = (m_activeTab == WelcomeTab::RecentFiles);
-                if (ImGui::BeginTabItem("Recent Files", nullptr, 
-                    recentFilesSelected && !m_preferBackupTab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None))
+                if (ImGui::BeginTabItem("Recent Files",
+                                        nullptr,
+                                        recentFilesSelected && !m_preferBackupTab
+                                          ? ImGuiTabItemFlags_SetSelected
+                                          : ImGuiTabItemFlags_None))
                 {
                     m_activeTab = WelcomeTab::RecentFiles;
                     renderRecentFilesTab(listWidth);
@@ -327,8 +331,11 @@ namespace gladius::ui
 
                 // Restore Backup tab
                 bool restoreBackupSelected = (m_activeTab == WelcomeTab::RestoreBackup);
-                if (ImGui::BeginTabItem("Restore Backup", nullptr,
-                    restoreBackupSelected && m_preferBackupTab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None))
+                if (ImGui::BeginTabItem("Restore Backup",
+                                        nullptr,
+                                        restoreBackupSelected && m_preferBackupTab
+                                          ? ImGuiTabItemFlags_SetSelected
+                                          : ImGuiTabItemFlags_None))
                 {
                     m_activeTab = WelcomeTab::RestoreBackup;
                     renderRestoreBackupTab(listWidth);
@@ -362,8 +369,7 @@ namespace gladius::ui
                 std::string timeStr = formatTimeForHuman(timestamp);
 
                 // Use a button that looks like a selectable
-                ImGui::PushStyleColor(ImGuiCol_Button,
-                                      ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                                       ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive,
@@ -408,8 +414,7 @@ namespace gladius::ui
             m_columns = columns;
 
             // Adjust cellWidth to evenly distribute space
-            cellWidth =
-              (availWidth - (ImGui::GetStyle().ItemSpacing.x * (columns - 1))) / columns;
+            cellWidth = (availWidth - (ImGui::GetStyle().ItemSpacing.x * (columns - 1))) / columns;
 
             // Start the thumbnail grid
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, 5));
@@ -466,8 +471,7 @@ namespace gladius::ui
                     ImGui::BeginTooltip();
 
                     // File path and size
-                    ImGui::TextUnformatted(
-                      fmt::format("Path: {}", info.filePath.string()).c_str());
+                    ImGui::TextUnformatted(fmt::format("Path: {}", info.filePath.string()).c_str());
 
                     // Show file size in appropriate units
                     std::string sizeStr;
@@ -479,9 +483,8 @@ namespace gladius::ui
                     }
                     else if (info.fileInfo.fileSize > 1024)
                     {
-                        sizeStr =
-                          fmt::format("Size: {:.2f} KB",
-                                      static_cast<double>(info.fileInfo.fileSize) / 1024.0);
+                        sizeStr = fmt::format("Size: {:.2f} KB",
+                                              static_cast<double>(info.fileInfo.fileSize) / 1024.0);
                     }
                     else
                     {
@@ -547,9 +550,8 @@ namespace gladius::ui
 
                     // Center the thumbnail based on its aspect ratio
                     float centerX = thumbPosX + (m_thumbnailSize - displayWidth) * 0.5f;
-                    ImGui::SetCursorPos(ImVec2(centerX,
-                                               ImGui::GetCursorPosY() +
-                                                 (m_thumbnailSize - displayHeight) * 0.5f));
+                    ImGui::SetCursorPos(ImVec2(
+                      centerX, ImGui::GetCursorPosY() + (m_thumbnailSize - displayHeight) * 0.5f));
 
                     ImGui::Image(
                       reinterpret_cast<void *>(static_cast<intptr_t>(info.thumbnailTextureId)),
@@ -559,10 +561,8 @@ namespace gladius::ui
                 {
                     // Draw placeholder
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                          ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                                          ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
 
                     if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FILE_ALT),
                                       ImVec2(m_thumbnailSize, m_thumbnailSize)))
@@ -617,8 +617,7 @@ namespace gladius::ui
                             ImGui::TextUnformatted("3MF Metadata:");
                             for (const auto & item : info.fileInfo.metadata)
                             {
-                                ImGui::BulletText(
-                                  "%s: %s", item.key.c_str(), item.value.c_str());
+                                ImGui::BulletText("%s: %s", item.key.c_str(), item.value.c_str());
                             }
                         }
                         else
@@ -649,14 +648,12 @@ namespace gladius::ui
                         truncatedName = truncatedName.substr(0, 12) + "...";
                     }
                     textSize = ImGui::CalcTextSize(truncatedName.c_str());
-                    ImGui::SetCursorPos(
-                      ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, textY));
+                    ImGui::SetCursorPos(ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, textY));
                     ImGui::TextUnformatted(truncatedName.c_str());
                 }
                 else
                 {
-                    ImGui::SetCursorPos(
-                      ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, textY));
+                    ImGui::SetCursorPos(ImVec2(itemPos.x + (cellWidth - textSize.x) * 0.5f, textY));
                     ImGui::TextUnformatted(fileName);
                 }
 
@@ -692,7 +689,7 @@ namespace gladius::ui
         }
 
         auto backups = m_backupManager->getAvailableBackups();
-        
+
         if (backups.empty())
         {
             ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No backup files found");
@@ -700,37 +697,40 @@ namespace gladius::ui
         else
         {
             // Show backup files in a list
-            for (const auto& backup : backups)
+            for (const auto & backup : backups)
             {
                 // Format the timestamp in a human-readable format
                 auto timeT = std::chrono::system_clock::to_time_t(backup.timestamp);
                 std::string timeStr = formatTimeForHuman(timeT);
 
                 // Create display text with session information
-                std::string sessionText = backup.isFromPreviousSession ? "Previous Session" : "Current Session";
-                std::string statusIcon = backup.isFromPreviousSession ? ICON_FA_EXCLAMATION_TRIANGLE : ICON_FA_CLOCK;
-                
+                std::string sessionText =
+                  backup.isFromPreviousSession ? "Previous Session" : "Current Session";
+                std::string statusIcon =
+                  backup.isFromPreviousSession ? ICON_FA_EXCLAMATION_TRIANGLE : ICON_FA_CLOCK;
+
                 // Use a button that looks like a selectable
                 ImGui::PushStyleColor(ImGuiCol_Button,
-                                      backup.isFromPreviousSession ? 
-                                      ImVec4(0.6f, 0.4f, 0.2f, 0.3f) : // Orange tint for previous session
-                                      ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+                                      backup.isFromPreviousSession
+                                        ? ImVec4(0.6f, 0.4f, 0.2f, 0.3f)
+                                        : // Orange tint for previous session
+                                        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      backup.isFromPreviousSession ?
-                                      ImVec4(0.7f, 0.5f, 0.3f, 0.5f) :
-                                      ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+                                      backup.isFromPreviousSession
+                                        ? ImVec4(0.7f, 0.5f, 0.3f, 0.5f)
+                                        : ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                                      backup.isFromPreviousSession ?
-                                      ImVec4(0.8f, 0.6f, 0.4f, 0.7f) :
-                                      ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+                                      backup.isFromPreviousSession
+                                        ? ImVec4(0.8f, 0.6f, 0.4f, 0.7f)
+                                        : ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 10));
 
                 const std::string displayText = fmt::format("{} {}\n{} | {} | {}",
-                                                           statusIcon,
-                                                           backup.originalFileName,
-                                                           sessionText,
-                                                           timeStr,
-                                                           backup.filePath.filename().string());
+                                                            statusIcon,
+                                                            backup.originalFileName,
+                                                            sessionText,
+                                                            timeStr,
+                                                            backup.filePath.filename().string());
 
                 if (ImGui::Button(displayText.c_str(),
                                   ImVec2(-1, ImGui::GetTextLineHeightWithSpacing() * 2.5f)))
@@ -746,11 +746,13 @@ namespace gladius::ui
                 if (ImGui::IsItemHovered())
                 {
                     ImGui::BeginTooltip();
-                    ImGui::TextUnformatted(fmt::format("Backup Path: {}", backup.filePath.string()).c_str());
-                    ImGui::TextUnformatted(fmt::format("Original File: {}", backup.originalFileName).c_str());
+                    ImGui::TextUnformatted(
+                      fmt::format("Backup Path: {}", backup.filePath.string()).c_str());
+                    ImGui::TextUnformatted(
+                      fmt::format("Original File: {}", backup.originalFileName).c_str());
                     ImGui::TextUnformatted(fmt::format("Created: {}", timeStr).c_str());
                     ImGui::TextUnformatted(fmt::format("Session: {}", sessionText).c_str());
-                    
+
                     // File size if available
                     try
                     {
@@ -759,25 +761,30 @@ namespace gladius::ui
                             auto fileSize = std::filesystem::file_size(backup.filePath);
                             if (fileSize > 1024 * 1024)
                             {
-                                ImGui::TextUnformatted(fmt::format("Size: {:.2f} MB", 
-                                                                 static_cast<double>(fileSize) / (1024.0 * 1024.0)).c_str());
+                                ImGui::TextUnformatted(
+                                  fmt::format("Size: {:.2f} MB",
+                                              static_cast<double>(fileSize) / (1024.0 * 1024.0))
+                                    .c_str());
                             }
                             else if (fileSize > 1024)
                             {
-                                ImGui::TextUnformatted(fmt::format("Size: {:.2f} KB", 
-                                                                 static_cast<double>(fileSize) / 1024.0).c_str());
+                                ImGui::TextUnformatted(
+                                  fmt::format("Size: {:.2f} KB",
+                                              static_cast<double>(fileSize) / 1024.0)
+                                    .c_str());
                             }
                             else
                             {
-                                ImGui::TextUnformatted(fmt::format("Size: {} bytes", fileSize).c_str());
+                                ImGui::TextUnformatted(
+                                  fmt::format("Size: {} bytes", fileSize).c_str());
                             }
                         }
                     }
-                    catch (const std::exception& e)
+                    catch (const std::exception &)
                     {
                         // Ignore file size errors
                     }
-                    
+
                     ImGui::EndTooltip();
                 }
 
