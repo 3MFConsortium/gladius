@@ -152,21 +152,6 @@ namespace gladius::ui
          */
         bool isConstantNode(nodes::NodeBase * node) const;
 
-        /**
-         * @brief Calculate optimal position for a constant node
-         *
-         * Places constant nodes close to their connected nodes, typically to the left
-         * of the leftmost connected node.
-         *
-         * @param constantNode The constant node to position
-         * @param model The node model
-         * @param config Layout configuration
-         * @return Optimal position for the constant node
-         */
-        ImVec2 calculateConstantNodePosition(nodes::NodeBase * constantNode,
-                                             nodes::Model & model,
-                                             const LayoutConfig & config);
-
       private:
         /**
          * @brief Analyze groups and create GroupInfo structures
@@ -212,19 +197,6 @@ namespace gladius::ui
         void layoutGroups(std::vector<GroupInfo> & groups, const LayoutConfig & config);
 
         /**
-         * @brief Resolve overlaps between nodes and groups
-         *
-         * @param ungroupedNodes Ungrouped nodes
-         * @param constantNodes Constant nodes (positioned optimally)
-         * @param groups Group information
-         * @param config Layout configuration
-         */
-        void resolveOverlaps(const std::vector<nodes::NodeBase *> & ungroupedNodes,
-                             const std::vector<nodes::NodeBase *> & constantNodes,
-                             std::vector<GroupInfo> & groups,
-                             const LayoutConfig & config);
-
-        /**
          * @brief Helper to determine node topological depth from dependencies
          *
          * @param graph The dependency graph
@@ -257,6 +229,50 @@ namespace gladius::ui
                                     const LayoutConfig & config);
 
         /**
+         * @brief Optimize a single layer by ordering nodes based on their connections
+         *
+         * @tparam T Entity type
+         * @param layerEntities Entities in the current layer
+         * @param allLayers All layers for connection lookup
+         * @param currentDepth Current layer depth
+         * @param config Layout configuration
+         */
+        template <typename T>
+        void optimizeLayerByConnectionOrder(
+          std::vector<LayoutEntity<T> *> & layerEntities,
+          const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+          int currentDepth,
+          const LayoutConfig & config);
+
+        /**
+         * @brief Calculate average Y position of connected nodes
+         *
+         * @tparam T Entity type
+         * @param entity Entity to calculate for
+         * @param allLayers All layers for connection lookup
+         * @param currentDepth Current layer depth
+         * @param config Layout configuration
+         * @return Average Y position of connected nodes
+         */
+        template <typename T>
+        float
+        calculateAverageConnectedY(LayoutEntity<T> * entity,
+                                   const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                   int currentDepth,
+                                   const LayoutConfig & config);
+
+        /**
+         * @brief Check if two nodes are connected via ports
+         *
+         * @tparam T Node type
+         * @param node1 First node
+         * @param node2 Second node
+         * @return true if nodes are connected
+         */
+        template <typename T>
+        bool areNodesConnected(T * node1, T * node2);
+
+        /**
          * @brief Calculate size of an entity
          *
          * @param entity Entity to measure
@@ -278,5 +294,84 @@ namespace gladius::ui
          * @return Calculated group size
          */
         ImVec2 calculateGroupSize(const GroupInfo & groupInfo);
+
+        /**
+         * @brief Optimize positions in a single layer to minimize edge lengths
+         *
+         * @tparam T Entity type
+         * @param layerEntities Entities in the layer to optimize
+         * @param allLayers All layers for connection lookup
+         * @param currentDepth Current layer depth
+         * @param config Layout configuration
+         */
+        template <typename T>
+        void optimizeSingleLayer(std::vector<LayoutEntity<T> *> & layerEntities,
+                                 const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                 int currentDepth,
+                                 const LayoutConfig & config);
+
+        /**
+         * @brief Group entities by their tag for group-aware optimization
+         *
+         * @param entities Input entities
+         * @param groups Output grouped entities
+         * @param ungrouped Output ungrouped entities
+         */
+        void groupEntitiesByTag(const std::vector<LayoutEntity<nodes::NodeBase> *> & entities,
+                                std::vector<std::vector<LayoutEntity<nodes::NodeBase> *>> & groups,
+                                std::vector<LayoutEntity<nodes::NodeBase> *> & ungrouped);
+
+        /**
+         * @brief Optimization unit for group-aware positioning
+         */
+        template <typename T>
+        struct OptimizationUnit
+        {
+            std::vector<LayoutEntity<T> *> entities;
+            float minY, maxY;
+
+            explicit OptimizationUnit(std::vector<LayoutEntity<T> *> entities_);
+            void updateBounds();
+            float getHeight() const;
+            float getCenterY() const;
+        };
+
+        /**
+         * @brief Calculate center Y position of an optimization unit
+         */
+        template <typename T>
+        float calculateUnitCenterY(const OptimizationUnit<T> & unit);
+
+        /**
+         * @brief Calculate optimal Y position for a unit based on connections
+         */
+        template <typename T>
+        float
+        calculateOptimalYPosition(const OptimizationUnit<T> & unit,
+                                  const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                  int currentDepth,
+                                  const LayoutConfig & config);
+
+        /**
+         * @brief Get connections for a node in adjacent layers
+         */
+        template <typename T>
+        std::vector<std::pair<LayoutEntity<T> *, float>>
+        getNodeConnections(T * node,
+                           const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                           int currentDepth);
+
+        /**
+         * @brief Move an optimization unit to a target Y position
+         */
+        template <typename T>
+        void moveOptimizationUnit(OptimizationUnit<T> & unit, float targetTopY);
+
+        /**
+         * @brief Resolve overlaps between units in a layer
+         */
+        template <typename T>
+        void resolveLayerOverlaps(std::vector<OptimizationUnit<T>> & units,
+                                  const LayoutConfig & config);
     };
 }
