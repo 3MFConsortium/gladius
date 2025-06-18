@@ -229,6 +229,50 @@ namespace gladius::ui
                                     const LayoutConfig & config);
 
         /**
+         * @brief Optimize a single layer by ordering nodes based on their connections
+         *
+         * @tparam T Entity type
+         * @param layerEntities Entities in the current layer
+         * @param allLayers All layers for connection lookup
+         * @param currentDepth Current layer depth
+         * @param config Layout configuration
+         */
+        template <typename T>
+        void optimizeLayerByConnectionOrder(
+          std::vector<LayoutEntity<T> *> & layerEntities,
+          const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+          int currentDepth,
+          const LayoutConfig & config);
+
+        /**
+         * @brief Calculate average Y position of connected nodes
+         *
+         * @tparam T Entity type
+         * @param entity Entity to calculate for
+         * @param allLayers All layers for connection lookup
+         * @param currentDepth Current layer depth
+         * @param config Layout configuration
+         * @return Average Y position of connected nodes
+         */
+        template <typename T>
+        float
+        calculateAverageConnectedY(LayoutEntity<T> * entity,
+                                   const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                   int currentDepth,
+                                   const LayoutConfig & config);
+
+        /**
+         * @brief Check if two nodes are connected via ports
+         *
+         * @tparam T Node type
+         * @param node1 First node
+         * @param node2 Second node
+         * @return true if nodes are connected
+         */
+        template <typename T>
+        bool areNodesConnected(T * node1, T * node2);
+
+        /**
          * @brief Calculate size of an entity
          *
          * @param entity Entity to measure
@@ -262,9 +306,9 @@ namespace gladius::ui
          */
         template <typename T>
         void optimizeSingleLayer(std::vector<LayoutEntity<T> *> & layerEntities,
-                                const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
-                                int currentDepth,
-                                const LayoutConfig & config);
+                                 const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                 int currentDepth,
+                                 const LayoutConfig & config);
 
         /**
          * @brief Group entities by their tag for group-aware optimization
@@ -274,8 +318,8 @@ namespace gladius::ui
          * @param ungrouped Output ungrouped entities
          */
         void groupEntitiesByTag(const std::vector<LayoutEntity<nodes::NodeBase> *> & entities,
-                               std::vector<std::vector<LayoutEntity<nodes::NodeBase> *>> & groups,
-                               std::vector<LayoutEntity<nodes::NodeBase> *> & ungrouped);
+                                std::vector<std::vector<LayoutEntity<nodes::NodeBase> *>> & groups,
+                                std::vector<LayoutEntity<nodes::NodeBase> *> & ungrouped);
 
         /**
          * @brief Optimization unit for group-aware positioning
@@ -285,7 +329,7 @@ namespace gladius::ui
         {
             std::vector<LayoutEntity<T> *> entities;
             float minY, maxY;
-            
+
             explicit OptimizationUnit(std::vector<LayoutEntity<T> *> entities_);
             void updateBounds();
             float getHeight() const;
@@ -302,10 +346,11 @@ namespace gladius::ui
          * @brief Calculate optimal Y position for a unit based on connections
          */
         template <typename T>
-        float calculateOptimalYPosition(const OptimizationUnit<T> & unit,
-                                       const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
-                                       int currentDepth,
-                                       const LayoutConfig & config);
+        float
+        calculateOptimalYPosition(const OptimizationUnit<T> & unit,
+                                  const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                  int currentDepth,
+                                  const LayoutConfig & config);
 
         /**
          * @brief Get connections for a node in adjacent layers
@@ -313,8 +358,8 @@ namespace gladius::ui
         template <typename T>
         std::vector<std::pair<LayoutEntity<T> *, float>>
         getNodeConnections(T * node,
-                          const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
-                          int currentDepth);
+                           const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                           int currentDepth);
 
         /**
          * @brief Move an optimization unit to a target Y position
@@ -327,6 +372,6 @@ namespace gladius::ui
          */
         template <typename T>
         void resolveLayerOverlaps(std::vector<OptimizationUnit<T>> & units,
-                                 const LayoutConfig & config);
+                                  const LayoutConfig & config);
     };
 }
