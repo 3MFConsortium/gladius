@@ -85,7 +85,7 @@ namespace gladius
 
         newModel();
         resetGeneratorContext();
-        
+
         // Initialize backup manager
         m_backupManager.initialize();
     }
@@ -216,30 +216,30 @@ namespace gladius
             // Create a temporary file for the backup
             auto tempDir = std::filesystem::temp_directory_path();
             auto tempBackupFile = tempDir / "gladius_temp_backup.3mf";
-            
+
             // Save current model to temporary file
             saveAs(tempBackupFile, false);
-            
+
             // Get original filename for backup naming
             std::string originalName = "untitled";
             if (m_currentAssemblyFileName.has_value() && !m_currentAssemblyFileName->empty())
             {
                 originalName = m_currentAssemblyFileName->stem().string();
             }
-            
+
             // Create backup using BackupManager
             m_backupManager.createBackup(tempBackupFile, originalName);
-            
+
             // Clean up temporary file
             if (std::filesystem::exists(tempBackupFile))
             {
                 std::filesystem::remove(tempBackupFile);
             }
-            
+
             // Update backup time
             m_lastBackupTime = std::chrono::system_clock::now();
         }
-        catch (const std::exception& e)
+        catch (const std::exception &)
         {
             // Backup failure shouldn't crash the application
             // Could log error here if logging is available
@@ -257,7 +257,7 @@ namespace gladius
         }
 
         refreshModelAsync();
-       
+
         return true;
     }
 
@@ -722,27 +722,31 @@ namespace gladius
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
         m_assembly->addModelIfNotExisting(modelId);
         auto & model = *m_assembly->getFunctions().at(modelId);
-        
+
         // Create begin and end nodes
         model.createBeginEnd();
         model.setDisplayName(name);
-        
+
         // Add pos vector input to begin node
-        model.getBeginNode()->addOutputPort(nodes::FieldNames::Pos, nodes::ParameterTypeIndex::Float3);
+        model.getBeginNode()->addOutputPort(nodes::FieldNames::Pos,
+                                            nodes::ParameterTypeIndex::Float3);
         model.registerOutputs(*model.getBeginNode());
-        
+
         // Add color vector output and shape scalar output to end node
-        model.getEndNode()->parameter()[nodes::FieldNames::Color] = nodes::VariantParameter(nodes::float3{0.5f, 0.5f, 0.5f});
-        model.getEndNode()->parameter()[nodes::FieldNames::Shape] = nodes::VariantParameter(float{-1.f});
-        
+        model.getEndNode()->parameter()[nodes::FieldNames::Color] =
+          nodes::VariantParameter(nodes::float3{0.5f, 0.5f, 0.5f});
+        model.getEndNode()->parameter()[nodes::FieldNames::Shape] =
+          nodes::VariantParameter(float{-1.f});
+
         model.registerInputs(*model.getEndNode());
         model.getBeginNode()->updateNodeIds();
         model.getEndNode()->updateNodeIds();
-        
+
         return model;
     }
 
-    nodes::Model & Document::copyFunction(nodes::Model const & sourceModel, std::string const & name)
+    nodes::Model & Document::copyFunction(nodes::Model const & sourceModel,
+                                          std::string const & name)
     {
         if (!m_3mfmodel)
         {
@@ -755,16 +759,17 @@ namespace gladius
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
         m_assembly->addModelIfNotExisting(modelId);
         auto & model = *m_assembly->getFunctions().at(modelId);
-        
+
         // Copy the source model
         model = sourceModel;
         model.setDisplayName(name);
         model.setResourceId(modelId);
-        
+
         return model;
     }
 
-    nodes::Model & Document::wrapExistingFunction(nodes::Model & sourceModel, std::string const & name)
+    nodes::Model & Document::wrapExistingFunction(nodes::Model & sourceModel,
+                                                  std::string const & name)
     {
         if (!m_3mfmodel)
         {
@@ -777,11 +782,11 @@ namespace gladius
         std::lock_guard<std::mutex> lock(m_assemblyMutex);
         m_assembly->addModelIfNotExisting(modelId);
         auto & model = *m_assembly->getFunctions().at(modelId);
-        
+
         // Create begin and end nodes with same inputs and outputs as source
         model.createBeginEnd();
         model.setDisplayName(name);
-        
+
         // Copy inputs from source model
         auto const & sourceInputs = sourceModel.getInputs();
         for (auto const & [inputName, inputPort] : sourceInputs)
@@ -789,66 +794,68 @@ namespace gladius
             model.getBeginNode()->addOutputPort(inputName, inputPort.getTypeIndex());
         }
         model.registerOutputs(*model.getBeginNode());
-        
-        // Copy outputs from source model  
+
+        // Copy outputs from source model
         auto const & sourceOutputs = sourceModel.getOutputs();
         for (auto const & [outputName, outputPort] : sourceOutputs)
         {
-            model.getEndNode()->parameter()[outputName] = nodes::createVariantTypeFromTypeIndex(outputPort.getTypeIndex());
+            model.getEndNode()->parameter()[outputName] =
+              nodes::createVariantTypeFromTypeIndex(outputPort.getTypeIndex());
         }
         model.registerInputs(*model.getEndNode());
-        
+
         // Create Resource node for the source function
         auto resourceNode = model.create<nodes::Resource>();
-        resourceNode->parameter().at(nodes::FieldNames::ResourceId) = nodes::VariantParameter(sourceModel.getResourceId());
-        
+        resourceNode->parameter().at(nodes::FieldNames::ResourceId) =
+          nodes::VariantParameter(sourceModel.getResourceId());
+
         // Create FunctionCall node
         auto functionCallNode = model.create<nodes::FunctionCall>();
         functionCallNode->parameter()
           .at(nodes::FieldNames::FunctionId)
           .setInputFromPort(resourceNode->getOutputs().at(nodes::FieldNames::Value));
-        
+
         // Set display name to source function name
         auto sourceFunctionName = sourceModel.getDisplayName();
         if (sourceFunctionName.has_value())
         {
             functionCallNode->setDisplayName(sourceFunctionName.value());
         }
-        
+
         // Update the function call node's inputs and outputs to match the source model
         functionCallNode->updateInputsAndOutputs(sourceModel);
         model.registerInputs(*functionCallNode);
         model.registerOutputs(*functionCallNode);
-        
+
         // Connect begin node outputs to function call inputs
         for (auto const & [inputName, inputPort] : sourceInputs)
         {
             auto beginOutputIter = model.getBeginNode()->getOutputs().find(inputName);
             auto functionInputIter = functionCallNode->parameter().find(inputName);
-            
-            if (beginOutputIter != model.getBeginNode()->getOutputs().end() && 
+
+            if (beginOutputIter != model.getBeginNode()->getOutputs().end() &&
                 functionInputIter != functionCallNode->parameter().end())
             {
                 functionInputIter->second.setInputFromPort(beginOutputIter->second);
             }
         }
-        
+
         // Connect function call outputs to end node inputs
         for (auto const & [outputName, outputPort] : sourceOutputs)
         {
             auto functionOutputIter = functionCallNode->getOutputs().find(outputName);
             auto endInputIter = model.getEndNode()->parameter().find(outputName);
-            
-            if (functionOutputIter != functionCallNode->getOutputs().end() && 
+
+            if (functionOutputIter != functionCallNode->getOutputs().end() &&
                 endInputIter != model.getEndNode()->parameter().end())
             {
                 endInputIter->second.setInputFromPort(functionOutputIter->second);
             }
         }
-        
+
         model.getBeginNode()->updateNodeIds();
         model.getEndNode()->updateNodeIds();
-        
+
         return model;
     }
 
@@ -1401,32 +1408,31 @@ namespace gladius
     {
         nodes::Validator validator;
         auto logger = getSharedLogger();
-        
+
         if (!validator.validate(*m_assembly))
         {
             for (auto const & error : validator.getErrors())
             {
                 if (logger)
-                    logger->addEvent(
-                      {fmt::format("{}: Review parameter {} of node {} in model {}",
-                                   error.message,
-                                   error.parameter,
-                                   error.node,
-                                   error.model),
-                       events::Severity::Error});
+                    logger->addEvent({fmt::format("{}: Review parameter {} of node {} in model {}",
+                                                  error.message,
+                                                  error.parameter,
+                                                  error.node,
+                                                  error.model),
+                                      events::Severity::Error});
             }
             return false;
         }
-        
+
         return true;
     }
 
-    BackupManager& Document::getBackupManager()
+    BackupManager & Document::getBackupManager()
     {
         return m_backupManager;
     }
 
-    const BackupManager& Document::getBackupManager() const
+    const BackupManager & Document::getBackupManager() const
     {
         return m_backupManager;
     }

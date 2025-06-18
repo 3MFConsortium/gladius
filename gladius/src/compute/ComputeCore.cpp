@@ -550,8 +550,11 @@ namespace gladius
     {
         ProfileFunction
 
-          std::lock_guard<std::recursive_mutex>
-            lock(m_computeMutex);
+          if (!m_computeMutex.try_lock())
+        {
+            return false;
+        }
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex, std::adopt_lock);
 
         if (fabs(m_lastContourSliceHeight_mm - sliceParameter.zHeight_mm) < FLT_EPSILON)
         {
