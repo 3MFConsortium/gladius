@@ -250,5 +250,83 @@ namespace gladius::ui
          * @return Calculated group size
          */
         ImVec2 calculateGroupSize(const GroupInfo & groupInfo);
+
+        /**
+         * @brief Optimize positions in a single layer to minimize edge lengths
+         *
+         * @tparam T Entity type
+         * @param layerEntities Entities in the layer to optimize
+         * @param allLayers All layers for connection lookup
+         * @param currentDepth Current layer depth
+         * @param config Layout configuration
+         */
+        template <typename T>
+        void optimizeSingleLayer(std::vector<LayoutEntity<T> *> & layerEntities,
+                                const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                int currentDepth,
+                                const LayoutConfig & config);
+
+        /**
+         * @brief Group entities by their tag for group-aware optimization
+         *
+         * @param entities Input entities
+         * @param groups Output grouped entities
+         * @param ungrouped Output ungrouped entities
+         */
+        void groupEntitiesByTag(const std::vector<LayoutEntity<nodes::NodeBase> *> & entities,
+                               std::vector<std::vector<LayoutEntity<nodes::NodeBase> *>> & groups,
+                               std::vector<LayoutEntity<nodes::NodeBase> *> & ungrouped);
+
+        /**
+         * @brief Optimization unit for group-aware positioning
+         */
+        template <typename T>
+        struct OptimizationUnit
+        {
+            std::vector<LayoutEntity<T> *> entities;
+            float minY, maxY;
+            
+            explicit OptimizationUnit(std::vector<LayoutEntity<T> *> entities_);
+            void updateBounds();
+            float getHeight() const;
+            float getCenterY() const;
+        };
+
+        /**
+         * @brief Calculate center Y position of an optimization unit
+         */
+        template <typename T>
+        float calculateUnitCenterY(const OptimizationUnit<T> & unit);
+
+        /**
+         * @brief Calculate optimal Y position for a unit based on connections
+         */
+        template <typename T>
+        float calculateOptimalYPosition(const OptimizationUnit<T> & unit,
+                                       const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                                       int currentDepth,
+                                       const LayoutConfig & config);
+
+        /**
+         * @brief Get connections for a node in adjacent layers
+         */
+        template <typename T>
+        std::vector<std::pair<LayoutEntity<T> *, float>>
+        getNodeConnections(T * node,
+                          const std::map<int, std::vector<LayoutEntity<T> *>> & allLayers,
+                          int currentDepth);
+
+        /**
+         * @brief Move an optimization unit to a target Y position
+         */
+        template <typename T>
+        void moveOptimizationUnit(OptimizationUnit<T> & unit, float targetTopY);
+
+        /**
+         * @brief Resolve overlaps between units in a layer
+         */
+        template <typename T>
+        void resolveLayerOverlaps(std::vector<OptimizationUnit<T>> & units,
+                                 const LayoutConfig & config);
     };
 }

@@ -416,7 +416,7 @@ namespace gladius::ui
     std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<T> *>>
     NodeLayoutEngine::arrangeInLayers(std::vector<LayoutEntity<T>> & entities)
     {
-        std::map<int, std::vector<LayoutEntity<T> *>> layers;
+        std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<T> *>> layers;
 
         for (auto & entity : entities)
         {
@@ -433,16 +433,71 @@ namespace gladius::ui
                           return a->item < b->item; // Pointer comparison for consistency
                       });
         }
+        
+        // Establish connections between entities based on the graph structure
+        if constexpr (std::is_same_v<T, nodes::NodeBase>)
+        {
+            // Create lookup map for faster entity lookup by node ID
+            std::unordered_map<nodes::NodeId, LayoutEntity<T>*> entityByNodeId;
+            for (auto& entity : entities)
+            {
+                entityByNodeId[entity.item->getId()] = &entity;
+            }
+            
+            // Clear existing connections
+            for (auto& entity : entities)
+            {
+                entity.dependencies.clear();
+                entity.dependents.clear();
+            }
+            
+            // For each entity, find its dependencies and dependents
+            for (auto& entity : entities)
+            {
+                nodes::NodeId nodeId = entity.item->getId();
+                
+                // For each node, find its dependencies in the model
+                // This would require access to the graph or model to determine actual connections
+                // For now, we'll use depth as a heuristic - nodes in lower layers are dependencies
+                for (auto& otherEntity : entities)
+                {
+                    if (otherEntity.item == entity.item) continue;
+                    
+                    nodes::NodeId otherId = otherEntity.item->getId();
+                    
+                    // Use the graph structure to determine actual dependencies
+                    // We need access to the model/graph to check direct connections
+                    // For now, use depth-based heuristic with actual connection verification later
+                    bool hasConnection = false;
+                    
+                    // Check if there's a direct dependency relationship
+                    // This would need access to the graph structure from the model
+                    if (std::abs(entity.depth - otherEntity.depth) == 1) {
+                        if (otherEntity.depth < entity.depth) {
+                            // Other entity is in a previous layer, could be a dependency
+                            entity.dependencies.push_back(&otherEntity);
+                            otherEntity.dependents.push_back(&entity);
+                            hasConnection = true;
+                        } else {
+                            // Other entity is in a later layer, this entity could be its dependency
+                            otherEntity.dependencies.push_back(&entity);
+                            entity.dependents.push_back(&otherEntity);
+                            hasConnection = true;
+                        }
+                    }
+                }
+            }
+        }
 
         return layers;
     }
 
     template <typename T>
     void
-    NodeLayoutEngine::optimizeLayerPositions(std::map<int, std::vector<LayoutEntity<T> *>> & layers,
+    NodeLayoutEngine::optimizeLayerPositions(std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<T> *>> & layers,
                                              const LayoutConfig & config)
     {
-        // Simple optimization: distribute entities evenly within each layer
+        // Optimize each layer separately to minimize edge lengths while avoiding overlaps
         for (auto & [depth, layerEntities] : layers)
         {
             if (layerEntities.size() <= 1)
@@ -450,18 +505,314 @@ namespace gladius::ui
                 continue;
             }
 
-            // Sort by current Y position
-            std::sort(layerEntities.begin(),
-                      layerEntities.end(),
-                      [](const LayoutEntity<T> * a, const LayoutEntity<T> * b)
-                      { return a->position.y < b->position.y; });
+            optimizeSingleLayer(layerEntities, layers, depth, config);
+        }
+    }
 
-            // Redistribute with consistent spacing
-            float currentY = 0.0f;
+    template <typename T>
+    void NodeLayoutEngine::optimizeSingleLayer(std::vector<NodeLayoutEngine::LayoutEntity<T> *> & layerEntities,
+                                               const std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<T> *>> & allLayers,
+                                               int currentDepth,
+                                               const LayoutConfig & config)
+    {
+        const int MAX_ITERATIONS = 50;
+        const float CONVERGENCE_THRESHOLD = 1.0f;
+        
+        // Group entities by their group membership (for nodes)
+        std::vector<std::vector<NodeLayoutEngine::LayoutEntity<T> *>> entityGroups;
+        std::vector<NodeLayoutEngine::LayoutEntity<T> *> ungroupedEntities;
+        
+        if constexpr (std::is_same_v<T, nodes::NodeBase>)
+        {
+            groupEntitiesByTag(reinterpret_cast<const std::vector<LayoutEntity<nodes::NodeBase> *> &>(layerEntities), 
+                              reinterpret_cast<std::vector<std::vector<LayoutEntity<nodes::NodeBase> *>> &>(entityGroups),
+                              reinterpret_cast<std::vector<LayoutEntity<nodes::NodeBase> *> &>(ungroupedEntities));
+        }
+        else
+        {
+            // For non-node entities, treat each as individual
             for (auto * entity : layerEntities)
             {
-                entity->position.y = currentY;
-                currentY += entity->size.y + config.nodeDistance;
+                ungroupedEntities.push_back(entity);
+            }
+        }
+
+        // Combine groups and individual entities for optimization
+        std::vector<OptimizationUnit<T>> optimizationUnits;
+        
+        // Add groups as units
+        for (auto & group : entityGroups)
+        {
+            optimizationUnits.emplace_back(group);
+        }
+        
+        // Add individual entities as units
+        for (auto * entity : ungroupedEntities)
+        {
+            optimizationUnits.emplace_back(std::vector<NodeLayoutEngine::LayoutEntity<T> *>{entity});
+        }
+
+        // Iterative optimization
+        for (int iteration = 0; iteration < MAX_ITERATIONS; ++iteration)
+        {
+            float totalMovement = 0.0f;
+            
+            for (auto & unit : optimizationUnits)
+            {
+                float oldY = calculateUnitCenterY(unit);
+                float optimalY = calculateOptimalYPosition(unit, allLayers, currentDepth, config);
+                
+                // Move the unit to optimal position
+                moveOptimizationUnit(unit, optimalY);
+                
+                float newY = calculateUnitCenterY(unit);
+                totalMovement += std::abs(newY - oldY);
+            }
+            
+            // Resolve overlaps while preserving group clustering
+            resolveLayerOverlaps(optimizationUnits, config);
+            
+            // Check for convergence
+            if (totalMovement < CONVERGENCE_THRESHOLD)
+            {
+                break;
+            }
+        }
+    }
+
+    void NodeLayoutEngine::groupEntitiesByTag(const std::vector<LayoutEntity<nodes::NodeBase> *> & entities,
+                                              std::vector<std::vector<LayoutEntity<nodes::NodeBase> *>> & groups,
+                                              std::vector<LayoutEntity<nodes::NodeBase> *> & ungrouped)
+    {
+        std::unordered_map<std::string, std::vector<LayoutEntity<nodes::NodeBase> *>> tagToEntities;
+        
+        for (auto * entity : entities)
+        {
+            const std::string & tag = entity->item->getTag();
+            if (tag.empty())
+            {
+                ungrouped.push_back(entity);
+            }
+            else
+            {
+                tagToEntities[tag].push_back(entity);
+            }
+        }
+        
+        // Convert map to vector of groups
+        for (auto & [tag, groupEntities] : tagToEntities)
+        {
+            groups.push_back(std::move(groupEntities));
+        }
+    }
+
+    template <typename T>
+    float NodeLayoutEngine::calculateUnitCenterY(const OptimizationUnit<T> & unit)
+    {
+        if (unit.entities.empty()) return 0.0f;
+        
+        float sumY = 0.0f;
+        for (auto * entity : unit.entities)
+        {
+            sumY += entity->position.y + entity->size.y / 2.0f;
+        }
+        return sumY / static_cast<float>(unit.entities.size());
+    }
+
+    template <typename T>
+    float NodeLayoutEngine::calculateOptimalYPosition(const OptimizationUnit<T> & unit,
+                                                      const std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<T> *>> & allLayers,
+                                                      int currentDepth,
+                                                      const LayoutConfig & config)
+    {
+        float totalWeight = 0.0f;
+        float weightedSum = 0.0f;
+        
+        // Calculate weighted average of connected nodes' positions
+        for (auto * entity : unit.entities)
+        {
+            if constexpr (std::is_same_v<T, nodes::NodeBase>)
+            {
+                // Track both direct connections and group connections
+                // Direct connections have higher weight
+                auto directConnections = getNodeConnections(entity->item, allLayers, currentDepth);
+                
+                // Process direct connections
+                for (auto & [connectedEntity, weight] : directConnections)
+                {
+                    // Check if the connected entity is part of a group
+                    std::string connectedTag;
+                    if (connectedEntity->item) {
+                        connectedTag = connectedEntity->item->getTag();
+                    }
+                    
+                    // For connections to entities in the same group, increase weight
+                    // to keep groups more tightly connected
+                    std::string thisTag;
+                    if (entity->item) {
+                        thisTag = entity->item->getTag();
+                    }
+                    
+                    if (!thisTag.empty() && thisTag == connectedTag) {
+                        // Same group connections are weighted higher to keep groups together
+                        weight *= 2.0f;
+                    }
+                    
+                    float connectedCenterY = connectedEntity->position.y + connectedEntity->size.y / 2.0f;
+                    weightedSum += connectedCenterY * weight;
+                    totalWeight += weight;
+                }
+                
+                // For grouped nodes, also consider connections to other nodes in the same group
+                // that might not be directly connected
+                std::string entityTag;
+                if (entity->item) {
+                    entityTag = entity->item->getTag();
+                }
+                
+                if (!entityTag.empty()) {
+                    for (auto & [layerDepth, layerEntities] : allLayers) {
+                        if (std::abs(layerDepth - currentDepth) > 1) continue; // Only adjacent layers
+                        
+                        for (auto* otherEntity : layerEntities) {
+                            // Skip entities already processed via direct connections
+                            bool alreadyProcessed = false;
+                            for (auto & [processedEntity, w] : directConnections) {
+                                if (processedEntity == otherEntity) {
+                                    alreadyProcessed = true;
+                                    break;
+                                }
+                            }
+                            if (alreadyProcessed) continue;
+                            
+                            // Check if entity is in the same group
+                            std::string otherTag;
+                            if (otherEntity->item) {
+                                otherTag = otherEntity->item->getTag();
+                            }
+                            
+                            if (entityTag == otherTag && !otherTag.empty()) {
+                                // Add a weaker connection to nodes in the same group
+                                float groupWeight = 0.5f;
+                                float otherCenterY = otherEntity->position.y + otherEntity->size.y / 2.0f;
+                                weightedSum += otherCenterY * groupWeight;
+                                totalWeight += groupWeight;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (totalWeight > 0.0f)
+        {
+            float optimalCenterY = weightedSum / totalWeight;
+            // Convert center Y to top Y for the unit
+            float unitHeight = unit.getHeight();
+            
+            return optimalCenterY - unitHeight / 2.0f;
+        }
+        
+        return calculateUnitCenterY(unit) - unit.getHeight() / 2.0f;
+    }
+
+    template <typename T>
+    std::vector<std::pair<NodeLayoutEngine::LayoutEntity<T> *, float>>
+    NodeLayoutEngine::getNodeConnections(T * node,
+                                         const std::map<int, std::vector<NodeLayoutEngine::LayoutEntity<T> *>> & allLayers,
+                                         int currentDepth)
+    {
+        std::vector<std::pair<NodeLayoutEngine::LayoutEntity<T> *, float>> connections;
+        
+        if constexpr (std::is_same_v<T, nodes::NodeBase>)
+        {
+            nodes::NodeId nodeId = node->getId();
+            
+            // Look in adjacent layers for connected nodes
+            for (int deltaDepth : {-1, 1})
+            {
+                int targetDepth = currentDepth + deltaDepth;
+                auto layerIt = allLayers.find(targetDepth);
+                if (layerIt == allLayers.end()) continue;
+                
+                for (auto * candidateEntity : layerIt->second)
+                {
+                    nodes::NodeId candidateId = candidateEntity->item->getId();
+                    bool isConnected = false;
+                    float weight = 1.0f;
+                    
+                    // Check if this node depends on the candidate (incoming edge)
+                    for (auto* dep : candidateEntity->dependents) {
+                        if (dep->item->getId() == nodeId) {
+                            isConnected = true;
+                            // Give slightly higher weight to direct connections
+                            weight = 1.2f;
+                            break;
+                        }
+                    }
+                    
+                    // Check if candidate depends on this node (outgoing edge)
+                    if (!isConnected) {
+                        for (auto* dep : candidateEntity->dependencies) {
+                            if (dep->item->getId() == nodeId) {
+                                isConnected = true;
+                                // Give slightly higher weight to direct connections
+                                weight = 1.2f;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (isConnected)
+                    {
+                        connections.emplace_back(candidateEntity, weight);
+                    }
+                }
+            }
+        }
+        
+        return connections;
+    }
+
+    template <typename T>
+    void NodeLayoutEngine::moveOptimizationUnit(OptimizationUnit<T> & unit, float targetTopY)
+    {
+        if (unit.entities.empty()) return;
+        
+        float currentTopY = unit.minY;
+        float deltaY = targetTopY - currentTopY;
+        
+        // Move all entities in the unit by the same delta
+        for (auto * entity : unit.entities)
+        {
+            entity->position.y += deltaY;
+        }
+        
+        unit.updateBounds();
+    }
+
+    template <typename T>
+    void NodeLayoutEngine::resolveLayerOverlaps(std::vector<OptimizationUnit<T>> & units,
+                                                const LayoutConfig & config)
+    {
+        if (units.size() <= 1) return;
+        
+        // Sort units by their center Y position
+        std::sort(units.begin(), units.end(),
+                  [](const OptimizationUnit<T> & a, const OptimizationUnit<T> & b)
+                  { return a.getCenterY() < b.getCenterY(); });
+        
+        // Resolve overlaps by pushing units apart
+        for (size_t i = 1; i < units.size(); ++i)
+        {
+            auto & prevUnit = units[i - 1];
+            auto & currentUnit = units[i];
+            
+            float minRequiredTop = prevUnit.maxY + config.nodeDistance;
+            if (currentUnit.minY < minRequiredTop)
+            {
+                float pushDistance = minRequiredTop - currentUnit.minY;
+                moveOptimizationUnit(currentUnit, currentUnit.minY + pushDistance);
             }
         }
     }
@@ -536,5 +887,45 @@ namespace gladius::ui
         groupInfo.position = ImVec2(minX, minY);
         groupInfo.size = ImVec2(maxX - minX, maxY - minY);
     } // We'll let the compiler implicitly instantiate the templates as needed
+
+    // ========== OptimizationUnit Template Implementations ==========
+    
+    template <typename T>
+    NodeLayoutEngine::OptimizationUnit<T>::OptimizationUnit(std::vector<NodeLayoutEngine::LayoutEntity<T> *> entities_)
+        : entities(std::move(entities_))
+    {
+        updateBounds();
+    }
+    
+    template <typename T>
+    void NodeLayoutEngine::OptimizationUnit<T>::updateBounds()
+    {
+        if (entities.empty()) {
+            minY = 0.0f;
+            maxY = 0.0f;
+            return;
+        }
+        
+        minY = std::numeric_limits<float>::max();
+        maxY = std::numeric_limits<float>::lowest();
+        
+        for (auto * entity : entities)
+        {
+            minY = std::min(minY, entity->position.y);
+            maxY = std::max(maxY, entity->position.y + entity->size.y);
+        }
+    }
+    
+    template <typename T>
+    float NodeLayoutEngine::OptimizationUnit<T>::getHeight() const
+    {
+        return maxY - minY;
+    }
+    
+    template <typename T>
+    float NodeLayoutEngine::OptimizationUnit<T>::getCenterY() const
+    {
+        return (minY + maxY) / 2.0f;
+    }
 
 } // namespace gladius::ui
