@@ -67,6 +67,11 @@ namespace gladius::ui
         [[nodiscard]] bool isLibraryVisible() const;
         void refreshLibraryDirectories();
 
+        /// Focus management for keyboard-driven workflow
+        void requestNodeFocus(nodes::NodeId nodeId);
+        [[nodiscard]] bool shouldFocusNode(nodes::NodeId nodeId) const;
+        void clearNodeFocus();
+
         // Public methods for keyboard shortcuts
         void requestManualCompile();
         void autoLayoutNodes(float distance = 200.0f);
@@ -119,11 +124,6 @@ namespace gladius::ui
         void meshResourceToolBox(ImVec2 mousePos);
         void showDeleteUnusedResourcesDialog();
         void validate();
-
-        /// Group/tag management functionality
-        void showGroupAssignmentDialog();
-        void assignSelectedNodesToGroup(const std::string & groupName);
-        std::vector<std::string> getAllExistingTags() const;
 
         void undo();
         void redo();
@@ -196,11 +196,12 @@ namespace gladius::ui
         // Library browser
         LibraryBrowser m_libraryBrowser;
 
+        /// Focus management for keyboard-driven workflow
+        nodes::NodeId m_nodeToFocus{0};
+        bool m_shouldFocusNode{false};
+
         /// Group assignment dialog state
         bool m_showGroupAssignmentDialog{false};
-        std::string m_newGroupName;
-        std::string m_selectedExistingGroup;
-        std::vector<std::string> m_existingGroups;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

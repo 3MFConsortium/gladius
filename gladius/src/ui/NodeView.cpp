@@ -8,8 +8,8 @@
 #include "Parameter.h"
 #include "Style.h"
 #include "Widgets.h"
-#include "nodesfwd.h"
 #include "nodes/DerivedNodes.h"
+#include "nodesfwd.h"
 
 #include "imguinodeeditor.h"
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
@@ -304,7 +304,7 @@ namespace gladius::ui
         content(baseNode);
 
         // Check for double-click on FunctionCall nodes to navigate to referenced function
-        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && 
+        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
             ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
         {
             auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode);
@@ -409,6 +409,15 @@ namespace gladius::ui
             ImGui::SameLine();
             ImGui::PushItemWidth(200 * m_uiScale);
 
+            // Check if this node should receive focus (keyboard-driven workflow)
+            bool shouldFocus = m_modelEditor && m_modelEditor->shouldFocusNode(node.getId());
+            if (shouldFocus && parameter.first == node.constParameter().begin()->first)
+            {
+                // Focus on the first input field
+                ImGui::SetKeyboardFocusHere();
+                m_modelEditor->clearNodeFocus();
+            }
+
             bool changed = ImGui::InputText("", name);
 
             if (parameter.first == FieldNames::Filename)
@@ -458,6 +467,15 @@ namespace gladius::ui
         {
             ImGui::SameLine();
 
+            // Check if this node should receive focus (keyboard-driven workflow)
+            bool shouldFocus = m_modelEditor && m_modelEditor->shouldFocusNode(node.getId());
+            if (shouldFocus && parameter.first == node.constParameter().begin()->first)
+            {
+                // Focus on the first input field
+                ImGui::SetKeyboardFocusHere();
+                m_modelEditor->clearNodeFocus();
+            }
+
             auto increment = 0.01f;
             bool changed = false;
 
@@ -504,6 +522,16 @@ namespace gladius::ui
             bool changed = false;
             ImGui::PushItemWidth(300 * m_uiScale);
             const auto increment = 0.1f;
+
+            // Check if this node should receive focus (keyboard-driven workflow)
+            bool shouldFocus = m_modelEditor && m_modelEditor->shouldFocusNode(node.getId());
+            if (shouldFocus && parameter.first == node.constParameter().begin()->first)
+            {
+                // Focus on the first input field
+                ImGui::SetKeyboardFocusHere();
+                m_modelEditor->clearNodeFocus();
+            }
+
             if (parameter.second.getContentType() == ContentType::Length)
             {
                 changed |= ImGui::DragFloat("x", &pval->x, increment);
@@ -548,6 +576,16 @@ namespace gladius::ui
         if (const auto pval = std::get_if<Matrix4x4>(&val))
         {
             ImGui::PushItemWidth(300 * m_uiScale);
+
+            // Check if this node should receive focus (keyboard-driven workflow)
+            bool shouldFocus = m_modelEditor && m_modelEditor->shouldFocusNode(node.getId());
+            if (shouldFocus && parameter.first == node.constParameter().begin()->first)
+            {
+                // Focus on the first input field
+                ImGui::SetKeyboardFocusHere();
+                m_modelEditor->clearNodeFocus();
+            }
+
             bool const changed = matrixEdit("", *pval);
             ImGui::PopItemWidth();
 
@@ -571,6 +609,16 @@ namespace gladius::ui
         {
             ImGui::SameLine();
             auto resId = static_cast<int>(*pval);
+
+            // Check if this node should receive focus (keyboard-driven workflow)
+            bool shouldFocus = m_modelEditor && m_modelEditor->shouldFocusNode(node.getId());
+            if (shouldFocus && parameter.first == node.constParameter().begin()->first)
+            {
+                // Focus on the first input field
+                ImGui::SetKeyboardFocusHere();
+                m_modelEditor->clearNodeFocus();
+            }
+
             if (ImGui::InputInt("ResourceId", &resId))
             {
                 *pval = static_cast<ResourceId>(resId);
@@ -630,6 +678,16 @@ namespace gladius::ui
         {
             ImGui::SameLine();
             ImGui::PushItemWidth(200 * m_uiScale);
+
+            // Check if this node should receive focus (keyboard-driven workflow)
+            bool shouldFocus = m_modelEditor && m_modelEditor->shouldFocusNode(node.getId());
+            if (shouldFocus && parameter.first == node.constParameter().begin()->first)
+            {
+                // Focus on the first input field
+                ImGui::SetKeyboardFocusHere();
+                m_modelEditor->clearNodeFocus();
+            }
+
             bool changed = ImGui::DragInt("", pval);
             ImGui::PopItemWidth();
 
@@ -900,6 +958,17 @@ namespace gladius::ui
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8 * m_uiScale, 0});
 
                     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 1.5f); // Scale the button width
+
+                    // Check if this node should receive focus (keyboard-driven workflow)
+                    bool shouldFocus =
+                      m_modelEditor && m_modelEditor->shouldFocusNode(node.getId());
+                    if (shouldFocus && parameter.first == node.constParameter().begin()->first)
+                    {
+                        // Focus on the first input pin/button
+                        ImGui::SetKeyboardFocusHere();
+                        m_modelEditor->clearNodeFocus();
+                    }
+
                     if (ImGui::Button(
                           reinterpret_cast<const char *>(ICON_FA_CARET_RIGHT),
                           ImVec2(ImGui::GetFontSize() * 1.5f, ImGui::GetFontSize() * 1.5f)))

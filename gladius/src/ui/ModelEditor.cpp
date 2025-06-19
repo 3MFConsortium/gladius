@@ -552,8 +552,10 @@ namespace gladius::ui
                 }
 
                 // Function type selection
-                static const char * functionTypes[] = {
-                  "Empty function", "Copy existing function", "Levelset template", "Wrap existing function"};
+                static const char * functionTypes[] = {"Empty function",
+                                                       "Copy existing function",
+                                                       "Levelset template",
+                                                       "Wrap existing function"};
                 int functionType = static_cast<int>(m_selectedFunctionType);
                 ImGui::Combo(
                   "Function type", &functionType, functionTypes, IM_ARRAYSIZE(functionTypes));
@@ -563,7 +565,7 @@ namespace gladius::ui
                 int availableFunctionCount = 0;
                 std::vector<nodes::Model *> availableFunctions;
                 std::vector<std::string> availableFunctionNames;
-                if (m_selectedFunctionType == FunctionType::CopyExisting || 
+                if (m_selectedFunctionType == FunctionType::CopyExisting ||
                     m_selectedFunctionType == FunctionType::WrapExisting)
                 {
                     for (auto & [id, model] : m_assembly->getFunctions())
@@ -595,7 +597,7 @@ namespace gladius::ui
                 }
 
                 bool canCreate = !m_newModelName.empty() &&
-                                 ((m_selectedFunctionType != FunctionType::CopyExisting && 
+                                 ((m_selectedFunctionType != FunctionType::CopyExisting &&
                                    m_selectedFunctionType != FunctionType::WrapExisting) ||
                                   availableFunctionCount > 0);
 
@@ -796,6 +798,11 @@ namespace gladius::ui
                                   m_currentModel->addLink(
                                     srcPortId, createdNode->parameter()[requiredFieldName].getId());
                               }
+
+                              // Request focus on the newly created node for keyboard-driven
+                              // workflow
+                              requestNodeFocus(createdNode->getId());
+
                               markModelAsModified();
                               closePopupMenu();
                           }
@@ -832,7 +839,6 @@ namespace gladius::ui
 
         outline();
         newModelDialog();
-        showGroupAssignmentDialog();
         showDeleteUnusedResourcesDialog();
         try
         {
@@ -966,9 +972,7 @@ namespace gladius::ui
                         if (ImGui::MenuItem(
                               reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group")))
                         {
-                            m_existingGroups = getAllExistingTags();
-                            m_newGroupName.clear();
-                            m_selectedExistingGroup.clear();
+                            // TODO: Implement group assignment
                             m_showGroupAssignmentDialog = true;
                         }
 
@@ -1213,6 +1217,10 @@ namespace gladius::ui
                 {
                     createdNode->setDisplayName(model->getDisplayName().value());
                 }
+
+                // Request focus on the newly created node for keyboard-driven workflow
+                requestNodeFocus(createdNode->getId());
+
                 markModelAsModified();
             }
         }
@@ -1256,6 +1264,9 @@ namespace gladius::ui
 
                 signedDistanceToMesh->setDisplayName("SD to " + key.getDisplayName());
                 ed::SetNodePosition(signedDistanceToMesh->getId(), posOnCanvasWithOffset);
+
+                // Request focus on the SignedDistanceToMesh node as it's more useful to focus on
+                requestNodeFocus(signedDistanceToMesh->getId());
 
                 markModelAsModified();
             }
@@ -1769,183 +1780,20 @@ namespace gladius::ui
         return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
     }
 
-    void ModelEditor::showGroupAssignmentDialog()
+    void ModelEditor::requestNodeFocus(nodes::NodeId nodeId)
     {
-        if (m_showGroupAssignmentDialog)
-        {
-            ImGui::OpenPopup("Assign Nodes to Group");
-        }
-
-        if (ImGui::BeginPopupModal("Assign Nodes to Group",
-                                   &m_showGroupAssignmentDialog,
-                                   ImGuiWindowFlags_AlwaysAutoResize))
-        {
-            auto selection = selectedNodes(m_editorContext);
-
-            ImGui::TextUnformatted(
-              fmt::format("Assign {} selected node(s) to a group:", selection.size()).c_str());
-            ImGui::Separator();
-
-            // Option 1: Create new group
-            ImGui::TextUnformatted("Create New Group:");
-            ImGui::PushItemWidth(300.0f);
-            if (ImGui::InputText("##NewGroupName", &m_newGroupName))
-            {
-                // Clear existing group selection when typing new name
-                m_selectedExistingGroup.clear();
-            }
-            ImGui::PopItemWidth();
-
-            ImGui::SameLine();
-            bool canCreateNew =
-              !m_newGroupName.empty() &&
-              std::find(m_existingGroups.begin(), m_existingGroups.end(), m_newGroupName) ==
-                m_existingGroups.end();
-
-            if (!canCreateNew)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
-            }
-
-            if (ImGui::Button("Create Group") && canCreateNew)
-            {
-                assignSelectedNodesToGroup(m_newGroupName);
-                m_showGroupAssignmentDialog = false;
-            }
-
-            if (!canCreateNew)
-            {
-                ImGui::PopStyleColor(3);
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::BeginTooltip();
-                    if (m_newGroupName.empty())
-                    {
-                        ImGui::TextUnformatted("Please enter a group name");
-                    }
-                    else
-                    {
-                        ImGui::TextUnformatted("Group name already exists");
-                    }
-                    ImGui::EndTooltip();
-                }
-            }
-
-            // Option 2: Select existing group
-            if (!m_existingGroups.empty())
-            {
-                ImGui::Separator();
-                ImGui::TextUnformatted("Or select existing group:");
-
-                for (const auto & groupName : m_existingGroups)
-                {
-                    bool isSelected = (m_selectedExistingGroup == groupName);
-                    if (ImGui::Selectable(groupName.c_str(), isSelected))
-                    {
-                        m_selectedExistingGroup = groupName;
-                        m_newGroupName.clear(); // Clear new group name when selecting existing
-                    }
-                }
-
-                if (!m_selectedExistingGroup.empty())
-                {
-                    if (ImGui::Button("Assign to Selected Group"))
-                    {
-                        assignSelectedNodesToGroup(m_selectedExistingGroup);
-                        m_showGroupAssignmentDialog = false;
-                    }
-                }
-            }
-
-            ImGui::Separator();
-            if (ImGui::Button("Cancel"))
-            {
-                m_showGroupAssignmentDialog = false;
-            }
-
-            ImGui::EndPopup();
-        }
+        m_nodeToFocus = nodeId;
+        m_shouldFocusNode = true;
     }
 
-    void ModelEditor::assignSelectedNodesToGroup(const std::string & groupName)
+    bool ModelEditor::shouldFocusNode(nodes::NodeId nodeId) const
     {
-        if (!m_currentModel || groupName.empty())
-        {
-            return;
-        }
-
-        auto selection = selectedNodes(m_editorContext);
-
-        // Create undo restore point
-        createUndoRestorePoint("Assign nodes to group: " + groupName);
-
-        for (const auto & nodeId : selection)
-        {
-            auto nodeOpt = m_currentModel->getNode(static_cast<nodes::NodeId>(nodeId.Get()));
-            if (nodeOpt.has_value())
-            {
-                auto & node = *nodeOpt.value();
-                node.setTag(groupName);
-            }
-        }
-
-        // Mark model as modified and trigger updates
-        markModelAsModified();
-        m_nodeViewVisitor.reset(); // This will trigger node groups update
-        m_parameterDirty = true;
+        return m_shouldFocusNode && m_nodeToFocus == nodeId;
     }
 
-    std::vector<std::string> ModelEditor::getAllExistingTags() const
+    void ModelEditor::clearNodeFocus()
     {
-        std::vector<std::string> tags;
-        if (!m_currentModel)
-        {
-            return tags;
-        }
-
-        // Use a set to avoid duplicates
-        std::set<std::string> uniqueTags;
-
-        // Create a visitor to collect all tags
-        class TagCollector : public nodes::Visitor
-        {
-          public:
-            std::set<std::string> & tags;
-
-            explicit TagCollector(std::set<std::string> & tagSet)
-                : tags(tagSet)
-            {
-            }
-
-            void visit(nodes::NodeBase & node) override
-            {
-                const std::string & tag = node.getTag();
-                if (!tag.empty())
-                {
-                    tags.insert(tag);
-                }
-            }
-        };
-
-        TagCollector collector(uniqueTags);
-        m_currentModel->visitNodes(collector);
-
-        // Convert set to vector
-        tags.assign(uniqueTags.begin(), uniqueTags.end());
-        return tags;
+        m_shouldFocusNode = false;
+        m_nodeToFocus = 0;
     }
-
-    nodes::Model & ModelEditor::createLevelsetFunction(std::string const & name)
-    {
-        return m_doc->createLevelsetFunction(name);
-    }
-
-    nodes::Model & ModelEditor::copyExistingFunction(nodes::Model const & sourceModel,
-                                                     std::string const & name)
-    {
-        return m_doc->copyFunction(sourceModel, name);
-    }
-
 } // namespace gladius::ui
