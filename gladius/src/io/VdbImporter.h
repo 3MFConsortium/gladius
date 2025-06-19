@@ -1,7 +1,7 @@
 #pragma once
 #include "Parameter.h"
-#include "src/Primitives.h"
-#include "src/Profiling.h"
+#include "Primitives.h"
+#include "Profiling.h"
 #include "vdb.h"
 #include <filesystem>
 #include <nanovdb/util/HostBuffer.h>
@@ -21,6 +21,8 @@ namespace gladius::vdb
         float m_voxelSize_mm{0.5f};
         Representation representation = Representation::NearDistanceField;
     };
+
+
 
     struct TriangleMesh
     {
@@ -66,6 +68,21 @@ namespace gladius::vdb
         gladius::nodes::float3 getMax() const
         {
             return gladius::nodes::float3(m_max.x(), m_max.y(), m_max.z());
+        }
+
+        void updateBoundingBox()
+        {
+            m_min = openvdb::Vec3s{std::numeric_limits<float>::max(),
+                                   std::numeric_limits<float>::max(),
+                                   std::numeric_limits<float>::max()};
+            m_max = openvdb::Vec3s{-std::numeric_limits<float>::max(),
+                                   -std::numeric_limits<float>::max(),
+                                   -std::numeric_limits<float>::max()};
+
+            for (auto const & vertex : vertices)
+            {
+                updateMinMax(vertex);
+            }
         }
 
       private:
@@ -203,6 +220,11 @@ namespace gladius::vdb
         void writeMesh(gladius::PrimitiveBuffer & primitives) const;
 
         static void writeMesh(TriangleMesh const & mesh, gladius::PrimitiveBuffer & primitives);
+
+        [[nodiscard]] TriangleMesh const & getMesh() const
+        {
+            return m_mesh;
+        }
 
       private:
         static void importFromMesh(TriangleMesh const & mesh,

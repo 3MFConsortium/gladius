@@ -5,6 +5,7 @@
 #include <atomic>
 #include <filesystem>
 
+#include "../ConfigManager.h"
 #include "../Document.h"
 #include "AboutDialog.h"
 #include "CliExportDialog.h"
@@ -12,9 +13,14 @@
 #include "LogView.h"
 #include "MeshExportDialog.h"
 #include "ModelEditor.h"
+#include "Outline.h"
 #include "RenderWindow.h"
 #include "SliceView.h"
-#include "Outline.h"
+#include "WelcomeScreen.h"
+
+// includes for the shortcut system
+#include "ShortcutManager.h"
+#include "ShortcutSettingsDialog.h"
 
 #include <chrono>
 
@@ -22,10 +28,26 @@ namespace ed = ax::NodeEditor;
 
 namespace gladius::ui
 {
+    enum class PendingFileOperation
+    {
+        None,
+        NewModel,
+        OpenFile
+    };
+
     class MainWindow
     {
       public:
         MainWindow();
+
+        /**
+         * @brief Set the ConfigManager reference
+         * @param configManager Reference to the ConfigManager
+         */
+        void setConfigManager(ConfigManager & configManager)
+        {
+            m_configManager = &configManager;
+        }
 
         void setup(std::shared_ptr<ComputeCore> core,
                    std::shared_ptr<Document> doc,
@@ -34,12 +56,27 @@ namespace gladius::ui
         void renderSettingsDialog();
         void open(const std::filesystem::path & filename);
         void startMainLoop();
-
-      private:
         void setup();
 
+        /**
+         * @brief Initialize the shortcut system
+         * Registers standard keyboard shortcuts for the application
+         */
+        void initializeShortcuts();
+
+        /**
+         * @brief Process keyboard shortcuts based on the active context
+         * @param activeContext The currently active context
+         */
+        void processShortcuts(ShortcutContext activeContext);
+
+        /**
+         * @brief Show the shortcut settings dialog
+         */
+        void showShortcutSettings();
+
+      private:
         void render();
-        void renderWelcomeScreen();
         void nodeEditor();
         void mainWindowDockingArea();
 
@@ -49,6 +86,7 @@ namespace gladius::ui
         void meshExportDialog();
         void cliExportDialog();
         void showExitPopUp();
+        void showSaveBeforeFileOperationPopUp();
         void logViewer();
 
         void refreshModel();
@@ -67,7 +105,30 @@ namespace gladius::ui
         void saveCurrentFunction();
         void importImageStack();
 
+        /**
+         * @brief Save rendering settings to configuration
+         */
+        void saveRenderSettings();
+
+        /**
+         * @brief Load rendering settings from configuration
+         */
+        void loadRenderSettings();
+
         void onPreviewProgramSwap();
+
+        /**
+         * @brief Add a file to the list of recently modified files
+         * @param filePath Path to the file that has been modified
+         */
+        void addToRecentFiles(const std::filesystem::path& filePath);
+
+        /**
+         * @brief Get the list of recently modified files
+         * @param maxCount Maximum number of files to return
+         * @return List of pairs containing file paths and timestamps
+         */
+        std::vector<std::pair<std::filesystem::path, std::time_t>> getRecentFiles(size_t maxCount = 100) const;
 
         GLView m_mainView;
 
@@ -88,6 +149,9 @@ namespace gladius::ui
         bool m_showMainMenu{false};
         bool m_isSlicePreviewVisible{false};
         bool m_showSaveBeforeExit{false};
+        bool m_showSaveBeforeFileOperation{false};
+        PendingFileOperation m_pendingFileOperation{PendingFileOperation::None};
+        std::optional<std::filesystem::path> m_pendingOpenFilename;
 
         float m_mainMenuPosX{-400.f}; // used for the move in animation
 
@@ -100,9 +164,15 @@ namespace gladius::ui
         LogView m_logView;
         RenderWindow m_renderWindow;
         AboutDialog m_about;
+        WelcomeScreen m_welcomeScreen;
 
         std::shared_ptr<Document> m_doc;
         events::SharedLogger m_logger;
+
+
+        // Flag to remember if library browser was visible
+        bool m_isLibraryBrowserVisible = true;
+
 
         double m_maxTimeSliceOptimization_s = 60.f;
 
@@ -117,5 +187,19 @@ namespace gladius::ui
         Outline m_outline;
 
         float m_uiScale = 1.f;
+
+        /// Opacity value for the welcome screen overlay (0.0-1.0)
+        float m_overlayOpacity = 1.0f;
+
+        /// Flag indicating if welcome screen overlay fadeout is in progress
+        bool m_overlayFadeoutActive = false;
+
+        ConfigManager * m_configManager = nullptr; // Pointer to the Application's ConfigManager
+
+        bool m_wasWelcomeScreenVisible = false;
+
+        // Shortcut system
+        std::shared_ptr<ShortcutManager> m_shortcutManager;
+        ShortcutSettingsDialog m_shortcutSettingsDialog;
     };
 }

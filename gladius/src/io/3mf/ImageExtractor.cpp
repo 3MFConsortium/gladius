@@ -36,7 +36,7 @@ namespace gladius::io
         close();
     }
 
-    bool ImageExtractor::open(std::filesystem::path const & filename)
+    bool ImageExtractor::loadFromArchive(std::filesystem::path const & filename)
     {
         // Close any previously opened archive
         close();
@@ -62,7 +62,7 @@ namespace gladius::io
     }
 
     std::vector<unsigned char>
-    ImageExtractor::loadFile(std::filesystem::path const & filename) const
+    ImageExtractor::loadFileFromArchive(std::filesystem::path const & filename) const
     {
         if (!m_archive)
         {
@@ -100,6 +100,27 @@ namespace gladius::io
               fmt::format("Error reading file {} from zip archive", filename.string()));
         }
         unzCloseCurrentFile(m_archive);
+
+        return fileContents;
+    }
+
+    std::vector<unsigned char>
+    ImageExtractor::loadFileFromFilesystem(std::filesystem::path const & filename) const
+    {
+        std::vector<unsigned char> fileContents;
+        if (std::filesystem::exists(filename))
+        {
+            std::ifstream file(filename, std::ios::binary);
+            if (!file)
+            {
+                throw std::runtime_error(fmt::format("Error opening file {}", filename.string()));
+            }
+
+            file.seekg(0, std::ios::end);
+            fileContents.resize(file.tellg());
+            file.seekg(0, std::ios::beg);
+            file.read(reinterpret_cast<char *>(fileContents.data()), fileContents.size());
+        }
 
         return fileContents;
     }
@@ -153,7 +174,7 @@ namespace gladius::io
 
         for (const auto & filename : filenames)
         {
-            auto const fileContents = loadFile(filename);
+            auto const fileContents = loadFileFromArchive(filename);
             if (fileContents.empty())
             {
                 continue;
@@ -169,6 +190,7 @@ namespace gladius::io
             }
 
             Image img{std::move(image), width, height};
+            img.swapXYData();
             m_pngInfo = lodepng::getPNGHeaderInfo(fileContents);
             img.setFormat(fromPngColorType(m_pngInfo.color));
             img.setBitDepth(m_pngInfo.color.bitdepth);
@@ -178,14 +200,19 @@ namespace gladius::io
         return images;
     }
 
-    openvdb::GridBase::Ptr ImageExtractor::loadAsVdbGrid(FileList const & filenames) const
+    openvdb::GridBase::Ptr ImageExtractor::loadAsVdbGrid(FileList const & filenames,
+                                                         FileLoaderType fileLoaderType) const
     {
         if (filenames.empty())
         {
             throw std::runtime_error("Error: no files to load");
         }
 
-        auto const fileContents = loadFile(filenames.front());
+        ;
+
+        auto const fileContents = fileLoaderType == FileLoaderType::Archive
+                                    ? loadFileFromArchive(filenames.front())
+                                    : loadFileFromFilesystem(filenames.front());
         if (fileContents.empty())
         {
             throw std::runtime_error("Error: empty file contents");
@@ -202,6 +229,11 @@ namespace gladius::io
         auto const pngInfo = lodepng::getPNGHeaderInfo(fileContents);
         auto const pixelFormat = fromPngColorType(pngInfo.color);
 
+        if (image.size() % (width * height) != 0)
+        {
+            throw std::runtime_error("Error: image data size is not a multiple of width * height");
+        }
+
         Image img{std::move(image), width, height};
         img.setFormat(pixelFormat);
         img.setBitDepth(pngInfo.color.bitdepth);
@@ -212,17 +244,21 @@ namespace gladius::io
               "Error: only grayscale 8 bit images are supported for VDB import");
         }
         {
-            openvdb::FloatGrid::Ptr grid = openvdb::FloatGrid::create();
-           
+            openvdb::FloatGrid::Ptr grid = openvdb::FloatGrid::create(0.);
+
             const auto transform = openvdb::math::Transform::createLinearTransform(1.);
             grid->setTransform(transform);
             grid->setName("sdf");
+
             auto accessor = grid->getAccessor();
+
             auto zIndex = 0;
             for (auto & filename : filenames)
             {
 
-                auto const fileContents = loadFile(filename);
+                auto const fileContents = fileLoaderType == FileLoaderType::Archive
+                                            ? loadFileFromArchive(filename)
+                                            : loadFileFromFilesystem(filename);
                 if (fileContents.empty())
                 {
                     zIndex++;
@@ -246,13 +282,16 @@ namespace gladius::io
                 img.setFormat(fromPngColorType(pngInfoCurrent.color));
                 img.setBitDepth(pngInfoCurrent.color.bitdepth);
 
+                unsigned int const numChannels =
+                  img.getData().size() / (img.getWidth() * img.getHeight());
+
                 for (unsigned int y = 0; y < img.getHeight(); ++y)
                 {
                     for (unsigned int x = 0; x < img.getWidth(); ++x)
                     {
-                        unsigned int index = ((img.getHeight() - y - 1) * img.getWidth() + x) * 4;
+                        unsigned int index = (y * img.getWidth() + x) * numChannels;
                         float value = img.getData()[index] / 255.0f;
-                        accessor.setValue(openvdb::Coord(x, y, zIndex), value);
+                        accessor.setValue(openvdb::Coord(img.getWidth() - x - 1, y, zIndex), value);
                     }
                 }
 
@@ -286,7 +325,7 @@ namespace gladius::io
 
     PixelFormat ImageExtractor::determinePixelFormat(std::filesystem::path const & filename) const
     {
-        auto const fileContents = loadFile(filename);
+        auto const fileContents = loadFileFromArchive(filename);
         if (fileContents.empty())
         {
             throw std::runtime_error("Error: empty file contents");
@@ -300,5 +339,5 @@ namespace gladius::io
     {
         return m_pngInfo;
     }
-
 } // namespace gladius::io
+

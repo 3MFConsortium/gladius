@@ -3,7 +3,7 @@
 #include "GLImageBuffer.h"
 #include "Primitives.h"
 #include "ResourceContext.h"
-#include "src/ProgramBase.h"
+#include "ProgramBase.h"
 
 namespace gladius
 {

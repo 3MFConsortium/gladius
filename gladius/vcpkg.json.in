@@ -45,8 +45,11 @@
     "minizip",
     "pugixml",
     "lib3mf",
+    "pkgconf",
     "minizip",
-    "tracy"
+    "tracy",
+    "clipper2",
+    "nlohmann-json"
   ],
   "overrides": [
     {

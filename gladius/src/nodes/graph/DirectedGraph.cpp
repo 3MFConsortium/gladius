@@ -1,6 +1,7 @@
 ﻿#include "DirectedGraph.h"
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace gladius::nodes::graph
 {
@@ -14,17 +15,18 @@ namespace gladius::nodes::graph
 
     void DirectedGraph::addDependency(Identifier id, Identifier idOfDependency)
     {
-        addVertex(id);
-        addVertex(idOfDependency);
         if (id == idOfDependency)
         {
             return;
         }
-        auto const index = id * m_size + idOfDependency;
-        m_graphData[index] = true;
 
-        if (std::find(std::begin(m_predecessors[id]), std::end(m_predecessors[id]), idOfDependency) == std::end(m_predecessors[id]))
+        addVertex(id);
+        addVertex(idOfDependency);
+
+        auto const index = id * m_size + idOfDependency;
+        if (!m_graphData[index])
         {
+            m_graphData[index] = true;
             m_predecessors[id].push_back(idOfDependency);
         }
     }
@@ -32,12 +34,11 @@ namespace gladius::nodes::graph
     void DirectedGraph::removeDependency(Identifier id, Identifier idOfDependency)
     {
         auto const index = id * m_size + idOfDependency;
-        m_graphData[index] = false;
-
-        auto const iterElemToRemove = std::find(std::begin(m_predecessors[id]), std::end(m_predecessors[id]), idOfDependency);
-        if (iterElemToRemove != std::end(m_predecessors[id]))
+        if (m_graphData[index])
         {
-            m_predecessors[id].erase(iterElemToRemove);
+            m_graphData[index] = false;
+            auto& preds = m_predecessors[id];
+            preds.erase(std::remove(preds.begin(), preds.end(), idOfDependency), preds.end());
         }
     }
 
@@ -52,10 +53,15 @@ namespace gladius::nodes::graph
         return m_size;
     }
 
+    auto DirectedGraph::isInRange(Identifier id) const -> bool
+    {
+        return id >= 0 && id < static_cast<Identifier>(m_size);
+    }
+
     void DirectedGraph::removeVertex(Identifier id)
     {
-        auto const iterElemToRemove = std::find(std::begin(m_vertices), std::end(m_vertices), id);
-        if (iterElemToRemove == std::end(m_vertices))
+        auto const iterElemToRemove = m_vertices.find(id);
+        if (iterElemToRemove == m_vertices.end())
         {
             return;
         }

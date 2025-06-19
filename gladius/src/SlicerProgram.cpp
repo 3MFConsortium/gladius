@@ -1,6 +1,6 @@
 #include "SlicerProgram.h"
 #include "gpgpu.h"
-#include "src/ProgramBase.h"
+#include "ProgramBase.h"
 
 #include <algorithm>
 #include <utility>

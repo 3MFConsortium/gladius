@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ImageStack.h"
-#include "src/io/vdb.h"
+#include "io/vdb.h"
 
 #include <filesystem>
 #include <lodepng.h>
@@ -21,7 +21,11 @@ namespace gladius::io
     std::filesystem::path removeLeadingSlash(std::filesystem::path const & path);
 
     using FileList = std::vector<std::filesystem::path>;
-
+    enum class FileLoaderType
+    {
+        Archive,
+        Filesystem
+    };
 
     class ImageExtractor
     {
@@ -29,12 +33,20 @@ namespace gladius::io
         ImageExtractor() = default;
         ~ImageExtractor();
 
-        bool open(std::filesystem::path const & filename);
+        openvdb::GridBase::Ptr loadAsVdbGrid(FileList const & filenames, FileLoaderType fileLoaderType) const;
+
+        bool loadFromArchive(std::filesystem::path const & filename);
+
         void close();
-        std::vector<unsigned char> loadFile(std::filesystem::path const & filename) const;
+
+        std::vector<unsigned char>
+        loadFileFromArchive(std::filesystem::path const & filename) const;
+
+        std::vector<unsigned char>
+        loadFileFromFilesystem(std::filesystem::path const & filename) const;
+
         ImageStack loadImageStack(FileList const & filenames);
 
-        openvdb::GridBase::Ptr loadAsVdbGrid(FileList const & filenames) const;
         void printAllFiles() const;
 
         PixelFormat determinePixelFormat(std::filesystem::path const & filename) const;

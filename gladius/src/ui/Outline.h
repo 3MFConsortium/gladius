@@ -1,5 +1,7 @@
 #pragma once
 #include "Document.h"
+#include "BuildItemView.h"
+#include "MetaDataView.h"
 
 //forward declaration
 namespace gladius::nodes
@@ -20,8 +22,7 @@ namespace gladius::ui
 
         void setDocument(SharedDocument document);
 
-        void render() const;
-        void renderBuildItem(gladius::nodes::BuildItem  const & item) const;
+        bool render() const;
 
       private:
         SharedDocument m_document;

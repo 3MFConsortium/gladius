@@ -45,8 +45,11 @@
     "minizip",
     "pugixml",
     "lib3mf",
+    "pkgconf",
     "minizip",
-    "tracy"
+    "tracy",
+    "clipper2",
+    "nlohmann-json"
   ],
   "overrides": [
     {
@@ -60,5 +63,5 @@
   ],
   "name": "gladius",
   "builtin-baseline": "a6149c39c5474bcf72820f4ac5aab615798a596b",
-  "version-string": "1.2.10"
+  "version-string": "1.2.12"
 }

@@ -1,10 +1,3 @@
-
-
-#include "ModelEditor.h"
-#include "../IconFontCppHeaders/IconsFontAwesome5.h"
-#include "../nodes/Assembly.h"
-#include "../nodes/GraphFlattener.h"
-#include "../nodes/Model.h"
 #include <exception>
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
@@ -12,9 +5,17 @@
 #include <iostream>
 
 #include <algorithm>
+#include <fmt/format.h>
+#include <set>
+#include <unordered_map>
 
 #include "../CLMath.h"
+#include "../IconFontCppHeaders/IconsFontAwesome5.h"
+#include "ComponentsObjectView.h"
 #include "Document.h"
+#include "MeshResource.h"
+#include "ModelEditor.h"
+#include "NodeLayoutEngine.h"
 #include "NodeView.h"
 #include "Port.h"
 #include "ResourceView.h"
@@ -22,6 +23,10 @@
 #include "Widgets.h"
 #include "imgui.h"
 #include "nodesfwd.h"
+#include "ui/LevelSetView.h"
+#include "ui/VolumeDataView.h"
+#include <nodes/Assembly.h>
+#include <nodes/Model.h>
 
 namespace gladius::ui
 {
@@ -130,10 +135,21 @@ namespace gladius::ui
                                ImVec2(300, height),
                                ImGuiWindowFlags_HorizontalScrollbar);
 
+        // Add a filter text box at the top
+        ImGui::TextUnformatted(ICON_FA_SEARCH);
+        ImGui::SameLine();
+        ImGui::PushItemWidth(200.0f * m_uiScale);
+        ImGui::InputText("##NodeFilterToolbox", &m_nodeFilterText);
+        ImGui::PopItemWidth();
+        ImGui::Separator();
+
         // Add the user defined functions. Because we do not have a mouse position
         // we use a dummy position
         ImGui::TextUnformatted("Functions");
         functionToolBox(ImVec2(0, 0));
+
+        ImGui::TextUnformatted("Mesh Resources");
+        meshResourceToolBox(ImVec2(0, 0));
 
         ImGui::EndChildFrame();
         ImGui::End();
@@ -162,59 +178,128 @@ namespace gladius::ui
 
         ImGui::Begin("Outline", nullptr, ImGuiWindowFlags_MenuBar);
 
+        // delete unused resources
         if (ImGui::BeginMenuBar())
         {
-            if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_PLUS "\tNew Function")))
+            if (ImGui::MenuItem(
+                  reinterpret_cast<const char *>(ICON_FA_TRASH "\tDelete unused resources")))
             {
-                ImGui::OpenPopup("Add Function");
-                m_showAddModel = true;
-            }
+                m_unusedResources = m_doc->findUnusedResources();
 
-            auto resId = m_currentModel->getResourceId();
-            auto const isAssembly = resId == m_assembly->assemblyModel()->getResourceId();
-
-            if (!isAssembly || m_currentModel->isManaged())
-            {
-                if (ImGui::MenuItem(
-                      reinterpret_cast<const char *>(ICON_FA_MINUS "\tDelete Function")))
+                if (!m_unusedResources.empty())
                 {
-                    m_doc->deleteFunction(m_currentModel->getResourceId());
-                    m_currentModel = m_assembly->assemblyModel();
-                    m_dirty = true;
+                    m_showDeleteUnusedResourcesConfirmation = true;
+                    ImGui::OpenPopup("Delete Unused Resources");
+                }
+                else
+                {
+                    auto logger = m_doc->getSharedLogger();
+                    if (logger)
+                    {
+                        logger->addEvent(
+                          {"No unused resources found in the model", events::Severity::Info});
+                    }
                 }
             }
-
             ImGui::EndMenuBar();
+        }
+
+        if (m_outline.render())
+        {
+            markModelAsModified();
         }
 
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
-
-        if (ImGui::TreeNodeEx("resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+        ImGui::BeginGroup();
+        if (ImGui::TreeNodeEx("Resources", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("ComponentsObjects", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ComponentsObjectView componentsObjectView;
+                if (componentsObjectView.render(m_doc))
+                {
+                    markModelAsModified();
+                }
+                ImGui::TreePop();
+            }
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(0.0f, 0.8f, 0.8f, 0.1f),
+                         "Components Objects\n\n"
+                         "Design elements that form your model's structure and features.\n"
+                         "Use components to reuse repetitive features and to\n"
+                         "composite complex parts.\n");
+
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("VolumeData", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                VolumeDataView volumeDataView;
+                if (volumeDataView.render(m_doc))
+                {
+                    markModelAsModified();
+                }
+                ImGui::TreePop();
+            }
+            ImGui::EndGroup();
+            frameOverlay(
+              ImVec4(1.0f, 0.0f, 1.0f, 0.1f),
+              "Volume Data\n\n"
+              "Define spatially varying properties inside your 3D models.\n"
+              "Volume data lets you specify how material properties change throughout\n"
+              "the interior of an object, not just on its surface.\n\n"
+              "Common uses:\n"
+              " Gradual color transitions and material blending\n"
+              " Variable density or infill structures\n"
+              " Physical properties like elasticity or conductivity\n"
+              " Temperature or stress distribution for simulation\n\n"
+              "Apply volume data to meshes or level sets using functions with \"pos\" input\n"
+              "and appropriate scalar (custom property) or vector (color) outputs for your desired "
+              "property.");
+
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("LevelSet", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                LevelSetView levelSetView;
+                if (levelSetView.render(m_doc))
+                {
+                    markModelAsModified();
+                }
+                ImGui::TreePop();
+            }
+            ImGui::EndGroup();
+            frameOverlay(
+              ImVec4(1.0f, 1.0f, 0.0f, 0.1f),
+              "Level Sets\n\n"
+              "Define your 3D shape using mathematical boundaries instead of triangles.\n"
+              "Level sets are perfect for creating smooth, organic shapes and\n"
+              "allow for easier mixing between different shapes.\n\n"
+              "For a level set you need a function with a \"pos\" vector as input and a scalar "
+              "output.\n");
+
             resourceOutline();
 
-            if (ImGui::TreeNodeEx("functions", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("Functions", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 functionOutline();
                 ImGui::TreePop();
             }
-
-            if (ImGui::TreeNodeEx("volumedata", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNodeEx("levelset", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::TreePop();
-            }
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(0.0f, 0.5f, 1.0f, 0.1f),
+                         "Functions\n\n"
+                         "These are the building blocks for creating implicit surfaces.\n"
+                         "Think of them as tools that let you combine basic shapes like\n"
+                         "spheres and cubes into more complex models.\n\n"
+                         "You can reference functions in a Level Set to define a geometry\n"
+                         "or in a Volume data to define the inner properties of your model.\n");
 
             ImGui::TreePop();
         }
 
-        m_outline.render();
+        ImGui::EndGroup();
+        frameOverlay(ImVec4(0.5f, 0.5f, 0.5f, 0.1f));
 
         ImGui::End();
     }
@@ -226,10 +311,19 @@ namespace gladius::ui
 
     void ModelEditor::functionOutline()
     {
-
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
+
+        ImGui::Indent();
+
+        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_PLUS "\tAdd function")))
+        {
+            ImGui::OpenPopup("Add Function");
+            m_showAddModel = true;
+        }
+
+        ImGui::Unindent();
 
         for (auto & model : m_assembly->getFunctions())
         {
@@ -240,6 +334,11 @@ namespace gladius::ui
 
             auto const isAssembly =
               model.second->getResourceId() == m_assembly->assemblyModel()->getResourceId();
+
+            if (isAssembly)
+            {
+                continue;
+            }
 
             auto & modelName = model.first;
             auto uid = &modelName;
@@ -283,6 +382,8 @@ namespace gladius::ui
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.f, 0.f, 1.f));
             }
+
+            ImGui::BeginGroup();
 
             bool nodeOpen =
               ImGui::TreeNodeEx("",
@@ -340,8 +441,76 @@ namespace gladius::ui
                         ImGui::TreePop();
                     }
                 }
+
+                if (!isAssembly && !model.second->isManaged())
+                {
+                    // Check if function can be safely deleted
+                    auto safeResult =
+                      m_doc->isItSafeToDeleteResource(ResourceKey(model.second->getResourceId()));
+                    if (ImGui::Button("Delete"))
+                    {
+                        if (safeResult.canBeRemoved)
+                        {
+                            m_doc->deleteFunction(model.second->getResourceId());
+                            m_currentModel = m_assembly->assemblyModel();
+                            m_dirty = true;
+                        }
+                    }
+
+                    // Display tooltip with dependency information if function cannot be deleted
+                    if (!safeResult.canBeRemoved)
+                    {
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextColored(
+                              ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                              "Cannot delete, the function is referenced by another item:");
+                            for (auto const & depRes : safeResult.dependentResources)
+                            {
+                                ImGui::BulletText("Resource ID: %u", depRes->GetModelResourceID());
+                            }
+                            for (auto const & depItem : safeResult.dependentBuildItems)
+                            {
+                                ImGui::BulletText("Build item: %u", depItem->GetObjectResourceID());
+                            }
+                            ImGui::EndTooltip();
+                        }
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Rename"))
+                    {
+                        m_outlineRenaming = true;
+                        ImGui::SetKeyboardFocusHere();
+                        ImGui::OpenPopup("Rename");
+                        m_newModelName = model.second->getDisplayName().value_or("New function");
+                    }
+
+                    if (ImGui::BeginPopup("Rename"))
+                    {
+                        ImGui::InputText("New Name", &m_newModelName);
+                        if (ImGui::Button("Confirm"))
+                        {
+                            model.second->setDisplayName(m_newModelName);
+                            m_outlineRenaming = false;
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Cancel"))
+                        {
+                            m_outlineRenaming = false;
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::EndPopup();
+                    }
+                }
+
                 ImGui::TreePop();
             }
+
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, isModelSelected ? 0.2f : 0.1f));
 
             ImGui::PopID();
         }
@@ -358,18 +527,109 @@ namespace gladius::ui
             if (ImGui::BeginPopupModal(
                   "Add Function", &m_showAddModel, ImGuiWindowFlags_AlwaysAutoResize))
             {
-                ImGui::Text("Please enter the name of the new function");
+                ImGui::Text("Create a new function");
                 ImGui::Separator();
 
-                ImGui::InputText("function name", &m_newModelName);
-                if (ImGui::Button("OK", ImVec2(120, 0)))
-                {
-                    auto & newModel = m_doc->createNewFunction();
-                    newModel.setDisplayName(m_newModelName);
-                    switchModel();
+                // Function name input
+                ImGui::InputText("Function name", &m_newModelName);
 
-                    m_showAddModel = false;
-                    ImGui::CloseCurrentPopup();
+                // Check for duplicate name
+                bool nameExists = false;
+                for (auto & [id, model] : m_assembly->getFunctions())
+                {
+                    if (model && model->getDisplayName().has_value() &&
+                        model->getDisplayName().value() == m_newModelName)
+                    {
+                        nameExists = true;
+                        break;
+                    }
+                }
+                if (nameExists)
+                {
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
+                                       "Warning: This name is already used for another function.");
+                }
+
+                // Function type selection
+                static const char * functionTypes[] = {
+                  "Empty function", "Copy existing function", "Levelset template", "Wrap existing function"};
+                int functionType = static_cast<int>(m_selectedFunctionType);
+                ImGui::Combo(
+                  "Function type", &functionType, functionTypes, IM_ARRAYSIZE(functionTypes));
+                m_selectedFunctionType = static_cast<FunctionType>(functionType);
+
+                // If copy or wrap, show list of available functions
+                int availableFunctionCount = 0;
+                std::vector<nodes::Model *> availableFunctions;
+                std::vector<std::string> availableFunctionNames;
+                if (m_selectedFunctionType == FunctionType::CopyExisting || 
+                    m_selectedFunctionType == FunctionType::WrapExisting)
+                {
+                    for (auto & [id, model] : m_assembly->getFunctions())
+                    {
+                        if (!model || model->isManaged() || model == m_currentModel)
+                            continue;
+                        availableFunctions.push_back(model.get());
+                        availableFunctionNames.push_back(
+                          model->getDisplayName().value_or("function"));
+                    }
+                    availableFunctionCount = static_cast<int>(availableFunctions.size());
+                    if (availableFunctionCount == 0)
+                    {
+                        ImGui::TextColored(ImVec4(1, 0, 0, 1),
+                                           "No user functions available to copy.");
+                    }
+                    else
+                    {
+                        if (m_selectedSourceFunctionIndex >= availableFunctionCount)
+                            m_selectedSourceFunctionIndex = 0;
+                        std::vector<const char *> cstrNames;
+                        for (auto & s : availableFunctionNames)
+                            cstrNames.push_back(s.c_str());
+                        ImGui::Combo("Source function",
+                                     &m_selectedSourceFunctionIndex,
+                                     cstrNames.data(),
+                                     availableFunctionCount);
+                    }
+                }
+
+                bool canCreate = !m_newModelName.empty() &&
+                                 ((m_selectedFunctionType != FunctionType::CopyExisting && 
+                                   m_selectedFunctionType != FunctionType::WrapExisting) ||
+                                  availableFunctionCount > 0);
+
+                if (canCreate && ImGui::Button("Create", ImVec2(120, 0)))
+                {
+                    nodes::Model * newModel = nullptr;
+                    switch (m_selectedFunctionType)
+                    {
+                    case FunctionType::Empty:
+                    default:
+                        newModel = &m_doc->createNewFunction();
+                        break;
+                    case FunctionType::CopyExisting:
+                        if (availableFunctionCount > 0)
+                            newModel = &m_doc->copyFunction(
+                              *availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
+                        break;
+                    case FunctionType::WrapExisting:
+                        if (availableFunctionCount > 0)
+                            newModel = &m_doc->wrapExistingFunction(
+                              *availableFunctions[m_selectedSourceFunctionIndex], m_newModelName);
+                        break;
+                    case FunctionType::LevelsetTemplate:
+                        newModel = &m_doc->createLevelsetFunction(m_newModelName);
+                        break;
+                    }
+                    if (newModel)
+                    {
+                        newModel->setDisplayName(m_newModelName);
+                        m_currentModel = m_assembly->findModel(newModel->getResourceId());
+                        switchModel();
+                        m_showAddModel = false;
+                        ImGui::CloseCurrentPopup();
+                    }
                 }
                 ImGui::SetItemDefaultFocus();
                 ImGui::SameLine();
@@ -406,6 +666,8 @@ namespace gladius::ui
         {
             ImGui::OpenPopup("Create Node");
             m_showCreateNodePopUp = false;
+            // Clear filter text when opening popup
+            m_nodeFilterText.clear();
         }
 
         if (m_currentModel == nullptr)
@@ -423,7 +685,67 @@ namespace gladius::ui
 
         if (ImGui::BeginPopup("Create Node"))
         {
+            // Add filter text box at the top of the popup
+            ImGui::TextUnformatted(ICON_FA_SEARCH);
+            ImGui::SameLine();
+            ImGui::PushItemWidth(200.0f * m_uiScale);
+
+            // Auto-focus on the filter input when popup opens
+            bool isFirstFrame = ImGui::IsWindowAppearing();
+
+            // Check if any key is pressed and focus the filter input
+            bool needsFocus = isFirstFrame;
+            auto & io = ImGui::GetIO();
+            bool isAnyKeyTyped = io.InputQueueCharacters.Size > 0;
+
+            // Check if backspace is pressed (Backspace isn't in InputQueueCharacters)
+            bool isBackspacePressed = io.KeysDown[ImGui::GetKeyIndex(ImGuiKey_Backspace)];
+
+            // Check if a key was pressed and the filter input doesn't already have focus
+            if ((isAnyKeyTyped || isBackspacePressed) && !ImGui::IsItemActive())
+            {
+                needsFocus = true;
+
+                // If any character was typed, update the filter text with it
+                if (!isFirstFrame)
+                {
+                    if (isBackspacePressed)
+                    {
+                        // Clear filter text on backspace
+                        m_nodeFilterText.clear();
+                    }
+                    else
+                    {
+                        // Set filter text to the first typed character
+                        for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+                        {
+                            char c = (char) io.InputQueueCharacters[i];
+                            if (c >= 32)
+                            { // Ignore control characters
+                                m_nodeFilterText = c;
+                                break; // Only use the first typed character
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (needsFocus)
+            {
+                ImGui::SetKeyboardFocusHere();
+            }
+
+            if (ImGui::InputText(
+                  "##NodeFilter", &m_nodeFilterText, ImGuiInputTextFlags_AutoSelectAll))
+            {
+                // Filter text changed
+            }
+            ImGui::PopItemWidth();
+            ImGui::Separator();
+
+            // Filter function and mesh resources using the filter text
             functionToolBox(mousePos);
+            meshResourceToolBox(mousePos);
 
             for (auto & [cat, catName] : nodes::CategoryNames)
             {
@@ -456,10 +778,14 @@ namespace gladius::ui
                       bool hasRequiredField = targetParameterIter != std::end(node.parameter());
 
                       pushNodeColor(node);
-                      if (node.getCategory() == category &&
+                      // Check if node matches filter
+                      std::string nodeName = node.name();
+                      bool matchesFilter = matchesNodeFilter(nodeName);
+
+                      if (matchesFilter && node.getCategory() == category &&
                           (hasRequiredField || !showOnlyLinkableNodes))
                       {
-                          if (ImGui::Button(node.name().c_str()))
+                          if (ImGui::Button(nodeName.c_str()))
                           {
                               createUndoRestorePoint("Create node");
                               auto createdNode = m_currentModel->create(node);
@@ -505,6 +831,8 @@ namespace gladius::ui
 
         outline();
         newModelDialog();
+        showGroupAssignmentDialog();
+        showDeleteUnusedResourcesDialog();
         try
         {
 
@@ -517,7 +845,7 @@ namespace gladius::ui
                 {
                     if (ImGui::MenuItem("Autolayout"))
                     {
-                        autoLayout(m_nodeDistance);
+                        autoLayout();
                     }
                     if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_COMPRESS_ARROWS_ALT
                                                                        "\tCenter View")))
@@ -558,9 +886,25 @@ namespace gladius::ui
                       {reinterpret_cast<const char *>(ICON_FA_ROBOT "\tCompile automatically")},
                       &m_autoCompile);
 
-                    if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_HAMMER "\tCompile")))
+                    if (!m_autoCompile)
                     {
-                        m_isManualCompileRequested = true;
+                        if (ImGui::MenuItem(
+                              reinterpret_cast<const char *>(ICON_FA_HAMMER "\tCompile")))
+                        {
+                            m_isManualCompileRequested = true;
+                        }
+                    }
+
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted("Compile the model");
+                        ImGui::Separator();
+                        ImGui::TextUnformatted(
+                          "If this option is enabled, the model will be compiled automatically "
+                          "when it is modified.\n"
+                          "If this option is disabled, you have to compile the model manually.");
+                        ImGui::EndTooltip();
                     }
 
                     auto core = m_doc->getCore();
@@ -584,6 +928,18 @@ namespace gladius::ui
                     toggleButton(
                       {reinterpret_cast<const char *>(ICON_FA_BOXES "\tAuto update bounding box")},
                       &autoUpdateBoundingBox);
+                    // Tooltip for auto update bounding box
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted("Auto update bounding box");
+                        ImGui::Separator();
+                        ImGui::TextUnformatted(
+                          "If enabled, the bounding box will be updated automatically when the "
+                          "model is modified.\n"
+                          "Deactivate this option to speed up the preview of parameter changes.");
+                        ImGui::EndTooltip();
+                    }
                     core->setAutoUpdateBoundingBox(autoUpdateBoundingBox);
 
                     if (!autoUpdateBoundingBox)
@@ -602,6 +958,44 @@ namespace gladius::ui
                       &showResourceNodes);
                     m_nodeViewVisitor.setResourceNodesVisible(showResourceNodes);
 
+                    // Add group assignment functionality
+                    auto selection = selectedNodes(m_editorContext);
+                    if (!selection.empty())
+                    {
+                        if (ImGui::MenuItem(
+                              reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group")))
+                        {
+                            m_existingGroups = getAllExistingTags();
+                            m_newGroupName.clear();
+                            m_selectedExistingGroup.clear();
+                            m_showGroupAssignmentDialog = true;
+                        }
+
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted("Assign selected nodes to a group/tag");
+                            ImGui::Separator();
+                            ImGui::TextUnformatted(
+                              fmt::format("Selected nodes: {}", selection.size()).c_str());
+                            ImGui::EndTooltip();
+                        }
+                    }
+                    else
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                        ImGui::MenuItem(
+                          reinterpret_cast<const char *>(ICON_FA_TAGS "\tAdd to Group"));
+                        ImGui::PopStyleColor();
+
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted("Select nodes to assign them to a group");
+                            ImGui::EndTooltip();
+                        }
+                    }
+
                     ImGui::EndMenuBar();
                 }
 
@@ -618,10 +1012,31 @@ namespace gladius::ui
                 m_nodeViewVisitor.setModelEditor(this);
                 if (m_currentModel)
                 {
+                    m_nodeWidthsInitialized = m_nodeViewVisitor.columnWidthsAreInitialized();
                     m_currentModel->visitNodes(m_nodeViewVisitor);
+
+                    // Update node groups after nodes are rendered and positioned
+                    m_nodeViewVisitor.updateNodeGroups();
                 }
                 onCreateNode();
                 onDeleteNode();
+
+                // Handle group movement - detect when nodes are moved and move their group members
+                m_nodeViewVisitor.handleGroupMovement();
+
+                // Handle group dragging via header/border areas - must be called before rendering
+                m_nodeViewVisitor.handleGroupDragging();
+
+                // Render node group last, to prioritize node interaction
+                m_nodeViewVisitor.renderNodeGroups();
+
+                // Check for group double-clicks and handle them AFTER rendering (so bounds are
+                // updated)
+                std::string doubleClickedGroup = m_nodeViewVisitor.checkForGroupClick();
+                if (!doubleClickedGroup.empty())
+                {
+                    m_nodeViewVisitor.handleGroupClick(doubleClickedGroup);
+                }
 
                 ed::End();
                 ed::PopStyleColor();
@@ -659,9 +1074,15 @@ namespace gladius::ui
             std::cerr << e.what() << "\n";
         }
 
-        if (!m_currentModel->hasBeenLayouted())
+        // Render the library browser if visible
+        if (m_libraryBrowser.isVisible() && m_doc)
         {
-            autoLayout(m_nodeDistance);
+            m_libraryBrowser.render(m_doc);
+        }
+
+        if (!m_currentModel->hasBeenLayouted() && m_nodeWidthsInitialized)
+        {
+            autoLayout();
         }
 
         m_parameterDirty = parameterChanged;
@@ -697,6 +1118,11 @@ namespace gladius::ui
         m_doc = std::move(document);
         setAssembly(m_doc->getAssembly());
 
+        if (m_doc)
+        {
+            m_libraryBrowser.setLogger(m_doc->getSharedLogger());
+        }
+
         m_outline.setDocument(m_doc);
     }
 
@@ -729,6 +1155,28 @@ namespace gladius::ui
         switchModel();
     }
 
+    bool ModelEditor::matchesNodeFilter(const std::string & text) const
+    {
+        if (m_nodeFilterText.empty())
+        {
+            return true; // No filter active, match everything
+        }
+
+        // Case-insensitive comparison
+        std::string lowerText = text;
+        std::string lowerFilter = m_nodeFilterText;
+        std::transform(lowerText.begin(),
+                       lowerText.end(),
+                       lowerText.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        std::transform(lowerFilter.begin(),
+                       lowerFilter.end(),
+                       lowerFilter.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        return lowerText.find(lowerFilter) != std::string::npos;
+    }
+
     void ModelEditor::functionToolBox(ImVec2 mousePos)
     {
         auto functions = m_assembly->getFunctions();
@@ -738,7 +1186,17 @@ namespace gladius::ui
             {
                 continue;
             }
-            if (ImGui::Button(model->getDisplayName().value_or("function").c_str()))
+
+            // Get the display name
+            std::string displayName = model->getDisplayName().value_or("function");
+
+            // Check if it matches the filter
+            if (!matchesNodeFilter(displayName))
+            {
+                continue; // Skip this item if it doesn't match the filter
+            }
+
+            if (ImGui::Button(displayName.c_str()))
             {
                 createUndoRestorePoint("Create node");
                 auto posOnCanvas = ed::ScreenToCanvas(mousePos);
@@ -754,6 +1212,50 @@ namespace gladius::ui
                 {
                     createdNode->setDisplayName(model->getDisplayName().value());
                 }
+                markModelAsModified();
+            }
+        }
+    }
+
+    void ModelEditor::meshResourceToolBox(ImVec2 mousePos)
+    {
+        auto & resourceManager = m_doc->getResourceManager();
+
+        auto const & resources = resourceManager.getResourceMap();
+
+        for (auto const & [key, res] : resources)
+        {
+            auto const * mesh = dynamic_cast<MeshResource const *>(res.get());
+            if (!mesh)
+            {
+                continue;
+            }
+
+            // Get the display name
+            std::string displayName = key.getDisplayName();
+
+            // Check if it matches the filter
+            if (!matchesNodeFilter(displayName))
+            {
+                continue; // Skip this item if it doesn't match the filter
+            }
+
+            if (ImGui::Button(displayName.c_str()))
+            {
+                createUndoRestorePoint("Create node");
+                auto posOnCanvas = ed::ScreenToCanvas(mousePos);
+                auto createdNode = m_currentModel->create<nodes::Resource>();
+                createdNode->setResourceId(key.getResourceId().value());
+                ed::SetNodePosition(createdNode->getId(), posOnCanvas);
+
+                auto signedDistanceToMesh = m_currentModel->create<nodes::SignedDistanceToMesh>();
+                ImVec2 const posOnCanvasWithOffset = ImVec2(posOnCanvas.x + 400, posOnCanvas.y);
+                m_currentModel->addLink(createdNode->outputs().at("value").getId(),
+                                        signedDistanceToMesh->parameter().at("mesh").getId());
+
+                signedDistanceToMesh->setDisplayName("SD to " + key.getDisplayName());
+                ed::SetNodePosition(signedDistanceToMesh->getId(), posOnCanvasWithOffset);
+
                 markModelAsModified();
             }
         }
@@ -849,10 +1351,10 @@ namespace gladius::ui
 
     void ModelEditor::markModelAsModified()
     {
-        if (!m_autoCompile)
-        {
-            return;
-        }
+        // if (!m_autoCompile)
+        // {
+        //     return;
+        // }
 
         m_modelWasModified = true;
         invalidatePrimitiveData();
@@ -883,122 +1385,28 @@ namespace gladius::ui
         m_nodePositionsNeedUpdate = false;
     }
 
-    void ModelEditor::autoLayout(float distance)
+    void ModelEditor::autoLayout()
     {
         if (currentModel() == nullptr)
         {
             return;
         }
 
-        auto const graph = currentModel()->getGraph();
+        // if (!m_nodeWidthsInitialized)
+        // {
+        //     return;
+        // }
 
-        if (graph.getSize() < 2)
-        {
-            return;
-        }
         createUndoRestorePoint("Autolayout");
 
-        currentModel()->updateGraphAndOrderIfNeeded();
+        // Use the dedicated layout engine for all layout operations
+        gladius::ui::NodeLayoutEngine layoutEngine;
+        gladius::ui::NodeLayoutEngine::LayoutConfig config;
+        config.nodeDistance = m_nodeDistance;
+        config.layerSpacing = m_nodeDistance * 1.5f;
+        config.groupPadding = m_nodeDistance * 0.5f;
 
-        if (!(currentModel()->getBeginNode()))
-        {
-            return;
-        }
-        auto const beginId = currentModel()->getBeginNode()->getId();
-        auto depthMap = determineDepth(graph, beginId);
-
-        
-       
-        auto getDepth = [&](nodes::NodeId nodeId)
-        {
-            auto const depthIter = depthMap.find(nodeId);
-            if (depthIter != std::end(depthMap))
-            {
-                return depthIter->second;
-            }
-            return 0;
-        };
-
-        auto getDepthCloseToSuccessor = [&](nodes::NodeId nodeId)
-        {
-            auto successsor = graph::determineSuccessor(graph, nodeId);
-            // find  lowest depth of the successor
-            int lowestDepth = std::numeric_limits<int>::max();
-            for (auto const succ : successsor)
-            {
-                auto const depthIter = depthMap.find(succ);
-                if (depthIter != std::end(depthMap))
-                {
-                    lowestDepth = std::min(lowestDepth, depthIter->second);
-                }
-            }
-
-            if (lowestDepth != std::numeric_limits<int>::max())
-            {
-                return lowestDepth - 1;
-            }
-            return 0;
-        };
-
-        auto determineDepth = [&](nodes::NodeId nodeId)
-        {
-            auto const depth = getDepth(nodeId);
-            if (depth == 0)
-            {
-                return getDepthCloseToSuccessor(nodeId);
-            }
-            return depth;
-        };
-
-        // Step 1: Assign Layers
-        std::map<int, std::vector<nodes::NodeBase *>> layers;
-        std::map<int, float> layersWidth;
-        for (auto & [id, node] : *currentModel())
-        {
-            auto const depth = (id == beginId) ? 0 : determineDepth(id);
-            layers[depth].push_back(node.get());
-            auto const nodeWidth = ed::GetNodeSize(node->getId()).x;
-            layersWidth[depth] = std::max(layersWidth[depth], nodeWidth);
-        }
-
-        // Step 2: Order Nodes within Layers (simple topological order for now)
-        for (auto & [depth, nodes] : layers)
-        {
-            std::sort(nodes.begin(),
-                      nodes.end(),
-                      [](nodes::NodeBase * a, nodes::NodeBase * b)
-                      { return a->getOrder() < b->getOrder(); });
-        }
-
-        std::vector<float> layerX;
-        float x = 0.f;
-        for (auto & [depth, width] : layersWidth)
-        {
-            layerX.push_back(x);
-            x += width + distance;
-        }
-
-        // Step 3: Assign Coordinates
-        for (auto & [depth, nodes] : layers)
-        {
-            // substract distance from every second layer to create a zigzag pattern
-            float y = (depth % 2 == 0) ? 0.f : -distance;
-            for (auto & node : nodes)
-            {
-                auto & pos = node->screenPos();
-                auto nodeWidth = ed::GetNodeSize(node->getId()).x;
-                auto nodeHeight = ed::GetNodeSize(node->getId()).y;
-                if (nodeWidth == 0.f || nodeHeight == 0.f)
-                {
-                    return;
-                }
-                pos.x = layerX.at(depth);
-                pos.y = y;
-                y += nodeHeight + distance; // Adjust y position to avoid overlap
-            }
-        }
-
-        currentModel()->markAsLayouted();
+        layoutEngine.performAutoLayout(*currentModel(), config);
 
         m_nodePositionsNeedUpdate = true;
     }
@@ -1193,6 +1601,350 @@ namespace gladius::ui
         std::vector<ed::NodeId> selectedNodeIds(numSelectedItems);
         GetSelectedNodes(selectedNodeIds.data(), static_cast<int>(numSelectedItems));
         return selectedNodeIds;
+    }
+
+    void ModelEditor::showDeleteUnusedResourcesDialog()
+    {
+        if (!m_showDeleteUnusedResourcesConfirmation)
+        {
+            return;
+        }
+
+        ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f,
+                            ImGui::GetIO().DisplaySize.y * 0.5f);
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (!ImGui::IsPopupOpen("Delete Unused Resources"))
+        {
+            ImGui::OpenPopup("Delete Unused Resources");
+        }
+
+        if (ImGui::BeginPopupModal("Delete Unused Resources",
+                                   &m_showDeleteUnusedResourcesConfirmation,
+                                   ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            if (m_unusedResources.empty())
+            {
+                ImGui::TextUnformatted("No unused resources found in the model.");
+            }
+            else
+            {
+                ImGui::Text("The following %zu unused resources will be deleted:",
+                            m_unusedResources.size());
+                ImGui::Separator();
+
+                ImGui::BeginChild("ResourceList", ImVec2(400, 300), true);
+
+                for (auto const & resource : m_unusedResources)
+                {
+                    try
+                    {
+                        Lib3MF_uint32 modelResourceId = resource->GetModelResourceID();
+                        ResourceKey key{modelResourceId};
+                        std::string resourceName = key.getDisplayName();
+
+                        // Try to determine the resource type
+                        std::string resourceType = "Unknown";
+                        try
+                        {
+                            if (std::dynamic_pointer_cast<Lib3MF::CFunction>(resource))
+                                resourceType = "Function";
+                            else if (std::dynamic_pointer_cast<Lib3MF::CMeshObject>(resource))
+                                resourceType = "Mesh";
+                            else if (std::dynamic_pointer_cast<Lib3MF::CComponentsObject>(resource))
+                                resourceType = "Components";
+                            else if (std::dynamic_pointer_cast<Lib3MF::CLevelSet>(resource))
+                                resourceType = "Level Set";
+                        }
+                        catch (const std::exception &)
+                        {
+                            // Fallback to unknown type
+                        }
+
+                        ImGui::Text("%s #%u (%s)",
+                                    resourceName.c_str(),
+                                    modelResourceId,
+                                    resourceType.c_str());
+                    }
+                    catch (const std::exception & e)
+                    {
+                        ImGui::Text("Error getting resource info: %s", e.what());
+                    }
+                }
+
+                ImGui::EndChild();
+                ImGui::Separator();
+
+                ImGui::Text("Are you sure you want to delete these resources?");
+                ImGui::Text("This action cannot be undone.");
+                ImGui::Separator();
+
+                if (ImGui::Button("Delete", ImVec2(120, 0)))
+                {
+                    m_doc->removeUnusedResources();
+                    markModelAsModified();
+                    m_showDeleteUnusedResourcesConfirmation = false;
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::SameLine();
+
+                if (ImGui::Button("Cancel", ImVec2(120, 0)))
+                {
+                    m_unusedResources.clear();
+                    m_showDeleteUnusedResourcesConfirmation = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            ImGui::EndPopup();
+        }
+    }
+    void ModelEditor::setLibraryRootDirectory(const std::filesystem::path & directory)
+    {
+        m_libraryBrowser.setRootDirectory(directory);
+    }
+
+    void ModelEditor::toggleLibraryVisibility()
+    {
+        m_libraryBrowser.setVisibility(!m_libraryBrowser.isVisible());
+    }
+
+    void ModelEditor::setLibraryVisibility(bool visible)
+    {
+        m_libraryBrowser.setVisibility(visible);
+    }
+
+    bool ModelEditor::isLibraryVisible() const
+    {
+        return m_libraryBrowser.isVisible();
+    }
+
+    void ModelEditor::refreshLibraryDirectories()
+    {
+        m_libraryBrowser.refreshDirectories();
+    }
+
+    void ModelEditor::requestManualCompile()
+    {
+        m_isManualCompileRequested = true;
+    }
+
+    void ModelEditor::autoLayoutNodes(float distance)
+    {
+        autoLayout();
+    }
+
+    void ModelEditor::showCreateNodePopup()
+    {
+        // Get current mouse position and show the create node popup
+        ImVec2 currentMousePos = ImGui::GetMousePos();
+        showPopupMenu([&, currentMousePos]() { createNodePopup(-1, currentMousePos); });
+        m_showCreateNodePopUp = true;
+        ImGui::OpenPopup("Create Node");
+    }
+
+    bool ModelEditor::switchToFunction(nodes::ResourceId functionId)
+    {
+        if (!m_assembly)
+        {
+            return false;
+        }
+
+        auto functionModel = m_assembly->findModel(functionId);
+        if (!functionModel)
+        {
+            return false;
+        }
+
+        m_currentModel = functionModel;
+        switchModel();
+        return true;
+    }
+
+    bool ModelEditor::isHovered() const
+    {
+        // Check if any of the editor windows are hovered
+        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
+    }
+
+    void ModelEditor::showGroupAssignmentDialog()
+    {
+        if (m_showGroupAssignmentDialog)
+        {
+            ImGui::OpenPopup("Assign Nodes to Group");
+        }
+
+        if (ImGui::BeginPopupModal("Assign Nodes to Group",
+                                   &m_showGroupAssignmentDialog,
+                                   ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            auto selection = selectedNodes(m_editorContext);
+
+            ImGui::TextUnformatted(
+              fmt::format("Assign {} selected node(s) to a group:", selection.size()).c_str());
+            ImGui::Separator();
+
+            // Option 1: Create new group
+            ImGui::TextUnformatted("Create New Group:");
+            ImGui::PushItemWidth(300.0f);
+            if (ImGui::InputText("##NewGroupName", &m_newGroupName))
+            {
+                // Clear existing group selection when typing new name
+                m_selectedExistingGroup.clear();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            bool canCreateNew =
+              !m_newGroupName.empty() &&
+              std::find(m_existingGroups.begin(), m_existingGroups.end(), m_newGroupName) ==
+                m_existingGroups.end();
+
+            if (!canCreateNew)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+            }
+
+            if (ImGui::Button("Create Group") && canCreateNew)
+            {
+                assignSelectedNodesToGroup(m_newGroupName);
+                m_showGroupAssignmentDialog = false;
+            }
+
+            if (!canCreateNew)
+            {
+                ImGui::PopStyleColor(3);
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    if (m_newGroupName.empty())
+                    {
+                        ImGui::TextUnformatted("Please enter a group name");
+                    }
+                    else
+                    {
+                        ImGui::TextUnformatted("Group name already exists");
+                    }
+                    ImGui::EndTooltip();
+                }
+            }
+
+            // Option 2: Select existing group
+            if (!m_existingGroups.empty())
+            {
+                ImGui::Separator();
+                ImGui::TextUnformatted("Or select existing group:");
+
+                for (const auto & groupName : m_existingGroups)
+                {
+                    bool isSelected = (m_selectedExistingGroup == groupName);
+                    if (ImGui::Selectable(groupName.c_str(), isSelected))
+                    {
+                        m_selectedExistingGroup = groupName;
+                        m_newGroupName.clear(); // Clear new group name when selecting existing
+                    }
+                }
+
+                if (!m_selectedExistingGroup.empty())
+                {
+                    if (ImGui::Button("Assign to Selected Group"))
+                    {
+                        assignSelectedNodesToGroup(m_selectedExistingGroup);
+                        m_showGroupAssignmentDialog = false;
+                    }
+                }
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Cancel"))
+            {
+                m_showGroupAssignmentDialog = false;
+            }
+
+            ImGui::EndPopup();
+        }
+    }
+
+    void ModelEditor::assignSelectedNodesToGroup(const std::string & groupName)
+    {
+        if (!m_currentModel || groupName.empty())
+        {
+            return;
+        }
+
+        auto selection = selectedNodes(m_editorContext);
+
+        // Create undo restore point
+        createUndoRestorePoint("Assign nodes to group: " + groupName);
+
+        for (const auto & nodeId : selection)
+        {
+            auto nodeOpt = m_currentModel->getNode(static_cast<nodes::NodeId>(nodeId.Get()));
+            if (nodeOpt.has_value())
+            {
+                auto & node = *nodeOpt.value();
+                node.setTag(groupName);
+            }
+        }
+
+        // Mark model as modified and trigger updates
+        markModelAsModified();
+        m_nodeViewVisitor.reset(); // This will trigger node groups update
+        m_parameterDirty = true;
+    }
+
+    std::vector<std::string> ModelEditor::getAllExistingTags() const
+    {
+        std::vector<std::string> tags;
+        if (!m_currentModel)
+        {
+            return tags;
+        }
+
+        // Use a set to avoid duplicates
+        std::set<std::string> uniqueTags;
+
+        // Create a visitor to collect all tags
+        class TagCollector : public nodes::Visitor
+        {
+          public:
+            std::set<std::string> & tags;
+
+            explicit TagCollector(std::set<std::string> & tagSet)
+                : tags(tagSet)
+            {
+            }
+
+            void visit(nodes::NodeBase & node) override
+            {
+                const std::string & tag = node.getTag();
+                if (!tag.empty())
+                {
+                    tags.insert(tag);
+                }
+            }
+        };
+
+        TagCollector collector(uniqueTags);
+        m_currentModel->visitNodes(collector);
+
+        // Convert set to vector
+        tags.assign(uniqueTags.begin(), uniqueTags.end());
+        return tags;
+    }
+
+    nodes::Model & ModelEditor::createLevelsetFunction(std::string const & name)
+    {
+        return m_doc->createLevelsetFunction(name);
+    }
+
+    nodes::Model & ModelEditor::copyExistingFunction(nodes::Model const & sourceModel,
+                                                     std::string const & name)
+    {
+        return m_doc->copyFunction(sourceModel, name);
     }
 
 } // namespace gladius::ui

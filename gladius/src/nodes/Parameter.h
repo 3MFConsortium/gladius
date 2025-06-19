@@ -6,7 +6,7 @@
 #include "BuildParameter.h"
 #include "Port.h"
 #include "nodesfwd.h"
-#include "src/ResourceKey.h"
+#include "ResourceKey.h"
 #include "types.h"
 
 #include <array>

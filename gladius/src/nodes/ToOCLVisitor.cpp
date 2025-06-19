@@ -3,7 +3,7 @@
 #include <fmt/format.h>
 #include <iostream>
 
-#include <src/nodes/Assembly.h>
+#include <nodes/Assembly.h>
 
 namespace gladius::nodes
 {

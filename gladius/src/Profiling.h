@@ -4,6 +4,8 @@
 #include <iostream>
 #include <thread>
 #include <tracy/Tracy.hpp>
+#include <chrono>
+#include <string>
 
 namespace gladius
 {
@@ -57,5 +59,6 @@ namespace gladius
 #define LOG_SCOPE_DURATION ScopedTimeLogger scopedTimeLogger(__FUNCTION__);
 #define LOG_SCOPE_DURATION_NAMED(name) ScopedTimeLogger scopedTimeLogger(name);
 //#define ProfileFunction LOG_SCOPE_DURATION
-#define ProfileFunction ZoneScoped;
+//#define ProfileFunction ZoneScoped;
+#define ProfileFunction 
 }

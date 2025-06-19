@@ -68,6 +68,38 @@ namespace gladius::io
             m_bitDepth = bitDepth;
         }
 
+        void swapXYData()
+        {
+            std::vector<unsigned char> swappedData;
+            swappedData.reserve(m_data.size());
+
+            if (m_width == 0 || m_height == 0)
+            {
+                throw std::runtime_error("Image width or height is zero");
+            }
+
+            if (m_data.size() % (m_width * m_height) != 0)
+            {
+                throw std::runtime_error("Image data size is not a multiple of width * height");
+            }
+
+            unsigned int const numChannels =
+              static_cast<unsigned int>(m_data.size()) / (m_width * m_height);
+            for (int y = m_height - 1; y >= 0; --y)
+            {
+                for (int x = m_width - 1; x >= 0; --x)
+                {
+                    unsigned int index = (y * m_width + x) * numChannels;
+                    for (unsigned int i = 0; i < numChannels; ++i)
+                    {   
+                        swappedData.push_back(m_data[index + i]);
+                    }
+                }
+            }
+
+            m_data = std::move(swappedData);
+        }
+
       private:
         ImageData m_data;
         unsigned int m_width{};

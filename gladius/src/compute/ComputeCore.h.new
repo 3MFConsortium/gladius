@@ -1,0 +1,197 @@
+#pragma once
+
+#include <BitmapLayer.h>
+#include <ContourExtractor.h>
+#include <EventLogger.h>
+#include <GLImageBuffer.h>
+#include <ImageRGBA.h>
+#include <ModelState.h>
+#include <RenderProgram.h>
+#include <ResourceContext.h>
+#include <SlicerProgram.h>
+#include <compute/Rendering.h>
+#include <compute/types.h>
+#include <nodes/BuildParameter.h>
+#include <nodes/Model.h>
+#include <nodes/nodesfwd.h>
+#include <ui/OrbitalCamera.h>
+
+#include <compute/ProgramManager.h>
+
+#include <mutex>
+
+namespace gladius
+{
+    // Forward declarations of shared pointer types
+    using SharedGLImageBuffer = std::shared_ptr<GLImageBuffer>;
+    using SharedContourExtractor = std::shared_ptr<ContourExtractor>;
+    using SharedSlicerProgram = std::shared_ptr<SlicerProgram>;
+    using SharedRenderProgram = std::shared_ptr<RenderProgram>;
+    using SharedPrimitives = std::shared_ptr<Primitives>;
+
+    // Wrapper classes have been removed in favor of directly using shared pointers
+
+    class ComputeCore
+    {
+      public:
+        explicit ComputeCore(SharedComputeContext context,
+                             RequiredCapabilities requiredCapabilities,
+                             events::SharedLogger logger);
+
+        void init();
+        void reset();
+
+        ComputeToken waitForComputeToken();
+        OptionalComputeToken requestComputeToken();
+
+        void createBuffer();
+
+        [[nodiscard]] bool renderScene(size_t startLine, size_t endLine);
+        void renderLowResPreview() const;
+
+        bool precomputeSdfForWholeBuildPlatform();
+        void precomputeSdfForBBox(const BoundingBox & boundingBox);
+        [[nodiscard]] SharedGLImageBuffer getResultImage() const;
+        [[nodiscard]] SharedContourExtractor getContour() const;
+
+        [[nodiscard]] cl_float getSliceHeight() const;
+
+        void setSliceHeight(cl_float z_mm);
+
+        [[nodiscard]] SharedSlicerProgram getSlicerProgram() const;
+        [[nodiscard]] SharedRenderProgram getBestRenderProgram() const;
+        [[nodiscard]] SharedRenderProgram getPreviewRenderProgram() const;
+        [[nodiscard]] SharedRenderProgram getOptimzedRenderProgram() const;
+
+        bool setScreenResolution(size_t width, size_t height);
+        bool setLowResPreviewResolution(size_t width, size_t height);
+        [[nodiscard]] std::pair<size_t, size_t> getLowResPreviewResolution() const;
+        [[nodiscard]] SharedPrimitives getPrimitives() const;
+
+        [[nodiscard]] SharedResources getResourceContext() const;
+
+        void generateSdfSlice() const;
+        [[nodiscard]] std::optional<BoundingBox> getBoundingBox() const;
+        void updateClippingAreaWithPadding() const;
+        void updateClippingAreaToBoundingBox() const;
+        [[nodiscard]] bool isVdbRequired() const;
+
+        [[nodiscard]] bool isAnyCompilationInProgress() const;
+
+        bool updateBBox();
+        void updateBBoxOrThrow();
+
+        void refreshProgram(nodes::SharedAssembly assembly);
+        void tryRefreshProgramProtected(nodes::SharedAssembly assembly);
+        [[nodiscard]] bool isRendererReady() const;
+
+        [[nodiscard]] SharedComputeContext getComputeContext() const;
+
+        void compileSlicerProgramBlocking();
+
+        void logMsg(std::string msg) const;
+
+        void computeVertexNormals(Mesh & mesh) const;
+
+        void recompileIfRequired();
+        void recompileBlockingNoLock();
+
+        void resetBoundingBox();
+
+        BitmapLayer generateDownSkinMap(float z_mm, Vector2 pixelSize_mm);
+        BitmapLayer generateUpSkinMap(float z_mm, Vector2 pixelSize_mm);
+
+        void setComputeContext(std::shared_ptr<ComputeContext> context);
+
+        bool requestContourUpdate(nodes::SliceParameter sliceParameter);
+
+        bool isSlicingInProgress() const;
+
+        std::mutex & getContourExtractorMutex();
+
+        void invalidatePreCompSdf();
+        [[nodiscard]] events::SharedLogger getSharedLogger() const;
+
+        [[nodiscard]] CodeGenerator getCodeGenerator() const;
+
+        void setCodeGenerator(CodeGenerator generator);
+
+        [[nodiscard]] std::shared_ptr<ModelState> getMeshResourceState() const;
+
+        PlainImage createThumbnail();
+        PlainImage createThumbnailPng();
+        void saveThumbnail(std::filesystem::path const & filename);
+
+        void applyCamera(ui::OrbitalCamera const & camera);
+
+        void injectSmoothingKernel(std::string const & kernel);
+
+        bool isBusy() const;
+
+        [[nodiscard]] bool tryToupdateParameter(nodes::Assembly & assembly);
+        [[nodiscard]] bool updateParameterBlocking(nodes::Assembly & assembly);
+
+        void setPreCompSdfSize(size_t size);
+
+        void adoptVertexOfMeshToSurface(VertexBuffer & vertices);
+
+        void setAutoUpdateBoundingBox(bool autoUpdateBoundingBox);
+        [[nodiscard]] bool isAutoUpdateBoundingBoxEnabled() const;
+
+      private:
+        bool updateBoundingBoxFast();
+        void throwIfNoOpenGL() const;
+        [[nodiscard]] events::Logger & getLogger() const;
+
+        cl_int2 determineBufferSize(float2 pixelSize_mm) const;
+        void reinitIfNecssary();
+
+        [[nodiscard]] int layerNumber() const;
+
+        void renderResultImageInterOp(DistanceMap & sourceImage, GLImageBuffer & targetImage) const;
+        void renderResultImageReadPixel(DistanceMap & sourceImage,
+                                        GLImageBuffer & targetImage) const;
+        void renderImage(DistanceMap & sourceImage) const;
+        void generateContours(nodes::SliceParameter sliceParameter);
+        void generateContourInternal(nodes::SliceParameter const & sliceParameter);
+        void generateContourMarchingSquare(nodes::SliceParameter const & sliceParameter);
+
+        mutable std::recursive_mutex m_computeMutex; // TODO: replace with std::mutex
+        SharedContourExtractor m_contour;
+        SharedGLImageBuffer m_resultImage;
+        SharedGLImageBuffer m_lowResPreviewImage;
+        std::shared_ptr<ImageRGBA> m_thumbnailImage;
+        std::shared_ptr<ImageRGBA> m_thumbnailImageHighRes;
+
+        SharedPrimitives m_primitives;
+        SharedComputeContext m_ComputeContext;
+        SharedResources m_resources;
+
+        double layerThickness_mm = 0.05;
+        cl_float m_sliceHeight_mm{0.0f};
+
+        cl_float m_lastContourSliceHeight_mm{0.0f};
+
+        std::optional<BoundingBox> m_boundingBox{};
+        bool m_isComputationTimeLoggingEnabled = false;
+
+        RequiredCapabilities m_capabilities = RequiredCapabilities::OpenGLInterop;
+        events::SharedLogger m_eventLogger;
+
+        std::shared_ptr<ModelState> m_meshResourceState;
+
+        std::future<void> m_sliceFuture;
+        std::mutex m_contourExtractorMutex;
+
+        bool m_precompSdfIsValid = false;
+        size_t m_preCompSdfSize = 256u;
+
+        bool m_autoUpdateBoundingBox = true;
+
+        CodeGenerator m_codeGenerator = CodeGenerator::Code;
+
+        SharedKernelReplacements m_kernelReplacements;
+
+        ProgramManager m_programs;
+    };
+}

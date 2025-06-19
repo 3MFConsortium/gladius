@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <functional>
 
- 
 #include "imgui.h"
 
 struct GLFWwindow;
@@ -44,11 +43,24 @@ namespace gladius
         [[nodiscard]] size_t getWidth() const;
         [[nodiscard]] size_t getHeight() const;
 
+        /**
+         * @brief Get the current UI scale factor
+         * @return The UI scale factor
+         */
+        [[nodiscard]] float getUiScale() const { return m_uiScale; }
+
+        /**
+         * @brief Set the UI scale factor
+         * @param scale The UI scale factor to set
+         */
+        void setUiScale(float scale) { m_uiScale = scale; }
+
         void storeWindowSettings();
 
         void addViewCallBack(const ViewCallBack& func);
         void clearViewCallback();
         void setRequestCloseCallBack(const ViewCallBack& func);
+
         bool isViewSettingsVisible();
         void setViewSettingsVisible(bool visible);
 
@@ -89,6 +101,7 @@ namespace gladius
         bool m_showViewSettings{false};
 
         std::filesystem::path m_gladiusImgUiFilename{};
+        std::string m_iniFileNameStorage{}; // Stores the string for ImGui ini filename
         GLFWwindow* m_window{nullptr};
         bool m_isAnimationRunning = false;
         bool m_stateCloseRequested = false;

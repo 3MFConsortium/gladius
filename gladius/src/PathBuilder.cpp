@@ -1,7 +1,7 @@
 #include "PathBuilder.h"
 #include "CLMath.h"
 #include "contour/ContourValidator.h"
-#include "src/Contour.h"
+#include "Contour.h"
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4244)
@@ -11,7 +11,7 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
-#include <psimpl.h>
+#include <psimpl/lib/psimpl.h>
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -203,6 +203,8 @@ namespace gladius
         return angle(ab, bc);
     }
 
+
+
     void determineContourMode(PolyLine & target, OrientationMeaning orientationMeaning)
     {
         if (!target.isClosed)
@@ -216,11 +218,10 @@ namespace gladius
             return;
         }
 
-        auto area = calcArea(target);
 
         if (orientationMeaning == OrientationMeaning::clockWiseIsOuter)
         {
-            if (area < 0.f)
+            if (target.area < 0.f)
             {
                 target.contourMode = ContourMode::Inner;
             }
@@ -231,7 +232,7 @@ namespace gladius
         }
         else
         {
-            if (area < 0.f)
+            if (target.area < 0.f)
             {
                 target.contourMode = ContourMode::Outer;
             }

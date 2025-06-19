@@ -13,7 +13,7 @@
 #include "EventLogger.h"
 #include "Parameter.h"
 #include "Port.h"
-#include "graph/DirectedGraph.h"
+#include "graph/AdjacencyListDirectedGraph.h"
 #include "graph/GraphAlgorithms.h"
 #include "nodesfwd.h"
 
@@ -177,7 +177,7 @@ namespace gladius::nodes
 
         InputParameterRegistry const & getConstParameterRegistry() const;
 
-        [[nodiscard]] graph::DirectedGraph const & getGraph() const;
+        [[nodiscard]] graph::AdjacencyListDirectedGraph const & getGraph() const;
 
         auto getPortRegistry() -> PortRegistry &;
 
@@ -211,6 +211,7 @@ namespace gladius::nodes
 
         bool updateTypes();
         [[nodiscard]] bool isValid(); // Not const because it might update the graph
+        void updateValidityState(); // Updates the m_isValid state based on the graph validation
 
         void setDisplayName(std::string const & name);
         [[nodiscard]] std::optional<std::string> getDisplayName() const;
@@ -236,9 +237,26 @@ namespace gladius::nodes
         [[nodiscard]] bool hasBeenLayouted() const;
 
         void setIsValid(bool isValid);
+
+        /**
+         * @brief Simplifies the model by removing nodes that are not connected to the end node.
+         *
+         * This method identifies all nodes that cannot influence the end node (i.e.,
+         * there is no path from these nodes to the end node) and removes them.
+         * This helps optimize the model by eliminating unused nodes.
+         *
+         * @return The number of nodes removed during simplification
+         */
+        size_t simplifyModel();
+        
+        /**
+         * @brief Clears the Model, resetting it to its initial state.
+         */
+        void clear();
+        
       private:
         void updateOrder();
-        auto buildGraph() -> graph::DirectedGraph &;
+        auto buildGraph() -> graph::AdjacencyListDirectedGraph &;
 
         NodeRegistry m_nodes;
         PortRegistry m_outPorts;
@@ -250,7 +268,7 @@ namespace gladius::nodes
 
         NodeId m_lastId = {1};
 
-        graph::DirectedGraph m_graph{0};
+        graph::AdjacencyListDirectedGraph m_graph{0};
         graph::VertexList m_outputOrder;
         bool m_graphRequiresUpdate = true;
 

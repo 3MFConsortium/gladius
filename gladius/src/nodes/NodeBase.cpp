@@ -65,11 +65,25 @@ namespace gladius::nodes
             inputTypeMap.insert({parameter.first, AnyTypeIndex});
         }
 
+    
         // find the TypeRule for the current input type in m_typeRules
         auto ruleIter = std::find_if(m_typeRules.begin(),
                                      m_typeRules.end(),
                                      [&inputTypeMap](const TypeRule & rule)
-                                     { return rule.input == inputTypeMap; });
+                                     {
+                                        if (rule.input.size() != inputTypeMap.size())   // this happens for nodes that can use scalar or vector types
+                                        {
+                                            // find the rule where at least one type matches
+                                            return std::any_of(inputTypeMap.begin(),
+                                                               inputTypeMap.end(),
+                                                               [&rule](const auto & inputPair)
+                                                               {
+                                                                   return rule.input.find(inputPair.first) != rule.input.end() &&
+                                                                          (rule.input.at(inputPair.first) == inputPair.second);
+                                                               });
+                                        }
+                                        return rule.input == inputTypeMap;
+                                    });
 
         // if we have a match, apply the output types
         if (ruleIter != m_typeRules.end())
