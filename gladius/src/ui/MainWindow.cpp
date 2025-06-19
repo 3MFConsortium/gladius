@@ -643,7 +643,7 @@ namespace gladius::ui
     void MainWindow::renderWindow()
     {
         // Process render window shortcuts
-        if (m_renderWindow.isVisible() && m_renderWindow.isHovered())
+        if (m_renderWindow.isVisible() && m_renderWindow.isHovered() && m_renderWindow.isFocused())
         {
             processShortcuts(ShortcutContext::RenderWindow);
         }

@@ -1052,6 +1052,11 @@ namespace gladius::ui
         return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
     }
 
+    bool RenderWindow::isFocused() const
+    {
+        return ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow) && isVisible();
+    }
+
     void RenderWindow::handleKeyInput()
     {
         // Handle keyboard input - this can be extended later

@@ -115,6 +115,8 @@ namespace gladius::ui
          */
         bool isHovered() const;
 
+        bool isFocused() const;
+
       private:
         void render(RenderWindowState & state);
         void slider();
