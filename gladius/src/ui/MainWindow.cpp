@@ -539,7 +539,7 @@ namespace gladius::ui
         {
             // Clear errors and warnings from events list when compilation is successful
             m_logger->clear();
-            
+
             m_renderWindow.invalidateViewDuetoModelUpdate();
             m_modelEditor.markModelAsUpToDate();
         }
@@ -1318,7 +1318,7 @@ namespace gladius::ui
                                                       ICON_FA_EXCLAMATION_TRIANGLE,
                                                       errorCount,
                                                       errorCount == 1 ? "Error" : "Errors");
-            
+
             if (ImGui::Button(errorText.c_str()))
             {
                 m_logView.show();
@@ -1347,13 +1347,12 @@ namespace gladius::ui
                                                         ICON_FA_EXCLAMATION_CIRCLE,
                                                         warningCount,
                                                         warningCount == 1 ? "Warning" : "Warnings");
-            
+
             if (ImGui::Button(warningText.c_str()))
             {
                 m_logView.show();
             }
             ImGui::PopStyleColor(4);
-
         }
         ImGui::End();
 
