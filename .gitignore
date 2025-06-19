@@ -7,6 +7,9 @@ gladius/.vs/gladius/v15/Browse.VC.opendb
 gladius/.vs/gladius/v15/Browse.VC.db
 gladius/.vs/
 gladius/build/
+gladius/out/
+out/
+build/
 gladius/.vscode/
 .vscode/
 gladius/src/.clangd/
@@ -16,6 +19,7 @@ gladius/tests/compile_commands.json
 gladius/src/compile_commands.json
 gladius/.clangd/index/*
 gladius/src/build/*
+gladius/src/out/
 
 gladius/.cache/*
 /gladius/install/
