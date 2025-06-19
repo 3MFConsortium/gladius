@@ -797,6 +797,7 @@ namespace gladius::ui
                                     srcPortId, createdNode->parameter()[requiredFieldName].getId());
                               }
                               markModelAsModified();
+                              closePopupMenu();
                           }
                       }
                       popNodeColor(node);
