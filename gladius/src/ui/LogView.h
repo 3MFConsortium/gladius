@@ -23,7 +23,7 @@ namespace gladius::ui
 
         bool m_visible = false;
         bool m_autoScroll = true;
-        bool m_collapsed = true;
+        bool m_collapsed = false;
         ImGuiTextFilter m_filter;
         events::Events m_filteredEvents;
         size_t m_logSizeWhenCacheWasGenerated = 0u;

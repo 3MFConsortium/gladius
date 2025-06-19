@@ -537,6 +537,9 @@ namespace gladius::ui
     {
         if (m_doc->refreshModelIfNoCompilationIsRunning())
         {
+            // Clear errors and warnings from events list when compilation is successful
+            m_logger->clear();
+            
             m_renderWindow.invalidateViewDuetoModelUpdate();
             m_modelEditor.markModelAsUpToDate();
         }
