@@ -507,6 +507,13 @@ namespace gladius::ui
             logViewer();
             m_about.render();
             m_renderWindow.updateCamera();
+
+            // Render status bar if welcome screen is not visible
+            if (!welcomeScreenVisible)
+            {
+                renderStatusBar();
+            }
+
             // Library browser is now rendered by the ModelEditor
         }
         catch (OpenCLError & e)
@@ -521,12 +528,9 @@ namespace gladius::ui
             m_logView.show();
         }
 
-        auto const errorCount = m_logger->getErrorCount();
-        if (errorCount > m_lastEventCount)
-        {
-            m_logView.show();
-        }
-        m_lastEventCount = errorCount;
+        // Update event counts for status bar (removed automatic popup)
+        m_lastEventCount = m_logger->getErrorCount();
+        m_lastWarningCount = m_logger->getWarningCount();
     }
 
     void MainWindow::refreshModel()
@@ -609,8 +613,11 @@ namespace gladius::ui
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
         ImGui::Begin("MainWindowDockingArea", nullptr, window_flags);
-        ImGui::SetWindowSize(
-          ImVec2(io.DisplaySize.x - silderWidth, io.DisplaySize.y - menuBarHeight));
+
+        // Account for status bar height
+        float const statusBarHeight = ImGui::GetFrameHeight();
+        ImGui::SetWindowSize(ImVec2(io.DisplaySize.x - silderWidth,
+                                    io.DisplaySize.y - menuBarHeight - statusBarHeight));
 
 #ifdef IMGUI_HAS_DOCK
         const auto dockspaceID = ImGui::GetID("MainDockingSpace");
@@ -1249,6 +1256,101 @@ namespace gladius::ui
             }
             ImGui::EndPopup();
         }
+    }
+
+    void MainWindow::renderStatusBar()
+    {
+        if (!m_logger)
+        {
+            return;
+        }
+
+        // Create status bar at the bottom of the main window
+        ImGuiViewport const * viewport = ImGui::GetMainViewport();
+        ImVec2 const statusBarPos =
+          ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - ImGui::GetFrameHeight());
+        ImVec2 const statusBarSize = ImVec2(viewport->Size.x, ImGui::GetFrameHeight());
+
+        ImGui::SetNextWindowPos(statusBarPos);
+        ImGui::SetNextWindowSize(statusBarSize);
+
+        ImGuiWindowFlags const statusBarFlags =
+          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+          ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+          ImGuiWindowFlags_NoNavInputs;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+
+        if (ImGui::Begin("##StatusBar", nullptr, statusBarFlags))
+        {
+            size_t const errorCount = m_logger->getErrorCount();
+            size_t const warningCount = m_logger->getWarningCount();
+
+            // Error indicator button
+            if (errorCount > 0)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 0.6f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+            }
+
+            std::string const errorText = fmt::format("{} {} {}",
+                                                      ICON_FA_EXCLAMATION_TRIANGLE,
+                                                      errorCount,
+                                                      errorCount == 1 ? "Error" : "Errors");
+            if (ImGui::Button(errorText.c_str()))
+            {
+                m_logView.show();
+            }
+            ImGui::PopStyleColor(3);
+
+            ImGui::SameLine();
+
+            // Warning indicator button
+            if (warningCount > 0)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.6f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.7f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.5f, 0.1f, 1.0f));
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 0.6f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+            }
+
+            std::string const warningText = fmt::format("{} {} {}",
+                                                        ICON_FA_EXCLAMATION_CIRCLE,
+                                                        warningCount,
+                                                        warningCount == 1 ? "Warning" : "Warnings");
+            if (ImGui::Button(warningText.c_str()))
+            {
+                m_logView.show();
+            }
+            ImGui::PopStyleColor(3);
+
+            // Add some spacing and show additional status info on the right
+            ImGui::SameLine();
+            float const availableWidth = ImGui::GetContentRegionAvail().x;
+            if (availableWidth > 200.0f)
+            {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availableWidth - 200.0f);
+                ImGui::Text("Ready");
+            }
+        }
+        ImGui::End();
+
+        ImGui::PopStyleVar(3);
     }
 
     void MainWindow::showSaveBeforeFileOperationPopUp()

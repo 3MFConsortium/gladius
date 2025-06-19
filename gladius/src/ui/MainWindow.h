@@ -88,6 +88,7 @@ namespace gladius::ui
         void showExitPopUp();
         void showSaveBeforeFileOperationPopUp();
         void logViewer();
+        void renderStatusBar();
 
         void refreshModel();
 
@@ -181,6 +182,8 @@ namespace gladius::ui
         bool m_showSettings = false;
 
         size_t m_lastEventCount{};
+
+        size_t m_lastWarningCount{};
 
         std::chrono::time_point<std::chrono::steady_clock> m_lastUpateTime;
 

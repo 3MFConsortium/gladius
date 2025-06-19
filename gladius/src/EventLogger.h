@@ -51,9 +51,12 @@ namespace gladius::events
         [[nodiscard]] size_t size() const;
 
         [[nodiscard]] size_t getErrorCount() const;
+
+        [[nodiscard]] size_t getWarningCount() const;
       private:
         Events m_events;
         size_t m_countErrors{};
+        size_t m_countWarnings{};
     };
 
     using SharedLogger = std::shared_ptr<Logger>;
