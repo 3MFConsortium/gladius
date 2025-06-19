@@ -721,6 +721,7 @@ namespace gladius::ui
     void RenderWindow::togglePermanentCentering()
     {
         setPermanentCentering(!m_permanentCenteringEnabled);
+        frameAll(); // Recenter view when toggling
     }
 
     void RenderWindow::setPermanentCentering(bool enabled)
