@@ -137,6 +137,10 @@ namespace gladius::ui
 
         bool m_isVisible{true};
 
+        // Cached ImGui window state (updated during rendering)
+        mutable bool m_isWindowHovered{false};
+        mutable bool m_isWindowFocused{false};
+
         RenderWindowState m_renderWindowState{};
 
         bool m_centerViewRequested = false;

@@ -71,6 +71,10 @@ namespace gladius::ui
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
         ImGui::Begin("Preview", &m_isVisible, window_flags);
 
+        // Cache window state for isHovered() and isFocused() methods
+        m_isWindowHovered = ImGui::IsWindowHovered();
+        m_isWindowFocused = ImGui::IsWindowFocused();
+
         // if has focus, but not any item has focus, handle key input and content area is hovered
         if (ImGui::IsWindowFocused() && !ImGui::IsAnyItemFocused() &&
             ImGui::IsMouseHoveringRect(m_contentAreaMin, m_contentAreaMax))
@@ -1049,12 +1053,12 @@ namespace gladius::ui
 
     bool RenderWindow::isHovered() const
     {
-        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
+        return m_isWindowHovered && isVisible();
     }
 
     bool RenderWindow::isFocused() const
     {
-        return ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow) && isVisible();
+        return m_isWindowFocused && isVisible();
     }
 
     void RenderWindow::handleKeyInput()
