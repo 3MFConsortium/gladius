@@ -919,6 +919,12 @@ namespace gladius::ui
                 closeMenu();
                 showShortcutSettings();
             }
+
+            if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_LIST "\tShow Log")))
+            {
+                closeMenu();
+                m_logView.show();
+            }
         }
 
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_QUESTION "\tAbout Gladius")))
@@ -1289,64 +1295,62 @@ namespace gladius::ui
             size_t const errorCount = m_logger->getErrorCount();
             size_t const warningCount = m_logger->getWarningCount();
 
-            // Error indicator button
+            // Error indicator - clickable to show log view
             if (errorCount > 0)
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 0.2f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.9f, 0.3f, 0.3f, 0.4f));
             }
             else
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 0.6f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.6f, 0.6f, 0.2f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 0.4f));
             }
 
             std::string const errorText = fmt::format("{} {} {}",
                                                       ICON_FA_EXCLAMATION_TRIANGLE,
                                                       errorCount,
                                                       errorCount == 1 ? "Error" : "Errors");
+            
             if (ImGui::Button(errorText.c_str()))
             {
                 m_logView.show();
             }
-            ImGui::PopStyleColor(3);
+            ImGui::PopStyleColor(4);
 
             ImGui::SameLine();
 
-            // Warning indicator button
+            // Warning indicator - clickable to show log view
             if (warningCount > 0)
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.6f, 0.2f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.7f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.5f, 0.1f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.7f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.7f, 0.3f, 0.2f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.9f, 0.7f, 0.3f, 0.4f));
             }
             else
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 0.6f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.6f, 0.6f, 0.2f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 0.4f));
             }
 
             std::string const warningText = fmt::format("{} {} {}",
                                                         ICON_FA_EXCLAMATION_CIRCLE,
                                                         warningCount,
                                                         warningCount == 1 ? "Warning" : "Warnings");
+            
             if (ImGui::Button(warningText.c_str()))
             {
                 m_logView.show();
             }
-            ImGui::PopStyleColor(3);
+            ImGui::PopStyleColor(4);
 
-            // Add some spacing and show additional status info on the right
-            ImGui::SameLine();
-            float const availableWidth = ImGui::GetContentRegionAvail().x;
-            if (availableWidth > 200.0f)
-            {
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availableWidth - 200.0f);
-                ImGui::Text("Ready");
-            }
         }
         ImGui::End();
 
