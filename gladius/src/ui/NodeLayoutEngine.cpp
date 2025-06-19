@@ -553,7 +553,19 @@ namespace gladius::ui
                   entityWithAvgY.end(),
                   [](const auto & a, const auto & b) { return a.second < b.second; });
 
-        // Stack nodes vertically with proper spacing
+        // Calculate the desired center for this layer based on the barycenter values
+        float desiredLayerCenterY = 0.0f;
+        if (!entityWithAvgY.empty())
+        {
+            float sumOfAvgs = 0.0f;
+            for (const auto & [entity, avgY] : entityWithAvgY)
+            {
+                sumOfAvgs += avgY;
+            }
+            desiredLayerCenterY = sumOfAvgs / entityWithAvgY.size();
+        }
+
+        // Stack nodes vertically with proper spacing, starting from a temporary Y
         float currentY = 0.0f;
         for (auto & [entity, avgY] : entityWithAvgY)
         {
@@ -561,9 +573,9 @@ namespace gladius::ui
             currentY += entity->size.y + config.nodeDistance;
         }
 
-        // Center the layer vertically
+        // Center the layer vertically around the desired barycenter
         float totalHeight = currentY - config.nodeDistance; // Remove last spacing
-        float centerOffset = -totalHeight / 2.0f;
+        float centerOffset = desiredLayerCenterY - (totalHeight / 2.0f);
 
         for (auto & [entity, avgY] : entityWithAvgY)
         {
