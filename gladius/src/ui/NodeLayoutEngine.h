@@ -207,6 +207,24 @@ namespace gladius::ui
         determineDepth(const nodes::graph::IDirectedGraph & graph, nodes::NodeId beginId);
 
         /**
+         * @brief Correct depth for constant nodes with depth 0 (excluding begin node)
+         *
+         * Constant nodes that have depth 0 are placed in the same layer as the begin node.
+         * This method corrects their depth by setting it to the minimum depth of their
+         * connected/consuming nodes minus 1, placing them in the layer just before
+         * their consumers.
+         *
+         * @param model The node model
+         * @param graph The dependency graph
+         * @param depthMap The depth map to modify
+         * @param beginId The begin node ID (excluded from correction)
+         */
+        void correctConstantNodeDepths(nodes::Model & model,
+                                     const nodes::graph::IDirectedGraph & graph,
+                                     std::unordered_map<nodes::NodeId, int> & depthMap,
+                                     nodes::NodeId beginId);
+
+        /**
          * @brief Arrange entities into layers by depth
          *
          * @tparam T Entity type

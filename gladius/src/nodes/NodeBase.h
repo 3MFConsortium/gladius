@@ -205,16 +205,6 @@ namespace gladius::nodes
             return &newInput;
         }
 
-        [[nodiscard]] int getDepth() const
-        {
-            return m_depth;
-        }
-
-        void setDepth(int depth)
-        {
-            m_depth = depth;
-        }
-
         std::unique_ptr<NodeBase> clone() const
         {
             return std::unique_ptr<NodeBase>(this->cloneImpl());
@@ -304,7 +294,6 @@ namespace gladius::nodes
         NodeName m_tag;
         NodeId m_id{};
         NodeId m_order{};
-        int m_depth{};
         Category m_category{Category::Internal};
         Outputs m_outputs;
         float2 m_screenPos{};

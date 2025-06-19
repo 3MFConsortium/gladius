@@ -39,6 +39,9 @@ namespace gladius::ui
         auto const beginId = model.getBeginNode()->getId();
         auto depthMap = determineDepth(graph, beginId);
 
+        // Correct depth for constant nodes with depth 0 (excluding begin node)
+        correctConstantNodeDepths(model, graph, depthMap, beginId);
+
         // Step 1: Separate nodes into ungrouped and identify those in groups
         // All nodes (including constants) are treated equally in the layered layout
         std::vector<nodes::NodeBase *> ungroupedNodesPreFilter;
@@ -304,6 +307,10 @@ namespace gladius::ui
         {
             ungroupedNodes[i]->screenPos() =
               nodes::float2(entities[i].position.x, entities[i].position.y);
+
+            // Also update the Dear ImGui Node Editor position
+            ed::SetNodePosition(ungroupedNodes[i]->getId(),
+                                ImVec2(entities[i].position.x, entities[i].position.y));
         }
     }
 
@@ -344,6 +351,10 @@ namespace gladius::ui
         {
             groupInfo.nodes[i]->screenPos() =
               nodes::float2(entities[i].position.x, entities[i].position.y);
+
+            // Also update the Dear ImGui Node Editor position
+            ed::SetNodePosition(groupInfo.nodes[i]->getId(),
+                                ImVec2(entities[i].position.x, entities[i].position.y));
         }
 
         // Update group bounds
@@ -408,6 +419,66 @@ namespace gladius::ui
                                      nodes::NodeId beginId)
     {
         return nodes::graph::determineDepth(graph, beginId);
+    }
+
+    void
+    NodeLayoutEngine::correctConstantNodeDepths(nodes::Model & model,
+                                                const nodes::graph::IDirectedGraph & graph,
+                                                std::unordered_map<nodes::NodeId, int> & depthMap,
+                                                nodes::NodeId beginId)
+    {
+        // Find all constant nodes with depth 0 (excluding the begin node)
+        std::vector<nodes::NodeId> constantNodesToCorrect;
+
+        for (auto const & [id, node] : model)
+        {
+            // Skip the begin node
+            if (id == beginId)
+            {
+                continue;
+            }
+
+            // Check if this node has depth 0 and is a constant node
+            auto depthIter = depthMap.find(id);
+            if (depthIter == depthMap.end() || depthIter->second == 0)
+            {
+                constantNodesToCorrect.push_back(id);
+            }
+        }
+
+        // Correct the depth for each constant node
+        for (auto const constantNodeId : constantNodesToCorrect)
+        {
+            // Find all successor nodes (nodes that depend on this constant node)
+            auto const successors = nodes::graph::determineSuccessor(graph, constantNodeId);
+
+            if (successors.empty())
+            {
+                // No successors, keep depth 0
+                continue;
+            }
+
+            // Find the minimum depth among successors
+            int minSuccessorDepth = std::numeric_limits<int>::max();
+            bool hasValidSuccessor = false;
+
+            for (auto const successorId : successors)
+            {
+                auto successorDepthIter = depthMap.find(successorId);
+                if (successorDepthIter != depthMap.end())
+                {
+                    minSuccessorDepth = std::min(minSuccessorDepth, successorDepthIter->second);
+                    hasValidSuccessor = true;
+                }
+            }
+
+            // Set the constant node's depth to minSuccessorDepth - 1
+            // This places it in the layer just before its consumers
+            if (hasValidSuccessor)
+            {
+                depthMap[constantNodeId] = std::max(0, minSuccessorDepth - 1);
+            }
+        }
     }
 
     template <typename T>
