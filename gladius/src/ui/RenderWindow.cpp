@@ -33,16 +33,16 @@ namespace gladius::ui
         m_view = view;
         m_shortcutManager = shortcutManager;
         m_configManager = configManager;
-        
+
         auto & settings = m_core->getResourceContext()->getRenderingSettings();
         m_renderWindowState.renderQuality = settings.quality;
         m_renderWindowState.renderQualityWhileMoving = settings.quality * 0.5f;
-        
+
         // Load permanent centering state from config
         if (m_configManager)
         {
-            m_permanentCenteringEnabled = m_configManager->getValue<bool>(
-                "renderWindow", "permanentCenteringEnabled", false);
+            m_permanentCenteringEnabled =
+              m_configManager->getValue<bool>("renderWindow", "permanentCenteringEnabled", false);
         }
     }
 

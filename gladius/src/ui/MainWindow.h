@@ -122,14 +122,15 @@ namespace gladius::ui
          * @brief Add a file to the list of recently modified files
          * @param filePath Path to the file that has been modified
          */
-        void addToRecentFiles(const std::filesystem::path& filePath);
+        void addToRecentFiles(const std::filesystem::path & filePath);
 
         /**
          * @brief Get the list of recently modified files
          * @param maxCount Maximum number of files to return
          * @return List of pairs containing file paths and timestamps
          */
-        std::vector<std::pair<std::filesystem::path, std::time_t>> getRecentFiles(size_t maxCount = 100) const;
+        std::vector<std::pair<std::filesystem::path, std::time_t>>
+        getRecentFiles(size_t maxCount = 100) const;
 
         GLView m_mainView;
 
@@ -170,10 +171,8 @@ namespace gladius::ui
         std::shared_ptr<Document> m_doc;
         events::SharedLogger m_logger;
 
-
         // Flag to remember if library browser was visible
         bool m_isLibraryBrowserVisible = true;
-
 
         double m_maxTimeSliceOptimization_s = 60.f;
 
