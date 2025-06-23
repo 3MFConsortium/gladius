@@ -70,7 +70,7 @@ endif()
 
 project(gladius)
 if (MSVC)
-    add_compile_options(/bigobj /utf-8 /Zc:__cplusplus) # see https://github.com/ocornut/imgui/issues/4866
+    add_compile_options(/bigobj /utf-8 /Zc:__cplusplus)
 
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_compile_options(/RTC1) 
