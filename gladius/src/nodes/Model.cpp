@@ -315,7 +315,7 @@ namespace gladius::nodes
         return m_outPorts;
     }
 
-    const graph::DirectedGraph & Model::getGraph() const
+    const graph::AdjacencyListDirectedGraph & Model::getGraph() const
     {
         return m_graph;
     }
@@ -502,7 +502,7 @@ namespace gladius::nodes
 
         if (!skipCheck)
         {
-           return updateTypes();
+            return updateTypes();
         }
 
         return true;
@@ -512,12 +512,20 @@ namespace gladius::nodes
     {
         const auto nodeToRemove = m_nodes.find(id);
 
-        if (nodeToRemove->second->getId() == m_beginNode->getId())
+        // First check if the node exists
+        if (nodeToRemove == std::end(m_nodes))
         {
             return;
         }
 
-        if (nodeToRemove->second->getId() == m_endNode->getId())
+        // Protect begin node from deletion
+        if (m_beginNode && nodeToRemove->second->getId() == m_beginNode->getId())
+        {
+            return;
+        }
+
+        // Protect end node from deletion
+        if (m_endNode && nodeToRemove->second->getId() == m_endNode->getId())
         {
             return;
         }
@@ -580,8 +588,12 @@ namespace gladius::nodes
     {
         m_beginNode = create<Begin>();
         m_beginNode->setDisplayName("inputs");
+        m_beginNode->screenPos() =
+          nodes::float2(0.0f, 0.0f); ///< Set initial screen position for Begin node
         m_endNode = create<End>();
         m_endNode->setDisplayName("outputs");
+        m_endNode->screenPos() =
+          nodes::float2(400.0f, 0.0f); ///< Set initial screen position for End node
     }
 
     void Model::createBeginEndWithDefaultInAndOuts()
@@ -606,10 +618,18 @@ namespace gladius::nodes
                 m_endNode->parameter().at(FieldNames::Shape).getId());
     }
 
-    graph::DirectedGraph & Model::buildGraph()
+    graph::AdjacencyListDirectedGraph & Model::buildGraph()
     {
         m_allInputReferencesAreValid = false;
-        m_graph = graph::DirectedGraph(m_lastId);
+        m_graph = graph::AdjacencyListDirectedGraph(m_lastId);
+        
+        // Add all nodes as vertices to ensure they are included in topological sort
+        // even if they have no connections
+        for (auto const & [id, node] : m_nodes)
+        {
+            m_graph.addVertex(id);
+        }
+        
         for (auto & [id, node] : m_nodes)
         {
             for (auto & parameter : node->parameter())
@@ -628,7 +648,7 @@ namespace gladius::nodes
                                   << parameter.second.getSource().value().uniqueName << " ("
                                   << parameter.second.getSource().value().portId
                                   << ")in m_output_ports\n";
-                        m_graph = graph::DirectedGraph(m_lastId);
+                        m_graph = graph::AdjacencyListDirectedGraph(m_lastId);
                         return m_graph;
                     }
                 }
@@ -684,10 +704,14 @@ namespace gladius::nodes
 
     bool Model::isValid()
     {
-        if (!m_isValid)
-        {
-            return false;
-        }
+        return m_isValid;
+    }
+
+    void Model::updateValidityState()
+    {
+        // Reset to true initially, then accumulate validation results
+        m_isValid = true;
+
         if (!m_allInputReferencesAreValid)
         {
             if (m_logger)
@@ -695,7 +719,8 @@ namespace gladius::nodes
                 m_logger->addEvent(
                   events::Event{"Not all input references are valid", events::Severity::Error});
             }
-            return false;
+            m_isValid = false;
+            return;
         }
 
         if (graph::isCyclic(m_graph))
@@ -704,10 +729,11 @@ namespace gladius::nodes
             {
                 m_logger->addEvent(events::Event{"Graph is cyclic", events::Severity::Error});
             }
-            return false;
+            m_isValid = false;
+            return;
         }
 
-        return updateTypes();
+        m_isValid = updateTypes();
     }
 
     void Model::setDisplayName(std::string const & name)
@@ -815,21 +841,103 @@ namespace gladius::nodes
         m_isValid = isValid;
     }
 
+    /**
+     * @brief Simplifies the model by removing nodes that are not connected to the end node.
+     *
+     * This method identifies all nodes that cannot influence the end node (i.e.,
+     * there is no path from these nodes to the end node) and removes them.
+     * This helps optimize the model by eliminating unused nodes.
+     *
+     * @return The number of nodes removed during simplification
+     */
+    size_t Model::simplifyModel()
+    {
+        // Make sure the graph is up-to-date
+        updateGraphAndOrderIfNeeded();
+
+        // If there's no end node, there's nothing to simplify
+        if (!m_endNode)
+        {
+            return 0;
+        }
+
+        // Get the node ID of the end node
+        NodeId const endNodeId = m_endNode->getId();
+
+        // Create a set of all nodes that are needed (directly or indirectly contribute to the end
+        // node)
+        std::set<NodeId> neededNodes;
+
+        // First, include the end node itself
+        neededNodes.insert(endNodeId);
+
+        // Then add all nodes that the end node depends on
+        // We need to carefully handle the dependencies
+        if (m_graph.getSize() > 0 && endNodeId < static_cast<NodeId>(m_graph.getSize()))
+        {
+            auto endNodeDependencies = graph::determineAllDependencies(m_graph, endNodeId);
+            neededNodes.insert(endNodeDependencies.begin(), endNodeDependencies.end());
+        }
+
+        // Always include the Begin node if it exists
+        if (m_beginNode)
+        {
+            neededNodes.insert(m_beginNode->getId());
+        }
+
+        // Find nodes to remove (those not in the needed set)
+        std::vector<NodeId> nodesToRemove;
+        for (const auto & [nodeId, node] : m_nodes)
+        {
+            // Skip begin and end nodes (redundant check, but for clarity)
+            if (nodeId == endNodeId || (m_beginNode && nodeId == m_beginNode->getId()))
+            {
+                continue;
+            }
+
+            if (neededNodes.find(nodeId) == neededNodes.end())
+            {
+                nodesToRemove.push_back(nodeId);
+            }
+        }
+
+        // Remove the unneeded nodes
+        size_t removedCount = nodesToRemove.size();
+        for (auto nodeId : nodesToRemove)
+        {
+            remove(nodeId);
+        }
+
+        // Update the graph after removing nodes
+        m_graphRequiresUpdate = true;
+        updateGraphAndOrderIfNeeded();
+
+        return removedCount;
+
+        return removedCount;
+    }
+
     void Model::clear()
     {
+        // Clear all nodes and registries
         m_nodes.clear();
         m_outPorts.clear();
         m_inputParameter.clear();
+
+        // Reset node pointers
         m_beginNode = nullptr;
         m_endNode = nullptr;
-        m_lastParameterId = {};
+
+        // Reset IDs
+        m_lastParameterId = 0;
         m_lastId = 1;
-        m_graph = graph::DirectedGraph(0);
+
+        // Reset graph
+        m_graph = graph::AdjacencyListDirectedGraph(0);
         m_outputOrder.clear();
         m_graphRequiresUpdate = true;
-        m_displayName.reset();
-        m_resourceId = 0;
-        m_isManaged = false;
+
+        // Reset state flags
         m_allInputReferencesAreValid = false;
         m_nodesHaveBeenLayouted = false;
         m_isValid = true;

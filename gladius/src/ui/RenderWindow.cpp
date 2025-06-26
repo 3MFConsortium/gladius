@@ -1,32 +1,49 @@
-
-
 #include "RenderWindow.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 #include "../CLMath.h"
 #include "../ComputeContext.h"
+#include "../ConfigManager.h"
 #include "../ContourExtractor.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
 #include "../ImageRGBA.h"
 #include "../TimeMeasurement.h"
 #include "../io/MeshExporter.h"
-#include <nodes/Model.h>
 #include "GLView.h"
 #include "Profiling.h"
+#include "ShortcutManager.h"
 #include "Widgets.h"
 #include "compute/ComputeCore.h"
 #include "imgui.h"
+#include <nodes/Model.h>
 
 namespace gladius::ui
 {
     using namespace std;
 
-    void RenderWindow::initialize(ComputeCore * core, GLView * view)
+    void RenderWindow::initialize(ComputeCore * core,
+                                  GLView * view,
+                                  std::shared_ptr<ShortcutManager> shortcutManager,
+                                  gladius::ConfigManager * configManager)
     {
         m_core = core;
         m_view = view;
+        m_shortcutManager = shortcutManager;
+        m_configManager = configManager;
+
+        auto & settings = m_core->getResourceContext()->getRenderingSettings();
+        m_renderWindowState.renderQuality = settings.quality;
+        m_renderWindowState.renderQualityWhileMoving = settings.quality * 0.5f;
+
+        // Load permanent centering state from config
+        if (m_configManager)
+        {
+            m_permanentCenteringEnabled =
+              m_configManager->getValue<bool>("renderWindow", "permanentCenteringEnabled", false);
+        }
     }
 
     void RenderWindow::renderWindow()
@@ -37,7 +54,12 @@ namespace gladius::ui
             return;
         }
 
-        render(m_renderWindowState);
+        // only render if can get a compute token
+        auto token = m_core->requestComputeToken();
+        if (token)
+        {
+            render(m_renderWindowState);
+        }
 
         auto const img = m_core->getResultImage();
 
@@ -48,6 +70,10 @@ namespace gladius::ui
         ImGui::SetNextWindowBgAlpha(1.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
         ImGui::Begin("Preview", &m_isVisible, window_flags);
+
+        // Cache window state for isHovered() and isFocused() methods
+        m_isWindowHovered = ImGui::IsWindowHovered();
+        m_isWindowFocused = ImGui::IsWindowFocused();
 
         // if has focus, but not any item has focus, handle key input and content area is hovered
         if (ImGui::IsWindowFocused() && !ImGui::IsAnyItemFocused() &&
@@ -68,10 +94,37 @@ namespace gladius::ui
                 }
             }
 
+            // Toggle for permanent centering
+            if (ImGui::MenuItem(
+                  reinterpret_cast<const char *>(ICON_FA_CROSSHAIRS "\tPermanent Centering"),
+                  nullptr,
+                  m_permanentCenteringEnabled))
+            {
+                togglePermanentCentering();
+            }
+
+            if (ImGui::IsItemHovered())
+            {
+                std::string shortcutText = "No shortcut assigned";
+                if (m_shortcutManager)
+                {
+                    auto shortcut =
+                      m_shortcutManager->getShortcut("camera.togglePermanentCentering");
+                    if (!shortcut.isEmpty())
+                    {
+                        shortcutText = shortcut.toString();
+                    }
+                }
+
+                ImGui::SetTooltip("Automatically center view when model changes, camera moves, or "
+                                  "viewport resizes\nShortcut: %s",
+                                  shortcutText.c_str());
+            }
+
             toggleButton({reinterpret_cast<const char *>(ICON_FA_ROBOT "\tHQ")},
                          &m_enableHQRendering);
 
-            int renderingFlags = m_core->getResourceContext().getRenderingSettings().flags;
+            int renderingFlags = m_core->getResourceContext()->getRenderingSettings().flags;
 
             // submenu for rendering flags
             bool flagsChanged = false;
@@ -86,6 +139,24 @@ namespace gladius::ui
                 flagsChanged |= ImGui::CheckboxFlags(
                   "Show Coordinate System", &renderingFlags, RF_SHOW_COORDINATE_SYSTEM);
 
+                ImGui::Separator(); // Quality slider
+                float quality = m_core->getResourceContext()->getRenderingSettings().quality;
+                ImGui::SetNextItemWidth(150.f * m_uiScale);
+                bool qualityChanged = ImGui::SliderFloat("Quality", &quality, 0.1f, 2.0f);
+
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Rendering quality (0.1 = Fast, 2.0 = Highest Quality)");
+                }
+                if (qualityChanged)
+                {
+                    m_core->getResourceContext()->getRenderingSettings().quality = quality;
+                    m_renderWindowState.renderQuality = quality;
+                    m_renderWindowState.renderQualityWhileMoving = quality * 0.5f;
+                    invalidateView();
+                }
+                m_renderWindowState.renderQuality = quality;
+
                 ImGui::EndMenu();
             }
 
@@ -94,7 +165,7 @@ namespace gladius::ui
                 invalidateView();
             }
 
-            m_core->getResourceContext().getRenderingSettings().flags = renderingFlags;
+            m_core->getResourceContext()->getRenderingSettings().flags = renderingFlags;
 
             if (m_core->isAnyCompilationInProgress())
             {
@@ -180,6 +251,12 @@ namespace gladius::ui
             fabs(prevRenderWindowSize.y - m_renderWindowSize_px.y) > tolerance)
         {
             invalidateView();
+
+            // Mark viewport size as changed for permanent centering
+            if (m_permanentCenteringEnabled)
+            {
+                m_viewportSizeChangedSinceLastCenter = true;
+            }
         }
 
         ImGui::Image(reinterpret_cast<void *>(static_cast<intptr_t>(textureId)),
@@ -302,6 +379,9 @@ namespace gladius::ui
         m_preComputedSdfDirty = true;
         m_parameterDirty = true;
         m_renderWindowState.renderingStepSize = 1;
+
+        // Mark model as modified for permanent centering
+        m_modelModifiedSinceLastCenter = true;
     }
 
     void RenderWindow::renderScene(RenderWindowState & state)
@@ -386,53 +466,367 @@ namespace gladius::ui
         invalidateView();
     }
 
-    bool RenderWindow::isVisible() const
+    void RenderWindow::setTopView()
     {
-        return m_isVisible;
+        // Top view: looking down the Z axis (pitch = +90°, yaw = 0°)
+        m_camera.setAngle(CL_M_PI_F / 2.0f, 0.0f);
+        onCameraManuallyMoved();
+        invalidateView();
     }
 
-    void RenderWindow::handleKeyInput()
+    void RenderWindow::setFrontView()
     {
-        float deltaTime = ImGui::GetIO().DeltaTime;
-        float amount = 5.f * deltaTime;
+        // Front view: looking along the Y axis (pitch = 0°, yaw = -90°)
+        m_camera.setAngle(0.0f, -CL_M_PI_F / 2.0f);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
 
-        int key_press_count_up = ImGui::GetKeyPressedAmount((ImGuiKey_UpArrow), deltaTime, 0.01f);
-        if (key_press_count_up > 0)
+    void RenderWindow::setLeftView()
+    {
+        // Left view: looking along the X axis (pitch = 0°, yaw = 0°)
+        m_camera.setAngle(0.0f, 0.0f);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::setRightView()
+    {
+        // Right view: looking along the negative X axis (pitch = 0°, yaw = 180°)
+        m_camera.setAngle(0.0f, CL_M_PI_F);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::setBackView()
+    {
+        // Back view: looking along the negative Y axis (pitch = 0°, yaw = 90°)
+        m_camera.setAngle(0.0f, CL_M_PI_F / 2.0f);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::setBottomView()
+    {
+        // Bottom view: looking up the Z axis (pitch = -90°, yaw = 0°)
+        m_camera.setAngle(-CL_M_PI_F / 2.0f, 0.0f);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::setIsometricView()
+    {
+        // Isometric view: pitch = -35.26°, yaw = 45° (standard CAD isometric)
+        float const pitch = -std::atan(1.0f / std::sqrt(2.0f)); // ~-35.26 degrees
+        float const yaw = CL_M_PI_F / 4.0f;                     // 45 degrees
+        m_camera.setAngle(pitch, yaw);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::togglePerspective()
+    {
+        // This would require camera implementation to support orthographic/perspective toggle
+        // For now, we'll save current view and restore it
+        saveCurrentView();
+        invalidateView();
+    }
+
+    void RenderWindow::frameAll()
+    {
+        centerView();  // Same as center view for now
+        zoomExtents(); // Zoom to fit all objects in view
+    }
+
+    void RenderWindow::zoomExtents()
+    {
+        // Zoom to fit all objects in view
+        if (m_core->updateBBox() && m_core->getBoundingBox().has_value())
         {
-            ImGui::SetKeyboardFocusHere();
-            // rotate up
-            m_camera.rotate(amount * key_press_count_up, 0.0f);
+            auto const bbox = m_core->getBoundingBox().value();
+            m_camera.adjustDistanceToTarget(bbox, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
             invalidateView();
         }
+    }
 
-        int key_press_count_down =
-          ImGui::GetKeyPressedAmount((ImGuiKey_DownArrow), deltaTime, 0.01f);
-        if (key_press_count_down > 0)
+    void RenderWindow::zoomSelected()
+    {
+        // For now, same as zoom extents since we don't have selection
+        zoomExtents();
+    }
+
+    void RenderWindow::panLeft()
+    {
+        // Get current look at position and move it left
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x - m_panSensitivity, currentLookAt.y, currentLookAt.z};
+        m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::panRight()
+    {
+        // Get current look at position and move it right
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x + m_panSensitivity, currentLookAt.y, currentLookAt.z};
+        m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::panUp()
+    {
+        // Get current look at position and move it up
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x, currentLookAt.y, currentLookAt.z + m_panSensitivity};
+        m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::panDown()
+    {
+        // Get current look at position and move it down
+        auto currentLookAt = m_camera.getLookAt();
+        Position newLookAt{currentLookAt.x, currentLookAt.y, currentLookAt.z - m_panSensitivity};
+        m_camera.setLookAt(newLookAt);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::rotateLeft()
+    {
+        m_camera.rotate(0.0f, -m_rotateSensitivity);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::rotateRight()
+    {
+        m_camera.rotate(0.0f, m_rotateSensitivity);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::rotateUp()
+    {
+        m_camera.rotate(m_rotateSensitivity, 0.0f);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::rotateDown()
+    {
+        m_camera.rotate(-m_rotateSensitivity, 0.0f);
+        onCameraManuallyMoved();
+        invalidateView();
+    }
+
+    void RenderWindow::previousView()
+    {
+        if (!m_viewHistory.empty() && m_currentViewIndex > 0)
         {
-            ImGui::SetKeyboardFocusHere();
-            // rotate down
-            m_camera.rotate(-1.f * amount * key_press_count_down, 0.0f);
+            m_currentViewIndex--;
+            auto const & view = m_viewHistory[m_currentViewIndex];
+
+            // Restore the view (this would require camera API support)
+            // For now, we'll invalidate the view
             invalidateView();
         }
+    }
 
-        int key_press_count_left =
-          ImGui::GetKeyPressedAmount((ImGuiKey_LeftArrow), deltaTime, 0.01f);
-        if (key_press_count_left > 0)
+    void RenderWindow::nextView()
+    {
+        if (!m_viewHistory.empty() && m_currentViewIndex < m_viewHistory.size() - 1)
         {
-            ImGui::SetKeyboardFocusHere();
-            // rotate left
-            m_camera.rotate(0.0f, -1.f * amount * key_press_count_left);
+            m_currentViewIndex++;
+            auto const & view = m_viewHistory[m_currentViewIndex];
+
+            // Restore the view (this would require camera API support)
+            // For now, we'll invalidate the view
             invalidateView();
         }
+    }
 
-        int key_press_count_right =
-          ImGui::GetKeyPressedAmount((ImGuiKey_RightArrow), deltaTime, 0.01f);
-        if (key_press_count_right > 0)
+    void RenderWindow::saveCurrentView()
+    {
+        // Save current camera state using available methods
+        auto eyePos = m_camera.getEyePosition();
+        auto lookAt = m_camera.getLookAt();
+
+        m_savedView.position = Vector3{eyePos.x, eyePos.y, eyePos.z};
+        m_savedView.target = Vector3{lookAt.x, lookAt.y, lookAt.z};
+        m_savedView.up = Vector3{0.0f, 0.0f, 1.0f}; // Assuming Z-up
+        m_savedView.distance = 100.0f;    // Default distance since we can't access private members
+        m_savedView.isPerspective = true; // Default to perspective
+        m_hasSavedView = true;
+
+        // Also add to history
+        CameraView currentView = m_savedView;
+        m_viewHistory.push_back(currentView);
+        m_currentViewIndex = m_viewHistory.size() - 1;
+
+        // Limit history size
+        if (m_viewHistory.size() > 20)
         {
-            ImGui::SetKeyboardFocusHere();
-            // rotate right
-            m_camera.rotate(0.0f, amount * key_press_count_right);
+            m_viewHistory.erase(m_viewHistory.begin());
+            if (m_currentViewIndex > 0)
+            {
+                m_currentViewIndex--;
+            }
+        }
+    }
+
+    void RenderWindow::restoreSavedView()
+    {
+        if (m_hasSavedView)
+        {
+            // Restore the saved view (this would require camera API support)
+            // For now, we'll invalidate the view
             invalidateView();
+        }
+    }
+
+    void RenderWindow::toggleFlyMode()
+    {
+        m_flyModeEnabled = !m_flyModeEnabled;
+        m_cameraMode = m_flyModeEnabled ? CameraMode::Fly : CameraMode::Orbit;
+        invalidateView();
+    }
+
+    void RenderWindow::setOrbitMode()
+    {
+        m_cameraMode = CameraMode::Orbit;
+        m_flyModeEnabled = false;
+    }
+
+    void RenderWindow::setPanMode()
+    {
+        m_cameraMode = CameraMode::Pan;
+        m_flyModeEnabled = false;
+    }
+
+    void RenderWindow::setZoomMode()
+    {
+        m_cameraMode = CameraMode::Zoom;
+        m_flyModeEnabled = false;
+    }
+
+    void RenderWindow::resetOrientation()
+    {
+        m_cameraMode = CameraMode::Orbit;
+        m_flyModeEnabled = false;
+
+        // Reset to isometric view
+        setIsometricView();
+    }
+
+    void RenderWindow::togglePermanentCentering()
+    {
+        setPermanentCentering(!m_permanentCenteringEnabled);
+        frameAll(); // Recenter view when toggling
+    }
+
+    void RenderWindow::setPermanentCentering(bool enabled)
+    {
+        m_permanentCenteringEnabled = enabled;
+
+        // Save to config
+        if (m_configManager)
+        {
+            m_configManager->setValue("renderWindow", "permanentCenteringEnabled", enabled);
+            m_configManager->save();
+        }
+
+        if (enabled)
+        {
+            // Initialize tracking state
+            updateCameraStateTracking();
+            m_modelModifiedSinceLastCenter = true; // Force initial centering
+            m_lastViewportSize = m_renderWindowSize_px;
+            m_viewportSizeChangedSinceLastCenter = false;
+        }
+        else
+        {
+            // Clear tracking state when disabled
+            m_lastCameraStateValid = false;
+            m_viewportSizeChangedSinceLastCenter = false;
+        }
+    }
+
+    bool RenderWindow::isPermanentCenteringEnabled() const
+    {
+        return m_permanentCenteringEnabled;
+    }
+
+    void RenderWindow::updateCameraStateTracking()
+    {
+        m_lastCameraState = getCurrentCameraState();
+        m_lastCameraStateValid = true;
+    }
+
+    bool RenderWindow::shouldRecalculateCenter()
+    {
+        if (!m_permanentCenteringEnabled)
+        {
+            return false;
+        }
+
+        // Always recalculate if model was modified
+        if (m_modelModifiedSinceLastCenter)
+        {
+            return true;
+        }
+
+        // Always recalculate if viewport size changed
+        if (m_viewportSizeChangedSinceLastCenter)
+        {
+            return true;
+        }
+
+        // Check if camera has moved
+        if (!m_lastCameraStateValid)
+        {
+            return true;
+        }
+
+        auto const currentState = getCurrentCameraState();
+        return currentState != m_lastCameraState;
+    }
+
+    RenderWindow::CameraState RenderWindow::getCurrentCameraState()
+    {
+        CameraState state;
+
+        // Get current camera parameters - we need to access these through the public API
+        auto const eyePos = m_camera.getEyePosition();
+        auto const lookAt = m_camera.getLookAt();
+
+        state.lookAt = Position{lookAt.x, lookAt.y, lookAt.z};
+
+        // For pitch/yaw and distance, we'd need to compute them from eye position and look at
+        // Since we don't have direct access, we'll use the eye position as a proxy for changes
+        Position const eyePosition{eyePos.x, eyePos.y, eyePos.z};
+        Position const lookAtPosition{lookAt.x, lookAt.y, lookAt.z};
+        Position const eyeToLookAt = lookAtPosition - eyePosition;
+
+        state.distance = eyeToLookAt.norm();
+
+        // Calculate pitch and yaw from the eye-to-lookat vector
+        state.pitch = std::asin(eyeToLookAt.z() / state.distance);
+        state.yaw = std::atan2(eyeToLookAt.y(), eyeToLookAt.x());
+
+        return state;
+    }
+
+    void RenderWindow::onCameraManuallyMoved()
+    {
+        // When camera is manually moved, disable permanent centering temporarily
+        // until the next model update or manual center request
+        if (m_permanentCenteringEnabled)
+        {
+            updateCameraStateTracking();
         }
     }
 
@@ -463,9 +857,11 @@ namespace gladius::ui
             m_view->startAnimationMode();
         }
 
-        if (m_centerViewRequested)
-        {
+        // Handle both manual center requests and permanent centering
+        bool const shouldCenter = m_centerViewRequested || shouldRecalculateCenter();
 
+        if (shouldCenter)
+        {
             bool boundingBoxValid = m_core->getBoundingBox().has_value();
             if (boundingBoxValid)
             {
@@ -477,7 +873,19 @@ namespace gladius::ui
                 if (boundingBoxValid)
                 {
                     m_camera.centerView(bb);
-                    m_camera.adjustDistanceToTarget(bb);
+                    m_camera.adjustDistanceToTarget(
+                      bb, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
+
+                    // Update tracking state for permanent centering
+                    if (m_permanentCenteringEnabled)
+                    {
+                        updateCameraStateTracking();
+                        m_modelModifiedSinceLastCenter = false;
+                        m_viewportSizeChangedSinceLastCenter = false;
+                        m_lastViewportSize = m_renderWindowSize_px;
+                    }
+
+                    m_centerViewRequested = false;
                 }
             }
 
@@ -485,17 +893,24 @@ namespace gladius::ui
             {
                 // just set the look at point to the center of the build platform
                 m_camera.setLookAt({200.0, 200.0, 50.0});
+
+                // Update tracking state for permanent centering
+                if (m_permanentCenteringEnabled)
+                {
+                    updateCameraStateTracking();
+                    m_modelModifiedSinceLastCenter = false;
+                    m_viewportSizeChangedSinceLastCenter = false;
+                    m_lastViewportSize = m_renderWindowSize_px;
+                }
             }
 
-            m_centerViewRequested = false;
             invalidateView();
         }
-
         if (state.isMoving)
         {
             if (m_preComputedSdfDirty)
             {
-                m_core->getResourceContext().getRenderingSettings().approximation = AM_FULL_MODEL;
+                m_core->getResourceContext()->getRenderingSettings().approximation = AM_FULL_MODEL;
             }
         }
 
@@ -627,6 +1042,51 @@ namespace gladius::ui
         {
             m_core->invalidatePreCompSdf();
             m_core->precomputeSdfForWholeBuildPlatform();
+            invalidateView();
+        }
+    }
+
+    bool RenderWindow::isVisible() const
+    {
+        return m_isVisible;
+    }
+
+    bool RenderWindow::isHovered() const
+    {
+        return m_isWindowHovered && isVisible();
+    }
+
+    bool RenderWindow::isFocused() const
+    {
+        return m_isWindowFocused && isVisible();
+    }
+
+    void RenderWindow::handleKeyInput()
+    {
+        // Handle keyboard input - this can be extended later
+        // For now, this is just a placeholder implementation
+    }
+
+    void RenderWindow::zoomIn()
+    {
+        m_camera.zoom(-0.1f); // Negative zoom means zoom in
+        invalidateView();
+    }
+
+    void RenderWindow::zoomOut()
+    {
+        m_camera.zoom(0.1f); // Positive zoom means zoom out
+        invalidateView();
+    }
+
+    void RenderWindow::resetZoom()
+    {
+        // Reset to a reasonable default distance
+        // We need to access the private members, so let's use the centerView logic
+        if (m_core->updateBBox() && m_core->getBoundingBox().has_value())
+        {
+            auto const bbox = m_core->getBoundingBox().value();
+            m_camera.adjustDistanceToTarget(bbox, m_renderWindowSize_px.x, m_renderWindowSize_px.y);
             invalidateView();
         }
     }

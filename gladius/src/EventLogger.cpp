@@ -32,6 +32,10 @@ namespace gladius::events
         {
             m_countErrors++;
         }
+        else if (event.getSeverity() == Severity::Warning)
+        {
+            m_countWarnings++;
+        }
         m_events.push_back(event);
 #ifdef _DEBUG
         std::cout << event.getMessage() << "\n";
@@ -41,6 +45,8 @@ namespace gladius::events
     void Logger::clear()
     {
         m_events.clear();
+        m_countErrors = 0;
+        m_countWarnings = 0;
     }
 
     Events::iterator Logger::begin()
@@ -71,5 +77,10 @@ namespace gladius::events
     size_t Logger::getErrorCount() const
     {
         return m_countErrors;
+    }
+
+    size_t Logger::getWarningCount() const
+    {
+        return m_countWarnings;
     }
 }

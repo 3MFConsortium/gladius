@@ -1,4 +1,6 @@
 #include "Document.h"
+
+#include "BackupManager.h"
 #include "CliReader.h"
 #include "CliWriter.h"
 #include "FileChooser.h"
@@ -9,8 +11,10 @@
 #include "compute/ComputeCore.h"
 #include "exceptions.h"
 #include "imguinodeeditor.h"
-#include "io/3mf/ImageStackCreator.h"
 #include "io/3mf/ImageExtractor.h"
+#include "io/3mf/ImageStackCreator.h"
+#include "io/3mf/ResourceDependencyGraph.h"
+#include "io/3mf/ResourceIdUtil.h" // for resourceIdToUniqueResourceId
 #include "io/3mf/Writer3mf.h"
 #include "io/ImporterVdb.h"
 #include "io/VdbImporter.h"
@@ -37,33 +41,53 @@ namespace gladius
 {
     using namespace std;
 
+    AssemblyToken Document::waitForAssemblyToken() const
+    {
+        return AssemblyToken(m_assemblyMutex);
+    }
+
+    OptionalAssemblyToken Document::requestAssemblyToken() const
+    {
+        if (!m_assemblyMutex.try_lock())
+        {
+            return {};
+        }
+        std::lock_guard<std::mutex> lock(m_assemblyMutex, std::adopt_lock);
+        return OptionalAssemblyToken(m_assemblyMutex);
+    }
+
     void Document::resetGeneratorContext()
     {
+
         if (!m_assembly || !m_core)
         {
             throw std::runtime_error("No assembly or core");
         }
-
+        // Get the resource context directly as a shared pointer
+        auto resourceContextPtr = m_core->getResourceContext();
         m_generatorContext = std::make_unique<nodes::GeneratorContext>(
-          &m_core->getResourceContext(), m_assembly->getFilename().remove_filename());
+          resourceContextPtr, m_assembly->getFilename().remove_filename());
         m_primitiveDateNeedsUpdate = true;
     }
 
     Document::Document(std::shared_ptr<ComputeCore> core)
         : m_core(std::move(core))
     {
-        m_channels.push_back(BitmapChannel{"DownSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateDownSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"DownSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateDownSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
-        m_channels.push_back(BitmapChannel{"UpSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateUpSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"UpSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateUpSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
         newModel();
         resetGeneratorContext();
+
+        // Initialize backup manager
+        m_backupManager.initialize();
     }
 
     void Document::refreshModelAsync()
@@ -72,9 +96,10 @@ namespace gladius
         {
             return;
         }
-
-        m_futureMeshLoading = std::async(std::launch::async, [&]() { refreshWorker(); });
         saveBackup();
+        {
+            m_futureModelRefresh = std::async(std::launch::async, [&]() { refreshWorker(); });
+        }
     }
 
     void Document::loadAllMeshResources()
@@ -92,16 +117,13 @@ namespace gladius
     void Document::refreshWorker()
     {
         ProfileFunction;
-        auto computeToken = m_core->requestComputeToken();
-        if (!computeToken.has_value())
-        {
-            m_core->invalidatePreCompSdf();
-            return;
-        }
+        auto computeToken = m_core->waitForComputeToken();
 
-        m_core->getMeshResourceState().signalCompilationStarted();
+        auto meshResourceState = m_core->getMeshResourceState();
+        meshResourceState->signalCompilationStarted();
 
         m_assembly->updateInputsAndOutputs();
+
         loadAllMeshResources();
 
         updateParameterRegistration();
@@ -109,70 +131,60 @@ namespace gladius
         m_parameterDirty = true;
         m_contoursDirty = true;
 
+        // Rebuild resource dependency graph
+        rebuildResourceDependencyGraph();
         updateFlatAssembly();
+
         m_core->refreshProgram(m_flatAssembly);
         m_core->recompileBlockingNoLock();
         m_core->invalidatePreCompSdf();
         m_core->resetBoundingBox();
         if (m_core->precomputeSdfForWholeBuildPlatform())
         {
-            m_core->getMeshResourceState().signalCompilationFinished();
+            meshResourceState->signalCompilationFinished();
         }
-        }
+    }
 
     void Document::updateFlatAssembly()
     {
+        ProfileFunction;
         using namespace gladius::events;
-        nodes::Assembly assemblyToFlat = *m_assembly;
+
+        nodes::Assembly assemblyToFlat;
+        {
+
+            if (!m_assembly)
+            {
+                return;
+            }
+
+            if (!validateAssembly())
+            {
+                return;
+            }
+
+            assemblyToFlat = *m_assembly;
+        }
+
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();
 
-        nodes::GraphFlattener flattener(assemblyToFlat);
-        nodes::Validator validator;
-        auto logger = getSharedLogger();
-        if (!validator.validate(*m_assembly))
-        {
+        // Pass the dependency graph to the flattener if available
+        nodes::GraphFlattener flattener =
+          m_resourceDependencyGraph
+            ? nodes::GraphFlattener(assemblyToFlat, m_resourceDependencyGraph.get())
+            : nodes::GraphFlattener(assemblyToFlat);
 
-            if (logger)
-            {
-                for (auto const & error : validator.getErrors())
-                {
-                    logger->addEvent({fmt::format("{}: Review parameter {} of node {} in model {}",
-                                                  error.message,
-                                                  error.parameter,
-                                                  error.node,
-                                                  error.model),
-                                      Severity::Error});
-                }
-            }
-            else
-            {
-                for (auto const & error : validator.getErrors())
-                {
-                    std::cerr << fmt::format("{}: Review parameter {} of node {} in model {}\n",
-                                             error.message,
-                                             error.parameter,
-                                             error.node,
-                                             error.model);
-                }
-            }
-            return;
-        }
         try
         {
             m_flatAssembly = std::make_shared<nodes::Assembly>(flattener.flatten());
         }
         catch (std::exception const & e)
         {
+            auto logger = getSharedLogger();
             if (logger)
-            {
                 logger->addEvent(
                   {"Error flattening assembly: " + std::string(e.what()), Severity::Error});
-            }
-            else
-            {
-                std::cerr << "Error flattening assembly: " << e.what() << "\n";
-            }
         }
     }
 
@@ -182,6 +194,7 @@ namespace gladius
         {
             throw std::runtime_error("No generator context");
         }
+
         for (auto & model : m_assembly->getFunctions())
         {
             if (!model.second)
@@ -197,26 +210,40 @@ namespace gladius
 
     void Document::saveBackup()
     {
-        // skip back up, if the last backup is less than 1 minutes ago
-        if (m_lastBackupTime.time_since_epoch().count() > 0 &&
-            std::chrono::duration_cast<std::chrono::minutes>(std::chrono::system_clock::now() -
-                                                             m_lastBackupTime)
-                .count() < 1)
+        // Use the new BackupManager for improved backup handling
+        try
         {
-            return;
-        }
+            // Create a temporary file for the backup
+            auto tempDir = std::filesystem::temp_directory_path();
+            auto tempBackupFile = tempDir / "gladius_temp_backup.3mf";
 
-        // save a backup of the current model in temp directory
-        auto tempDir = std::filesystem::temp_directory_path();
-        auto backupDir = tempDir / "gladius";
-        if (!std::filesystem::exists(backupDir))
+            // Save current model to temporary file
+            saveAs(tempBackupFile, false);
+
+            // Get original filename for backup naming
+            std::string originalName = "untitled";
+            if (m_currentAssemblyFileName.has_value() && !m_currentAssemblyFileName->empty())
+            {
+                originalName = m_currentAssemblyFileName->stem().string();
+            }
+
+            // Create backup using BackupManager
+            m_backupManager.createBackup(tempBackupFile, originalName);
+
+            // Clean up temporary file
+            if (std::filesystem::exists(tempBackupFile))
+            {
+                std::filesystem::remove(tempBackupFile);
+            }
+
+            // Update backup time
+            m_lastBackupTime = std::chrono::system_clock::now();
+        }
+        catch (const std::exception &)
         {
-            std::filesystem::create_directory(backupDir);
+            // Backup failure shouldn't crash the application
+            // Could log error here if logging is available
         }
-
-        auto backupFile = backupDir / "backup.3mf";
-        saveAs(backupFile, false);
-        m_lastBackupTime = std::chrono::system_clock::now();
     }
 
     bool Document::refreshModelIfNoCompilationIsRunning()
@@ -224,42 +251,49 @@ namespace gladius
         ProfileFunction;
         if (m_core->getBestRenderProgram()->isCompilationInProgress() ||
             m_core->getSlicerProgram()->isCompilationInProgress() ||
-            !m_core->getMeshResourceState().isModelUpToDate())
+            !m_core->getMeshResourceState()->isModelUpToDate())
         {
             return false;
         }
 
         refreshModelAsync();
+
         return true;
     }
 
     void Document::newModel()
     {
         ProfileFunction;
-        m_assembly = std::make_shared<nodes::Assembly>();
-        m_assembly->assemblyModel()->createValidVoid();
+        {
+
+            m_assembly = std::make_shared<nodes::Assembly>();
+            m_assembly->assemblyModel()->createValidVoid();
+        }
         m_modelFileName.clear();
         m_3mfmodel.reset();
 
         io::Importer3mf importer{getSharedLogger()};
         m_3mfmodel = importer.get3mfWrapper()->CreateModel();
 
-        m_core->getResourceContext().clearImageStacks();
+        m_core->getResourceContext()->clearImageStacks();
         resetGeneratorContext();
     }
 
     void Document::newEmptyModel()
     {
         ProfileFunction;
-        m_assembly = std::make_shared<nodes::Assembly>();
-        m_assembly->assemblyModel()->createBeginEndWithDefaultInAndOuts();
+        {
+
+            m_assembly = std::make_shared<nodes::Assembly>();
+            m_assembly->assemblyModel()->createBeginEndWithDefaultInAndOuts();
+        }
         m_modelFileName.clear();
         m_3mfmodel.reset();
 
         io::Importer3mf importer{getSharedLogger()};
         m_3mfmodel = importer.get3mfWrapper()->CreateModel();
 
-        m_core->getResourceContext().clearImageStacks();
+        m_core->getResourceContext()->clearImageStacks();
         resetGeneratorContext();
     }
 
@@ -283,7 +317,10 @@ namespace gladius
 
         updatePayload();
 
-        m_parameterDirty = m_core->tryToupdateParameter(*m_assembly);
+        {
+            m_parameterDirty = m_core->tryToupdateParameter(*m_assembly);
+        }
+
         if (m_parameterDirty)
         {
             m_parameterDirty = !m_core->precomputeSdfForWholeBuildPlatform();
@@ -296,6 +333,7 @@ namespace gladius
 
     void Document::updateParameterRegistration()
     {
+
         if (!m_assembly)
         {
             return;
@@ -338,31 +376,33 @@ namespace gladius
             {
                 return;
             }
-
-            m_generatorContext->primitives = &m_core->getPrimitives();
+            // Get the primitives directly as a shared_ptr
+            m_generatorContext->primitives = m_core->getPrimitives();
             if (!m_generatorContext->primitives)
             {
                 return;
             }
 
-            if (!m_assembly)
             {
-                return;
+
+                if (!m_assembly)
+                {
+                    return;
+                }
+
+                m_generatorContext->basePath = m_assembly->getFilename().remove_filename();
             }
-
-            m_generatorContext->basePath = m_assembly->getFilename().remove_filename();
-
-            m_generatorContext->computeContext = &m_core->getComputeContext();
+            // Get the compute context directly as a shared_ptr
+            m_generatorContext->computeContext = m_core->getComputeContext();
             if (!m_generatorContext->computeContext)
             {
                 return;
             }
 
-            CL_ERROR(m_core->getComputeContext().GetQueue().finish());
+            CL_ERROR(m_core->getComputeContext()->GetQueue().finish());
 
-            updateMemoryOffsets(); // determines which resources are needed
-
-            if (m_primitiveDateNeedsUpdate)
+            updateMemoryOffsets(); // determines which resources are needed            if
+                                   // (m_primitiveDateNeedsUpdate)
             {
                 if (m_generatorContext->primitives)
                 {
@@ -370,17 +410,21 @@ namespace gladius
                 }
 
                 updateParameterRegistration();
-                for (auto & model : m_assembly->getFunctions())
+
                 {
-                    if (!model.second)
+
+                    for (auto & model : m_assembly->getFunctions())
                     {
-                        continue;
-                    }
-                    for (auto & node : *model.second)
-                    {
-                        if (node.second)
+                        if (!model.second)
                         {
-                            node.second->generate(*m_generatorContext);
+                            continue;
+                        }
+                        for (auto & node : *model.second)
+                        {
+                            if (node.second)
+                            {
+                                node.second->generate(*m_generatorContext);
+                            }
                         }
                     }
                 }
@@ -396,7 +440,10 @@ namespace gladius
         }
         catch (std::exception const & e)
         {
-            std::cerr << "unhandled exception: " << e.what() << "\n";
+            auto logger = getSharedLogger();
+            if (logger)
+                logger->addEvent(
+                  {std::string("unhandled exception: ") + e.what(), events::Severity::Error});
         }
     }
 
@@ -404,17 +451,23 @@ namespace gladius
     {
         ProfileFunction;
         m_core->getSlicerProgram()->waitForCompilation();
-        refreshWorker();
+        {
+
+            refreshWorker();
+        }
         try
         {
-            if (m_futureMeshLoading.valid())
+            if (m_futureModelRefresh.valid())
             {
-                m_futureMeshLoading.get(); // wait for the future to finish
+                m_futureModelRefresh.get(); // wait for the future to finish
             }
         }
         catch (std::future_error const & e)
         {
-            std::cerr << "future error: " << e.what() << "\n";
+            auto logger = getSharedLogger();
+            if (logger)
+                logger->addEvent(
+                  {std::string("future error: ") + e.what(), events::Severity::Error});
         }
         m_core->compileSlicerProgramBlocking();
         updateParameter();
@@ -428,9 +481,13 @@ namespace gladius
 
         vdb::MeshExporter exporter;
         exporter.beginExport(filename, *m_core);
+        auto logger = getSharedLogger();
         while (exporter.advanceExport(*m_core))
         {
-            std::cout << " Processing layer with z = " << m_core->getSliceHeight() << "\n";
+            if (logger)
+                logger->addEvent(
+                  {fmt::format("Processing layer with z = {}", m_core->getSliceHeight()),
+                   events::Severity::Info});
         }
         exporter.finalizeExportSTL(*m_core);
     }
@@ -470,16 +527,22 @@ namespace gladius
     {
         if (filename.extension() == ".3mf")
         {
+            auto computeToken = m_core->waitForComputeToken();
             io::saveTo3mfFile(filename, *this, writeThumbnail);
         }
 
         m_fileChanged = false;
         m_currentAssemblyFileName = filename;
-        m_assembly->setFilename(filename);
+
+        {
+
+            m_assembly->setFilename(filename);
+        }
     }
 
     nodes::SharedAssembly Document::getAssembly() const
     {
+
         return m_assembly;
     }
 
@@ -487,6 +550,7 @@ namespace gladius
                                       std::string const & nodeName,
                                       std::string const & parameterName)
     {
+
         auto const & parameter = findParameterOrThrow(modelId, nodeName, parameterName);
         auto val = parameter.getValue();
         if (auto * pval = std::get_if<float>(&val))
@@ -501,6 +565,7 @@ namespace gladius
                                      std::string const & parameterName,
                                      float value)
     {
+
         findParameterOrThrow(modelId, nodeName, parameterName).setValue(value);
     }
 
@@ -508,6 +573,7 @@ namespace gladius
                                                std::string const & nodeName,
                                                std::string const & parameterName)
     {
+
         auto const & parameter = findParameterOrThrow(modelId, nodeName, parameterName);
         auto val = parameter.getValue();
         if (auto * pval = std::get_if<std::string>(&val))
@@ -522,6 +588,7 @@ namespace gladius
                                       std::string const & parameterName,
                                       std::string const & value)
     {
+
         findParameterOrThrow(modelId, nodeName, parameterName).setValue(value);
     }
 
@@ -529,6 +596,7 @@ namespace gladius
                                                    std::string const & nodeName,
                                                    std::string const & parameterName)
     {
+
         auto const & parameter = findParameterOrThrow(modelId, nodeName, parameterName);
         auto val = parameter.getValue();
         if (auto * pval = std::get_if<nodes::float3>(&val))
@@ -543,6 +611,7 @@ namespace gladius
                                         std::string const & parameterName,
                                         nodes::float3 const & value)
     {
+
         findParameterOrThrow(modelId, nodeName, parameterName).setValue(value);
     }
 
@@ -554,26 +623,29 @@ namespace gladius
             m_core->requestContourUpdate(sliceParameter);
         }
 
-        PolyLines contours = m_core->getContour().getContour();
+        auto contourExtractor = m_core->getContour();
+        PolyLines contours = contourExtractor->getContour();
         if (sliceParameter.offset != 0.f)
         {
-            return m_core->getContour().generateOffsetContours(sliceParameter.offset, contours);
+            return contourExtractor->generateOffsetContours(sliceParameter.offset, contours);
         }
         return contours;
     }
 
     BoundingBox Document::computeBoundingBox() const
     {
+
         if (!m_core->updateBBox())
         {
             return {};
         }
-        m_core->getResourceContext().releasePreComputedSdf(); // saving memory (api usage)
+        m_core->getResourceContext()->releasePreComputedSdf(); // saving memory (api usage)
         return m_core->getBoundingBox().value_or(BoundingBox{});
     }
 
     gladius::Mesh Document::generateMesh() const
     {
+
         return gladius::vdb::generatePreviewMesh(*m_core, *m_assembly);
     }
 
@@ -587,7 +659,7 @@ namespace gladius
         return *m_generatorContext;
     }
 
-    ComputeContext & Document::getComputeContext() const
+    SharedComputeContext Document::getComputeContext() const
     {
         if (!m_core)
         {
@@ -629,9 +701,161 @@ namespace gladius
 
         auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
         auto const modelId = new3mfFunc->GetModelResourceID();
+
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
         m_assembly->addModelIfNotExisting(modelId);
         auto & model = *m_assembly->getFunctions().at(modelId);
         model.createBeginEnd();
+        return model;
+    }
+
+    nodes::Model & Document::createLevelsetFunction(std::string const & name)
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3mf model loaded");
+        }
+
+        auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
+        auto const modelId = new3mfFunc->GetModelResourceID();
+
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        m_assembly->addModelIfNotExisting(modelId);
+        auto & model = *m_assembly->getFunctions().at(modelId);
+
+        // Create begin and end nodes
+        model.createBeginEnd();
+        model.setDisplayName(name);
+
+        // Add pos vector input to begin node
+        model.getBeginNode()->addOutputPort(nodes::FieldNames::Pos,
+                                            nodes::ParameterTypeIndex::Float3);
+        model.registerOutputs(*model.getBeginNode());
+
+        // Add color vector output and shape scalar output to end node
+        model.getEndNode()->parameter()[nodes::FieldNames::Color] =
+          nodes::VariantParameter(nodes::float3{0.5f, 0.5f, 0.5f});
+        model.getEndNode()->parameter()[nodes::FieldNames::Shape] =
+          nodes::VariantParameter(float{-1.f});
+
+        model.registerInputs(*model.getEndNode());
+        model.getBeginNode()->updateNodeIds();
+        model.getEndNode()->updateNodeIds();
+
+        return model;
+    }
+
+    nodes::Model & Document::copyFunction(nodes::Model const & sourceModel,
+                                          std::string const & name)
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3mf model loaded");
+        }
+
+        auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
+        auto const modelId = new3mfFunc->GetModelResourceID();
+
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        m_assembly->addModelIfNotExisting(modelId);
+        auto & model = *m_assembly->getFunctions().at(modelId);
+
+        // Copy the source model
+        model = sourceModel;
+        model.setDisplayName(name);
+        model.setResourceId(modelId);
+
+        return model;
+    }
+
+    nodes::Model & Document::wrapExistingFunction(nodes::Model & sourceModel,
+                                                  std::string const & name)
+    {
+        if (!m_3mfmodel)
+        {
+            throw std::runtime_error("No 3mf model loaded");
+        }
+
+        auto const new3mfFunc = m_3mfmodel->AddImplicitFunction();
+        auto const modelId = new3mfFunc->GetModelResourceID();
+
+        std::lock_guard<std::mutex> lock(m_assemblyMutex);
+        m_assembly->addModelIfNotExisting(modelId);
+        auto & model = *m_assembly->getFunctions().at(modelId);
+
+        // Create begin and end nodes with same inputs and outputs as source
+        model.createBeginEnd();
+        model.setDisplayName(name);
+
+        // Copy inputs from source model
+        auto const & sourceInputs = sourceModel.getInputs();
+        for (auto const & [inputName, inputPort] : sourceInputs)
+        {
+            model.getBeginNode()->addOutputPort(inputName, inputPort.getTypeIndex());
+        }
+        model.registerOutputs(*model.getBeginNode());
+
+        // Copy outputs from source model
+        auto const & sourceOutputs = sourceModel.getOutputs();
+        for (auto const & [outputName, outputPort] : sourceOutputs)
+        {
+            model.getEndNode()->parameter()[outputName] =
+              nodes::createVariantTypeFromTypeIndex(outputPort.getTypeIndex());
+        }
+        model.registerInputs(*model.getEndNode());
+
+        // Create Resource node for the source function
+        auto resourceNode = model.create<nodes::Resource>();
+        resourceNode->parameter().at(nodes::FieldNames::ResourceId) =
+          nodes::VariantParameter(sourceModel.getResourceId());
+
+        // Create FunctionCall node
+        auto functionCallNode = model.create<nodes::FunctionCall>();
+        functionCallNode->parameter()
+          .at(nodes::FieldNames::FunctionId)
+          .setInputFromPort(resourceNode->getOutputs().at(nodes::FieldNames::Value));
+
+        // Set display name to source function name
+        auto sourceFunctionName = sourceModel.getDisplayName();
+        if (sourceFunctionName.has_value())
+        {
+            functionCallNode->setDisplayName(sourceFunctionName.value());
+        }
+
+        // Update the function call node's inputs and outputs to match the source model
+        functionCallNode->updateInputsAndOutputs(sourceModel);
+        model.registerInputs(*functionCallNode);
+        model.registerOutputs(*functionCallNode);
+
+        // Connect begin node outputs to function call inputs
+        for (auto const & [inputName, inputPort] : sourceInputs)
+        {
+            auto beginOutputIter = model.getBeginNode()->getOutputs().find(inputName);
+            auto functionInputIter = functionCallNode->parameter().find(inputName);
+
+            if (beginOutputIter != model.getBeginNode()->getOutputs().end() &&
+                functionInputIter != functionCallNode->parameter().end())
+            {
+                functionInputIter->second.setInputFromPort(beginOutputIter->second);
+            }
+        }
+
+        // Connect function call outputs to end node inputs
+        for (auto const & [outputName, outputPort] : sourceOutputs)
+        {
+            auto functionOutputIter = functionCallNode->getOutputs().find(outputName);
+            auto endInputIter = model.getEndNode()->parameter().find(outputName);
+
+            if (functionOutputIter != functionCallNode->getOutputs().end() &&
+                endInputIter != model.getEndNode()->parameter().end())
+            {
+                endInputIter->second.setInputFromPort(functionOutputIter->second);
+            }
+        }
+
+        model.getBeginNode()->updateNodeIds();
+        model.getEndNode()->updateNodeIds();
+
         return model;
     }
 
@@ -639,6 +863,7 @@ namespace gladius
                                                              std::string const & nodeName,
                                                              std::string const & parameterName)
     {
+
         auto const modelIter = m_assembly->getFunctions().find(modelId);
         if (modelIter == std::end(m_assembly->getFunctions()))
         {
@@ -664,13 +889,16 @@ namespace gladius
     {
         auto computeToken = m_core->waitForComputeToken();
         m_buildItems.clear();
-
         resetGeneratorContext();
         m_core->reset();
-        m_core->getResourceContext().clearImageStacks();
+        m_core->getResourceContext()->clearImageStacks();
         auto newFilename = filename;
         m_primitiveDateNeedsUpdate = true;
-        m_assembly->setFilename(filename);
+
+        {
+
+            m_assembly->setFilename(filename);
+        }
 
         if (filename.extension() == ".vdb")
         {
@@ -684,7 +912,10 @@ namespace gladius
 
         if (filename.extension() == ".3mf")
         {
-            m_assembly = {};
+            {
+
+                m_assembly = {};
+            }
 
             try
             {
@@ -692,12 +923,10 @@ namespace gladius
             }
             catch (std::exception const & e)
             {
-                std::cerr << "unhandled exception: " << e.what() << "\n";
                 auto logger = getSharedLogger();
                 if (logger)
-                {
-                    logger->addEvent(events::Event{e.what(), events::Severity::Error});
-                }
+                    logger->addEvent(
+                      {std::string("unhandled exception: ") + e.what(), events::Severity::Error});
                 newModel();
                 return;
             }
@@ -732,6 +961,7 @@ namespace gladius
     void Document::clearBuildItems()
     {
         m_buildItems.clear();
+
         m_assembly->assemblyModel()->clear();
         m_assembly->assemblyModel()->createBeginEndWithDefaultInAndOuts();
         m_assembly->assemblyModel()->setManaged(true);
@@ -754,15 +984,10 @@ namespace gladius
         }
         catch (const std::exception & e)
         {
-            // log
+            auto logger = getSharedLogger();
             if (logger)
-            {
-                logger->addEvent({e.what(), events::Severity::Error});
-            }
-            else
-            {
-                std::cerr << e.what() << "\n";
-            }
+                logger->addEvent(
+                  {std::string("STL load error: ") + e.what(), events::Severity::Error});
             return {};
         }
 
@@ -803,7 +1028,10 @@ namespace gladius
 
     void Document::deleteResource(ResourceId id)
     {
-        m_assembly->deleteModel(id); // will just return if not a function
+        {
+
+            m_assembly->deleteModel(id); // will just return if not a function
+        }
 
         if (m_3mfmodel)
         {
@@ -836,7 +1064,10 @@ namespace gladius
 
     void Document::deleteFunction(ResourceId id)
     {
-        m_assembly->deleteModel(id);
+        {
+
+            m_assembly->deleteModel(id);
+        }
 
         if (m_3mfmodel)
         {
@@ -938,7 +1169,6 @@ namespace gladius
             }
 
             return ResourceKey{0};
-
         }
         auto & resourceManager = getGeneratorContext().resourceManager;
         auto const key = ResourceKey{stack->GetModelResourceID()};
@@ -949,7 +1179,6 @@ namespace gladius
         resourceManager.addResource(key, std::move(grid));
         resourceManager.loadResources();
         return key;
-
     }
 
     void Document::update3mfModel()
@@ -958,7 +1187,7 @@ namespace gladius
         writer.updateModel(*this);
     }
 
-    void Document::updateDocumenFrom3mfModel()
+    void Document::updateDocumenFrom3mfModel(bool skipImplicitFunctions)
     {
         if (!m_3mfmodel)
         {
@@ -966,15 +1195,245 @@ namespace gladius
         }
 
         io::Importer3mf importer{getSharedLogger()};
-        
+
         // Load build items from the 3MF model
         clearBuildItems();
         importer.loadBuildItems(m_3mfmodel, *this);
 
         // Load implicit functions from the 3MF model
-        importer.loadImplicitFunctions(m_3mfmodel, *this);
+        if (!skipImplicitFunctions)
+        {
+            importer.loadImplicitFunctions(m_3mfmodel, *this);
+
+            m_assembly->updateInputsAndOutputs();
+        }
 
         // Update the assembly inputs and outputs
-        m_assembly->updateInputsAndOutputs();
+    }
+
+    void Document::rebuildResourceDependencyGraph()
+    {
+
+        if (!m_3mfmodel)
+        {
+            return;
+        }
+
+        m_resourceDependencyGraph =
+          std::make_unique<io::ResourceDependencyGraph>(m_3mfmodel, getSharedLogger());
+        m_resourceDependencyGraph->buildGraph();
+    }
+
+    io::CanResourceBeRemovedResult Document::isItSafeToDeleteResource(ResourceKey key)
+    {
+        io::CanResourceBeRemovedResult result;
+        result.canBeRemoved = true;
+
+        if (!m_3mfmodel)
+        {
+            return result;
+        }
+
+        auto modelResIdOpt = key.getResourceId();
+        if (!modelResIdOpt)
+        {
+            return result;
+        }
+
+        // map model ResourceId to UniqueResourceID for graph lookup
+        Lib3MF_uint32 uniqueResId =
+          io::resourceIdToUniqueResourceId(m_3mfmodel, modelResIdOpt.value());
+        try
+        {
+            auto resource = m_3mfmodel->GetResourceByID(uniqueResId);
+            result = m_resourceDependencyGraph->checkResourceRemoval(resource);
+            return result;
+        }
+        catch (const Lib3MF::ELib3MFException & e)
+        {
+            // Resource not found, return empty result
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("Resource not found: {}", e.what()), events::Severity::Error});
+            }
+        }
+        catch (const std::exception & e)
+        {
+
+            // Resource not found, return empty result
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("Exception occurred: {}", e.what()), events::Severity::Error});
+            }
+            return result;
+        }
+
+        return result;
+    }
+
+    std::size_t Document::removeUnusedResources()
+    {
+        if (!m_3mfmodel || !m_resourceDependencyGraph)
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent({"Cannot remove unused resources: Model or resource dependency "
+                                  "graph not available",
+                                  events::Severity::Warning});
+            }
+            return 0;
+        }
+
+        // Ensure the resource dependency graph is up-to-date
+        rebuildResourceDependencyGraph();
+
+        // Find all unused resources
+        std::vector<Lib3MF::PResource> unusedResources =
+          m_resourceDependencyGraph->findUnusedResources();
+
+        if (unusedResources.empty())
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {"No unused resources found in the model", events::Severity::Info});
+            }
+            return 0;
+        }
+
+        std::size_t removedCount = 0;
+        auto & resourceManager = getGeneratorContext().resourceManager;
+
+        // Remove each unused resource
+        for (auto const & resource : unusedResources)
+        {
+            try
+            {
+                // Get the model resource ID for this resource
+                Lib3MF_uint32 modelResourceId = resource->GetModelResourceID();
+                ResourceKey key{modelResourceId};
+
+                // Check if this is actually a function (need to handle differently)
+                bool isFunction = false;
+                try
+                {
+                    auto function = std::dynamic_pointer_cast<Lib3MF::CFunction>(resource);
+                    if (function)
+                    {
+                        isFunction = true;
+                        deleteFunction(modelResourceId);
+                    }
+                }
+                catch (const std::exception &)
+                {
+                    // Not a function, continue with normal resource deletion
+                }
+
+                if (!isFunction)
+                {
+                    // Delete from resource manager if it exists there
+                    if (resourceManager.hasResource(key))
+                    {
+                        resourceManager.deleteResource(key);
+                    }
+
+                    // Delete the resource from the 3MF model
+                    m_3mfmodel->RemoveResource(resource);
+                }
+
+                removedCount++;
+            }
+            catch (const std::exception & e)
+            {
+                auto logger = getSharedLogger();
+                if (logger)
+                {
+                    logger->addEvent({fmt::format("Failed to remove unused resource: {}", e.what()),
+                                      events::Severity::Error});
+                }
+            }
+        }
+
+        if (removedCount > 0)
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("Successfully removed {} unused resources", removedCount),
+                   events::Severity::Info});
+            }
+            markFileAsChanged();
+
+            // Rebuild the dependency graph now that resources have been removed
+            rebuildResourceDependencyGraph();
+        }
+
+        return removedCount;
+    }
+
+    std::vector<Lib3MF::PResource> Document::findUnusedResources()
+    {
+        if (!m_3mfmodel || !m_resourceDependencyGraph)
+        {
+            auto logger = getSharedLogger();
+            if (logger)
+            {
+                logger->addEvent(
+                  {"Cannot find unused resources: Model or resource dependency graph not available",
+                   events::Severity::Warning});
+            }
+            return {};
+        }
+
+        // Ensure the resource dependency graph is up-to-date
+        rebuildResourceDependencyGraph();
+
+        // Find all unused resources
+        return m_resourceDependencyGraph->findUnusedResources();
+    }
+
+    const gladius::io::ResourceDependencyGraph * Document::getResourceDependencyGraph() const
+    {
+        return m_resourceDependencyGraph.get();
+    }
+
+    bool Document::validateAssembly() const
+    {
+        nodes::Validator validator;
+        auto logger = getSharedLogger();
+
+        if (!validator.validate(*m_assembly))
+        {
+            for (auto const & error : validator.getErrors())
+            {
+                if (logger)
+                    logger->addEvent({fmt::format("{}: Review parameter {} of node {} in model {}",
+                                                  error.message,
+                                                  error.parameter,
+                                                  error.node,
+                                                  error.model),
+                                      events::Severity::Error});
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    BackupManager & Document::getBackupManager()
+    {
+        return m_backupManager;
+    }
+
+    const BackupManager & Document::getBackupManager() const
+    {
+        return m_backupManager;
     }
 }

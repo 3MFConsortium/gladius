@@ -37,4 +37,13 @@ namespace gladius
 
     using NoValidBinaryStlFile = GladiusException;
 
+    class FileIOError : public GladiusException
+    {
+      public:
+        explicit FileIOError(std::string const& message)
+            : GladiusException("File I/O error: " + message)
+        {
+        }
+    };
+
 }

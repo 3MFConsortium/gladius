@@ -64,5 +64,19 @@ namespace gladius::ui
             SharedDocument document,
             Lib3MF::PModel model3mf,
             Lib3MF::PLevelSet levelSet);
+            
+        /**
+         * @brief Renders the volume data selection dropdown for a level set
+         * 
+         * @param document The document containing the volume data
+         * @param model3mf The 3MF model containing the resources
+         * @param levelSet The level set to modify
+         * 
+         * @return true if the volume data properties were modified
+         */
+        static bool renderVolumeDataDropdown(
+            SharedDocument document,
+            Lib3MF::PModel model3mf,
+            Lib3MF::PLevelSet levelSet);
     };
 }

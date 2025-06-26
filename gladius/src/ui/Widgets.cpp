@@ -208,7 +208,7 @@ namespace gladius::ui
         return changed;
     }
 
-    void frameOverlay(ImVec4 color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f))
+    void frameOverlay(ImVec4 color, std::string const & tooltip)
     {
         ImVec2 rectMin = ImGui::GetItemRectMin();
         ImVec2 rectMax = ImGui::GetItemRectMax();
@@ -216,9 +216,25 @@ namespace gladius::ui
         rectMax.x =
           ImGui::GetContentRegionMax().x; // Expand to the right to the available content area
 
+        // Draw the colored rectangle
         ImGui::GetWindowDrawList()->AddRectFilled(rectMin,
                                                   rectMax,
                                                   ImGui::ColorConvertFloat4ToU32(color),
-                                                  15.0f); // Gray color with rounded corners
+                                                  15.0f); // Rounded corners
+        
+        // Handle tooltip by checking if mouse is hovering over the overlay region
+        if (!tooltip.empty())
+        {
+            ImVec2 mousePos = ImGui::GetIO().MousePos;
+            bool isHovered = (mousePos.x >= rectMin.x && mousePos.x <= rectMax.x &&
+                              mousePos.y >= rectMin.y && mousePos.y <= rectMax.y);
+                              
+            if (isHovered)
+            {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(tooltip.c_str());
+                ImGui::EndTooltip();
+            }
+        }
     }
 }

@@ -30,6 +30,27 @@ namespace gladius::ui
         /// \returns Returns true, if the window was rendered
         [[nodiscard]] bool render(ComputeCore & core, GLView & view);
 
+        /**
+         * @brief Check if mouse is hovering over the slice view
+         * @return true if the slice view is being hovered
+         */
+        bool isHovered() const;
+
+        /**
+         * @brief Zoom in the slice view
+         */
+        void zoomIn();
+        
+        /**
+         * @brief Zoom out the slice view
+         */
+        void zoomOut();
+        
+        /**
+         * @brief Reset the slice view to default position and zoom
+         */
+        void resetView();
+
       private:
         bool m_visible{false};
 

@@ -52,6 +52,7 @@ namespace gladius::ui
                     ed::SetNodePosition(newNode->getId(), posOnCanvas);
 
                     ImGui::CloseCurrentPopup();
+                    ImGui::PopStyleColor();
                     ImGui::EndPopup();
                     return {newNode->getValueOutputPort().getId()};
                 }
@@ -67,7 +68,7 @@ namespace gladius::ui
                     nodes::ConstantVector * newNode = nodes.create<nodes::ConstantVector>();
                     newNode->setDisplayName(targetName);
                     ed::SetNodePosition(newNode->getId(), posOnCanvas);
-
+                    ImGui::PopStyleColor();
                     ImGui::CloseCurrentPopup();
                     ImGui::EndPopup();
                     return {newNode->getVectorOutputPort().getId()};

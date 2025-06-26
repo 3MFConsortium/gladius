@@ -22,17 +22,8 @@ namespace gladius::nodes
     {
         model.updateGraphAndOrderIfNeeded();
         model.updateTypes();
-        model.setIsValid(true);
-
-        auto const & graph = model.getGraph();
-        bool const isCyclic = nodes::graph::isCyclic(graph);
-
-        if (isCyclic)
-        {
-            m_errors.push_back(
-              {"Cyclic graph detected", model.getDisplayName().value_or("unknown"), "", "", ""});
-            model.setIsValid(false);
-        }
+  
+        model.updateValidityState();
 
         for (auto & [nodeId, node] : model)
         {

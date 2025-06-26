@@ -2,16 +2,26 @@
 #include "ui/MainWindow.h"
 
 #include <filesystem>
+#include <iostream>
 
 namespace gladius
 {
     Application::Application()
+        : m_configManager()
+        , m_mainWindow()
     {
+        m_mainWindow.setConfigManager(m_configManager);
+        m_mainWindow.setup();
         m_mainWindow.startMainLoop();
     }
 
     Application::Application(int argc, char ** argv)
+        : m_configManager()
+        , m_mainWindow()
     {
+        m_mainWindow.setConfigManager(m_configManager);
+        m_mainWindow.setup();
+        
         // the first argument is the executable name
         if (argc >= 2)
         {
@@ -36,7 +46,13 @@ namespace gladius
     }
     
     Application::Application(std::filesystem::path const & filename)
+        : m_configManager()
+        , m_mainWindow()
     {
+        m_mainWindow.setConfigManager(m_configManager);
+        m_mainWindow.setup();
+
+        
         if (std::filesystem::exists(filename))
         {
             m_mainWindow.open(filename);

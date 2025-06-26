@@ -382,27 +382,163 @@ void kernel calculateVertexNormals(__global float4 * vertices,
 
 
 
+/// @brief Optimized kernel that moves points to the nearest surface with improved convergence
+/// and early termination for fast bounding box computation
 void kernel movePointsToSurface(__global float4 * in, __global float4 * out, PAYLOAD_ARGS)
 {
     int const index = get_global_id(0);
     float3 pos = in[index].xyz;
-    float sdf = FLT_MAX;
-    float travelIncrement = 0.f;
-    for (int i = 0; i < 100 && (fabs(sdf)> 0.0001f); ++i)
+    float3 const originalPos = pos;
+    
+    // Convergence parameters - tuned for bounding box computation
+    float const surfaceThreshold = 0.0001f;
+    float const maxTravelDistance = 20.0f;  // Allow more travel for better coverage
+    int const maxIterations = 30;  // Further reduced iterations for speed
+    float const minStepSize = 0.0001f;  // Minimum step to avoid infinite loops
+    
+    float sdf = model(pos, PASS_PAYLOAD_ARGS).w;
+    float initialSdf = fabs(sdf);
+    float prevSdf = sdf;
+    float totalTravelDistance = 0.0f;
+    int stagnationCount = 0;
+    bool wasCloseToSurface = false;
+    
+    // Early exit if already very close to surface
+    if (fabs(sdf) < surfaceThreshold)
+    {
+        out[index] = (float4)(pos, sdf);
+        return;
+    }
+    
+    // Early exit if very far from surface (likely not useful for bounding box)
+    if (initialSdf > 50.0f)
+    {
+        out[index] = (float4)(originalPos, sdf);
+        return;
+    }
+    
+    for (int i = 0; i < maxIterations; ++i)
+    {
+        // Early termination checks
+        if (fabs(sdf) <= surfaceThreshold)
+        {
+            break;  // Converged successfully
+        }
+        
+        if (totalTravelDistance > maxTravelDistance)
+        {
+            // Traveled too far, probably diverging or no surface nearby
+            break;
+        }
+        
+        // Get surface normal with caching consideration
+        float3 normal = surfaceNormalModelOnly(pos, PASS_PAYLOAD_ARGS).xyz;
+        float normalLength = length(normal);
+        
+        // Check for degenerate normals
+        if (normalLength < 0.001f)
+        {
+            break;  // Near singularity, exit
+        }
+        normal = normal / normalLength;  // Normalize
+        
+        // Adaptive step sizing with improved heuristics
+        float stepSize;
+        float absSdf = fabs(sdf);
+        
+        if (absSdf > 1.0f)
+        {
+            // Far from surface: aggressive steps but bounded
+            stepSize = clamp(absSdf * 0.7f, 0.01f, 2.0f);
+        }
+        else if (absSdf > 0.1f)
+        {
+            // Medium distance: moderate steps
+            stepSize = absSdf * 0.85f;
+        }
+        else if (absSdf > 0.01f)
+        {
+            // Close to surface: careful steps
+            stepSize = absSdf * 0.95f;
+            wasCloseToSurface = true;
+        }
+        else
+        {
+            // Very close: use direct Newton-Raphson step
+            stepSize = sdf;  // Direct step to surface (signed)
+            wasCloseToSurface = true;
+        }
+        
+        // Ensure minimum step size to avoid infinite loops
+        if (fabs(stepSize) < minStepSize)
+        {
+            stepSize = (stepSize >= 0) ? minStepSize : -minStepSize;
+        }
+        
+        // Move towards surface
+        float3 const step = normal * stepSize * sign(sdf);
+        pos = pos - step;
+        float stepLength = length(step);
+        totalTravelDistance += stepLength;
+        
+        // Update SDF at new position
+        prevSdf = sdf;
+        sdf = model(pos, PASS_PAYLOAD_ARGS).w;
+        
+        // Advanced convergence checking
+        float progress = fabs(sdf - prevSdf);
+        float relativeProgress = (fabs(prevSdf) > 0.0001f) ? progress / fabs(prevSdf) : progress;
+        
+        // Check for stagnation with relative tolerance
+        if (relativeProgress < 0.01f || progress < surfaceThreshold * 0.1f)
+        {
+            stagnationCount++;
+            if (stagnationCount > 2)
+            {
+                break;  // Not making sufficient progress
+            }
+        }
+        else
+        {
+            stagnationCount = 0;
+        }
+        
+        // Divergence detection and correction
+        if (fabs(sdf) > fabs(prevSdf) * 1.5f && i > 3)
+        {
+            // Diverging: try smaller step
+            pos = pos + step * 0.5f;  // Backtrack halfway
+            sdf = model(pos, PASS_PAYLOAD_ARGS).w;
+            
+            if (fabs(sdf) > fabs(prevSdf))
+            {
+                // Still diverging, revert to previous position and exit
+                pos = pos - step * 0.5f;
+                sdf = prevSdf;
+                break;
+            }
+        }
+        
+        // Oscillation detection for points near thin features
+        if (wasCloseToSurface && i > 10 && fabs(sdf) > absSdf * 0.8f)
+        {
+            // Likely oscillating around thin feature, use current best position
+            break;
+        }
+    }
+    
+    // Final micro-refinement for very close points
+    if (fabs(sdf) <= surfaceThreshold * 5.0f && fabs(sdf) > surfaceThreshold)
     {
         float3 const normal = surfaceNormalModelOnly(pos, PASS_PAYLOAD_ARGS).xyz;
-        for (int j = 0; j < 10 && (fabs(sdf)> 0.0001f); ++j)
+        if (length(normal) > 0.001f)
         {
-          float sdf_previous = sdf;
-          sdf = model(pos, PASS_PAYLOAD_ARGS).w;
-          float const delta = sdf - sdf_previous;
-          float correctionFactor = (fabs(travelIncrement) > 0.f) ?  fabs((sdf_previous - sdf) / travelIncrement) : 1.f;
-          travelIncrement = sdf * correctionFactor;
-          pos = pos - normal * travelIncrement;
+            pos = pos - normalize(normal) * sdf;  // Final Newton step
+            sdf = model(pos, PASS_PAYLOAD_ARGS).w;
         }
     }
 
-    out[index] = (float4) (pos, sdf);
+    out[index] = (float4)(pos, sdf);
 }
 
 void kernel adoptVertexOfMeshToSurface(__global float4 * in, __global float4 * out, PAYLOAD_ARGS)

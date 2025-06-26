@@ -25,26 +25,26 @@ namespace gladius::ui
         bool update(float deltaTime_ms);
 
         void centerView(BoundingBox const & bbox);
-
-        void adjustDistanceToTarget(BoundingBox const & bbox);
+        void adjustDistanceToTarget(BoundingBox const & bbox, float viewportWidth, float viewportHeight);
         void setAngle(float pitch, float yaw);
         void rotate(float pitch, float yaw);
+
       private:
         auto computeEyePosition() const -> Position;
 
         float m_eyeDist = 100.0f;
         float m_eyeDistTarget = 800.0f;
 
-        float m_pitch = 0.f;
-        float m_yaw = 0.f;
+        float m_pitch = 0.6f;
+        float m_yaw = -1.6f;
 
-    	float m_pitchTarget = 0.6f;
+        float m_pitchTarget = 0.6f;
         float m_yawTarget = -1.6f;
 
         float m_prevMousPosX = 0.f;
         float m_prevMousPosY = 0.f;
         int m_mouseButton = -1;
-        Position m_lookAt{0.f, 0.f, 0.f};
+        Position m_lookAt{200.f, 200.f, 10.f};
         Position m_lookAtTarget{200.f, 200.f, 10.f};
     };
 }

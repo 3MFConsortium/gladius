@@ -7,10 +7,11 @@
 #include <utility>
 
 #include "../ResourceManager.h"
+#include "../types.h"
 #include "Parameter.h"
 #include "Port.h"
-#include "nodesfwd.h"
 #include "Primitives.h"
+#include "nodesfwd.h"
 
 namespace gladius
 {
@@ -47,16 +48,20 @@ namespace gladius::nodes
 
     /// Equal Operator for InputTypeMap
     bool operator==(const InputTypeMap & lhs, const InputTypeMap & rhs);
-
     struct GeneratorContext
     {
-        GeneratorContext(ResourceContext * resourceContext, std::filesystem::path assemblyDir)
-            : resourceManager(resourceContext, std::move(assemblyDir)) {};
+        GeneratorContext(SharedResources resourceContext, std::filesystem::path assemblyDir)
+            : resourceManager(resourceContext, std::move(assemblyDir))
+            , m_resourceContext(resourceContext) {};
 
-        Primitives * primitives{nullptr};
+        SharedPrimitives primitives{nullptr};
         ResourceManager resourceManager;
         std::filesystem::path basePath{};
-        ComputeContext * computeContext{nullptr};
+        SharedComputeContext computeContext{nullptr};
+
+      private:
+        // Keep the resources alive for the lifetime of the GeneratorContext
+        SharedResources m_resourceContext;
     };
 
     class NodeBase
@@ -72,7 +77,6 @@ namespace gladius::nodes
         };
 
         virtual ~NodeBase() = default;
-
 
         ParameterMap & parameter()
         {
@@ -201,16 +205,6 @@ namespace gladius::nodes
             return &newInput;
         }
 
-        [[nodiscard]] int getDepth() const
-        {
-            return m_depth;
-        }
-
-        void setDepth(int depth)
-        {
-            m_depth = depth;
-        }
-
         std::unique_ptr<NodeBase> clone() const
         {
             return std::unique_ptr<NodeBase>(this->cloneImpl());
@@ -300,7 +294,6 @@ namespace gladius::nodes
         NodeName m_tag;
         NodeId m_id{};
         NodeId m_order{};
-        int m_depth{};
         Category m_category{Category::Internal};
         Outputs m_outputs;
         float2 m_screenPos{};

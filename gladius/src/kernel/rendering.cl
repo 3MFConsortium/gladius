@@ -116,55 +116,159 @@ if (renderingSettings.z_mm > 0.0001f && renderingSettings.flags & RF_SHOW_STACK)
     return result;
 }
 
+/**
+ * @brief Performs ray casting against signed distance fields to find intersections.
+ * 
+ * Enhanced to better handle thin-walled geometries using binary refinement when
+ * passing through surfaces and adaptive step sizes to reduce the chance of missing details.
+ * Also refines step size when the distance gradient changes sign near a surface.
+ * 
+ * @param eyePosition The starting position of the ray
+ * @param rayDirection The normalized direction of the ray
+ * @param startDistance Initial travel distance offset
+ * @param PAYLOAD_ARGS Additional arguments passed to mapping functions
+ * @return struct RayCastResult Result of the ray cast containing hit information
+ */
 struct RayCastResult
 rayCast(float3 eyePosition, float3 rayDirection, float startDistance, PAYLOAD_ARGS)
 {
-
-    int const maxRaySteps = renderingSettings.approximation & AM_FULL_MODEL ? 1000 : 300;
-    float const maxTravelDistance = 10000.f;
+    // Configuration constants
+    int const maxRaySteps = 2000;
+    float const maxTravelDistance = 100000.f;
     float const initialCloseEnough = (renderingSettings.approximation & AM_ONLY_PRECOMPSDF) ? 0.01f : 1.E-3f;
     float closeEnough = initialCloseEnough;
-    float const edgeWidth = 0.f; // renderingSettings.crestLineWidth;
-    float traveledDistance = closeEnough;
-    float distanceToSurface = closeEnough * 2.f;
-
+    
+    // Ray state tracking
+    float traveledDistance = startDistance + closeEnough;
+    float prevSignedDistance = FLT_MAX; // Signed distance from the previous step, initialized high
+    float prevAbsDistance = FLT_MAX;    // Absolute distance from the previous step
+    float prevDeltaDistance = 0.0f;     // Change in distance (slope) from the previous step calculation
+    float minStepSize = initialCloseEnough * 0.01f; // Minimum step size to prevent skipping tiny features
+    
+    // Result structure preparation
     struct RayCastResult result;
     struct DistanceColor hitObject;
-    result.edge = FLT_MAX;
-
+    result.edge = FLT_MAX; // Initialize edge to max float
+    hitObject.signedDistance = FLT_MAX; // Initialize hitObject distance
+    hitObject.color = (float4)(0.f); // Initialize color
+    hitObject.type = 0.f; // Initialize type
+    
     bool hit = false;
-    int const zero = min((int)(fabs(eyePosition.x)), 0);    //trick the compiler to avoid inlining
+    int const zero = min((int)(fabs(eyePosition.x)), 0);    // Trick the compiler to avoid inlining
     float nearRangeFactor = 1.0f;
-
+    float nextStep = minStepSize;
+    
+    // Main ray marching loop
     for (int i = zero; i < maxRaySteps; ++i)
     {
         float3 rayPos = eyePosition + traveledDistance * rayDirection;
+        // Use PASS_PAYLOAD_ARGS when calling the function
         hitObject = mapCached(rayPos, PASS_PAYLOAD_ARGS);
-
-        closeEnough = initialCloseEnough + traveledDistance * 1.E-6f;
-        bool signChanged = sign(distanceToSurface) != sign(hitObject.signedDistance);
-        nearRangeFactor = (signChanged) ? 0.1f : nearRangeFactor;
-        //pull back if we just run through a surface to approach with smaller steps again
-        traveledDistance =  (signChanged) ? traveledDistance - fabs(distanceToSurface) : traveledDistance;
-
-        distanceToSurface = hitObject.signedDistance;
-
+        float currentSignedDistance = hitObject.signedDistance;
+        float currentAbsDistance = fabs(currentSignedDistance);
         
-        traveledDistance += distanceToSurface * nearRangeFactor;
+        // Dynamic precision adjustment based on distance traveled
+        closeEnough = initialCloseEnough + traveledDistance * 1.E-6f;
+        
+        // Detect if we've crossed a surface boundary (sign change of distance)
+        // Ensure prevSignedDistance is valid before checking sign change
+        bool distanceSignChanged = (i > 0) && (sign(prevSignedDistance) != sign(currentSignedDistance));
+        
+        // Calculate change in distance (slope approximation)
+        // Ensure prevSignedDistance is valid before calculating delta
+        float deltaDistance = (i > 0) ? (currentSignedDistance - prevSignedDistance) : 0.0f;
+        // Detect if the slope's sign changed compared to the previous step's slope calculation
+        // Ensure prevDeltaDistance is valid (not from the first step)
+        bool slopeSignChanged = (i > 1) && (sign(deltaDistance) != sign(prevDeltaDistance)) && (prevDeltaDistance != 0.0f);
+        // Check if we are close to a potential surface
+        bool isCloseToSurface = currentAbsDistance < (nextStep); 
 
-        if (fabs(distanceToSurface) < closeEnough)
+        bool refinedThisStep = false; // Flag to track if binary refinement happened
+
+        if (distanceSignChanged || slopeSignChanged || isCloseToSurface)
         {
-            traveledDistance -= distanceToSurface;
+            // Binary search refinement when we detect that we've crossed a surface
+            float lastGoodT = traveledDistance - fabs(prevSignedDistance); // Start from just before the crossing
+            float badT = traveledDistance; // The point where the sign change was detected
+            float midT;
+            
+            // Perform binary search to find accurate intersection
+            for (int refineSteps = 0; refineSteps < 6; ++refineSteps)
+            {
+                midT = (lastGoodT + badT) * 0.5f;
+                float3 midPos = eyePosition + midT * rayDirection;
+                // Use PASS_PAYLOAD_ARGS when calling the function
+                struct DistanceColor midSample = mapCached(midPos, PASS_PAYLOAD_ARGS);
+                
+                // Check sign against the original sign *before* crossing
+                if (sign(prevSignedDistance) != sign(midSample.signedDistance))
+                {
+                    badT = midT; // Midpoint is on the wrong side
+                }
+                else
+                {
+                    lastGoodT = midT; // Midpoint is on the correct side
+                    // Update the current distance based on the refined midpoint for the next iteration check
+                    currentSignedDistance = midSample.signedDistance; 
+                    currentAbsDistance = fabs(currentSignedDistance);
+                }
+            }
+            
+            // Update traveled distance to the refined position
+            traveledDistance = lastGoodT;
+            
+            // Re-evaluate the hit object at the refined position for the next step calculation
+            rayPos = eyePosition + traveledDistance * rayDirection;
+            // Use PASS_PAYLOAD_ARGS when calling the function
+            hitObject = mapCached(rayPos, PASS_PAYLOAD_ARGS);
+            currentSignedDistance = hitObject.signedDistance;
+            currentAbsDistance = fabs(currentSignedDistance);
+            // Recalculate deltaDistance based on the refined position before proceeding
+            // Use the prevSignedDistance from *before* the binary search started
+            deltaDistance = currentSignedDistance - prevSignedDistance; 
+
+            // Use very small steps immediately after passing through a surface
+            nearRangeFactor = 0.1f;
+            refinedThisStep = true; // Mark that refinement occurred
+        }
+        else
+        {
+            // Gradually increase the step size factor when moving consistently away/towards surface
+            nearRangeFactor = min(nearRangeFactor * 1.05f, 1.0f);
+        }
+        
+        // Calculate the next step size, ensuring it's not too small
+        // Use the potentially updated currentAbsDistance from binary search
+        nextStep = max(currentAbsDistance * nearRangeFactor, minStepSize);
+                
+        // Update state for the next iteration *before* advancing the ray
+        // Use the potentially updated currentSignedDistance/AbsDistance from binary search
+        prevSignedDistance = currentSignedDistance;
+        prevAbsDistance = currentAbsDistance;
+        // Use the potentially recalculated deltaDistance from binary search
+        prevDeltaDistance = deltaDistance; 
+        
+        // Advance the ray
+        traveledDistance += nextStep;
+        
+        // Check if we've hit the surface (using the potentially updated distance from binary search)
+        if (currentAbsDistance < closeEnough)
+        {
+            // Fine-tune the final position by backtracking the small remaining distance
+            traveledDistance -= currentSignedDistance; 
             hit = true;
             break;
         }
-
+        
+        // Terminate if we've gone too far
         if (traveledDistance > maxTravelDistance)
         {
             break;
         }
     }
-
+    
+    // Ensure hitObject is assigned even if the loop finishes without hitting
+    // If no hit, hitObject might still hold the last sample data, which is fine for color/type.
     result.color = hitObject.color;
     result.type = hitObject.type;
     result.hit = (hit) ? 1.f : -1.f;

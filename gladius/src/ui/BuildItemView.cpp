@@ -23,17 +23,13 @@ namespace gladius::ui
                 {
                     // Try to get part name
                     std::string partName = object->GetName();
-                    std::string partNumber = object->GetPartNumber();
+                    std::string partNumber = buildItem->GetPartNumber();
                     if (!partName.empty())
                     {
                         return fmt::format("{} (BuildItem #{})", 
                             partName, buildItem->GetObjectResourceID());
                     }
-                    else if (!partNumber.empty())
-                    {
-                        return fmt::format("PN:{} (BuildItem #{})", 
-                            partNumber, buildItem->GetObjectResourceID());
-                    }
+
                 }
                 return fmt::format("BuildItem #{}", buildItem->GetObjectResourceID());
             }
@@ -74,16 +70,16 @@ namespace gladius::ui
                     auto object = buildItem->GetObjectResource();
                     if (object)
                     {
-                        std::string partNumber = object->GetPartNumber();
+                        std::string partNumber = buildItem->GetPartNumber();
                         if (ImGui::InputText("##PartNumber", &partNumber, ImGuiInputTextFlags_None))
                         {
                             try
                             {
                                 document->update3mfModel();
-                                object->SetPartNumber(partNumber);
+                                buildItem->SetPartNumber(partNumber);
                                 document->markFileAsChanged();
-                                document->updateDocumenFrom3mfModel();
-                                propertiesChanged = true;
+
+                               // propertiesChanged = true;
                             }
                             catch (...)
                             {
@@ -220,7 +216,10 @@ namespace gladius::ui
                             propertiesChanged = true;
                             ImGui::TreePop();
                             ImGui::EndGroup();
-                            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
+                            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
+                                        "Build Item Properties\n\n"
+                                        "Each build item can be positioned, rotated, and scaled.\n"
+                                        "Changes here affect how your model appears in the final print.");
                             continue; // Skip the rest for this deleted item
                         }
                         catch (...)
@@ -234,7 +233,10 @@ namespace gladius::ui
                     ImGui::TreePop();
                 }
                 ImGui::EndGroup();
-                frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
+                frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
+                            "Build Item\n\n"
+                            "Items in this section represent objects that will be printed.\n"
+                            "Each one has a position, rotation, and references a 3D model.");
             }
         }
         catch (...)
@@ -393,13 +395,7 @@ namespace gladius::ui
                     document->update3mfModel();
                     
                     // Set identity matrix
-                    for (int i = 0; i < 4; i++)
-                    {
-                        for (int j = 0; j < 3; j++)
-                        {
-                            transform.m_Fields[i][j] = (i == j) ? 1.0f : 0.0f;
-                        }
-                    }
+                    io::setTransformToIdentity(transform);
                     
                     buildItem->SetObjectTransform(transform);
                     document->markFileAsChanged();

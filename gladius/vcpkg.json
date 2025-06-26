@@ -48,7 +48,8 @@
     "pkgconf",
     "minizip",
     "tracy",
-    "clipper2"
+    "clipper2",
+    "nlohmann-json"
   ],
   "overrides": [
     {
@@ -61,6 +62,6 @@
     }
   ],
   "name": "gladius",
-  "builtin-baseline": "acd5bba5aac8b6573b5f6f463dc0341ac0ee6fa4",
+  "builtin-baseline": "f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2",
   "version-string": "1.2.12"
 }

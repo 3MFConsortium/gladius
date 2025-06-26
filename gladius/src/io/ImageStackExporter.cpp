@@ -2,6 +2,7 @@
 
 #include "MeshExporter.h"
 #include "compute/ComputeCore.h"
+#include "io/3mf/ResourceIdUtil.h"
 
 #include <lodepng.h>
 
@@ -44,22 +45,7 @@ namespace gladius::io
     Lib3MF::sTransform createtIdentityTransform()
     {
         Lib3MF::sTransform transform;
-        transform.m_Fields[0][0] = 1.0f;
-        transform.m_Fields[0][1] = 0.0f;
-        transform.m_Fields[0][2] = 0.0f;
-
-        transform.m_Fields[1][0] = 0.0f;
-        transform.m_Fields[1][1] = 1.0f;
-        transform.m_Fields[1][2] = 0.0f;
-
-        transform.m_Fields[2][0] = 0.0f;
-        transform.m_Fields[2][1] = 0.0f;
-        transform.m_Fields[2][2] = 1.0f;
-
-        transform.m_Fields[3][0] = 0.0f;
-        transform.m_Fields[3][1] = 0.0f;
-        transform.m_Fields[3][2] = 0.0f;
-
+        setTransformToIdentity(transform);
         return transform;
     }
 
@@ -157,15 +143,13 @@ namespace gladius::io
         }
 
         m_startHeight_mm = bb->min.z;
-        m_endHeight_mm = bb->max.z;
-
-        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
+        m_endHeight_mm = bb->max.z;        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
         generator.updateClippingAreaToBoundingBox();
-        generator.getResourceContext().requestDistanceMaps();
+        generator.getResourceContext()->requestDistanceMaps();
 
         m_sheetcount =
           static_cast<Lib3MF_uint32>(ceil(m_endHeight_mm - m_startHeight_mm) / m_layerIncrement_mm);
-        auto & distmap = *(generator.getResourceContext().getDistanceMipMaps()[m_qualityLevel]);
+        auto & distmap = *(generator.getResourceContext()->getDistanceMipMaps()[m_qualityLevel]);
         m_columnCountWorld = distmap.getWidth();
         m_rowCountWorld = distmap.getHeight();
         m_imageStack = m_model3mf->AddImageStack(m_columnCountWorld, m_rowCountWorld, m_sheetcount);
@@ -265,7 +249,7 @@ namespace gladius::io
 
         for (int y = 0; y < height; y++)
         {
-            for (int x = 0 ; x < width; x++)
+            for (int x = 0; x < width; x++)
             {
                 unsigned int indexTarget = (y * width + x) * numChannels;
                 unsigned int indexSource = ((height - y - 1) * width + x) * numChannels;
@@ -275,8 +259,8 @@ namespace gladius::io
                 }
             }
         }
-       
-        data =  std::move(swappedData);
+
+        data = std::move(swappedData);
     }
 
     bool ImageStackExporter::advanceExport(ComputeCore & generator)
@@ -286,7 +270,7 @@ namespace gladius::io
         generator.updateClippingAreaToBoundingBox();
         generator.generateSdfSlice();
 
-        auto & distmap = *(generator.getResourceContext().getDistanceMipMaps()[m_qualityLevel]);
+        auto & distmap = *(generator.getResourceContext()->getDistanceMipMaps()[m_qualityLevel]);
         distmap.read();
 
         std::vector<Lib3MF_uint8> inputData;
@@ -296,10 +280,9 @@ namespace gladius::io
         {
             throw std::runtime_error("Size of input data does not match the size of the image");
         }
-
         for (size_t i = 0; i < distmap.getData().size(); i++)
         {
-            auto const value = distmap.getData()[i].x;
+            float const value = distmap.getData()[i].x;
 
             float const grayValue = std::clamp(128.f + value * 1000.0f, 0.f, 255.f);
             auto const val = static_cast<unsigned char>(grayValue);

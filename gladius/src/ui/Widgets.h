@@ -26,5 +26,10 @@ namespace gladius::ui
 
     bool floatEdit(std::string const & label, float & value);
 
-    void frameOverlay(ImVec4 color);
+    /**
+     * @brief Creates a colored frame overlay with an optional tooltip
+     * @param color The color of the overlay
+     * @param tooltip Optional tooltip text shown on hover
+     */
+    void frameOverlay(ImVec4 color, std::string const & tooltip = "");
 }

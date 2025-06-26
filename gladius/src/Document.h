@@ -1,9 +1,11 @@
 #pragma once
 
+#include "BackupManager.h"
 #include "BitmapChannel.h"
 #include "Mesh.h"
 #include "compute/ComputeCore.h"
 #include "io/3mf/Importer3mf.h"
+#include "io/3mf/ResourceDependencyGraph.h"
 #include "nodes/Assembly.h"
 #include "nodes/BuildItem.h"
 #include "nodes/Model.h"
@@ -11,9 +13,15 @@
 
 #include <atomic>
 #include <filesystem>
+#include <mutex>
+#include <optional>
 
 namespace gladius
 {
+    /// Tokens for assembly mutex access
+    using AssemblyToken = std::lock_guard<std::mutex>;
+    using OptionalAssemblyToken = std::optional<AssemblyToken>;
+
     namespace vdb
     {
         struct TriangleMesh;
@@ -77,6 +85,29 @@ namespace gladius
     class Document
     {
       public:
+        /**
+         * @brief Waits until the assembly mutex can be locked and returns a token that keeps it
+         * locked.
+         *
+         * The token is an RAII wrapper that automatically releases the mutex when it goes out of
+         * scope. Use this method when you need guaranteed access to the assembly and are willing to
+         * wait.
+         *
+         * @return AssemblyToken An RAII token that keeps the mutex locked for its lifetime
+         */
+        AssemblyToken waitForAssemblyToken() const;
+
+        /**
+         * @brief Attempts to acquire a lock on the assembly mutex without waiting.
+         *
+         * This method tries to lock the mutex without blocking. If the mutex is already locked,
+         * it returns an empty optional. Otherwise, it returns an optional containing a token
+         * that keeps the mutex locked.
+         *
+         * @return OptionalAssemblyToken An optional that contains a token if the lock was acquired
+         */
+        OptionalAssemblyToken requestAssemblyToken() const;
+
         void resetGeneratorContext();
         explicit Document(std::shared_ptr<ComputeCore> core);
         [[nodiscard]] bool refreshModelIfNoCompilationIsRunning();
@@ -139,7 +170,7 @@ namespace gladius
 
         [[nodiscard]] nodes::GeneratorContext & getGeneratorContext();
 
-        [[nodiscard]] ComputeContext & getComputeContext() const;
+        [[nodiscard]] SharedComputeContext getComputeContext() const;
 
         [[nodiscard]] events::SharedLogger getSharedLogger() const;
 
@@ -150,6 +181,9 @@ namespace gladius
         [[nodiscard]] Lib3MF::PModel get3mfModel() const;
 
         nodes::Model & createNewFunction();
+        nodes::Model & createLevelsetFunction(std::string const & name);
+        nodes::Model & copyFunction(nodes::Model const & sourceModel, std::string const & name);
+        nodes::Model & wrapExistingFunction(nodes::Model & sourceModel, std::string const & name);
 
         void injectSmoothingKernel(std::string const & kernel);
 
@@ -178,15 +212,86 @@ namespace gladius
 
         /**
          * @brief Updates the 3MF model with the current state of the document.
-         * 
+         *
          */
         void update3mfModel();
 
         /**
          * @brief Updates the document from the 3MF model.
-         * 
+         *
          */
-        void updateDocumenFrom3mfModel();
+        void updateDocumenFrom3mfModel(bool skipImplicitFunctions = false);
+
+        /**
+         * @brief Checks if a resource can be safely deleted, without dependencies.
+         * @param key The key of the resource to check.
+         * @return Result containing removal possibility and dependent items.
+         */
+        gladius::io::CanResourceBeRemovedResult isItSafeToDeleteResource(ResourceKey key);
+
+        /**
+         * @brief Removes all resources that are not used by any build item.
+         *
+         * This method identifies resources that are not directly or indirectly referenced
+         * by any build item and removes them from the model. It uses the ResourceDependencyGraph
+         * to find unused resources and safely delete them.
+         *
+         * @return The number of resources that were removed
+         */
+        std::size_t removeUnusedResources();
+
+        /**
+         * @brief Updates the resource dependency graph and finds all unused resources.
+         *
+         * This method is a public version that updates the dependency graph and returns
+         * unused resources without deleting them.
+         *
+         * @return Vector of resource pointers that can be safely removed.
+         */
+        std::vector<Lib3MF::PResource> findUnusedResources();
+
+        /**
+         * @brief Get the ResourceDependencyGraph object
+         *
+         * @return A pointer to the resource dependency graph (nullptr if not available)
+         */
+        [[nodiscard]] const gladius::io::ResourceDependencyGraph *
+        getResourceDependencyGraph() const;
+
+        /**
+         * @brief Rebuilds the dependency graph for the current 3MF model
+         *
+         * Creates a new ResourceDependencyGraph and builds the graph for the currently loaded 3MF
+         * model. This is used to track dependencies between resources for safe resource deletion.
+         */
+        void rebuildResourceDependencyGraph();
+
+        /**
+         * @brief Validates the current assembly
+         *
+         * Validates the assembly using the nodes::Validator.
+         * Logs any validation errors.
+         *
+         * @return True if the assembly is valid, false otherwise
+         */
+        bool validateAssembly() const;
+
+        /**
+         * @brief Get the backup manager instance
+         *
+         * @return BackupManager& Reference to the backup manager
+         */
+        BackupManager& getBackupManager();
+
+        /**
+         * @brief Get the backup manager instance (const version)
+         *
+         * @return const BackupManager& Const reference to the backup manager
+         */
+        const BackupManager& getBackupManager() const;
+
+        void updateFlatAssembly();
+
       private:
         [[nodiscard]] nodes::VariantParameter &
         findParameterOrThrow(ResourceId modelId,
@@ -198,7 +303,6 @@ namespace gladius
         void refreshModelAsync();
         void loadAllMeshResources();
         void refreshWorker();
-        void updateFlatAssembly();
 
         void updateMemoryOffsets();
 
@@ -221,12 +325,21 @@ namespace gladius
 
         Lib3MF::PModel m_3mfmodel;
 
-        std::future<void> m_futureMeshLoading;
+        std::future<void> m_futureModelRefresh;
 
         nodes::BuildItems m_buildItems;
 
         // last backup time
         std::chrono::time_point<std::chrono::system_clock> m_lastBackupTime;
+
+        /// Dependency graph for resource removal checks
+        std::unique_ptr<gladius::io::ResourceDependencyGraph> m_resourceDependencyGraph;
+
+        /// Mutex for protecting m_assembly
+        mutable std::mutex m_assemblyMutex;
+
+        /// Backup manager for handling file backups
+        BackupManager m_backupManager;
     };
 
     using SharedDocument = std::shared_ptr<Document>;
