@@ -73,7 +73,7 @@ jobs:
                               # action you need, `v11` in this case to stay up
                               # to date with fixes on the v11 branch.
       with:
-        vcpkgGitCommitId: 'acd5bba5aac8b6573b5f6f463dc0341ac0ee6fa4'
+        vcpkgGitCommitId: 'f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2'
         vcpkgJsonGlob: '${{ github.workspace }}/gladius/vcpkg.json'
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
