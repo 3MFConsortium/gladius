@@ -20,7 +20,6 @@ namespace gladius::ui
     class LibraryBrowser
     {
       public:
-     
         LibraryBrowser() = default;
         /**
          * @brief Constructor
@@ -29,7 +28,6 @@ namespace gladius::ui
         explicit LibraryBrowser(events::SharedLogger logger);
 
         void setLogger(events::SharedLogger logger);
-   
 
         /**
          * @brief Destructor
@@ -81,7 +79,7 @@ namespace gladius::ui
 
         std::filesystem::path m_rootDirectory;           ///< Root directory to scan for subfolders
         std::vector<std::filesystem::path> m_subfolders; ///< Found subfolders
-        bool m_visible = true;                          ///< Whether the browser is visible
+        bool m_visible = false;                          ///< Whether the browser is visible
         bool m_needsRefresh = true;    ///< Whether the directories need to be rescanned
         events::SharedLogger m_logger; ///< Logger for events
         std::unordered_map<std::string, std::unique_ptr<ThreemfFileViewer>>

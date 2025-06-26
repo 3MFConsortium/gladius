@@ -172,7 +172,7 @@ namespace gladius::ui
         events::SharedLogger m_logger;
 
         // Flag to remember if library browser was visible
-        bool m_isLibraryBrowserVisible = true;
+        bool m_isLibraryBrowserVisible = false;
 
         double m_maxTimeSliceOptimization_s = 60.f;
 
