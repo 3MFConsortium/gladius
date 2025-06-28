@@ -578,7 +578,11 @@ namespace gladius
 
     bool ComputeCore::isSlicingInProgress() const
     {
-        ProfileFunction if (!m_sliceFuture.valid())
+        ProfileFunction
+
+          std::lock_guard<std::recursive_mutex>
+            lock(m_computeMutex);
+        if (!m_sliceFuture.valid())
         {
             return false;
         }
@@ -851,11 +855,26 @@ namespace gladius
 
     SharedContourExtractor ComputeCore::getContour() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
-        if (m_sliceFuture.valid())
+        // Create a local copy of the future to avoid race conditions
+        // We must NOT hold the mutex while waiting to avoid deadlock
+        std::future<void> localFuture;
         {
-            const_cast<std::future<void> &>(m_sliceFuture).get();
+            std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+            if (m_sliceFuture.valid())
+            {
+                // Move the future to avoid race conditions
+                localFuture = std::move(const_cast<std::future<void> &>(m_sliceFuture));
+            }
         }
+
+        // Wait for the future outside the mutex to avoid deadlock
+        if (localFuture.valid())
+        {
+            localFuture.get();
+        }
+
+        // Now acquire the mutex to safely return the contour
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return m_contour;
     }
 
