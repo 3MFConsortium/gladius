@@ -51,4 +51,5 @@ file(GLOB FONT_FILES
 )
 file(COPY ${FONT_FILES}  DESTINATION "misc/fonts/")
 
-gtest_add_tests(TARGET ${BINARY})
+# Use gtest_discover_tests for automatic test discovery
+gtest_discover_tests(${BINARY})
