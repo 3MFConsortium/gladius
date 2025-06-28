@@ -108,7 +108,7 @@
                 "USE_CACHE": "true",
                 "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "ENABLE_COVERAGE": "ON"
+                "ENABLE_COVERAGE": "OFF"
             }
         },
         {

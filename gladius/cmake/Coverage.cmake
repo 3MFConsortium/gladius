@@ -1,6 +1,6 @@
 # Coverage.cmake - Add coverage support to the project
 
-option(ENABLE_COVERAGE "Enable code coverage" ON)
+option(ENABLE_COVERAGE "Enable code coverage" OFF)
 
 if(ENABLE_COVERAGE)
     message(STATUS "Enabling code coverage support")
