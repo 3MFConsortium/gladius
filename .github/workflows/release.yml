@@ -1,0 +1,116 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
+  workflow_dispatch:  # Allow manual testing
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        default: '0.0.1-test'
+
+jobs:
+  # Trigger the existing build workflow to generate artifacts
+  build:
+    uses: ./.github/workflows/build.yml
+    
+  # Create the release after build completes
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Windows Installer
+      uses: actions/download-artifact@v4
+      with:
+        name: gladius_win64
+        path: ./artifacts/windows/
+        
+    - name: Download Linux Package
+      uses: actions/download-artifact@v4
+      with:
+        name: gladius_deb
+        path: ./artifacts/linux/
+        
+    - name: Rename artifacts with version
+      id: version
+      run: |
+        # Extract version from tag or manual input
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/v}
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Create release directory
+        mkdir -p release
+        
+        # Rename Windows installer
+        if [ -f ./artifacts/windows/*.msi ]; then
+          MSI_FILE=$(find ./artifacts/windows/ -name "*.msi" | head -1)
+          cp "$MSI_FILE" "./release/gladius-${VERSION}-windows-x64.msi"
+        fi
+        
+        # Rename Linux package
+        if [ -f ./artifacts/linux/*.deb ]; then
+          DEB_FILE=$(find ./artifacts/linux/ -name "*.deb" | head -1)
+          cp "$DEB_FILE" "./release/gladius-${VERSION}-linux-x64.deb"
+        fi
+        
+        # List files for verification
+        ls -la ./release/
+        
+    - name: Generate Release Notes
+      id: release_notes
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        cat > release_notes.md << EOF
+        # Gladius ${VERSION}
+        
+        ## Downloads
+        
+        - **Windows (x64)**: \`gladius-${VERSION}-windows-x64.msi\`
+        - **Linux (x64)**: \`gladius-${VERSION}-linux-x64.deb\`
+        
+        ## Installation
+        
+        ### Windows
+        Download and run the MSI installer. Administrator privileges may be required.
+        
+        ### Linux (Ubuntu/Debian)
+        \`\`\`bash
+        sudo dpkg -i gladius-${VERSION}-linux-x64.deb
+        sudo apt-get install -f  # Fix any dependency issues
+        \`\`\`
+        
+        ## What's Changed
+        
+        See the commit history for detailed changes in this release.
+        EOF
+        
+        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+        cat release_notes.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Gladius ${{ steps.version.outputs.version }}
+        body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+        files: |
+          release/gladius-*.msi
+          release/gladius-*.deb
+        fail_on_unmatched_files: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
