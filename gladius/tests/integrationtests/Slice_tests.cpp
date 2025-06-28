@@ -95,12 +95,12 @@ namespace gladius_integration_tests
         auto constexpr tolerance = 2.E-1f;
         EXPECT_NEAR(areaSum,
                     testParameter.expected_area_mm2,
-                    tolerance); // NOLINT(clang-diagnostic-double-promotion) 
+                    tolerance); // NOLINT(clang-diagnostic-double-promotion)
     }
 
     std::array<TestParameter, 1> implicitGyroidParameter{
       // filename, z_mm, expected number of contours, expected area
-      {{FileNames::ImplicitGyroid, 15.f, 13u,  921.4f}},
+      {{FileNames::SimpleGyroid, 5.f, 3u, 4.966f}},
     };
 
     INSTANTIATE_TEST_SUITE_P(ImplicitGyroid,
