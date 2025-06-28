@@ -172,21 +172,6 @@ namespace gladius::ui
                                0.1f,
                                20.0f);
 
-            dragParameter("Weight dist to neighbor",
-                          &m_core->getResourceContext()->getRenderingSettings().weightDistToNb,
-                          0.f,
-                          100.0f);
-
-            dragParameter("Weight midpoint",
-                          &m_core->getResourceContext()->getRenderingSettings().weightMidPoint,
-                          0.f,
-                          100.0f);
-
-            dragParameter("Normal offset",
-                          &m_core->getResourceContext()->getRenderingSettings().normalOffset,
-                          0.f,
-                          5.0f);
-
             bool enableSdfRendering =
               m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
             if (ImGui::Checkbox("Show Distance field", &enableSdfRendering))
@@ -2340,9 +2325,6 @@ namespace gladius::ui
         // Create JSON object for render settings
         nlohmann::json renderJson;
         renderJson["quality"] = renderSettings.quality;
-        renderJson["weightDistToNb"] = renderSettings.weightDistToNb;
-        renderJson["weightMidPoint"] = renderSettings.weightMidPoint;
-        renderJson["normalOffset"] = renderSettings.normalOffset;
         renderJson["sdfVisEnabled"] =
           m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
 
@@ -2386,21 +2368,6 @@ namespace gladius::ui
         if (renderJson.contains("quality"))
         {
             renderSettings.quality = renderJson["quality"].get<float>();
-        }
-
-        if (renderJson.contains("weightDistToNb"))
-        {
-            renderSettings.weightDistToNb = renderJson["weightDistToNb"].get<float>();
-        }
-
-        if (renderJson.contains("weightMidPoint"))
-        {
-            renderSettings.weightMidPoint = renderJson["weightMidPoint"].get<float>();
-        }
-
-        if (renderJson.contains("normalOffset"))
-        {
-            renderSettings.normalOffset = renderJson["normalOffset"].get<float>();
         }
 
         if (renderJson.contains("sdfVisEnabled"))
