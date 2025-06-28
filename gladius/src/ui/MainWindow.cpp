@@ -60,6 +60,9 @@ namespace gladius::ui
         m_logger = std::move(logger);
         m_outline.setDocument(m_doc);
 
+        // Set UI mode to true since we're using the MainWindow (UI interface)
+        m_doc->setUiMode(true);
+
         m_modelEditor.setDocument(m_doc);
         // Set the library root directory
         m_modelEditor.setLibraryRootDirectory(getAppDir() / "library");
