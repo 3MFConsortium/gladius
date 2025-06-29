@@ -474,6 +474,7 @@ namespace gladius::ui
                 sliceWindow();
                 renderWindow();
                 meshExportDialog();
+                meshExportDialog3mf();
                 cliExportDialog();
                 mainMenu();
                 showExitPopUp();
@@ -855,31 +856,25 @@ namespace gladius::ui
             }
 
             if (ImGui::MenuItem(
-                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\tImage Stack")))
+                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\t3MF Mesh")))
             {
                 closeMenu();
                 QueriedFilename filename;
-                std::filesystem::path suggestedFilename =
-                  m_currentAssemblyFileName.value_or("imagestack");
-                suggestedFilename.replace_extension("imagestack.3mf");
-
-                filename = querySaveFilename({"*.3mf"}, suggestedFilename);
-
+                if (m_currentAssemblyFileName.has_value())
+                {
+                    auto suggestedFilename = m_currentAssemblyFileName.value();
+                    suggestedFilename.replace_extension("3mf");
+                    filename = querySaveFilename({"*.3mf"}, suggestedFilename);
+                }
+                else
+                {
+                    filename = querySaveFilename({"*.3mf"}, "part.3mf");
+                }
                 if (filename.has_value())
                 {
-                    io::ImageStackExporter exporter(m_logger);
-                    exporter.beginExport(filename.value(), *m_core);
+                    filename->replace_extension(".3mf");
 
-                    if (filename.has_value())
-                    {
-                        exporter.beginExport(filename.value(), *m_core);
-                        while (exporter.advanceExport(*m_core))
-                        {
-                            std::cout << " Processing layer with z = " << m_core->getSliceHeight()
-                                      << "\n";
-                        }
-                        exporter.finalize();
-                    }
+                    m_meshExporterDialog3mf.beginExport(filename.value(), *m_core);
                 }
             }
         }
@@ -973,6 +968,16 @@ namespace gladius::ui
             m_renderWindow.invalidateView();
         }
         m_meshExporterDialog.render(*m_core);
+    }
+
+    void MainWindow::meshExportDialog3mf()
+    {
+        if (m_meshExporterDialog3mf.isVisible())
+        {
+            m_mainView.startAnimationMode();
+            m_renderWindow.invalidateView();
+        }
+        m_meshExporterDialog3mf.render(*m_core);
     }
 
     void MainWindow::cliExportDialog()

@@ -1,4 +1,10 @@
+
+
 # C++ Coding Guidelines
+
+## Build Instructions
+- **Build System**: Use the "Build ALL" task.
+- **Run Tests**: Use the "Run Gladius Tests" task.
 
 ## General
 - **Modern C++**: Use C++11 and later features. Use std::algorithm when possible.

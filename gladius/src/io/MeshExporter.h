@@ -11,7 +11,8 @@
 
 namespace gladius::vdb
 {
-    openvdb::FloatGrid::Ptr createGridFromSdf(gladius::PreComputedSdf & sdf, float bandwidth_mm = 0.1f);
+    openvdb::FloatGrid::Ptr createGridFromSdf(gladius::PreComputedSdf & sdf,
+                                              float bandwidth_mm = 0.1f);
 
     void writeTriangle(std::ostream & output,
                        openvdb::Vec3s & point1,
@@ -30,6 +31,7 @@ namespace gladius::vdb
     gladius::Mesh generatePreviewMesh(ComputeCore & generator, nodes::Assembly & assembly);
     gladius::Mesh gridToMesh(openvdb::FloatGrid::Ptr grid, ComputeContext & computeContext);
     void exportMeshToSTL(Mesh & mesh, const std::filesystem::path & filename);
+    double alignToLayer(double value, double increment);
 
     class MeshExporter : public gladius::io::IExporter
     {
@@ -41,7 +43,7 @@ namespace gladius::vdb
 
         void finalizeExportVdb();
         void finalizeExportNanoVdb();
-        void finalizeExportSTL(ComputeCore & core) ;
+        void finalizeExportSTL(ComputeCore & core);
 
         void setQualityLevel(size_t qualityLevel);
 

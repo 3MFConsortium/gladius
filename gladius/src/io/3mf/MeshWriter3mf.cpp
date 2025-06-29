@@ -58,13 +58,13 @@ namespace gladius::io
             auto model3mf = m_wrapper->CreateModel();
 
             // Add default metadata
-            addDefaultMetadata(model3mf);
+            //	addDefaultMetadata(model3mf);
 
             // Copy metadata from source document if available
-            if (sourceDocument)
-            {
-                copyMetadata(*sourceDocument, model3mf);
-            }
+            // if (sourceDocument)
+            // {
+            //     copyMetadata(*sourceDocument, model3mf);
+            // }
 
             // Add mesh to model
             auto meshObject = addMeshToModel(model3mf, mesh, meshName);
@@ -265,7 +265,6 @@ namespace gladius::io
             return vertexIndex;
         };
 
-        // Access mesh vertex data directly from CPU buffers to avoid GPU read operations
         auto const & vertexBuffer = mesh.getVertices();
         auto const vertexData = const_cast<Buffer<cl_float4> &>(vertexBuffer).getDataCopy();
 
@@ -444,16 +443,6 @@ namespace gladius::io
             catch (...)
             {
                 // Ignore if we can't add creation date
-            }
-
-            // Add export type metadata
-            try
-            {
-                metaDataGroup->AddMetaData("gladius", "ExportType", "CoreMesh", "string", false);
-            }
-            catch (...)
-            {
-                // Ignore if we can't add custom metadata
             }
         }
         catch (std::exception const & e)
