@@ -3,9 +3,8 @@
 #include "../Mesh.h"
 #include "../compute/ComputeCore.h"
 #include "../nodes/Assembly.h"
+#include "LayerBasedMeshExporter.h"
 #include "vdb.h"
-
-#include "IExporter.h"
 
 #include <filesystem>
 
@@ -33,32 +32,22 @@ namespace gladius::vdb
     void exportMeshToSTL(Mesh & mesh, const std::filesystem::path & filename);
     double alignToLayer(double value, double increment);
 
-    class MeshExporter : public gladius::io::IExporter
+    class MeshExporter : public gladius::io::LayerBasedMeshExporter
     {
       public:
-        void beginExport(const std::filesystem::path & fileName, ComputeCore & generator) override;
-        bool advanceExport(ComputeCore & generator) override;
+        // Override to store compute core reference
+        void beginExport(std::filesystem::path const & fileName, ComputeCore & generator) override;
+
+        // Override finalize to implement base finalization
         void finalize() override;
-        [[nodiscard]] double getProgress() const override;
 
         void finalizeExportVdb();
         void finalizeExportNanoVdb();
         void finalizeExportSTL(ComputeCore & core);
 
-        void setQualityLevel(size_t qualityLevel);
-
       private:
-        void setLayerIncrement(float increment_mm);
-        std::filesystem::path m_fileName;
         std::ofstream m_file;
-        openvdb::FloatGrid::Ptr m_grid;
-        double m_layerIncrement_mm = 0.1f;
-        float m_bandwidth_mm = m_layerIncrement_mm * 2.f;
-        size_t m_qualityLevel = 3; // 3 = best quality, but insane high memory usage
-        double m_progress = 0.;
-        double m_startHeight_mm = 0.;
-        double m_endHeight_mm = 0.;
-        double m_currentHeight_mm = 0.;
+        ComputeCore * m_computeCore = nullptr;
     };
 
 }

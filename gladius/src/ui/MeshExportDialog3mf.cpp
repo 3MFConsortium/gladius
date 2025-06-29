@@ -1,40 +1,27 @@
 #include "MeshExportDialog3mf.h"
 
-#include "imgui.h"
-
 namespace gladius::ui
 {
-    void MeshExportDialog3mf::beginExport(std::filesystem::path threeMfFilename, ComputeCore & core)
+    void MeshExportDialog3mf::beginExport(std::filesystem::path const & threeMfFilename,
+                                          ComputeCore & core)
     {
         m_visible = true;
         m_exporter.setQualityLevel(1);
         m_exporter.beginExport(threeMfFilename, core);
     }
 
-    void MeshExportDialog3mf::render(ComputeCore & core)
+    std::string MeshExportDialog3mf::getWindowTitle() const
     {
-        if (!m_visible)
-        {
-            return;
-        }
-        ImGui::Begin("Export in progress", &m_visible);
-
-        ImGui::TextUnformatted("Exporting to 3MF file");
-        ImGui::ProgressBar(static_cast<float>(m_exporter.getProgress()));
-        if (!m_exporter.advanceExport(core))
-        {
-            m_exporter.finalize();
-            m_visible = false;
-        }
-        if (ImGui::Button("Cancel"))
-        {
-            m_visible = false;
-        }
-        ImGui::End();
+        return "Export in progress";
     }
 
-    bool MeshExportDialog3mf::isVisible() const
+    std::string MeshExportDialog3mf::getExportMessage() const
     {
-        return m_visible;
+        return "Exporting to 3MF file";
+    }
+
+    io::IExporter & MeshExportDialog3mf::getExporter()
+    {
+        return m_exporter;
     }
 }

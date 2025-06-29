@@ -1,19 +1,28 @@
 #pragma once
 #include "../io/MeshExporter3mf.h"
+#include "BaseExportDialog.h"
 
 #include <filesystem>
 
 namespace gladius::ui
 {
-    class MeshExportDialog3mf
+    class MeshExportDialog3mf : public BaseExportDialog
     {
       public:
-        void beginExport(std::filesystem::path threeMfFilename, ComputeCore & core);
-        void render(ComputeCore & core);
-        [[nodiscard]] bool isVisible() const;
+        MeshExportDialog3mf()
+            : m_exporter(nullptr)
+        {
+        }
+
+        void beginExport(std::filesystem::path const & threeMfFilename,
+                         ComputeCore & core) override;
+
+      protected:
+        [[nodiscard]] std::string getWindowTitle() const override;
+        [[nodiscard]] std::string getExportMessage() const override;
+        [[nodiscard]] io::IExporter & getExporter() override;
 
       private:
         vdb::MeshExporter3mf m_exporter;
-        bool m_visible{false};
     };
 } // namespace gladius::ui
