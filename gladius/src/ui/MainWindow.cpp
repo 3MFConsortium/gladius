@@ -856,7 +856,7 @@ namespace gladius::ui
             }
 
             if (ImGui::MenuItem(
-                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\t3MF Mesh")))
+                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\t3MF (Mesh)")))
             {
                 closeMenu();
                 QueriedFilename filename;
@@ -1097,8 +1097,8 @@ namespace gladius::ui
 
     void MainWindow::saveAs()
     {
-        auto filename =
-          querySaveFilename({"*.3mf"}, m_currentAssemblyFileName.value_or(std::filesystem::path{}));
+        auto filename = querySaveFilename(
+          {"*.implicit.3mf"}, m_currentAssemblyFileName.value_or(std::filesystem::path{}));
         if (filename.has_value())
         {
             filename->replace_extension(".3mf");
