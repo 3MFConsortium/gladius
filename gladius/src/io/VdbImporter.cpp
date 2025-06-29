@@ -1,25 +1,24 @@
 #include "VdbImporter.h"
 
-#include "src/Document.h"
 #include "nodes/Assembly.h"
 #include "nodes/Model.h"
-#include "src/Primitives.h"
-#include "src/ResourceContext.h"
+#include "Document.h"
+#include "Primitives.h"
+#include "Profiling.h"
+#include "ResourceContext.h"
+#include "exceptions.h"
+#include "types.h"
 #include "vdb.h"
 
 #include <cstring>
 #include <fmt/format.h>
-
-#include "src/exceptions.h"
-#include "src/types.h"
-#include "src/Profiling.h"
-
-
-
+#ifdef _WIN32
+#include <codecvt>
+#include <locale>
+#endif
 
 namespace gladius::vdb
 {
-   
 
     size_t TriangleMesh::polygonCount() const
     {
@@ -50,8 +49,8 @@ namespace gladius::vdb
         ProfileFunction
         try
         {
-            
-            const openvdb::GridBase::Ptr sdfGrid = load(vdbFilename);         
+
+            const openvdb::GridBase::Ptr sdfGrid = load(vdbFilename);
             importFromGrid<float>(sdfGrid, primitives, 1.f);
         }
         catch (const std::exception & e)
@@ -68,7 +67,7 @@ namespace gladius::vdb
             openvdb::initialize();
             openvdb::io::File vdbFile(vdbFilename.string());
             vdbFile.open();
-            return vdbFile.getGrids()->front();            
+            return vdbFile.getGrids()->front();
         }
         catch (const std::exception & e)
         {
@@ -79,8 +78,7 @@ namespace gladius::vdb
 
     void VdbImporter::loadStl(const std::filesystem::path & stlFilename)
     {
-        ProfileFunction
-        m_mesh = loadStlAsMesh(stlFilename);
+        ProfileFunction m_mesh = loadStlAsMesh(stlFilename);
     }
 
     void VdbImporter::writeMesh(gladius::PrimitiveBuffer & primitives) const
@@ -88,8 +86,7 @@ namespace gladius::vdb
         writeMesh(m_mesh, primitives);
     }
 
-    
-    void VdbImporter::writeMesh(TriangleMesh const& mesh, gladius::PrimitiveBuffer& primitives)
+    void VdbImporter::writeMesh(TriangleMesh const & mesh, gladius::PrimitiveBuffer & primitives)
     {
         writeFlatMesh(mesh, primitives);
 
@@ -120,8 +117,7 @@ namespace gladius::vdb
                                      PrimitiveBuffer & primitives,
                                      ImportSettings & config)
     {
-        ProfileFunction
-        const auto transform = openvdb::math::Transform::createLinearTransform(1.);
+        ProfileFunction const auto transform = openvdb::math::Transform::createLinearTransform(1.);
         float const scaling = 1.f / config.m_voxelSize_mm;
 
         if (config.representation == Representation::NearDistanceField)
@@ -171,10 +167,16 @@ namespace gladius::vdb
 
     TriangleMesh VdbImporter::loadStlAsMesh(std::filesystem::path const & stlFilename) const
     {
-        ProfileFunction
-        TriangleMesh mesh;
+        ProfileFunction TriangleMesh mesh;
 
-        std::ifstream stlFile(stlFilename.c_str(), std::ios::in | std::ios::binary);
+#ifdef _WIN32
+        // Convert std::filesystem::path to std::wstring
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+        std::wstring wideStlFilename = converter.from_bytes(stlFilename.string());
+        std::ifstream stlFile(wideStlFilename, std::ios::in | std::ios::binary);
+#else
+        std::ifstream stlFile(stlFilename, std::ios::in | std::ios::binary);
+#endif
         if (!stlFile)
         {
             throw std::runtime_error(fmt::format("Cannot open {}", stlFilename.string()));
@@ -187,7 +189,11 @@ namespace gladius::vdb
         {
             try
             {
-                auto const fileSize = std::filesystem::file_size(stlFilename);
+#ifdef _WIN32
+                auto fileSize = std::filesystem::file_size(wideStlFilename);
+#else
+                auto fileSize = std::filesystem::file_size(stlFilename);
+#endif
 
                 stlFile.read(header, 80);
 
@@ -243,13 +249,14 @@ namespace gladius::vdb
             stlFile.close();
         }
 
+        mesh.updateBoundingBox();
+
         return mesh;
     }
 
     void VdbImporter::writeFlatMesh(TriangleMesh const & mesh, PrimitiveBuffer & primitives)
     {
-        ProfileFunction
-        PrimitiveMeta metaData{};
+        ProfileFunction PrimitiveMeta metaData{};
         metaData.primitiveType = SDF_MESH_TRIANGLES;
         metaData.start = static_cast<int>(primitives.data.size());
 
@@ -277,7 +284,7 @@ namespace gladius::vdb
         metaData.end = static_cast<int>(primitives.data.size());
         primitives.meta.push_back(metaData);
     }
-    
+
     TriangleMesh fromBoundingBox(openvdb::Vec3s const & min, openvdb::Vec3s const & max)
     {
         TriangleMesh mesh;

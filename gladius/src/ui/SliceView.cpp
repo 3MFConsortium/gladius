@@ -5,7 +5,7 @@
 
 #include "GLView.h"
 #include "Widgets.h"
-#include "src/ContourExtractor.h"
+#include "ContourExtractor.h"
 
 namespace gladius
 {
@@ -27,6 +27,11 @@ namespace gladius::ui
     bool SliceView::isVisible() const
     {
         return m_visible;
+    }
+
+    bool SliceView::isHovered() const
+    {
+        return ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) && isVisible();
     }
 
     bool SliceView::render(gladius::ComputeCore & core, GLView & view)
@@ -191,6 +196,7 @@ namespace gladius::ui
                 ImGuiCol const red = IM_COL32(255, 0, 0, 255);
                 ImGuiCol const yellow = IM_COL32(255, 255, 55, 64);
                 ImGuiCol const darkRed = IM_COL32(128, 0, 0, 64);
+                ImGuiCol const greenish = IM_COL32(55, 255, 155, 255);
                 for (auto const & line : lines)
                 {
                     if (line.vertices.size() < 4)
@@ -210,6 +216,12 @@ namespace gladius::ui
                          ++iter)
                     {
                         auto actualColor = color;
+
+                        if (line.area < 0.f)
+                        {
+                            actualColor = greenish;
+                        }
+
                         if (m_showSelfIntersections && line.hasIntersections)
                         {
                             actualColor = yellow;
@@ -255,10 +267,9 @@ namespace gladius::ui
             }
 
             if (!m_contours.has_value() && !core.isSlicingInProgress())
-            {
-                auto const & contourExtractor = core.getContour();
+            {                auto const & contourExtractor = core.getContour();
                 std::lock_guard<std::mutex> lockContourExtractor(core.getContourExtractorMutex());
-                m_contours = contourExtractor.getContour();
+                m_contours = contourExtractor->getContour();
             }
 
             if (!core.isSlicingInProgress() && m_contours.has_value())
@@ -267,7 +278,7 @@ namespace gladius::ui
 
                 if (m_renderNormals)
                 {
-                    auto const & normals = core.getContour().getNormals();
+                    auto const & normals = core.getContour()->getNormals();
 
                     ImGuiCol constexpr lightBlue IM_COL32(200, 200, 255, 255);
 
@@ -279,7 +290,7 @@ namespace gladius::ui
 
                 if (m_renderSourceVertices)
                 {
-                    auto const vertices = core.getContour().getSourceVertices();
+                    auto const vertices = core.getContour()->getSourceVertices();
                     for (auto const & vertex : vertices)
                     {
                         ImGuiCol const lightGreen = IM_COL32(static_cast<char>(5.f * vertex.w),
@@ -362,5 +373,28 @@ namespace gladius::ui
     [[nodiscard]] ImVec2 SliceView::screenToWorldPos(ImVec2 screenPos) const
     {
         return {((screenPos.x - m_origin.x) / m_zoom), ((-screenPos.y + m_origin.y) / m_zoom)};
+    }
+
+    void SliceView::zoomIn()
+    {
+        // Zoom in by 20%
+        m_zoomTarget *= 1.2f;
+        // Clamp to reasonable values
+        m_zoomTarget = std::min(m_zoomTarget, 50.0f);
+    }
+
+    void SliceView::zoomOut()
+    {
+        // Zoom out by 20%
+        m_zoomTarget *= 0.8f;
+        // Clamp to reasonable values
+        m_zoomTarget = std::max(m_zoomTarget, 0.5f);
+    }
+
+    void SliceView::resetView()
+    {
+        // Reset zoom and position
+        m_zoomTarget = 4.0f;
+        m_scrolling = {0.0f, 250.0f};
     }
 }

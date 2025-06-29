@@ -19,13 +19,13 @@
 #include "ProgramManager.h"
 #include "compute/ProgramManager.h"
 #include "gpgpu.h"
-#include "src/Contour.h"
-#include "src/Profiling.h"
-#include "src/RenderProgram.h"
-#include "src/ResourceContext.h"
-#include "src/SlicerProgram.h"
-#include "src/nodes/GraphFlattener.h"
-#include "src/nodes/OptimizeOutputs.h"
+#include "Contour.h"
+#include "Profiling.h"
+#include "RenderProgram.h"
+#include "ResourceContext.h"
+#include "SlicerProgram.h"
+#include "nodes/GraphFlattener.h"
+#include "nodes/OptimizeOutputs.h"
 #include <ToCommandStreamVisitor.h>
 #include <ToOCLVisitor.h>
 

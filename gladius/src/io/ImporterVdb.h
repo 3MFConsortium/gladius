@@ -1,6 +1,6 @@
 #pragma once
 #include "Parameter.h"
-#include "src/Primitives.h"
+#include "Primitives.h"
 #include <filesystem>
 
 namespace gladius

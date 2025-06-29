@@ -29,11 +29,21 @@ namespace gladius
                 "GPU) is "
                 "installed as well as proper drivers for this device. Some devices may need an "
                 "additional OpenCL runtime. If you are running Gladius inside a virtual machine "
-                "lacking a GPU you may try to install a CPU based OpenCL runtime.")
+                "lacking a GPU you may try to install a CPU based OpenCL runtime. Gladius requires "
+                "OpenCL 1.2 or higher, with fp64 support.")
         {
         }
     };
 
     using NoValidBinaryStlFile = GladiusException;
+
+    class FileIOError : public GladiusException
+    {
+      public:
+        explicit FileIOError(std::string const& message)
+            : GladiusException("File I/O error: " + message)
+        {
+        }
+    };
 
 }

@@ -24,6 +24,8 @@ namespace gladius
     nodes::SliceParameter contourOnlyParameter();
 
     float roundTo(float value, float layerThickness);
+    bool pointInPolygon(const Vector2 & pt, const PolyLine & poly);
+    Vector2 computeCentroid(const PolyLine & poly);
 
     struct SliceQuality
     {
@@ -62,6 +64,10 @@ namespace gladius
         [[nodiscard]] const NormalVectors & getNormals() const;
         [[nodiscard]] const SliceQuality & getSliceQuality() const;
         void runPostProcessing();
+        void calcAreas();
+        void calcSign();
+
+        PolyLines generateOffsetContours(float offset, PolyLines const & contours) const;
 
       private:
         void includeOpenContours();
@@ -69,7 +75,6 @@ namespace gladius
         void mergeOpenContoursWithNearestNeighbor();
         void closeRemainingPolyLines();
         void markToSmallAreasForExclusion();
-        void calcAreas();
         void updateContourMode();
         void simplify();
         void measureQuality();

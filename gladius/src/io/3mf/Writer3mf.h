@@ -9,7 +9,7 @@
 #include "EventLogger.h"
 #include "nodes/types.h"
 
-#include <lib3mf/Cpp/lib3mf_implicit.hpp>
+#include <lib3mf_implicit.hpp>
 
 #include <filesystem>
 
@@ -67,7 +67,9 @@ namespace gladius::io
          * @param filename The path to the output 3MF file.
          * @param doc The document to be saved.
          */
-        void save(std::filesystem::path const & filename, Document const & doc);
+        void save(std::filesystem::path const & filename,
+                  Document const & doc,
+                  bool writeThumbnail = true);
 
         /**
          * @brief Saves the function to a 3MF file with the specified filename.
@@ -81,15 +83,17 @@ namespace gladius::io
          * @param doc The document whose thumbnail will be updated.
          */
         void updateThumbnail(Document & doc);
-      private:
-        events::SharedLogger m_logger;
-        Lib3MF::PWrapper m_wrapper{};
 
         /**
          * @brief Updates the 3MF model based on the document.
          * @param doc The document to be updated.
          */
         void updateModel(Document const & doc);
+      private:
+        events::SharedLogger m_logger;
+        Lib3MF::PWrapper m_wrapper{};
+
+
 
         /**
          * @brief Adds the function to the 3MF model.
@@ -114,8 +118,11 @@ namespace gladius::io
      * @brief Saves the document to a 3MF file with the specified filename.
      * @param filename The path to the output 3MF file.
      * @param doc The document to be saved.
+     * @param writeThumbnail Whether to write the thumbnail or not.
      */
-    void saveTo3mfFile(std::filesystem::path const & filename, Document const & doc);
+    void saveTo3mfFile(std::filesystem::path const & filename,
+                       Document const & doc,
+                       bool writeThumbnail = true);
 
     /**
      * @brief Saves the function to a 3MF file with the specified filename.

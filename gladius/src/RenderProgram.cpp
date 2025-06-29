@@ -1,6 +1,6 @@
 #include "RenderProgram.h"
 #include "gpgpu.h"
-#include "src/ProgramBase.h"
+#include "ProgramBase.h"
 #include "Profiling.h"
 
 #include <CL/cl_platform.h>

@@ -2,9 +2,12 @@ cmake_minimum_required(VERSION 3.12)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Options
+option(ENABLE_OPENCL_TESTS "Enable tests that require OpenCL" ON)
+
 set(CPACK_PACKAGE_VERSION_MAJOR "1")
 set(CPACK_PACKAGE_VERSION_MINOR "2")
-set(CPACK_PACKAGE_VERSION_PATCH "10")
+set(CPACK_PACKAGE_VERSION_PATCH "12")
 
 # Set the version of the package in src/version.h
 configure_file(
@@ -67,7 +70,7 @@ endif()
 
 project(gladius)
 if (MSVC)
-    add_compile_options(/bigobj /utf-8 /Zc:char8_t- /Zc:__cplusplus) # see https://github.com/ocornut/imgui/issues/4866
+    add_compile_options(/bigobj /utf-8 /Zc:__cplusplus)
 
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_compile_options(/RTC1) 
@@ -132,7 +135,9 @@ if (ENABLE_TRACY)
 endif()
 find_package(imgui CONFIG REQUIRED)
 find_package(unofficial-imgui-node-editor CONFIG REQUIRED)
-
+find_package(PkgConfig REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
 
 
 file(GLOB KERNEL_FILES
@@ -197,6 +202,8 @@ configure_file(${CMAKE_SOURCE_DIR}/src/gladius.rc.res gladius.rc.res COPYONLY)
 
 
 file(COPY examples DESTINATION "src/")
+file(COPY library DESTINATION "src/")
+
 
 file(COPY components/licenses DESTINATION "src/")
 
@@ -221,13 +228,16 @@ install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${IN
 # Install examples
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/ DESTINATION ${INSTALL_PREFIX}/examples/)
 
+# Install library
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/library/ DESTINATION ${INSTALL_PREFIX}/library/)
+
 # Install binaries and libraries
 install(
     DIRECTORY ${PROJECT_BINARY_DIR}/src/
     DESTINATION ${INSTALL_PREFIX}
     FILES_MATCHING 
     PATTERN "*.dll"
-    PATTERN "*.so.*"
+    REGEX ".*\\.so\\.[0-9]+"
     PATTERN "*.so"
     PATTERN "*.ttf"
     PATTERN "*.rtf"

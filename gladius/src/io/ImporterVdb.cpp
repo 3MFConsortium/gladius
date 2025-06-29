@@ -3,10 +3,10 @@
 #include "Builder.h"
 #include "nodes/Assembly.h"
 #include "nodes/Model.h"
-#include "src/Document.h"
-#include "src/Primitives.h"
-#include "src/ResourceContext.h"
-#include "src/io/VdbImporter.h"
+#include "Document.h"
+#include "Primitives.h"
+#include "ResourceContext.h"
+#include "io/VdbImporter.h"
 #include "vdb.h"
 
 #include <cstring>
@@ -15,9 +15,9 @@
 #include "Document.h"
 #include "Model.h"
 #include "nodes/nodesfwd.h"
-#include "src/Profiling.h"
-#include "src/exceptions.h"
-#include "src/types.h"
+#include "Profiling.h"
+#include "exceptions.h"
+#include "types.h"
 namespace gladius::io
 {
 

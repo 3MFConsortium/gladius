@@ -8,9 +8,9 @@
 #include "nodes/Parameter.h"
 #include "nodes/Visitor.h"
 
-#include <lib3mf/Cpp/lib3mf_abi.hpp>
-#include <lib3mf/Cpp/lib3mf_implicit.hpp>
-#include <lib3mf/Cpp/lib3mf_types.hpp>
+#include <lib3mf_abi.hpp>
+#include <lib3mf_implicit.hpp>
+#include <lib3mf_types.hpp>
 
 #include <unordered_map>
 
@@ -500,9 +500,12 @@ namespace gladius::io
         }
     }
 
-    void Writer3mf::save(std::filesystem::path const & filename, Document const & doc)
+    void Writer3mf::save(std::filesystem::path const & filename,
+                         Document const & doc,
+                         bool writeThumbnail)
     {
         auto model = doc.get3mfModel();
+
 
         if (!model)
         {
@@ -510,6 +513,12 @@ namespace gladius::io
             return;
         }
         auto metaDataGroup = model->GetMetaDataGroup();
+
+        if (!metaDataGroup)
+        {
+            m_logger->addEvent({"No metadata group found.", events::Severity::Warning});
+            return;
+        }
 
         try
         {
@@ -526,7 +535,10 @@ namespace gladius::io
         }
 
         updateModel(doc);
-        updateThumbnail(const_cast<Document &>(doc));
+        if (writeThumbnail)
+        {
+            updateThumbnail(const_cast<Document &>(doc));
+        }
 
         try
         {
@@ -549,7 +561,6 @@ namespace gladius::io
             return;
         }
 
-      
         for (auto & [name, model] : doc.getAssembly()->getFunctions())
         {
             if (model->isManaged())
@@ -566,8 +577,8 @@ namespace gladius::io
             }
             else
             {
-                throw std::runtime_error("Function not found in 3mf model");
-                // addFunctionTo3mf(*model, model3mf);
+                //throw std::runtime_error("Function not found in 3mf model");
+                addFunctionTo3mf(*model, model3mf);
             }
         }
     }
@@ -651,10 +662,11 @@ namespace gladius::io
         writer->WriteToFile(filename.string().c_str());
     }
 
-    void saveTo3mfFile(std::filesystem::path const & filename, Document const & doc)
+    void
+    saveTo3mfFile(std::filesystem::path const & filename, Document const & doc, bool writeThumbnail)
     {
         Writer3mf writer(doc.getSharedLogger());
-        writer.save(filename, doc);
+        writer.save(filename, doc, writeThumbnail);
     }
 
     void saveFunctionTo3mfFile(std::filesystem::path const & filename,

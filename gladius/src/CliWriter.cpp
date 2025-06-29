@@ -25,7 +25,7 @@ namespace gladius
         auto sliceParameter = contourOnlyParameter();
         sliceParameter.zHeight_mm = generator.getSliceHeight();
         generator.requestContourUpdate(sliceParameter);
-        writeLayer(generator.getContour().getContour(), sliceParameter.zHeight_mm);
+        writeLayer(generator.getContour()->getContour(), sliceParameter.zHeight_mm);
 
         m_file << "$$GEOMETRYEND\n";
     }
@@ -62,7 +62,7 @@ namespace gladius
             const auto z_mm = roundToLayerThickness(z_previous + m_layerThickness_mm);
             sliceParameter.zHeight_mm = z_mm;
             generator.requestContourUpdate(sliceParameter);
-            writeLayer(generator.getContour().getContour(), z_mm);
+            writeLayer(generator.getContour()->getContour(), z_mm);
             std::cout << "Exporting layer " << i << " of " << numberLayer << " with height " << z_mm
                       << " mm\n";
         }
@@ -105,7 +105,7 @@ namespace gladius
         sliceParameter.zHeight_mm = z_mm;
         generator.setSliceHeight(z_mm);
         generator.requestContourUpdate(sliceParameter);
-        writeLayer(generator.getContour().getContour(), z_mm);
+        writeLayer(generator.getContour()->getContour(), z_mm);
 
         m_progress = (z_mm - m_startHeight_mm) / (m_endHeight_mm - m_startHeight_mm);
         return z_mm < generator.getBoundingBox()->max.z + m_layerThickness_mm;

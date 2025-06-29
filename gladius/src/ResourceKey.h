@@ -3,6 +3,7 @@
 #include <optional>
 #include <filesystem>
 #include <fmt/format.h>
+#include "types.h"
 
 namespace gladius
 {
@@ -13,8 +14,6 @@ namespace gladius
         seed ^= std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         (hash_combine(seed, rest), ...);
     }
-
-    using ResourceId = uint32_t;
 
     class ResourceKey
     {

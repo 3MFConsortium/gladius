@@ -1,11 +1,14 @@
 #include "Importer3mf.h"
 
-#include <lib3mf/Cpp/lib3mf_abi.hpp>
-#include <lib3mf/Cpp/lib3mf_implicit.hpp>
-#include <lib3mf/Cpp/lib3mf_types.hpp>
+#include <lib3mf_abi.hpp>
+#include <lib3mf_implicit.hpp>
+#include <lib3mf_types.hpp>
+#include <set>
+#include <vector>
 
 #include "Builder.h"
 #include "Document.h"
+#include "FunctionComparator.h"
 #include "ImageExtractor.h"
 #include "Parameter.h"
 #include "Profiling.h"
@@ -277,6 +280,75 @@ namespace gladius::io
         doc.getAssembly()->updateInputsAndOutputs();
     }
 
+    void Importer3mf::loadImplicitFunctionsFiltered(Lib3MF::PModel fileModel,
+                                                    Document & doc,
+                                                    std::vector<Duplicates> const & duplicates)
+    {
+        ProfileFunction;
+
+        // If there are no duplicates to filter out, just use the regular method
+        if (duplicates.empty())
+        {
+            loadImplicitFunctions(fileModel, doc);
+            return;
+        }
+
+        // Create a set of resource IDs to skip (the duplicate functions)
+        std::set<Lib3MF_uint32> duplicateIds;
+        for (auto const & duplicate : duplicates)
+        {
+            if (duplicate.duplicateFunction)
+            {
+                duplicateIds.insert(duplicate.duplicateFunction->GetUniqueResourceID());
+            }
+        }
+
+        // Log the duplicate IDs
+        for (auto const & duplicate : duplicates)
+        {
+            if (duplicate.duplicateFunction)
+            {
+                std::cout << "Duplicate function found with ID: "
+                          << duplicate.duplicateFunction->GetUniqueResourceID() << std::endl;
+            }
+        }
+
+        // Process resources, skipping those in the duplicateIds set
+        auto resourceIterator = fileModel->GetResources();
+        while (resourceIterator->MoveNext())
+        {
+            auto res = resourceIterator->GetCurrent();
+            Lib3MF_uint32 resourceId = res->GetUniqueResourceID();
+
+            // Skip if this resource is in our duplicates list
+            if (duplicateIds.find(resourceId) != duplicateIds.end())
+            {
+                if (m_eventLogger)
+                {
+                    m_eventLogger->addEvent(
+                      {fmt::format("Skipped loading duplicate function with ID: {}", resourceId),
+                       events::Severity::Info});
+                }
+                continue;
+            }
+
+            // Process as usual if not a duplicate
+            auto implicitFunc = dynamic_cast<Lib3MF::CImplicitFunction *>(res.get());
+            if (implicitFunc)
+            {
+                processImplicitFunction(doc, implicitFunc);
+            }
+
+            auto functionFromImage3d = dynamic_cast<Lib3MF::CFunctionFromImage3D *>(res.get());
+            if (functionFromImage3d)
+            {
+                processFunctionFromImage3d(doc, functionFromImage3d);
+            }
+        }
+
+        doc.getAssembly()->updateInputsAndOutputs();
+    }
+
     TextureTileStyle toTextureTileStyle(Lib3MF::eTextureTileStyle style)
     {
         ProfileFunction switch (style)
@@ -351,6 +423,13 @@ namespace gladius::io
         {
             return;
         }
+
+        if (m_eventLogger)
+        {
+            m_eventLogger->addEvent({fmt::format("Creating model: {}", func->GetUniqueResourceID()),
+                                     events::Severity::Info});
+        }
+
         assembly.addModelIfNotExisting(func->GetModelResourceID());
 
         auto & idToNode = m_nodeMaps[func->GetModelResourceID()];
@@ -421,6 +500,9 @@ namespace gladius::io
                                            typeIndexFrom3mfType(output->GetType()));
                 }
             }
+            newNode->setUniqueName(node3mf->GetIdentifier());
+            // tag
+            newNode->setTag(node3mf->GetTag());
             model->registerInputs(*newNode);
             model->registerOutputs(*newNode);
             idToNode[makeValidVariableName(node3mf->GetIdentifier())] = newNode;
@@ -735,6 +817,205 @@ namespace gladius::io
         return mat;
     }
 
+    std::vector<Lib3MF::PImplicitFunction>
+    Importer3mf::collectImplicitFunctions(Lib3MF::PModel const & model) const
+    {
+        ProfileFunction std::vector<Lib3MF::PImplicitFunction> implicitFunctions;
+        auto resourceIterator = model->GetResources();
+
+        while (resourceIterator->MoveNext())
+        {
+            auto resource = resourceIterator->GetCurrent();
+            auto implicitFunc = std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(resource);
+
+            if (implicitFunc)
+            {
+                implicitFunctions.push_back(implicitFunc);
+            }
+        }
+
+        return implicitFunctions;
+    }
+
+    std::vector<Duplicates> Importer3mf::findDuplicatedFunctions(
+      std::vector<Lib3MF::PImplicitFunction> const & originalFunctions,
+      Lib3MF::PModel const & extendedModel) const
+    {
+        ProfileFunction std::vector<Duplicates> duplicates;
+
+        // For each original function, search for an equivalent in the extended model
+        for (const auto & originalFunction : originalFunctions)
+        {
+            // Skip if function is null (should not happen, but let's be safe)
+            if (!originalFunction)
+            {
+                continue;
+            }
+
+            // Use the FunctionComparator to find an equivalent function
+            auto equivalentFunction = findEquivalentFunction(*extendedModel, *originalFunction);
+
+            // If an equivalent function is found, store the function pointers in the result
+            if (equivalentFunction)
+            {
+                Duplicates duplicate{originalFunction, equivalentFunction};
+
+                duplicates.push_back(duplicate);
+            }
+        }
+
+        return duplicates;
+    }
+
+    std::set<Lib3MF_uint32>
+    Importer3mf::collectFunctionResourceIds(Lib3MF::PModel const & model) const
+    {
+        ProfileFunction std::set<Lib3MF_uint32> functionResourceIds;
+        auto resourceIterator = model->GetResources();
+        while (resourceIterator->MoveNext())
+        {
+            auto resource = resourceIterator->GetCurrent();
+            auto implicitFunc = dynamic_cast<Lib3MF::CImplicitFunction *>(resource.get());
+            auto functionFromImage3d = dynamic_cast<Lib3MF::CFunctionFromImage3D *>(resource.get());
+
+            if (implicitFunc || functionFromImage3d)
+            {
+                functionResourceIds.insert(resource->GetResourceID());
+            }
+        }
+        return functionResourceIds;
+    }
+
+    void
+    Importer3mf::replaceDuplicatedFunctionReferences(std::vector<Duplicates> const & duplicates,
+                                                     Lib3MF::PModel const & model) const
+    {
+        ProfileFunction
+
+          // If no duplicates were found, no need to replace anything
+          if (duplicates.empty())
+        {
+            return;
+        }
+
+        // Get all implicit functions from the model
+        auto resourceIterator = model->GetResources();
+
+        // Iterate through all resources
+        while (resourceIterator->MoveNext())
+        {
+            auto resource = resourceIterator->GetCurrent();
+
+            // Check if the resource is an implicit function
+            auto implicitFunction = std::dynamic_pointer_cast<Lib3MF::CImplicitFunction>(resource);
+            if (!implicitFunction)
+            {
+                // Not an implicit function, skip
+                continue;
+            }
+
+            // Get all nodes in this function
+            auto nodeIterator = implicitFunction->GetNodes();
+
+            // Iterate through all nodes in the function
+            while (nodeIterator->MoveNext())
+            {
+                auto node = nodeIterator->GetCurrent();
+
+                // Check if this is a ResourceIdNode (ConstResourceID type)
+                if (node->GetNodeType() == Lib3MF::eImplicitNodeType::ConstResourceID)
+                {
+                    auto resourceIdNode = std::dynamic_pointer_cast<Lib3MF::CResourceIdNode>(node);
+                    if (!resourceIdNode)
+                    {
+                        if (m_eventLogger)
+                        {
+                            m_eventLogger->addEvent(
+                              {fmt::format("Could not cast node {} to ResourceIdNode",
+                                           node->GetIdentifier()),
+                               events::Severity::Warning});
+                        }
+                        continue;
+                    }
+
+                    // Get the resource referenced by this node
+                    Lib3MF::PResource referencedResource;
+                    try
+                    {
+                        referencedResource = resourceIdNode->GetResource();
+                    }
+                    catch (const std::exception & e)
+                    {
+                        if (m_eventLogger)
+                        {
+                            m_eventLogger->addEvent(
+                              {fmt::format("Error retrieving resource from ResourceIdNode {}: {}",
+                                           node->GetIdentifier(),
+                                           e.what()),
+                               events::Severity::Warning});
+                        }
+                        continue;
+                    }
+
+                    if (!referencedResource)
+                    {
+                        if (m_eventLogger)
+                        {
+                            m_eventLogger->addEvent(
+                              {fmt::format("ResourceIdNode {} references a null resource",
+                                           node->GetIdentifier()),
+                               events::Severity::Warning});
+                        }
+                        continue;
+                    }
+
+                    // Check if this resource is one of our duplicate functions
+                    for (const auto & duplicate : duplicates)
+                    {
+                        // If the referenced resource ID matches a duplicate function's ID
+                        if (referencedResource->GetUniqueResourceID() ==
+                            duplicate.duplicateFunction->GetUniqueResourceID())
+                        {
+                            // Replace the reference with the original function
+                            try
+                            {
+                                auto originalResource = model->GetResourceByID(
+                                  duplicate.originalFunction->GetUniqueResourceID());
+                                resourceIdNode->SetResource(originalResource);
+
+                                if (m_eventLogger)
+                                {
+                                    m_eventLogger->addEvent(
+                                      {fmt::format(
+                                         "Replaced reference to duplicate function {} "
+                                         "with original function {}",
+                                         duplicate.duplicateFunction->GetUniqueResourceID(),
+                                         duplicate.originalFunction->GetUniqueResourceID()),
+                                       events::Severity::Info});
+                                }
+                            }
+                            catch (const std::exception & e)
+                            {
+                                if (m_eventLogger)
+                                {
+                                    m_eventLogger->addEvent(
+                                      {fmt::format(
+                                         "Error replacing function reference in node {}: {}",
+                                         node->GetIdentifier(),
+                                         e.what()),
+                                       events::Severity::Error});
+                                }
+                            }
+
+                            // We've handled this node, no need to check other duplicates
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     void Importer3mf::loadMeshes(Lib3MF::PModel model, Document & doc)
     {
         ProfileFunction auto objectIterator = model->GetObjects();
@@ -1018,7 +1299,7 @@ namespace gladius::io
         ProfileFunction auto image3dIterator = model->GetImage3Ds();
 
         ImageExtractor extractor;
-        if (!extractor.open(filename))
+        if (!extractor.loadFromArchive(filename))
         {
             throw std::runtime_error(fmt::format("Could not open file {}", filename.string()));
         }
@@ -1061,7 +1342,7 @@ namespace gladius::io
                     key.setDisplayName(image3d->GetName());
                     if (useVdb)
                     {
-                        auto grid = extractor.loadAsVdbGrid(fileList);
+                        auto grid = extractor.loadAsVdbGrid(fileList, FileLoaderType::Archive);
 
                         resMan.addResource(key, std::move(grid));
                     }
@@ -1153,7 +1434,9 @@ namespace gladius::io
 
                     if (component->HasTransform())
                     {
-                        componentTrafo = matrix4x4From3mfTransform(component->GetTransform());
+                        auto const transformationComponent =
+                          matrix4x4From3mfTransform(component->GetTransform());
+                        componentTrafo = inverseMatrix(transformationComponent);
                     }
 
                     buildItemIter->addComponent(
@@ -1228,17 +1511,20 @@ namespace gladius::io
 
     void Importer3mf::merge(std::filesystem::path const & filename, Document & doc)
     {
-        ProfileFunction auto model3mf = doc.get3mfModel();
-        if (!model3mf)
+        ProfileFunction auto targetModel = doc.get3mfModel();
+        if (!targetModel)
         {
             load(filename, doc);
             return;
         }
 
-        auto const modelToMerge = m_wrapper->CreateModel();
-        auto const reader = modelToMerge->QueryReader("3mf");
+        auto core = doc.getCore();
+        auto computenToken = core->waitForComputeToken();
 
-        reader->SetStrictModeActive(true);
+        auto const modelToMergeFrom = m_wrapper->CreateModel();
+        auto const reader = modelToMergeFrom->QueryReader("3mf");
+
+        reader->SetStrictModeActive(false);
         try
         {
             reader->ReadFromFile(filename.string());
@@ -1261,10 +1547,58 @@ namespace gladius::io
 
         try
         {
-            model3mf->MergeFromModel(modelToMerge.get());
+            // backup the list of function ids
 
-           loadImageStacks(filename, model3mf, doc);
-           loadImplicitFunctions(model3mf, doc);
+            std::set<Lib3MF_uint32> functionResourceIds = collectFunctionResourceIds(targetModel);
+            // store the ptr to the original functions
+            auto implicitFunctions = collectImplicitFunctions(targetModel);
+
+            targetModel->MergeFromModel(modelToMergeFrom.get());
+
+            // now find all duplicated functions
+            size_t numDuplicatesPrevious = 0;
+            size_t numDuplicatesCurrent = 0;
+            std::vector<Duplicates> duplicates;
+            do
+            {
+                numDuplicatesPrevious = numDuplicatesCurrent;
+
+                duplicates = findDuplicatedFunctions(implicitFunctions, targetModel);
+                numDuplicatesCurrent = duplicates.size();
+
+                // replace the references to the duplicated functions with the original ones
+                replaceDuplicatedFunctionReferences(duplicates, targetModel);
+
+            } while (numDuplicatesPrevious != numDuplicatesCurrent);
+
+            // remove the duplicates from the model
+            for (auto const & duplicate : duplicates)
+            {
+                // log
+                m_eventLogger->addEvent({fmt::format("Removed resource from model3mf: {}",
+                                                     duplicate.duplicateFunction->GetResourceID()),
+                                         events::Severity::Info});
+                // targetModel->RemoveResource(duplicate.duplicateFunction.get());
+                auto const & resource =
+                  targetModel->GetResourceByID(duplicate.duplicateFunction->GetUniqueResourceID());
+                if (!resource)
+                {
+                    if (m_eventLogger)
+                    {
+                        m_eventLogger->addEvent(
+                          {fmt::format("Resource {} not found in model3mf",
+                                       duplicate.duplicateFunction->GetUniqueResourceID()),
+                           events::Severity::Error});
+                    }
+                    continue;
+                }
+                targetModel->RemoveResource(resource);
+            }
+
+            loadImageStacks(filename, targetModel, doc);
+            loadImplicitFunctionsFiltered(targetModel, doc, duplicates);
+
+            doc.rebuildResourceDependencyGraph();
         }
         catch (Lib3MF::ELib3MFException const & e)
         {

@@ -2,15 +2,16 @@
 #include "ImageRGBA.h"
 #include "Primitives.h"
 #include "ResourceKey.h"
+#include "types.h"
 
-#include <openvdb/Grid.h>
 #include <fmt/format.h>
+#include <openvdb/Grid.h>
 
 #include <filesystem>
-#include <unordered_map>
 #include <memory>
-#include <string>
 #include <optional>
+#include <string>
+#include <unordered_map>
 
 namespace gladius
 {
@@ -27,7 +28,7 @@ namespace gladius
     class Mesh;
     class ResourceContext;
     class ImageStackOCLBuffer;
-    
+
     using TextureBuffer = ImageImpl<cl_float4>;
 
     struct ImageObject
@@ -125,11 +126,10 @@ namespace gladius
         bool m_alreadyLoaded = false;
         bool m_inUse = false;
     };
-    
     class ResourceManager
     {
       public:
-        explicit ResourceManager(ResourceContext * resourceContext,
+        explicit ResourceManager(SharedResources resourceContext,
                                  std::filesystem::path assemblyDir);
 
         void addResource(const std::filesystem::path & filename);
@@ -158,12 +158,13 @@ namespace gladius
 
         bool hasResource(ResourceKey const & key) const;
 
+        void deleteResource(ResourceKey const & key);
+
       private:
         void increaseImageNumber();
-
         std::map<std::filesystem::path, ImageObject> m_textures;
         int m_nameCounter = 0;
-        ResourceContext * m_resourceContext{nullptr};
+        SharedResources m_resourceContext{nullptr};
         std::filesystem::path m_assemblyDir;
 
         ResourceMap m_resources;

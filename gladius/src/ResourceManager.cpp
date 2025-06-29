@@ -22,9 +22,9 @@ namespace gladius
         reader.writeMesh(m_payloadData);
     }
 
-    ResourceManager::ResourceManager(ResourceContext * resourceContext,
+    ResourceManager::ResourceManager(SharedResources resourceContext,
                                      std::filesystem::path assemblyDir)
-        : m_resourceContext(resourceContext)
+        : m_resourceContext(std::move(resourceContext))
         , m_assemblyDir(std::move(assemblyDir))
     {
     }
@@ -122,5 +122,18 @@ namespace gladius
     bool ResourceManager::hasResource(ResourceKey const & key) const
     {
         return m_resources.find(key) != m_resources.end();
+    }
+
+    void ResourceManager::deleteResource(ResourceKey const & key)
+    {
+        // find the resource
+        auto iter = m_resources.find(key);
+        if (iter == m_resources.end())
+        {
+            return;
+        }
+
+        // remove the resource
+        m_resources.erase(iter);
     }
 }

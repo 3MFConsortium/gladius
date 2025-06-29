@@ -18,7 +18,7 @@ namespace gladius
         auto sliceParameter = contourOnlyParameter();
         sliceParameter.zHeight_mm = generator.getSliceHeight();
         generator.requestContourUpdate(sliceParameter);
-        writeLayer(generator.getContour().getContour());
+        writeLayer(generator.getContour()->getContour());
 
         m_file << "</svg>";
         m_file.close();

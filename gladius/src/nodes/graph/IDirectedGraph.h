@@ -1,12 +1,12 @@
 ﻿#pragma once
 
-#include <set>
+#include <unordered_set>
 #include <vector>
 
 namespace gladius::nodes::graph
 {
     using Identifier = int;
-    using DependencySet = std::set<Identifier>;
+    using DependencySet = std::unordered_set<Identifier>;
     using VertexList = std::vector<Identifier>;
 
     class IDirectedGraph
@@ -21,6 +21,7 @@ namespace gladius::nodes::graph
           -> bool = 0;
 
         [[nodiscard]] virtual auto getSize() const -> std::size_t = 0;
+        [[nodiscard]] virtual bool isInRange(Identifier id) const = 0;
         virtual void removeVertex(Identifier id) = 0;
         virtual void addVertex(Identifier id) = 0;
         [[nodiscard]] virtual auto hasPredecessors(Identifier id) const -> bool = 0;

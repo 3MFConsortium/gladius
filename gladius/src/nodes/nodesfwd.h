@@ -124,7 +124,6 @@ namespace gladius::nodes
                                  Pow,
                                  SignedDistanceToMesh,
                                  FunctionCall,
-                                 Mix,
                                  Transformation,
                                  Length,
                                  DecomposeVector,

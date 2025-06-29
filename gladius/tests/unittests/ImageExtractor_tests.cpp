@@ -9,7 +9,7 @@ namespace gladius_tests
 
     struct TestFiles
     {
-        static auto constexpr Boundary3mf = "testdata/Boundary.3mf";
+        static auto constexpr SphereInACageSmallAsImageStack = "testdata/SphereInACage_small.imagestack.3mf";
     };
 
     TEST(ImageExtractor, Open_Valid3mfFile_ReturnsTrue)
@@ -18,7 +18,7 @@ namespace gladius_tests
         io::ImageExtractor extractor;
 
         // act
-        auto const result = extractor.open(TestFiles::Boundary3mf);
+        auto const result = extractor.loadFromArchive(TestFiles::SphereInACageSmallAsImageStack);
 
         // assert
         EXPECT_TRUE(result);
@@ -30,17 +30,17 @@ namespace gladius_tests
         io::ImageExtractor extractor;
 
         // act (expect exception)
-        EXPECT_THROW(extractor.open("testdata/Invalid.3mf"), std::runtime_error);
+        EXPECT_THROW(extractor.loadFromArchive("testdata/Invalid.3mf"), std::runtime_error);
     }
 
     TEST(ImageExtractor, LoadFile_ValidFile_ReturnsFileContent)
     {
         // arrange
         io::ImageExtractor extractor;
-        extractor.open(TestFiles::Boundary3mf);
+        extractor.loadFromArchive(TestFiles::SphereInACageSmallAsImageStack);
 
         // act
-        auto const result = extractor.loadFile("volume/layer_01.png");
+        auto const result = extractor.loadFileFromArchive("volume/1/layer_001.png");
 
         // assert
         EXPECT_FALSE(result.empty());
@@ -63,10 +63,10 @@ namespace gladius_tests
     {
         // arrange
         io::ImageExtractor extractor;
-        extractor.open(TestFiles::Boundary3mf);
+        extractor.loadFromArchive(TestFiles::SphereInACageSmallAsImageStack);
 
         // act
-        io::ImageStack const imgStack = extractor.loadImageStack({"volume/layer_01.png"});
+        io::ImageStack const imgStack = extractor.loadImageStack({"volume/1/layer_001.png"});
         auto firstImage = imgStack.front();
         auto pngInfo = extractor.getPNGInfo();
 

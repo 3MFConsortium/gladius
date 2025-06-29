@@ -1,6 +1,6 @@
 ﻿#include "GraphAlgorithms.h"
 #include "graph/IDirectedGraph.h"
-#include "src/Profiling.h"
+#include "Profiling.h"
 
 #include <list>
 #include <queue>
@@ -33,7 +33,7 @@ namespace gladius::nodes::graph
     auto determineAllDependencies(const IDirectedGraph & graph, Identifier id) -> DependencySet
     {
         ProfileFunction;
-        if (id < 0 || id > static_cast<Identifier>(graph.getSize()))
+        if (!graph.isInRange(id))
         {
             return DependencySet();
         }
@@ -116,6 +116,12 @@ namespace gladius::nodes::graph
                            Identifier dependencyInQuestion) -> bool
     {
         ProfileFunction;
+
+        if (graph.getSize() == 0)
+        {
+            return false;
+        }
+        
         if (id < 0 || dependencyInQuestion < 0)
         {
             return false;
@@ -125,7 +131,8 @@ namespace gladius::nodes::graph
             return true;
         }
 
-        std::vector<bool> visited(graph.getSize(), false);
+      
+        std::vector<bool> visited(graph.getSize() + 1u, false);
         std::queue<Identifier> nodesToVisit;
 
         nodesToVisit.push(id);
@@ -269,7 +276,7 @@ namespace gladius::nodes::graph
         result.reserve(graph.getSize());
 
         std::list<BfsItem> nodesToVisit;
-        std::vector<bool> visited(graph.getSize(), false);
+        std::vector<bool> visited(graph.getSize() + 1u, false);
         visited[start] = true;
 
         auto const constexpr depth = 0;

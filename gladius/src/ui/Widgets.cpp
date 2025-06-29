@@ -175,6 +175,8 @@ namespace gladius::ui
         int digitCount = (value != 0.0f) ? (int) log10(fabs(value)) + 3 : 3;
         float const increment = std::max(powf(10, round(log10(fabs(value)))) * 0.01f, 0.1f);
         std::string format = "%." + std::to_string(digitCount) + "f";
+
+        ImGui::SetNextItemWidth(100.f);
         bool changed = ImGui::DragFloat(label.c_str(),
                                         &value,
                                         0.1f,
@@ -195,8 +197,7 @@ namespace gladius::ui
             }
 
             int const keyPressCountDown =
-              ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_DownArrow), deltaTime,
-              0.1f);
+              ImGui::GetKeyPressedAmount(ImGui::GetKeyIndex(ImGuiKey_DownArrow), deltaTime, 0.1f);
             if (keyPressCountDown > 0)
             {
                 value -= increment * keyPressCountDown;
@@ -205,5 +206,35 @@ namespace gladius::ui
         }
 
         return changed;
+    }
+
+    void frameOverlay(ImVec4 color, std::string const & tooltip)
+    {
+        ImVec2 rectMin = ImGui::GetItemRectMin();
+        ImVec2 rectMax = ImGui::GetItemRectMax();
+        rectMin.x += ImGui::GetStyle().FramePadding.x;
+        rectMax.x =
+          ImGui::GetContentRegionMax().x; // Expand to the right to the available content area
+
+        // Draw the colored rectangle
+        ImGui::GetWindowDrawList()->AddRectFilled(rectMin,
+                                                  rectMax,
+                                                  ImGui::ColorConvertFloat4ToU32(color),
+                                                  15.0f); // Rounded corners
+        
+        // Handle tooltip by checking if mouse is hovering over the overlay region
+        if (!tooltip.empty())
+        {
+            ImVec2 mousePos = ImGui::GetIO().MousePos;
+            bool isHovered = (mousePos.x >= rectMin.x && mousePos.x <= rectMax.x &&
+                              mousePos.y >= rectMin.y && mousePos.y <= rectMax.y);
+                              
+            if (isHovered)
+            {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(tooltip.c_str());
+                ImGui::EndTooltip();
+            }
+        }
     }
 }
