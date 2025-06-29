@@ -25,27 +25,15 @@ namespace gladius::io
 {
 
     MeshWriter3mf::MeshWriter3mf(events::SharedLogger logger)
-        : m_logger(std::move(logger))
+        : Writer3mfBase(std::move(logger))
     {
-        try
-        {
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
-        }
-        catch (std::exception const & e)
-        {
-            if (m_logger)
-            {
-                m_logger->addEvent({fmt::format("Failed to initialize 3MF library: {}", e.what()),
-                                    events::Severity::Error});
-            }
-            throw std::runtime_error("Failed to initialize 3MF library");
-        }
     }
 
     void MeshWriter3mf::exportMesh(std::filesystem::path const & filePath,
                                    Mesh const & mesh,
                                    std::string const & meshName,
-                                   Document const * sourceDocument)
+                                   Document const * sourceDocument,
+                                   bool writeThumbnail)
     {
         if (!validateMesh(mesh))
         {
@@ -58,19 +46,25 @@ namespace gladius::io
             auto model3mf = m_wrapper->CreateModel();
 
             // Add default metadata
-            //	addDefaultMetadata(model3mf);
+            addDefaultMetadata(model3mf);
 
             // Copy metadata from source document if available
-            // if (sourceDocument)
-            // {
-            //     copyMetadata(*sourceDocument, model3mf);
-            // }
+            if (sourceDocument)
+            {
+                copyMetadata(*sourceDocument, model3mf);
+            }
 
             // Add mesh to model
             auto meshObject = addMeshToModel(model3mf, mesh, meshName);
 
             // Create build item
             createBuildItem(model3mf, meshObject, meshName);
+
+            // Add thumbnail if requested and source document is available
+            if (writeThumbnail && sourceDocument)
+            {
+                updateThumbnail(const_cast<Document &>(*sourceDocument), model3mf);
+            }
 
             // Write to file
             auto writer = model3mf->QueryWriter("3mf");
@@ -98,7 +92,8 @@ namespace gladius::io
     void MeshWriter3mf::exportMeshes(
       std::filesystem::path const & filePath,
       std::vector<std::pair<std::shared_ptr<Mesh>, std::string>> const & meshes,
-      Document const * sourceDocument)
+      Document const * sourceDocument,
+      bool writeThumbnail)
     {
         if (meshes.empty())
         {
@@ -136,6 +131,12 @@ namespace gladius::io
                 createBuildItem(model3mf, meshObject, name);
             }
 
+            // Add thumbnail if requested and source document is available
+            if (writeThumbnail && sourceDocument)
+            {
+                updateThumbnail(const_cast<Document &>(*sourceDocument), model3mf);
+            }
+
             // Write to file
             auto writer = model3mf->QueryWriter("3mf");
             writer->WriteToFile(filePath.string());
@@ -162,7 +163,8 @@ namespace gladius::io
 
     void MeshWriter3mf::exportMeshFromDocument(std::filesystem::path const & filePath,
                                                Document & document,
-                                               ResourceKey const & resourceKey)
+                                               ResourceKey const & resourceKey,
+                                               bool writeThumbnail)
     {
         // Get mesh from document's resource manager
         auto & resourceManager = document.getResourceManager();
@@ -222,7 +224,7 @@ namespace gladius::io
             meshName = fmt::format("Mesh_Resource");
         }
 
-        exportMesh(filePath, gladiusMesh, meshName, &document);
+        exportMesh(filePath, gladiusMesh, meshName, &document, writeThumbnail);
     }
 
     Lib3MF::PMeshObject MeshWriter3mf::addMeshToModel(Lib3MF::PModel model3mf,
@@ -317,144 +319,6 @@ namespace gladius::io
         return meshObject;
     }
 
-    void MeshWriter3mf::copyMetadata(Document const & sourceDocument, Lib3MF::PModel targetModel)
-    {
-        auto sourceModel = sourceDocument.get3mfModel();
-        if (!sourceModel)
-        {
-            return; // No source metadata to copy
-        }
-
-        try
-        {
-            auto sourceMetaDataGroup = sourceModel->GetMetaDataGroup();
-            auto targetMetaDataGroup = targetModel->GetMetaDataGroup();
-
-            if (!sourceMetaDataGroup || !targetMetaDataGroup)
-            {
-                return;
-            }
-
-            Lib3MF_uint32 count = sourceMetaDataGroup->GetMetaDataCount();
-
-            for (Lib3MF_uint32 i = 0; i < count; ++i)
-            {
-                auto sourceMetaData = sourceMetaDataGroup->GetMetaData(i);
-                if (!sourceMetaData)
-                {
-                    continue;
-                }
-
-                std::string namespace_ = sourceMetaData->GetNameSpace();
-                std::string name = sourceMetaData->GetName();
-                std::string value = sourceMetaData->GetValue();
-                std::string type = sourceMetaData->GetType();
-                bool preserve = sourceMetaData->GetMustPreserve();
-
-                // Skip if metadata already exists in target
-                try
-                {
-                    auto existing = targetMetaDataGroup->GetMetaDataByKey(namespace_, name);
-                    if (existing)
-                    {
-                        continue; // Already exists, don't overwrite
-                    }
-                }
-                catch (...)
-                {
-                    // Metadata doesn't exist, we can add it
-                }
-
-                // Add metadata to target
-                try
-                {
-                    targetMetaDataGroup->AddMetaData(namespace_, name, value, type, preserve);
-
-                    if (m_logger)
-                    {
-                        m_logger->addEvent(
-                          {fmt::format("Copied metadata: {}:{} = {}", namespace_, name, value),
-                           events::Severity::Info});
-                    }
-                }
-                catch (std::exception const & e)
-                {
-                    if (m_logger)
-                    {
-                        m_logger->addEvent(
-                          {fmt::format(
-                             "Failed to copy metadata {}:{}: {}", namespace_, name, e.what()),
-                           events::Severity::Warning});
-                    }
-                }
-            }
-        }
-        catch (std::exception const & e)
-        {
-            if (m_logger)
-            {
-                m_logger->addEvent(
-                  {fmt::format("Error copying metadata: {}", e.what()), events::Severity::Warning});
-            }
-        }
-    }
-
-    void MeshWriter3mf::addDefaultMetadata(Lib3MF::PModel model3mf)
-    {
-        try
-        {
-            auto metaDataGroup = model3mf->GetMetaDataGroup();
-            if (!metaDataGroup)
-            {
-                return;
-            }
-
-            // Add application metadata
-            try
-            {
-                auto existing = metaDataGroup->GetMetaDataByKey("", "Application");
-                if (!existing)
-                {
-                    metaDataGroup->AddMetaData("", "Application", "Gladius", "string", true);
-                }
-            }
-            catch (...)
-            {
-                metaDataGroup->AddMetaData("", "Application", "Gladius", "string", true);
-            }
-
-            // Add creation date
-            try
-            {
-                auto existing = metaDataGroup->GetMetaDataByKey("", "CreationDate");
-                if (!existing)
-                {
-                    // Get current time in ISO 8601 format
-                    auto now = std::chrono::system_clock::now();
-                    auto time_t = std::chrono::system_clock::to_time_t(now);
-                    auto tm = *std::gmtime(&time_t);
-
-                    std::stringstream ss;
-                    ss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S");
-
-                    metaDataGroup->AddMetaData("", "CreationDate", ss.str(), "dateTime", true);
-                }
-            }
-            catch (...)
-            {
-                // Ignore if we can't add creation date
-            }
-        }
-        catch (std::exception const & e)
-        {
-            if (m_logger)
-            {
-                m_logger->addEvent({fmt::format("Failed to add default metadata: {}", e.what()),
-                                    events::Severity::Warning});
-            }
-        }
-    }
-
     void MeshWriter3mf::createBuildItem(Lib3MF::PModel model3mf,
                                         Lib3MF::PMeshObject meshObject,
                                         std::string const & partNumber)
@@ -521,6 +385,7 @@ namespace gladius::io
     }
 
     // Convenience function implementation
+    // Convenience function implementation
     void exportMeshTo3mfCore(std::filesystem::path const & filePath,
                              Mesh const & mesh,
                              std::string const & meshName,
@@ -528,7 +393,7 @@ namespace gladius::io
                              events::SharedLogger logger)
     {
         MeshWriter3mf writer(logger);
-        writer.exportMesh(filePath, mesh, meshName, sourceDocument);
+        writer.exportMesh(filePath, mesh, meshName, sourceDocument, false);
     }
 
 } // namespace gladius::io

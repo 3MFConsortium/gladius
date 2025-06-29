@@ -11,6 +11,7 @@
 
 #include "EventLogger.h"
 #include "Mesh.h"
+#include "io/3mf/Writer3mfBase.h"
 
 #include <lib3mf_implicit.hpp>
 
@@ -28,7 +29,7 @@ namespace gladius
 namespace gladius::io
 {
 
-    class MeshWriter3mf
+    class MeshWriter3mf : public Writer3mfBase
     {
       public:
         explicit MeshWriter3mf(events::SharedLogger logger);
@@ -36,29 +37,27 @@ namespace gladius::io
         void exportMesh(std::filesystem::path const & filePath,
                         Mesh const & mesh,
                         std::string const & meshName,
-                        Document const * sourceDocument = nullptr);
+                        Document const * sourceDocument = nullptr,
+                        bool writeThumbnail = false);
 
         void exportMeshes(std::filesystem::path const & filePath,
                           std::vector<std::pair<std::shared_ptr<Mesh>, std::string>> const & meshes,
-                          Document const * sourceDocument = nullptr);
+                          Document const * sourceDocument = nullptr,
+                          bool writeThumbnail = false);
 
         void exportMeshFromDocument(std::filesystem::path const & filePath,
                                     Document & document,
-                                    ResourceKey const & resourceKey);
+                                    ResourceKey const & resourceKey,
+                                    bool writeThumbnail = true);
 
         bool validateMesh(Mesh const & mesh);
 
       private:
-        void addDefaultMetadata(Lib3MF::PModel model3mf);
-        void copyMetadata(Document const & sourceDocument, Lib3MF::PModel targetModel);
         Lib3MF::PMeshObject
         addMeshToModel(Lib3MF::PModel model3mf, Mesh const & mesh, std::string const & meshName);
         void createBuildItem(Lib3MF::PModel model3mf,
                              Lib3MF::PMeshObject meshObject,
                              std::string const & partNumber);
-
-        events::SharedLogger m_logger;
-        Lib3MF::PWrapper m_wrapper;
     };
 
     void exportMeshTo3mfCore(std::filesystem::path const & filePath,

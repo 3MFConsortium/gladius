@@ -487,17 +487,8 @@ namespace gladius::io
     }
 
     Writer3mf::Writer3mf(events::SharedLogger logger)
-        : m_logger(std::move(logger))
+        : Writer3mfBase(std::move(logger))
     {
-        try
-        {
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
-        }
-        catch (std::exception & e)
-        {
-            m_logger->addEvent({e.what(), events::Severity::Error});
-            return;
-        }
     }
 
     void Writer3mf::save(std::filesystem::path const & filename,
@@ -505,7 +496,6 @@ namespace gladius::io
                          bool writeThumbnail)
     {
         auto model = doc.get3mfModel();
-
 
         if (!model)
         {
@@ -537,7 +527,7 @@ namespace gladius::io
         updateModel(doc);
         if (writeThumbnail)
         {
-            updateThumbnail(const_cast<Document &>(doc));
+            updateThumbnail(const_cast<Document &>(doc), model);
         }
 
         try
@@ -577,7 +567,7 @@ namespace gladius::io
             }
             else
             {
-                //throw std::runtime_error("Function not found in 3mf model");
+                // throw std::runtime_error("Function not found in 3mf model");
                 addFunctionTo3mf(*model, model3mf);
             }
         }
@@ -621,33 +611,6 @@ namespace gladius::io
             auto const sourcePath = model.getSourceName(output.getSource().value().portId);
             auto const targetPath = fmt::format("outputs.{}", portName);
             function->AddLinkByNames(sourcePath, targetPath);
-        }
-    }
-
-    void Writer3mf::updateThumbnail(Document & doc)
-    {
-        auto model3mf = doc.get3mfModel();
-
-        if (!model3mf)
-        {
-            m_logger->addEvent({"No 3MF model to update.", events::Severity::Error});
-            return;
-        }
-        try
-        {
-            auto image = doc.getCore()->createThumbnailPng();
-
-            if (model3mf->HasPackageThumbnailAttachment())
-            {
-                model3mf->RemovePackageThumbnailAttachment();
-            }
-            auto thumbNail = model3mf->CreatePackageThumbnailAttachment();
-            thumbNail->ReadFromBuffer(image.data);
-        }
-        catch (const std::exception & e)
-        {
-            m_logger->addEvent({e.what(), events::Severity::Error});
-            return;
         }
     }
 

@@ -7,6 +7,7 @@
 #include "Document.h"
 #include "EventLogger.h"
 #include "Mesh.h"
+#include "compute/ComputeCore.h"
 #include "io/3mf/MeshWriter3mf.h"
 #include "types.h"
 
@@ -417,6 +418,60 @@ namespace gladius_tests
 
         gladius::io::MeshWriter3mf writer(m_logger);
         EXPECT_FALSE(writer.validateMesh(*emptyMesh));
+    }
+
+    // Thumbnail tests
+    TEST_F(MeshWriter3mfTest, ExportSingleMesh_WithThumbnailParameter_DoesNotCrash)
+    {
+        auto mesh = createTestCube();
+        std::filesystem::path outputPath = m_tempDir / "cube_with_thumbnail.3mf";
+
+        // Test that the thumbnail parameter is accepted without crashing
+        // Note: Actual thumbnail functionality requires a fully initialized Document
+        gladius::io::MeshWriter3mf writer(m_logger);
+        ASSERT_NO_THROW(writer.exportMesh(outputPath, *mesh, "test_cube", nullptr, true));
+
+        validate3mfFile(outputPath, 1);
+    }
+
+    TEST_F(MeshWriter3mfTest, ExportSingleMesh_WithoutThumbnailParameter_DoesNotCrash)
+    {
+        auto mesh = createTestCube();
+        std::filesystem::path outputPath = m_tempDir / "cube_without_thumbnail.3mf";
+
+        gladius::io::MeshWriter3mf writer(m_logger);
+        ASSERT_NO_THROW(writer.exportMesh(outputPath, *mesh, "test_cube", nullptr, false));
+
+        validate3mfFile(outputPath, 1);
+    }
+
+    TEST_F(MeshWriter3mfTest, ExportMultipleMeshes_WithThumbnailParameter_DoesNotCrash)
+    {
+        auto cube = createTestCube();
+        auto tetrahedron = createTestTetrahedron();
+        std::vector<std::pair<std::shared_ptr<gladius::Mesh>, std::string>> meshes;
+        meshes.emplace_back(std::shared_ptr<gladius::Mesh>(cube.release()), "test_cube");
+        meshes.emplace_back(std::shared_ptr<gladius::Mesh>(tetrahedron.release()),
+                            "test_tetrahedron");
+
+        std::filesystem::path outputPath = m_tempDir / "multiple_meshes_with_thumbnail.3mf";
+
+        gladius::io::MeshWriter3mf writer(m_logger);
+        ASSERT_NO_THROW(writer.exportMeshes(outputPath, meshes, nullptr, true));
+
+        validate3mfFile(outputPath, 2);
+    }
+
+    TEST_F(MeshWriter3mfTest, ExportMeshFromDocument_WithThumbnailParameter_SkippedDueToComplexity)
+    {
+        // This test would require a complete Document with ResourceManager and ComputeCore setup
+        // For now, we'll test that the method signature accepts the thumbnail parameter
+        std::filesystem::path outputPath = m_tempDir / "document_mesh_with_thumbnail.3mf";
+
+        // This test would need a properly initialized Document with mesh resources
+        // Skipping for now as it requires extensive Document setup including ComputeCore
+        GTEST_SKIP() << "Document-based export test requires complex setup including ComputeCore, "
+                        "ResourceManager, and mesh resources";
     }
 
 } // namespace gladius_tests

@@ -35,8 +35,8 @@ namespace gladius::vdb
 
             // Export the mesh using MeshWriter3mf
             gladius::io::MeshWriter3mf writer(m_logger);
-            std::string meshName = "Gladius_Mesh";
-            writer.exportMesh(m_fileName, mesh, meshName, nullptr);
+            std::string meshName = "Mesh";
+            writer.exportMesh(m_fileName, mesh, meshName, nullptr, true);
 
             if (m_logger)
             {

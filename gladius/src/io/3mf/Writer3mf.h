@@ -7,6 +7,7 @@
 #pragma once
 
 #include "EventLogger.h"
+#include "io/3mf/Writer3mfBase.h"
 #include "nodes/types.h"
 
 #include <lib3mf_implicit.hpp>
@@ -53,7 +54,7 @@ namespace gladius::io
      * @class Writer3mf
      * @brief The Writer3mf class is responsible for saving documents and functions to 3MF files.
      */
-    class Writer3mf
+    class Writer3mf : public Writer3mfBase
     {
       public:
         /**
@@ -79,22 +80,12 @@ namespace gladius::io
         void saveFunction(std::filesystem::path const & filename, gladius::nodes::Model & function);
 
         /**
-         * @brief Updates the thumbnail of the document.
-         * @param doc The document whose thumbnail will be updated.
-         */
-        void updateThumbnail(Document & doc);
-
-        /**
          * @brief Updates the 3MF model based on the document.
          * @param doc The document to be updated.
          */
         void updateModel(Document const & doc);
+
       private:
-        events::SharedLogger m_logger;
-        Lib3MF::PWrapper m_wrapper{};
-
-
-
         /**
          * @brief Adds the function to the 3MF model.
          * @param model The model to which the function will be added.
@@ -111,7 +102,6 @@ namespace gladius::io
         void fillFunction(Lib3MF::PImplicitFunction function,
                           gladius::nodes::Model & model,
                           Lib3MF::PModel model3mf);
-
     };
 
     /**
