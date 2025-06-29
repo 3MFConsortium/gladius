@@ -1,4 +1,5 @@
 #include "MeshExportDialog3mf.h"
+#include "../Document.h"
 
 namespace gladius::ui
 {
@@ -8,6 +9,15 @@ namespace gladius::ui
         m_visible = true;
         m_exporter.setQualityLevel(1);
         m_exporter.beginExport(threeMfFilename, core);
+    }
+
+    void MeshExportDialog3mf::beginExport(std::filesystem::path const & threeMfFilename,
+                                          ComputeCore & core,
+                                          Document const * document)
+    {
+        m_visible = true;
+        m_exporter.setQualityLevel(1);
+        m_exporter.beginExport(threeMfFilename, core, document);
     }
 
     std::string MeshExportDialog3mf::getWindowTitle() const

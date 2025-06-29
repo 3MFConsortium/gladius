@@ -4,6 +4,12 @@
 
 #include <filesystem>
 
+// Forward declaration
+namespace gladius
+{
+    class Document;
+}
+
 namespace gladius::ui
 {
     class MeshExportDialog3mf : public BaseExportDialog
@@ -16,6 +22,10 @@ namespace gladius::ui
 
         void beginExport(std::filesystem::path const & threeMfFilename,
                          ComputeCore & core) override;
+
+        void beginExport(std::filesystem::path const & threeMfFilename,
+                         ComputeCore & core,
+                         Document const * document);
 
       protected:
         [[nodiscard]] std::string getWindowTitle() const override;

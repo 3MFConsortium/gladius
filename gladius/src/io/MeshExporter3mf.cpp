@@ -1,5 +1,6 @@
 #include "MeshExporter3mf.h"
 
+#include "../Document.h"
 #include "../compute/ComputeCore.h"
 #include "3mf/MeshWriter3mf.h"
 #include "MeshExporter.h"
@@ -18,6 +19,16 @@ namespace gladius::vdb
                                       ComputeCore & generator)
     {
         m_computeCore = &generator;
+        m_sourceDocument = nullptr;
+        LayerBasedMeshExporter::beginExport(fileName, generator);
+    }
+
+    void MeshExporter3mf::beginExport(std::filesystem::path const & fileName,
+                                      ComputeCore & generator,
+                                      Document const * document)
+    {
+        m_computeCore = &generator;
+        m_sourceDocument = document;
         LayerBasedMeshExporter::beginExport(fileName, generator);
     }
 
@@ -36,7 +47,7 @@ namespace gladius::vdb
             // Export the mesh using MeshWriter3mf
             gladius::io::MeshWriter3mf writer(m_logger);
             std::string meshName = "Mesh";
-            writer.exportMesh(m_fileName, mesh, meshName, nullptr, true);
+            writer.exportMesh(m_fileName, mesh, meshName, m_sourceDocument, true);
 
             if (m_logger)
             {

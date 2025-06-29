@@ -874,7 +874,7 @@ namespace gladius::ui
                 {
                     filename->replace_extension(".3mf");
 
-                    m_meshExporterDialog3mf.beginExport(filename.value(), *m_core);
+                    m_meshExporterDialog3mf.beginExport(filename.value(), *m_core, m_doc.get());
                 }
             }
         }
