@@ -729,16 +729,6 @@ namespace gladius::ui
             showWelcomeScreen();
         }
 
-        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_SCHOOL "\tExamples")))
-        {
-            closeMenu();
-            const auto filename = queryLoadFilename({{"*.3mf"}}, getAppDir() / "examples/");
-            if (filename.has_value())
-            {
-                open(filename.value());
-            }
-        }
-
         CliWriter writer;
 
         ImGui::Separator();
