@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+// Forward declare ImVec2 from imgui
+struct ImVec2;
+
 namespace gladius::ui
 {
     /// Tab identifiers for the welcome screen
@@ -197,5 +200,38 @@ namespace gladius::ui
 
         /// Render the examples tab
         void renderExamplesTab(float availableWidth);
+
+        /// Helper method to render a simple file list without thumbnails
+        void renderSimpleFileList(
+          const std::vector<std::pair<std::filesystem::path, std::time_t>> & fileList,
+          bool showTimestamp);
+
+        /// Helper method to render a thumbnail grid
+        void
+        renderThumbnailGrid(std::vector<ThreemfThumbnailExtractor::ThumbnailInfo> & thumbnailInfos,
+                            float availableWidth,
+                            const char * placeholderIcon,
+                            bool showTimestamp);
+
+        /// Helper method to render a single thumbnail item
+        void renderThumbnailItem(ThreemfThumbnailExtractor::ThumbnailInfo & info,
+                                 float cellWidth,
+                                 float cellHeight,
+                                 const ImVec2 & itemPos,
+                                 const char * placeholderIcon,
+                                 bool showTimestamp);
+
+        /// Helper method to render file name with truncation
+        void renderFileName(const std::string & fileName,
+                            float cellWidth,
+                            const ImVec2 & itemPos,
+                            float textY);
+
+        /// Helper method to format and display file size
+        std::string formatFileSize(size_t fileSize);
+
+        /// Helper method to render file tooltip with common information
+        void renderFileTooltip(const ThreemfThumbnailExtractor::ThumbnailInfo & info,
+                               bool showTimestamp);
     };
 }
