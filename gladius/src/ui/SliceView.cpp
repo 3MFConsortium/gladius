@@ -298,6 +298,11 @@ namespace gladius::ui
                 {
                     m_contours.reset();
 
+                    drawList->PopClipRect();
+
+                    // Render screen rulers even during contour updates
+                    renderScreenRulers(drawList, fullCanvasStart, fullCanvasSize);
+
                     ImGui::End();
                     ImGui::PopStyleVar();
                     return windowIsActuallyVisible;
