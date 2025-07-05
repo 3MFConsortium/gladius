@@ -76,6 +76,11 @@ namespace gladius::ui
          */
         void showShortcutSettings();
 
+        /**
+         * @brief Show the welcome screen and reset overlay opacity
+         */
+        void showWelcomeScreen();
+
       private:
         void render();
         void nodeEditor();

@@ -120,12 +120,8 @@ namespace gladius::ui
         m_welcomeScreen.setBackupManager(&m_doc->getBackupManager());
 
         // Set backup restore callback
-        m_welcomeScreen.setRestoreBackupCallback(
-          [this](const std::filesystem::path & backupPath)
-          {
-              open(backupPath);
-              m_welcomeScreen.hide();
-          });
+        m_welcomeScreen.setRestoreBackupCallback([this](const std::filesystem::path & backupPath)
+                                                 { open(backupPath); });
 
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
@@ -486,12 +482,7 @@ namespace gladius::ui
                 }
             }
 
-            // Render welcome screen if it's visible
-            if (welcomeScreenVisible)
-            {
-                // Now render the welcome screen on top of the overlay we created earlier
-                m_welcomeScreen.render();
-            }
+            m_welcomeScreen.render();
 
             logViewer();
             m_about.render();
@@ -679,6 +670,7 @@ namespace gladius::ui
         ImGui::Begin("Menu", &m_showMainMenu, window_flags);
 
         ImGui::SetWindowSize(ImVec2(menuWidth, io.DisplaySize.y - menuBarHeight));
+
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FILE "\tNew")))
         {
             closeMenu();
@@ -726,6 +718,12 @@ namespace gladius::ui
                     save();
                 }
             }
+        }
+
+        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_HOME "\tHome")))
+        {
+            closeMenu();
+            showWelcomeScreen();
         }
 
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_SCHOOL "\tExamples")))
@@ -2315,6 +2313,12 @@ namespace gladius::ui
     void MainWindow::showShortcutSettings()
     {
         m_shortcutSettingsDialog.show();
+    }
+
+    void MainWindow::showWelcomeScreen()
+    {
+        m_overlayOpacity = 1.0f;
+        m_welcomeScreen.show();
     }
 
     void MainWindow::saveRenderSettings()
