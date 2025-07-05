@@ -126,6 +126,9 @@ namespace gladius::ui
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
 
+        // Set examples directory
+        m_welcomeScreen.setExamplesDirectory(getAppDir() / "examples");
+
         nodeEditor();
         newModel();
         loadRenderSettings();
