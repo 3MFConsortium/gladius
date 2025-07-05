@@ -1,11 +1,12 @@
 #include "SliceView.h"
- 
+
 #include "imgui.h"
 #include <fmt/format.h>
 
+#include "../IconFontCppHeaders/IconsFontAwesome5.h"
+#include "ContourExtractor.h"
 #include "GLView.h"
 #include "Widgets.h"
-#include "ContourExtractor.h"
 
 namespace gladius
 {
@@ -42,8 +43,20 @@ namespace gladius::ui
         }
         bool windowIsActuallyVisible = false;
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0., 0.));
-        if (ImGui::Begin("Slice", &m_visible))
+        if (ImGui::Begin("Slice", &m_visible, ImGuiWindowFlags_MenuBar))
         {
+            if (ImGui::BeginMenuBar())
+            {
+
+                // Always show menu bar
+                if (ImGui::MenuItem(
+                      reinterpret_cast<const char *>(ICON_FA_COMPRESS_ARROWS_ALT "\tCenter View")))
+                {
+                    centerView();
+                }
+                ImGui::EndMenuBar();
+            }
+
             if (!m_hideDeveloperTools)
             {
                 ImGui::Checkbox("Show normals ", &m_renderNormals);
@@ -69,6 +82,9 @@ namespace gladius::ui
             canvasSize.x = std::max(50.f, canvasSize.x);
             canvasSize.y = std::max(50.f, canvasSize.y);
             ImVec2 canvasEnd = ImVec2(canvasStart.x + canvasSize.x, canvasStart.y + canvasSize.y);
+
+            // Store canvas size for use in centerView()
+            m_canvasSize = canvasSize;
 
             // Draw border and background color
             ImGuiIO & io = ImGui::GetIO();
@@ -197,6 +213,10 @@ namespace gladius::ui
                 ImGuiCol const yellow = IM_COL32(255, 255, 55, 64);
                 ImGuiCol const darkRed = IM_COL32(128, 0, 0, 64);
                 ImGuiCol const greenish = IM_COL32(55, 255, 155, 255);
+
+                // Reset bounding rect for new contour calculation
+                m_contourBounds.reset();
+
                 for (auto const & line : lines)
                 {
                     if (line.vertices.size() < 4)
@@ -212,10 +232,16 @@ namespace gladius::ui
                     }
                     prevPoint = line.vertices.front();
 
+                    // Update bounding rect with first vertex
+                    m_contourBounds.expand(prevPoint);
+
                     for (auto iter = std::begin(line.vertices) + 1; iter != std::end(line.vertices);
                          ++iter)
                     {
                         auto actualColor = color;
+
+                        // Update bounding rect with current vertex
+                        m_contourBounds.expand(*iter);
 
                         if (line.area < 0.f)
                         {
@@ -260,6 +286,7 @@ namespace gladius::ui
                 if (core.requestContourUpdate(sliceParameter))
                 {
                     m_contours.reset();
+
                     ImGui::End();
                     ImGui::PopStyleVar();
                     return windowIsActuallyVisible;
@@ -267,14 +294,35 @@ namespace gladius::ui
             }
 
             if (!m_contours.has_value() && !core.isSlicingInProgress())
-            {                auto const & contourExtractor = core.getContour();
+            {
+                auto const & contourExtractor = core.getContour();
                 std::lock_guard<std::mutex> lockContourExtractor(core.getContourExtractorMutex());
                 m_contours = contourExtractor->getContour();
+
+                // If we just got contours but they're empty, mark as empty
+                if (m_contours.has_value() && m_contours->empty())
+                {
+                    m_contourWasEmpty = true;
+                }
             }
 
             if (!core.isSlicingInProgress() && m_contours.has_value())
             {
+                // Check if we should auto-center: contours were empty before and now we have
+                // content
+                bool const contourHasContent = !m_contours->empty();
+                bool const shouldAutoCenter = m_contourWasEmpty && contourHasContent;
+
                 renderLines(*m_contours);
+
+                // Auto-center if transitioning from empty to having content
+                if (shouldAutoCenter && m_contourBounds.isValid)
+                {
+                    centerView();
+                }
+
+                // Update the "was empty" state for next frame
+                m_contourWasEmpty = !contourHasContent;
 
                 if (m_renderNormals)
                 {
@@ -396,5 +444,78 @@ namespace gladius::ui
         // Reset zoom and position
         m_zoomTarget = 4.0f;
         m_scrolling = {0.0f, 250.0f};
+    }
+
+    void SliceView::centerView()
+    {
+        // If bounds are not valid but we have contours, calculate bounds first
+        if (!m_contourBounds.isValid && m_contours.has_value())
+        {
+            calculateContourBounds();
+        }
+
+        if (!m_contourBounds.isValid)
+        {
+            // No contour data available, fall back to reset view
+            resetView();
+            return;
+        }
+
+        // Calculate the center of the contour in world coordinates
+        Vector2 const contourCenter = m_contourBounds.center();
+
+        // Calculate required zoom to fit the contour with some padding
+        float const paddingFactor = 1.2f; // 20% padding around the contour
+        float const contourWidth = m_contourBounds.width();
+        float const contourHeight = m_contourBounds.height();
+
+        // Use actual canvas size
+        float const canvasWidth = m_canvasSize.x;
+        float const canvasHeight = m_canvasSize.y;
+
+        // Calculate zoom to fit both width and height
+        float const zoomForWidth =
+          (contourWidth > 0.0f) ? canvasWidth / (contourWidth * paddingFactor) : 1.0f;
+        float const zoomForHeight =
+          (contourHeight > 0.0f) ? canvasHeight / (contourHeight * paddingFactor) : 1.0f;
+
+        // Use the smaller zoom to ensure everything fits
+        m_zoomTarget = std::min(zoomForWidth, zoomForHeight);
+        m_zoomTarget = std::max(0.5f, std::min(m_zoomTarget, 50.0f)); // Clamp zoom
+
+        // Set zoom immediately to avoid animation delay affecting the calculation
+        m_zoom = m_zoomTarget;
+
+        // Set scrolling to center the contour
+        // We want the contour center to be at the canvas center
+        // Canvas center in screen coordinates: (canvasWidth/2, canvasHeight/2)
+        // World point to canvas conversion: canvas = origin + world * zoom
+        // So: origin = canvas - world * zoom
+        m_scrolling.x = canvasWidth * 0.5f - contourCenter.x() * m_zoom;
+        m_scrolling.y = canvasHeight * 0.5f +
+                        contourCenter.y() * m_zoom; // Note: Y is flipped in screen coordinates
+    }
+
+    void SliceView::calculateContourBounds()
+    {
+        m_contourBounds.reset();
+
+        if (!m_contours.has_value())
+        {
+            return;
+        }
+
+        for (auto const & line : *m_contours)
+        {
+            if (line.vertices.size() < 4)
+            {
+                continue;
+            }
+
+            for (auto const & vertex : line.vertices)
+            {
+                m_contourBounds.expand(vertex);
+            }
+        }
     }
 }
