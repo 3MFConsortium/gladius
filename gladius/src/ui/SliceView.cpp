@@ -76,24 +76,35 @@ namespace gladius::ui
             }
 
             windowIsActuallyVisible = true;
-            ImVec2 canvasStart =
-              ImGui::GetCursorScreenPos(); // ImDrawList API uses screen coordinates!
-            ImVec2 canvasSize = ImGui::GetContentRegionAvail(); // Resize canvas to what's available
-            canvasSize.x = std::max(50.f, canvasSize.x);
-            canvasSize.y = std::max(50.f, canvasSize.y);
-            ImVec2 canvasEnd = ImVec2(canvasStart.x + canvasSize.x, canvasStart.y + canvasSize.y);
 
-            // Store canvas size for use in centerView()
+            constexpr float RULER_WIDTH = 30.0f;
+
+            ImVec2 const fullCanvasStart = ImGui::GetCursorScreenPos();
+            ImVec2 fullCanvasSize = ImGui::GetContentRegionAvail();
+            fullCanvasSize.x = std::max(50.f, fullCanvasSize.x);
+            fullCanvasSize.y = std::max(50.f, fullCanvasSize.y);
+
+            // Adjust for rulers - actual drawable canvas is smaller
+            ImVec2 const canvasStart = ImVec2{fullCanvasStart.x + RULER_WIDTH, fullCanvasStart.y};
+            ImVec2 const canvasSize =
+              ImVec2{fullCanvasSize.x - RULER_WIDTH, fullCanvasSize.y - RULER_WIDTH};
+            ImVec2 const canvasEnd =
+              ImVec2{canvasStart.x + canvasSize.x, canvasStart.y + canvasSize.y};
+
+            // Store full canvas size for use in centerView()
             m_canvasSize = canvasSize;
 
-            // Draw border and background color
+            // Draw border and background color for full area
             ImGuiIO & io = ImGui::GetIO();
             ImDrawList * drawList = ImGui::GetWindowDrawList();
             drawList->AddRectFilled(canvasStart,
                                     canvasEnd,
                                     ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)));
 
-            // This will catch our interactions
+            // Add spacing to position cursor for the rulers
+            ImGui::SetCursorScreenPos(canvasStart);
+
+            // This will catch our interactions (only for the actual canvas, not rulers)
             ImGui::InvisibleButton("canvas",
                                    canvasSize,
                                    ImGuiButtonFlags_MouseButtonLeft |
@@ -362,6 +373,9 @@ namespace gladius::ui
                 }
             }
             drawList->PopClipRect();
+
+            // Render screen rulers in the full canvas area
+            renderScreenRulers(drawList, fullCanvasStart, fullCanvasSize);
         }
 
         auto const contentMin =
@@ -517,5 +531,153 @@ namespace gladius::ui
                 m_contourBounds.expand(vertex);
             }
         }
+    }
+
+    void SliceView::renderScreenRulers(ImDrawList * drawList,
+                                       ImVec2 canvasStart,
+                                       ImVec2 canvasSize) const
+    {
+        constexpr float RULER_WIDTH = 50.0f;
+        constexpr float MAJOR_TICK_LENGTH = 15.0f;
+        constexpr float MINOR_TICK_LENGTH = 8.0f;
+        constexpr float TEXT_OFFSET = 5.0f;
+
+        ImU32 const rulerBgColor = IM_COL32(50, 50, 50, 150);
+        ImU32 const rulerTextColor = IM_COL32(200, 200, 200, 255);
+        ImU32 const majorTickColor = IM_COL32(180, 180, 180, 255);
+        ImU32 const minorTickColor = IM_COL32(120, 120, 120, 255);
+
+        // Actual drawing area (excluding rulers)
+        ImVec2 const drawingStart = ImVec2{canvasStart.x + RULER_WIDTH, canvasStart.y};
+        ImVec2 const drawingSize = ImVec2{canvasSize.x - RULER_WIDTH, canvasSize.y - RULER_WIDTH};
+
+        // Calculate world coordinates for visible area
+        ImVec2 const topLeft = screenToWorldPos(drawingStart);
+        ImVec2 const bottomRight =
+          screenToWorldPos(ImVec2{drawingStart.x + drawingSize.x, drawingStart.y + drawingSize.y});
+
+        // Determine appropriate tick spacing based on zoom level
+        float baseSpacing = 10.0f; // 10mm base spacing
+        float tickSpacing = baseSpacing;
+
+        // Adjust spacing based on zoom to keep reasonable tick density
+        while (tickSpacing * m_zoom < 40.0f)
+        {
+            tickSpacing *= 2.0f;
+        }
+        while (tickSpacing * m_zoom > 120.0f)
+        {
+            tickSpacing *= 0.5f;
+        }
+
+        // X-axis ruler (bottom)
+        ImVec2 const xRulerStart =
+          ImVec2{drawingStart.x, canvasStart.y + canvasSize.y - RULER_WIDTH};
+        ImVec2 const xRulerEnd =
+          ImVec2{drawingStart.x + drawingSize.x, canvasStart.y + canvasSize.y};
+
+        // Draw X ruler background
+        drawList->AddRectFilled(xRulerStart, xRulerEnd, rulerBgColor);
+        drawList->AddLine(
+          ImVec2{xRulerStart.x, xRulerStart.y}, ImVec2{xRulerEnd.x, xRulerStart.y}, majorTickColor);
+
+        // X-axis ticks and labels
+        float const startX = std::floor(topLeft.x / tickSpacing) * tickSpacing;
+        for (float worldX = startX; worldX <= bottomRight.x + tickSpacing; worldX += tickSpacing)
+        {
+            ImVec2 const canvasPos = worldToCanvasPos(ImVec2{worldX, 0.0f});
+            if (canvasPos.x >= drawingStart.x && canvasPos.x <= drawingStart.x + drawingSize.x)
+            {
+                // Major tick
+                drawList->AddLine(ImVec2{canvasPos.x, xRulerStart.y},
+                                  ImVec2{canvasPos.x, xRulerStart.y + MAJOR_TICK_LENGTH},
+                                  majorTickColor);
+
+                // Label
+                std::string const label = fmt::format("{:.0f}", worldX);
+                ImVec2 const textSize = ImGui::CalcTextSize(label.c_str());
+                drawList->AddText(ImVec2{canvasPos.x - textSize.x * 0.5f,
+                                         xRulerStart.y + MAJOR_TICK_LENGTH + TEXT_OFFSET},
+                                  rulerTextColor,
+                                  label.c_str());
+
+                // Minor ticks between major ticks
+                float const minorTickSpacing = tickSpacing * 0.2f;
+                for (int i = 1; i < 5; ++i)
+                {
+                    float const minorWorldX = worldX + i * minorTickSpacing;
+                    if (minorWorldX <= bottomRight.x)
+                    {
+                        ImVec2 const minorCanvasPos = worldToCanvasPos(ImVec2{minorWorldX, 0.0f});
+                        if (minorCanvasPos.x >= drawingStart.x &&
+                            minorCanvasPos.x <= drawingStart.x + drawingSize.x)
+                        {
+                            drawList->AddLine(
+                              ImVec2{minorCanvasPos.x, xRulerStart.y},
+                              ImVec2{minorCanvasPos.x, xRulerStart.y + MINOR_TICK_LENGTH},
+                              minorTickColor);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Y-axis ruler (left)
+        ImVec2 const yRulerStart = ImVec2{canvasStart.x, canvasStart.y};
+        ImVec2 const yRulerEnd =
+          ImVec2{canvasStart.x + RULER_WIDTH, drawingStart.y + drawingSize.y};
+
+        // Draw Y ruler background
+        drawList->AddRectFilled(yRulerStart, yRulerEnd, rulerBgColor);
+        drawList->AddLine(
+          ImVec2{yRulerEnd.x, yRulerStart.y}, ImVec2{yRulerEnd.x, yRulerEnd.y}, majorTickColor);
+
+        // Y-axis ticks and labels (note: Y coordinates are flipped in screen space)
+        float const startY =
+          std::floor(std::min(topLeft.y, bottomRight.y) / tickSpacing) * tickSpacing;
+        float const endY = std::max(topLeft.y, bottomRight.y);
+        for (float worldY = startY; worldY <= endY + tickSpacing; worldY += tickSpacing)
+        {
+            ImVec2 const canvasPos = worldToCanvasPos(ImVec2{0.0f, worldY});
+            if (canvasPos.y >= drawingStart.y && canvasPos.y <= drawingStart.y + drawingSize.y)
+            {
+                // Major tick
+                drawList->AddLine(ImVec2{yRulerEnd.x - MAJOR_TICK_LENGTH, canvasPos.y},
+                                  ImVec2{yRulerEnd.x, canvasPos.y},
+                                  majorTickColor);
+
+                // Label
+                std::string const label = fmt::format("{:.0f}", worldY);
+                ImVec2 const textSize = ImGui::CalcTextSize(label.c_str());
+                drawList->AddText(ImVec2{yRulerEnd.x - MAJOR_TICK_LENGTH - textSize.x - TEXT_OFFSET,
+                                         canvasPos.y - textSize.y * 0.5f},
+                                  rulerTextColor,
+                                  label.c_str());
+
+                // Minor ticks between major ticks
+                float const minorTickSpacing = tickSpacing * 0.2f;
+                for (int i = 1; i < 5; ++i)
+                {
+                    float const minorWorldY = worldY + i * minorTickSpacing;
+                    if (minorWorldY <= endY)
+                    {
+                        ImVec2 const minorCanvasPos = worldToCanvasPos(ImVec2{0.0f, minorWorldY});
+                        if (minorCanvasPos.y >= drawingStart.y &&
+                            minorCanvasPos.y <= drawingStart.y + drawingSize.y)
+                        {
+                            drawList->AddLine(
+                              ImVec2{yRulerEnd.x - MINOR_TICK_LENGTH, minorCanvasPos.y},
+                              ImVec2{yRulerEnd.x, minorCanvasPos.y},
+                              minorTickColor);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Draw corner rectangle to complete the ruler frame
+        drawList->AddRectFilled(ImVec2{canvasStart.x, canvasStart.y + canvasSize.y - RULER_WIDTH},
+                                ImVec2{canvasStart.x + RULER_WIDTH, canvasStart.y + canvasSize.y},
+                                rulerBgColor);
     }
 }

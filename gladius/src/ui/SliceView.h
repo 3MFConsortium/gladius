@@ -131,5 +131,8 @@ namespace gladius::ui
 
         /// Calculate bounding rectangle from current contour data
         void calculateContourBounds();
+
+        /// Render screen rulers with marks in canvas coordinates
+        void renderScreenRulers(ImDrawList * drawList, ImVec2 canvasStart, ImVec2 canvasSize) const;
     };
 }
