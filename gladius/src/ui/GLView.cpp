@@ -228,8 +228,13 @@ namespace gladius
 
         auto const font_scaling_factor = 2.f;
         auto const font_size_in_pixels = 16.f;
-        io.Fonts->AddFontFromFileTTF("misc/fonts/Roboto-Medium.ttf",
-                                     font_size_in_pixels * font_scaling_factor);
+        
+        // Load main font with fallback
+        if (!io.Fonts->AddFontFromFileTTF("misc/fonts/Roboto-Medium.ttf",
+                                         font_size_in_pixels * font_scaling_factor))
+        {
+            std::cerr << "Warning: Could not load Roboto-Medium.ttf, using default font\n";
+        }
 
         // merge in icons from Font Awesome
         static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
@@ -238,10 +243,13 @@ namespace gladius
         icons_config.PixelSnapH = true;
         icons_config.GlyphOffset.y += 4.f;
 
-        io.Fonts->AddFontFromFileTTF("misc/fonts/fa-solid-900.ttf",
-                                     font_size_in_pixels * font_scaling_factor,
-                                     &icons_config,
-                                     icons_ranges);
+        if (!io.Fonts->AddFontFromFileTTF("misc/fonts/fa-solid-900.ttf",
+                                         font_size_in_pixels * font_scaling_factor,
+                                         &icons_config,
+                                         icons_ranges))
+        {
+            std::cerr << "Warning: Could not load fa-solid-900.ttf, icons may not display correctly\n";
+        }
 
         io.FontGlobalScale /= font_scaling_factor;
 
