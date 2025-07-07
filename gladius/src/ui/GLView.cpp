@@ -608,50 +608,57 @@ namespace gladius
           std::chrono::milliseconds{static_cast<int>(1000. / 120.)};
         auto constexpr minFrameDurationStatic =
           std::chrono::milliseconds{static_cast<int>(1000. / 60.)};
-        while (!m_stateCloseRequested)
+        try
         {
-            if (glfwWindowShouldClose(m_window))
+            while (!m_stateCloseRequested)
             {
-                // Save window settings before handling close request
-                storeWindowSettings();
+                if (glfwWindowShouldClose(m_window))
+                {
+                    // Save window settings before handling close request
+                    storeWindowSettings();
 
-                glfwSetWindowShouldClose(m_window, GLFW_FALSE);
-                m_close();
-                m_stateCloseRequested = false;
-            }
+                    glfwSetWindowShouldClose(m_window, GLFW_FALSE);
+                    m_close();
+                    m_stateCloseRequested = false;
+                }
 
-            auto const durationSinceLastFrame_ms = getTimeStamp_ms() - lastFrame_ms;
-            auto const minFrameDuration =
-              m_isAnimationRunning ? minFrameDurationAnimation : minFrameDurationStatic;
+                auto const durationSinceLastFrame_ms = getTimeStamp_ms() - lastFrame_ms;
+                auto const minFrameDuration =
+                  m_isAnimationRunning ? minFrameDurationAnimation : minFrameDurationStatic;
 
-            auto const delay_ms =
-              std::min(minFrameDuration, minFrameDuration - durationSinceLastFrame_ms);
-            std::this_thread::sleep_for(delay_ms);
+                auto const delay_ms =
+                  std::min(minFrameDuration, minFrameDuration - durationSinceLastFrame_ms);
+                std::this_thread::sleep_for(delay_ms);
 
-            if (m_isAnimationRunning)
-            {
-                glfwPollEvents();
-                lastAnimationTimePoint_ms = getTimeStamp_ms();
-            }
-            else
-            {
-                auto durationSinceAnimation = getTimeStamp_ms() - lastAnimationTimePoint_ms;
-                if (durationSinceAnimation < std::chrono::seconds{5})
+                if (m_isAnimationRunning)
                 {
                     glfwPollEvents();
+                    lastAnimationTimePoint_ms = getTimeStamp_ms();
                 }
                 else
                 {
-                    glfwWaitEventsTimeout(5);
-                    lastAnimationTimePoint_ms = getTimeStamp_ms();
+                    auto durationSinceAnimation = getTimeStamp_ms() - lastAnimationTimePoint_ms;
+                    if (durationSinceAnimation < std::chrono::seconds{5})
+                    {
+                        glfwPollEvents();
+                    }
+                    else
+                    {
+                        glfwWaitEventsTimeout(5);
+                        lastAnimationTimePoint_ms = getTimeStamp_ms();
+                    }
                 }
-            }
 
-            glClearColor(0.0f, 0.0f, 0.0f, 1.00f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            glClear(GL_DEPTH_BUFFER_BIT);
-            render();
-            lastFrame_ms = getTimeStamp_ms();
+                glClearColor(0.0f, 0.0f, 0.0f, 1.00f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                render();
+                lastFrame_ms = getTimeStamp_ms();
+            }
+        }
+        catch (const std::exception & e)
+        {
+            std::cerr << e.what() << '\n';
         }
     }
 
@@ -685,14 +692,4 @@ namespace gladius
     {
         m_isAnimationRunning = false;
     }
-
-    //     HWND GLView::getNativeWindowHandle()
-    //     {
-    // #ifdef _WIN32
-    //         return m_window ? glfwGetWin32Window(m_window) : nullptr;
-    // #else
-    //         return nullptr;
-    // #endif
-    //     }
-
 }
