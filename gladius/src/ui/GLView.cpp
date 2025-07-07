@@ -40,6 +40,11 @@ namespace gladius
         // Explicitly save ImGui settings before destroying context
         ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
         
+        // Clear window user pointer to prevent dangling references
+        if (m_window) {
+            glfwSetWindowUserPointer(m_window, nullptr);
+        }
+        
         ImGui_ImplOpenGL2_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         
@@ -95,12 +100,18 @@ namespace gladius
             return;
         }
 
-        static auto staticDropCallback = [this](GLFWwindow * window, int count, const char ** paths)
-        { handleDropCallback(window, count, paths); };
+        static auto staticDropCallback = [](GLFWwindow * window, int count, const char ** paths)
+        {
+            // Get the GLView instance from the window user pointer
+            GLView* view = static_cast<GLView*>(glfwGetWindowUserPointer(window));
+            if (view) {
+                view->handleDropCallback(window, count, paths);
+            }
+        };
 
-        glfwSetDropCallback(m_window,
-                            [](GLFWwindow * window, int count, const char ** paths)
-                            { staticDropCallback(window, count, paths); });
+        // Set the window user pointer to this instance
+        glfwSetWindowUserPointer(m_window, this);
+        glfwSetDropCallback(m_window, staticDropCallback);
 
         glfwMakeContextCurrent(m_window);
         if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
@@ -113,10 +124,15 @@ namespace gladius
 
         // determine hdpi scaling
         determineUiScale();
-        static auto staticWindowSizeCallback = [this](GLFWwindow* window, int width, int height)
-        { determineUiScale(); };
-        glfwSetWindowSizeCallback(m_window, [](GLFWwindow* window, int width, int height)
-        { staticWindowSizeCallback(window, width, height); });
+        static auto staticWindowSizeCallback = [](GLFWwindow* window, int width, int height)
+        {
+            // Get the GLView instance from the window user pointer
+            GLView* view = static_cast<GLView*>(glfwGetWindowUserPointer(window));
+            if (view) {
+                view->determineUiScale();
+            }
+        };
+        glfwSetWindowSizeCallback(m_window, staticWindowSizeCallback);
 
         applyFullscreenMode();
     }
@@ -191,14 +207,15 @@ namespace gladius
             std::filesystem::copy_file(io.IniFilename, m_gladiusImgUiFilename);
         }
         
+        // Set the ini filename storage before using it
+        m_iniFileNameStorage = m_gladiusImgUiFilename.string();
+        io.IniFilename = m_iniFileNameStorage.c_str();
+        
         // If our custom config exists, load it immediately
         if (std::filesystem::is_regular_file(m_gladiusImgUiFilename))
         {
             ImGui::LoadIniSettingsFromDisk(m_iniFileNameStorage.c_str());
         }
-
-        m_iniFileNameStorage = m_gladiusImgUiFilename.string();
-        io.IniFilename = m_iniFileNameStorage.c_str();
 #ifdef IMGUI_HAS_DOCK
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 #endif
