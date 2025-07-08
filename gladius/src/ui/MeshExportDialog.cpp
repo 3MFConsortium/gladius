@@ -1,41 +1,40 @@
 #include "MeshExportDialog.h"
 
- 
-#include "imgui.h"
-
 namespace gladius::ui
 {
-    void MeshExportDialog::beginExport(std::filesystem::path stlFilename, ComputeCore & core)
+    void MeshExportDialog::beginExport(std::filesystem::path const & stlFilename,
+                                       ComputeCore & core)
     {
         m_visible = true;
+        m_computeCore = &core;
         m_exporter.setQualityLevel(1);
         m_exporter.beginExport(stlFilename, core);
     }
 
-    void MeshExportDialog::render(ComputeCore & core)
+    std::string MeshExportDialog::getWindowTitle() const
     {
-        if (!m_visible)
-        {
-            return;
-        }
-        ImGui::Begin("Export in progress", &m_visible);
-
-        ImGui::TextUnformatted("Exporting to stl file");
-        ImGui::ProgressBar(static_cast<float>(m_exporter.getProgress()));
-        if (!m_exporter.advanceExport(core))
-        {
-            m_exporter.finalizeExportSTL(core);
-            m_visible = false;
-        }
-        if (ImGui::Button("Cancel"))
-        {
-            m_visible = false;
-        }
-        ImGui::End();
+        return "Export in progress";
     }
 
-    bool MeshExportDialog::isVisible() const
+    std::string MeshExportDialog::getExportMessage() const
     {
-        return m_visible;
+        return "Exporting to stl file";
+    }
+
+    io::IExporter & MeshExportDialog::getExporter()
+    {
+        return m_exporter;
+    }
+
+    void MeshExportDialog::finalizeExport()
+    {
+        if (m_computeCore)
+        {
+            m_exporter.finalizeExportSTL(*m_computeCore);
+        }
+        else
+        {
+            BaseExportDialog::finalizeExport();
+        }
     }
 }

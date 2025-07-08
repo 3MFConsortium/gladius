@@ -176,14 +176,14 @@ namespace gladius_tests
     {
         // Arrange
         nodes::Model model;
-        model.createBeginEnd();
+        model.createBeginEndWithDefaultInAndOuts(); // Use the method that creates default parameters
         
         auto* beginNode = model.getBeginNode();
         auto* endNode = model.getEndNode();
         
         // Create nodes that are connected to the end node
         auto* connectedMath = model.create<nodes::Addition>();
-        auto* connectedVector = model.create<nodes::ComposeVector>();
+        auto* connectedScalar = model.create<nodes::ConstantScalar>();
         
         // Create nodes that are disconnected from the end node
         auto* disconnectedMath = model.create<nodes::Subtraction>();
@@ -191,26 +191,23 @@ namespace gladius_tests
         
         // Set up connections for the connected nodes
         beginNode->addOutputPort("value", nodes::ParameterTypeIndex::Float);
+        model.registerOutputs(*beginNode); // Register the new output port
         
         // Get port and parameter IDs for creating links
         auto beginValuePortId = beginNode->getOutputs().at("value").getId();
         auto mathAParamId = connectedMath->parameter().at(nodes::FieldNames::A).getId();
         auto mathResultPortId = connectedMath->getOutputs().at(nodes::FieldNames::Result).getId();
-        auto vectorXParamId = connectedVector->parameter().at("x").getId();
-        auto vectorResultPortId = connectedVector->getOutputs().at(nodes::FieldNames::Result).getId();
         auto shapeParamId = endNode->parameter().at(nodes::FieldNames::Shape).getId();
         
-        // Add link from begin to addition node
+        // Set up a proper connection chain: Begin -> Addition -> End
         model.addLink(beginValuePortId, mathAParamId);
         connectedMath->parameter()[nodes::FieldNames::B] = nodes::VariantParameter(1.0f);
         
-        // Add link from addition to compose vector
-        model.addLink(mathResultPortId, vectorXParamId);
-        connectedVector->parameter()[nodes::FieldNames::Y] = nodes::VariantParameter(0.0f);
-        connectedVector->parameter()[nodes::FieldNames::Z] = nodes::VariantParameter(0.0f);
-
-        // Link compose vector to end node
-        model.addLink(vectorResultPortId, shapeParamId);
+        // Link addition result to end node shape parameter
+        model.addLink(mathResultPortId, shapeParamId);
+        
+        // Set a value for the constant scalar (it's not connected to anything)
+        connectedScalar->parameter()[nodes::FieldNames::Value] = nodes::VariantParameter(2.0f);
         
         // Count initial nodes (should be 6: Begin, End, 2 connected, 2 disconnected)
         int initialNodeCount = 0;
@@ -223,22 +220,22 @@ namespace gladius_tests
         size_t removedCount = model.simplifyModel();
         
         // Assert
-        EXPECT_EQ(removedCount, 2); // Two disconnected nodes should be removed
+        EXPECT_EQ(removedCount, 3); // Three disconnected nodes should be removed (ConstantScalar, Subtraction, Sine)
         
-        // Count remaining nodes (should be 4: Begin, End, 2 connected)
+        // Count remaining nodes (should be 3: Begin, End, Addition)
         int finalNodeCount = 0;
         for (auto it = model.begin(); it != model.end(); ++it) {
             ++finalNodeCount;
         }
-        EXPECT_EQ(finalNodeCount, 4); 
+        EXPECT_EQ(finalNodeCount, 3); 
         
         // Verify that the disconnected nodes were removed
         EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::Subtraction>(model), 0);
         EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::Sine>(model), 0);
+        EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::ConstantScalar>(model), 0);
         
         // Verify that the connected nodes still exist
         EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::Addition>(model), 1);
-        EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::ComposeVector>(model), 1);
         EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::Begin>(model), 1);
         EXPECT_EQ(helper::countNumberOfNodesOfType<nodes::End>(model), 1);
     }
@@ -247,7 +244,7 @@ namespace gladius_tests
     {
         // Arrange
         nodes::Model model;
-        model.createBeginEnd();
+        model.createBeginEndWithDefaultInAndOuts();
         
         // Create a more complex graph with both connected and disconnected components
         
@@ -266,6 +263,7 @@ namespace gladius_tests
         
         // Set up connections for the first connected path
         model.getBeginNode()->addOutputPort("value1", nodes::ParameterTypeIndex::Float);
+        model.registerOutputs(*model.getBeginNode());
         
         // Get port and parameter IDs for the first connected path
         auto begin1PortId = model.getBeginNode()->getOutputs().at("value1").getId();
@@ -273,21 +271,25 @@ namespace gladius_tests
         auto addResultPortId = add->getOutputs().at(nodes::FieldNames::Result).getId();
         auto multiplyAParamId = multiply->parameter().at(nodes::FieldNames::A).getId();
         auto multiplyResultPortId = multiply->getOutputs().at(nodes::FieldNames::Result).getId();
+        
+        // Add parameter to End node for value1
+        model.addFunctionOutput("value1", nodes::VariantParameter(0.0f));
         auto value1ParamId = model.getEndNode()->parameter().at("value1").getId();
         
         // Begin -> Add
         model.addLink(begin1PortId, addAParamId);
-        add->parameter()["b"] = nodes::VariantParameter(1.0f);
+        add->parameter()[nodes::FieldNames::B] = nodes::VariantParameter(1.0f);
         
         // Add -> Multiply
         model.addLink(addResultPortId, multiplyAParamId);
-        multiply->parameter()["b"] = nodes::VariantParameter(2.0f);
+        multiply->parameter()[nodes::FieldNames::B] = nodes::VariantParameter(2.0f);
         
         // Multiply -> End
         model.addLink(multiplyResultPortId, value1ParamId);
         
         // Set up connections for the second connected path
         model.getBeginNode()->addOutputPort("value2", nodes::ParameterTypeIndex::Float);
+        model.registerOutputs(*model.getBeginNode());
         
         // Get port and parameter IDs for the second connected path
         auto begin2PortId = model.getBeginNode()->getOutputs().at("value2").getId();
@@ -299,7 +301,7 @@ namespace gladius_tests
         
         // Begin -> Subtract
         model.addLink(begin2PortId, subtractAParamId);
-        subtract->parameter()["b"] = nodes::VariantParameter(3.0f);
+        subtract->parameter()[nodes::FieldNames::B] = nodes::VariantParameter(3.0f);
         
         // Subtract -> ComposeVector
         model.addLink(subtractResultPortId, vectorXParamId);
@@ -310,8 +312,8 @@ namespace gladius_tests
         model.addLink(vectorResultPortId, shapeParamId);
         
         // Set up connections for the disconnected path
-        divide->parameter()["a"] = nodes::VariantParameter(10.0f);
-        divide->parameter()["b"] = nodes::VariantParameter(2.0f);
+        divide->parameter()[nodes::FieldNames::A] = nodes::VariantParameter(10.0f);
+        divide->parameter()[nodes::FieldNames::B] = nodes::VariantParameter(2.0f);
         
         // Get port and parameter IDs for the disconnected path
         auto divideResultPortId = divide->getOutputs().at(nodes::FieldNames::Result).getId();

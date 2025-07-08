@@ -281,14 +281,31 @@ namespace gladius
          *
          * @return BackupManager& Reference to the backup manager
          */
-        BackupManager& getBackupManager();
+        BackupManager & getBackupManager();
 
         /**
          * @brief Get the backup manager instance (const version)
          *
          * @return const BackupManager& Const reference to the backup manager
          */
-        const BackupManager& getBackupManager() const;
+        const BackupManager & getBackupManager() const;
+
+        /**
+         * @brief Set whether the application is running in UI mode
+         *
+         * This determines whether automatic backups should be created.
+         * When false (API/library mode), no backups are created.
+         *
+         * @param uiMode True if UI is active, false for API/library usage
+         */
+        void setUiMode(bool uiMode);
+
+        /**
+         * @brief Check if the application is running in UI mode
+         *
+         * @return true if UI mode is active, false otherwise
+         */
+        bool isUiMode() const;
 
         void updateFlatAssembly();
 
@@ -340,6 +357,9 @@ namespace gladius
 
         /// Backup manager for handling file backups
         BackupManager m_backupManager;
+
+        /// Flag to track if UI mode is active (determines if backups should be created)
+        bool m_uiMode = false;
     };
 
     using SharedDocument = std::shared_ptr<Document>;

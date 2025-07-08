@@ -231,7 +231,8 @@ namespace gladius::vdb
 
         openvdb::Vec3d voxelSize{(bbox->max.x - bbox->min.x) / static_cast<double>(matrixSize),
                                  (bbox->max.y - bbox->min.y) / static_cast<double>(matrixSize),
-                                 (bbox->max.z - bbox->min.z) / static_cast<double>(matrixSize)};        auto const bandwidth =
+                                 (bbox->max.z - bbox->min.z) / static_cast<double>(matrixSize)};
+        auto const bandwidth =
           std::max(voxelSize.x(), std::max(voxelSize.y(), voxelSize.z())) * 2.f;
         auto grid =
           createGridFromSdf(generator.getResourceContext()->getPrecompSdfBuffer(), bandwidth);
@@ -255,7 +256,8 @@ namespace gladius::vdb
         transformation->postTranslate(openvdb::Vec3d{static_cast<double>(bbox->min.x),
                                                      static_cast<double>(bbox->min.y),
                                                      static_cast<double>(bbox->min.z)});
-        grid->setTransform(transformation);        auto mesh = gridToMesh(grid, *generator.getComputeContext());
+        grid->setTransform(transformation);
+        auto mesh = gridToMesh(grid, *generator.getComputeContext());
         generator.computeVertexNormals(mesh);
         grid.reset();
         generator.getResourceContext()->releasePreComputedSdf();
@@ -333,74 +335,10 @@ namespace gladius::vdb
         return std::floor(value / increment) * increment;
     }
 
-    void MeshExporter::beginExport(const std::filesystem::path & fileName, ComputeCore & generator)
+    void MeshExporter::beginExport(std::filesystem::path const & fileName, ComputeCore & generator)
     {
-        m_fileName = fileName;
-        if (!generator.updateBBox())
-        {
-            throw std::runtime_error(
-              "Computing bounding box failed. The model has probably not been compiled yet");
-        }
-        const auto bb = generator.getBoundingBox();
-        generator.updateClippingAreaWithPadding();
-
-        m_startHeight_mm = alignToLayer(bb->min.z - m_layerIncrement_mm, m_layerIncrement_mm);
-        m_endHeight_mm = alignToLayer(bb->max.z + m_layerIncrement_mm, m_layerIncrement_mm);
-        m_currentHeight_mm = m_startHeight_mm;        m_currentHeight_mm = alignToLayer(m_currentHeight_mm, m_layerIncrement_mm);
-
-        const auto z = static_cast<int>(std::floor(m_currentHeight_mm));
-
-        generator.getResourceContext()->requestDistanceMaps();
-
-        const auto resX =
-          generator.getResourceContext()->getDistanceMipMaps()[m_qualityLevel]->getWidth();
-        const auto width_mm = generator.getResourceContext()->getClippingArea().z -
-                              generator.getResourceContext()->getClippingArea().x;
-        const auto voxelSize = width_mm / static_cast<float>(resX);
-        setLayerIncrement(voxelSize);
-        generator.setSliceHeight(m_currentHeight_mm);
-
-        std::cout << "Voxel size = " << voxelSize << "\n";
-
-        m_grid = openvdb::FloatGrid::create(m_bandwidth_mm);
-        m_grid->setGridClass(openvdb::GRID_LEVEL_SET);
-        m_grid->setName("SDF computed by gladius");
-        m_grid->setTransform(
-          openvdb::math::Transform::createLinearTransform(static_cast<double>(voxelSize)));
-    }
-
-    bool MeshExporter::advanceExport(ComputeCore & generator)
-    {        generator.generateSdfSlice();
-
-        auto & distmap = *(generator.getResourceContext()->getDistanceMipMaps()[m_qualityLevel]);
-        distmap.read();
-
-        openvdb::FloatGrid::Accessor accessor = m_grid->getAccessor();
-
-        const auto z = static_cast<int>(std::floor(m_currentHeight_mm / m_layerIncrement_mm));
-
-        m_currentHeight_mm = alignToLayer(m_currentHeight_mm, m_layerIncrement_mm);
-
-        for (int y = 0; y < static_cast<int>(distmap.getHeight()); ++y)
-        {
-            for (int x = 0; x < static_cast<int>(distmap.getWidth()); ++x)
-            {
-                openvdb::Coord xyz(x, y, z);                const auto value =
-                  std::clamp<float>(distmap.getValue(x, y).x, -m_bandwidth_mm, m_bandwidth_mm);
-
-                accessor.setValue(xyz, value);
-            }
-        }
-
-        m_grid->pruneGrid();
-        m_currentHeight_mm += m_layerIncrement_mm;
-        m_currentHeight_mm = alignToLayer(m_currentHeight_mm, m_layerIncrement_mm);
-
-        generator.setSliceHeight(m_currentHeight_mm);
-
-        m_progress =
-          ((generator.getSliceHeight() - m_startHeight_mm) / (m_endHeight_mm - m_startHeight_mm));
-        return generator.getSliceHeight() < generator.getBoundingBox()->max.z + m_layerIncrement_mm;
+        m_computeCore = &generator;
+        LayerBasedMeshExporter::beginExport(fileName, generator);
     }
 
     void MeshExporter::finalize()
@@ -418,7 +356,9 @@ namespace gladius::vdb
         file.write(grids);
         file.close();
         m_grid.reset();
-    }    void MeshExporter::finalizeExportSTL(ComputeCore & core)
+    }
+
+    void MeshExporter::finalizeExportSTL(ComputeCore & core)
     {
         auto mesh = gridToMesh(m_grid, *core.getComputeContext());
         // core.adoptVertexOfMeshToSurface(mesh.getVertices());
@@ -441,21 +381,5 @@ namespace gladius::vdb
                       << "\n";
         }
         m_grid.reset();
-    }
-
-    double MeshExporter::getProgress() const
-    {
-        return m_progress;
-    }
-
-    void MeshExporter::setQualityLevel(size_t qualityLevel)
-    {
-        m_qualityLevel = qualityLevel;
-    }
-
-    void MeshExporter::setLayerIncrement(float increment_mm)
-    {
-        m_layerIncrement_mm = increment_mm;
-        m_bandwidth_mm = m_layerIncrement_mm * 2.f;
     }
 }

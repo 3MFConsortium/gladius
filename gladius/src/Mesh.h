@@ -80,7 +80,17 @@ namespace gladius
 
         void addFace(Vector3 const & a, Vector3 const & b, Vector3 const & c)
         {
-            auto faceNormal = a.normalized().cross(b.normalized()).normalized();
+            // Calculate face normal using manual cross product to avoid Eigen linking issues
+            auto edge1 = b - a;
+            auto edge2 = c - a;
+
+            // Manual cross product: edge1 × edge2
+            Vector3 faceNormal;
+            faceNormal[0] = edge1[1] * edge2[2] - edge1[2] * edge2[1];
+            faceNormal[1] = edge1[2] * edge2[0] - edge1[0] * edge2[2];
+            faceNormal[2] = edge1[0] * edge2[1] - edge1[1] * edge2[0];
+            faceNormal.normalize();
+
             Face face{faceNormal, {a, b, c}, {faceNormal, faceNormal, faceNormal}};
             addFace(face);
         }

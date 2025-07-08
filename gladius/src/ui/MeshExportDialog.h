@@ -1,19 +1,25 @@
 #pragma once
+#include "BaseExportDialog.h"
 #include <MeshExporter.h>
 
 #include <filesystem>
 
 namespace gladius::ui
 {
-    class MeshExportDialog
+    class MeshExportDialog : public BaseExportDialog
     {
       public:
-        void beginExport(std::filesystem::path stlFilename, ComputeCore & core);
-        void render(ComputeCore & core);
-        [[nodiscard]] bool isVisible() const;
+        void beginExport(std::filesystem::path const & stlFilename, ComputeCore & core) override;
+
+      protected:
+        [[nodiscard]] std::string getWindowTitle() const override;
+        [[nodiscard]] std::string getExportMessage() const override;
+        [[nodiscard]] io::IExporter & getExporter() override;
+
+        void finalizeExport() override;
 
       private:
         vdb::MeshExporter m_exporter;
-        bool m_visible{false};
+        ComputeCore * m_computeCore = nullptr;
     };
 } // namespace gladius::ui

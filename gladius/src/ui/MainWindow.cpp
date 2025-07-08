@@ -60,6 +60,9 @@ namespace gladius::ui
         m_logger = std::move(logger);
         m_outline.setDocument(m_doc);
 
+        // Set UI mode to true since we're using the MainWindow (UI interface)
+        m_doc->setUiMode(true);
+
         m_modelEditor.setDocument(m_doc);
         // Set the library root directory
         m_modelEditor.setLibraryRootDirectory(getAppDir() / "library");
@@ -117,15 +120,14 @@ namespace gladius::ui
         m_welcomeScreen.setBackupManager(&m_doc->getBackupManager());
 
         // Set backup restore callback
-        m_welcomeScreen.setRestoreBackupCallback(
-          [this](const std::filesystem::path & backupPath)
-          {
-              open(backupPath);
-              m_welcomeScreen.hide();
-          });
+        m_welcomeScreen.setRestoreBackupCallback([this](const std::filesystem::path & backupPath)
+                                                 { open(backupPath); });
 
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
+
+        // Set examples directory
+        m_welcomeScreen.setExamplesDirectory(getAppDir() / "examples");
 
         nodeEditor();
         newModel();
@@ -168,21 +170,6 @@ namespace gladius::ui
                                &m_core->getResourceContext()->getRenderingSettings().quality,
                                0.1f,
                                20.0f);
-
-            dragParameter("Weight dist to neighbor",
-                          &m_core->getResourceContext()->getRenderingSettings().weightDistToNb,
-                          0.f,
-                          100.0f);
-
-            dragParameter("Weight midpoint",
-                          &m_core->getResourceContext()->getRenderingSettings().weightMidPoint,
-                          0.f,
-                          100.0f);
-
-            dragParameter("Normal offset",
-                          &m_core->getResourceContext()->getRenderingSettings().normalOffset,
-                          0.f,
-                          5.0f);
 
             bool enableSdfRendering =
               m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
@@ -486,6 +473,7 @@ namespace gladius::ui
                 sliceWindow();
                 renderWindow();
                 meshExportDialog();
+                meshExportDialog3mf();
                 cliExportDialog();
                 mainMenu();
                 showExitPopUp();
@@ -497,12 +485,7 @@ namespace gladius::ui
                 }
             }
 
-            // Render welcome screen if it's visible
-            if (welcomeScreenVisible)
-            {
-                // Now render the welcome screen on top of the overlay we created earlier
-                m_welcomeScreen.render();
-            }
+            m_welcomeScreen.render();
 
             logViewer();
             m_about.render();
@@ -690,6 +673,7 @@ namespace gladius::ui
         ImGui::Begin("Menu", &m_showMainMenu, window_flags);
 
         ImGui::SetWindowSize(ImVec2(menuWidth, io.DisplaySize.y - menuBarHeight));
+
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FILE "\tNew")))
         {
             closeMenu();
@@ -739,14 +723,10 @@ namespace gladius::ui
             }
         }
 
-        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_SCHOOL "\tExamples")))
+        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_HOME "\tHome")))
         {
             closeMenu();
-            const auto filename = queryLoadFilename({{"*.3mf"}}, getAppDir() / "examples/");
-            if (filename.has_value())
-            {
-                open(filename.value());
-            }
+            showWelcomeScreen();
         }
 
         CliWriter writer;
@@ -867,31 +847,25 @@ namespace gladius::ui
             }
 
             if (ImGui::MenuItem(
-                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\tImage Stack")))
+                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\t3MF (Mesh)")))
             {
                 closeMenu();
                 QueriedFilename filename;
-                std::filesystem::path suggestedFilename =
-                  m_currentAssemblyFileName.value_or("imagestack");
-                suggestedFilename.replace_extension("imagestack.3mf");
-
-                filename = querySaveFilename({"*.3mf"}, suggestedFilename);
-
+                if (m_currentAssemblyFileName.has_value())
+                {
+                    auto suggestedFilename = m_currentAssemblyFileName.value();
+                    suggestedFilename.replace_extension("3mf");
+                    filename = querySaveFilename({"*.3mf"}, suggestedFilename);
+                }
+                else
+                {
+                    filename = querySaveFilename({"*.3mf"}, "part.3mf");
+                }
                 if (filename.has_value())
                 {
-                    io::ImageStackExporter exporter(m_logger);
-                    exporter.beginExport(filename.value(), *m_core);
+                    filename->replace_extension(".3mf");
 
-                    if (filename.has_value())
-                    {
-                        exporter.beginExport(filename.value(), *m_core);
-                        while (exporter.advanceExport(*m_core))
-                        {
-                            std::cout << " Processing layer with z = " << m_core->getSliceHeight()
-                                      << "\n";
-                        }
-                        exporter.finalize();
-                    }
+                    m_meshExporterDialog3mf.beginExport(filename.value(), *m_core, m_doc.get());
                 }
             }
         }
@@ -985,6 +959,16 @@ namespace gladius::ui
             m_renderWindow.invalidateView();
         }
         m_meshExporterDialog.render(*m_core);
+    }
+
+    void MainWindow::meshExportDialog3mf()
+    {
+        if (m_meshExporterDialog3mf.isVisible())
+        {
+            m_mainView.startAnimationMode();
+            m_renderWindow.invalidateView();
+        }
+        m_meshExporterDialog3mf.render(*m_core);
     }
 
     void MainWindow::cliExportDialog()
@@ -1104,8 +1088,8 @@ namespace gladius::ui
 
     void MainWindow::saveAs()
     {
-        auto filename =
-          querySaveFilename({"*.3mf"}, m_currentAssemblyFileName.value_or(std::filesystem::path{}));
+        auto filename = querySaveFilename(
+          {"*.implicit.3mf"}, m_currentAssemblyFileName.value_or(std::filesystem::path{}));
         if (filename.has_value())
         {
             filename->replace_extension(".3mf");
@@ -2324,6 +2308,12 @@ namespace gladius::ui
         m_shortcutSettingsDialog.show();
     }
 
+    void MainWindow::showWelcomeScreen()
+    {
+        m_overlayOpacity = 1.0f;
+        m_welcomeScreen.show();
+    }
+
     void MainWindow::saveRenderSettings()
     {
         if (!m_configManager)
@@ -2337,9 +2327,6 @@ namespace gladius::ui
         // Create JSON object for render settings
         nlohmann::json renderJson;
         renderJson["quality"] = renderSettings.quality;
-        renderJson["weightDistToNb"] = renderSettings.weightDistToNb;
-        renderJson["weightMidPoint"] = renderSettings.weightMidPoint;
-        renderJson["normalOffset"] = renderSettings.normalOffset;
         renderJson["sdfVisEnabled"] =
           m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
 
@@ -2383,21 +2370,6 @@ namespace gladius::ui
         if (renderJson.contains("quality"))
         {
             renderSettings.quality = renderJson["quality"].get<float>();
-        }
-
-        if (renderJson.contains("weightDistToNb"))
-        {
-            renderSettings.weightDistToNb = renderJson["weightDistToNb"].get<float>();
-        }
-
-        if (renderJson.contains("weightMidPoint"))
-        {
-            renderSettings.weightMidPoint = renderJson["weightMidPoint"].get<float>();
-        }
-
-        if (renderJson.contains("normalOffset"))
-        {
-            renderSettings.normalOffset = renderJson["normalOffset"].get<float>();
         }
 
         if (renderJson.contains("sdfVisEnabled"))

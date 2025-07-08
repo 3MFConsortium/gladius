@@ -1,11 +1,12 @@
 #include "SliceView.h"
- 
+
 #include "imgui.h"
 #include <fmt/format.h>
 
+#include "../IconFontCppHeaders/IconsFontAwesome5.h"
+#include "ContourExtractor.h"
 #include "GLView.h"
 #include "Widgets.h"
-#include "ContourExtractor.h"
 
 namespace gladius
 {
@@ -42,8 +43,20 @@ namespace gladius::ui
         }
         bool windowIsActuallyVisible = false;
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0., 0.));
-        if (ImGui::Begin("Slice", &m_visible))
+        if (ImGui::Begin("Slice", &m_visible, ImGuiWindowFlags_MenuBar))
         {
+            if (ImGui::BeginMenuBar())
+            {
+
+                // Always show menu bar
+                if (ImGui::MenuItem(
+                      reinterpret_cast<const char *>(ICON_FA_COMPRESS_ARROWS_ALT "\tCenter View")))
+                {
+                    centerView();
+                }
+                ImGui::EndMenuBar();
+            }
+
             if (!m_hideDeveloperTools)
             {
                 ImGui::Checkbox("Show normals ", &m_renderNormals);
@@ -63,21 +76,35 @@ namespace gladius::ui
             }
 
             windowIsActuallyVisible = true;
-            ImVec2 canvasStart =
-              ImGui::GetCursorScreenPos(); // ImDrawList API uses screen coordinates!
-            ImVec2 canvasSize = ImGui::GetContentRegionAvail(); // Resize canvas to what's available
-            canvasSize.x = std::max(50.f, canvasSize.x);
-            canvasSize.y = std::max(50.f, canvasSize.y);
-            ImVec2 canvasEnd = ImVec2(canvasStart.x + canvasSize.x, canvasStart.y + canvasSize.y);
 
-            // Draw border and background color
+            constexpr float RULER_WIDTH = 30.0f;
+
+            ImVec2 const fullCanvasStart = ImGui::GetCursorScreenPos();
+            ImVec2 fullCanvasSize = ImGui::GetContentRegionAvail();
+            fullCanvasSize.x = std::max(50.f, fullCanvasSize.x);
+            fullCanvasSize.y = std::max(50.f, fullCanvasSize.y);
+
+            // Adjust for rulers - actual drawable canvas is smaller
+            ImVec2 const canvasStart = ImVec2{fullCanvasStart.x + RULER_WIDTH, fullCanvasStart.y};
+            ImVec2 const canvasSize =
+              ImVec2{fullCanvasSize.x - RULER_WIDTH, fullCanvasSize.y - RULER_WIDTH};
+            ImVec2 const canvasEnd =
+              ImVec2{canvasStart.x + canvasSize.x, canvasStart.y + canvasSize.y};
+
+            // Store full canvas size for use in centerView()
+            m_canvasSize = canvasSize;
+
+            // Draw border and background color for full area
             ImGuiIO & io = ImGui::GetIO();
             ImDrawList * drawList = ImGui::GetWindowDrawList();
             drawList->AddRectFilled(canvasStart,
                                     canvasEnd,
                                     ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)));
 
-            // This will catch our interactions
+            // Add spacing to position cursor for the rulers
+            ImGui::SetCursorScreenPos(canvasStart);
+
+            // This will catch our interactions (only for the actual canvas, not rulers)
             ImGui::InvisibleButton("canvas",
                                    canvasSize,
                                    ImGuiButtonFlags_MouseButtonLeft |
@@ -197,6 +224,10 @@ namespace gladius::ui
                 ImGuiCol const yellow = IM_COL32(255, 255, 55, 64);
                 ImGuiCol const darkRed = IM_COL32(128, 0, 0, 64);
                 ImGuiCol const greenish = IM_COL32(55, 255, 155, 255);
+
+                // Reset bounding rect for new contour calculation
+                m_contourBounds.reset();
+
                 for (auto const & line : lines)
                 {
                     if (line.vertices.size() < 4)
@@ -212,10 +243,16 @@ namespace gladius::ui
                     }
                     prevPoint = line.vertices.front();
 
+                    // Update bounding rect with first vertex
+                    m_contourBounds.expand(prevPoint);
+
                     for (auto iter = std::begin(line.vertices) + 1; iter != std::end(line.vertices);
                          ++iter)
                     {
                         auto actualColor = color;
+
+                        // Update bounding rect with current vertex
+                        m_contourBounds.expand(*iter);
 
                         if (line.area < 0.f)
                         {
@@ -260,6 +297,12 @@ namespace gladius::ui
                 if (core.requestContourUpdate(sliceParameter))
                 {
                     m_contours.reset();
+
+                    drawList->PopClipRect();
+
+                    // Render screen rulers even during contour updates
+                    renderScreenRulers(drawList, fullCanvasStart, fullCanvasSize);
+
                     ImGui::End();
                     ImGui::PopStyleVar();
                     return windowIsActuallyVisible;
@@ -267,14 +310,35 @@ namespace gladius::ui
             }
 
             if (!m_contours.has_value() && !core.isSlicingInProgress())
-            {                auto const & contourExtractor = core.getContour();
+            {
+                auto const & contourExtractor = core.getContour();
                 std::lock_guard<std::mutex> lockContourExtractor(core.getContourExtractorMutex());
                 m_contours = contourExtractor->getContour();
+
+                // If we just got contours but they're empty, mark as empty
+                if (m_contours.has_value() && m_contours->empty())
+                {
+                    m_contourWasEmpty = true;
+                }
             }
 
             if (!core.isSlicingInProgress() && m_contours.has_value())
             {
+                // Check if we should auto-center: contours were empty before and now we have
+                // content
+                bool const contourHasContent = !m_contours->empty();
+                bool const shouldAutoCenter = m_contourWasEmpty && contourHasContent;
+
                 renderLines(*m_contours);
+
+                // Auto-center if transitioning from empty to having content
+                if (shouldAutoCenter && m_contourBounds.isValid)
+                {
+                    centerView();
+                }
+
+                // Update the "was empty" state for next frame
+                m_contourWasEmpty = !contourHasContent;
 
                 if (m_renderNormals)
                 {
@@ -314,6 +378,9 @@ namespace gladius::ui
                 }
             }
             drawList->PopClipRect();
+
+            // Render screen rulers in the full canvas area
+            renderScreenRulers(drawList, fullCanvasStart, fullCanvasSize);
         }
 
         auto const contentMin =
@@ -396,5 +463,226 @@ namespace gladius::ui
         // Reset zoom and position
         m_zoomTarget = 4.0f;
         m_scrolling = {0.0f, 250.0f};
+    }
+
+    void SliceView::centerView()
+    {
+        // If bounds are not valid but we have contours, calculate bounds first
+        if (!m_contourBounds.isValid && m_contours.has_value())
+        {
+            calculateContourBounds();
+        }
+
+        if (!m_contourBounds.isValid)
+        {
+            // No contour data available, fall back to reset view
+            resetView();
+            return;
+        }
+
+        // Calculate the center of the contour in world coordinates
+        Vector2 const contourCenter = m_contourBounds.center();
+
+        // Calculate required zoom to fit the contour with some padding
+        float const paddingFactor = 1.2f; // 20% padding around the contour
+        float const contourWidth = m_contourBounds.width();
+        float const contourHeight = m_contourBounds.height();
+
+        // Use actual canvas size
+        float const canvasWidth = m_canvasSize.x;
+        float const canvasHeight = m_canvasSize.y;
+
+        // Calculate zoom to fit both width and height
+        float const zoomForWidth =
+          (contourWidth > 0.0f) ? canvasWidth / (contourWidth * paddingFactor) : 1.0f;
+        float const zoomForHeight =
+          (contourHeight > 0.0f) ? canvasHeight / (contourHeight * paddingFactor) : 1.0f;
+
+        // Use the smaller zoom to ensure everything fits
+        m_zoomTarget = std::min(zoomForWidth, zoomForHeight);
+        m_zoomTarget = std::max(0.5f, std::min(m_zoomTarget, 50.0f)); // Clamp zoom
+
+        // Set zoom immediately to avoid animation delay affecting the calculation
+        m_zoom = m_zoomTarget;
+
+        // Set scrolling to center the contour
+        // We want the contour center to be at the canvas center
+        // Canvas center in screen coordinates: (canvasWidth/2, canvasHeight/2)
+        // World point to canvas conversion: canvas = origin + world * zoom
+        // So: origin = canvas - world * zoom
+        m_scrolling.x = canvasWidth * 0.5f - contourCenter.x() * m_zoom;
+        m_scrolling.y = canvasHeight * 0.5f +
+                        contourCenter.y() * m_zoom; // Note: Y is flipped in screen coordinates
+    }
+
+    void SliceView::calculateContourBounds()
+    {
+        m_contourBounds.reset();
+
+        if (!m_contours.has_value())
+        {
+            return;
+        }
+
+        for (auto const & line : *m_contours)
+        {
+            if (line.vertices.size() < 4)
+            {
+                continue;
+            }
+
+            for (auto const & vertex : line.vertices)
+            {
+                m_contourBounds.expand(vertex);
+            }
+        }
+    }
+
+    void SliceView::renderScreenRulers(ImDrawList * drawList,
+                                       ImVec2 canvasStart,
+                                       ImVec2 canvasSize) const
+    {
+        constexpr float RULER_WIDTH = 50.0f;
+        constexpr float MAJOR_TICK_LENGTH = 15.0f;
+        constexpr float MINOR_TICK_LENGTH = 8.0f;
+        constexpr float TEXT_OFFSET = 5.0f;
+
+        ImU32 const rulerBgColor = IM_COL32(50, 50, 50, 150);
+        ImU32 const rulerTextColor = IM_COL32(200, 200, 200, 255);
+        ImU32 const majorTickColor = IM_COL32(180, 180, 180, 255);
+        ImU32 const minorTickColor = IM_COL32(120, 120, 120, 255);
+
+        // Actual drawing area (excluding rulers)
+        ImVec2 const drawingStart = ImVec2{canvasStart.x + RULER_WIDTH, canvasStart.y};
+        ImVec2 const drawingSize = ImVec2{canvasSize.x - RULER_WIDTH, canvasSize.y - RULER_WIDTH};
+
+        // Calculate world coordinates for visible area
+        ImVec2 const topLeft = screenToWorldPos(drawingStart);
+        ImVec2 const bottomRight =
+          screenToWorldPos(ImVec2{drawingStart.x + drawingSize.x, drawingStart.y + drawingSize.y});
+
+        // Determine appropriate tick spacing based on zoom level
+        float baseSpacing = 10.0f; // 10mm base spacing
+        float tickSpacing = baseSpacing;
+
+        // Adjust spacing based on zoom to keep reasonable tick density
+        while (tickSpacing * m_zoom < 40.0f)
+        {
+            tickSpacing *= 2.0f;
+        }
+        while (tickSpacing * m_zoom > 120.0f)
+        {
+            tickSpacing *= 0.5f;
+        }
+
+        // X-axis ruler (bottom)
+        ImVec2 const xRulerStart =
+          ImVec2{drawingStart.x, canvasStart.y + canvasSize.y - RULER_WIDTH};
+        ImVec2 const xRulerEnd =
+          ImVec2{drawingStart.x + drawingSize.x, canvasStart.y + canvasSize.y};
+
+        // Draw X ruler background
+        drawList->AddRectFilled(xRulerStart, xRulerEnd, rulerBgColor);
+        drawList->AddLine(
+          ImVec2{xRulerStart.x, xRulerStart.y}, ImVec2{xRulerEnd.x, xRulerStart.y}, majorTickColor);
+
+        // X-axis ticks and labels
+        float const startX = std::floor(topLeft.x / tickSpacing) * tickSpacing;
+        for (float worldX = startX; worldX <= bottomRight.x + tickSpacing; worldX += tickSpacing)
+        {
+            ImVec2 const canvasPos = worldToCanvasPos(ImVec2{worldX, 0.0f});
+            if (canvasPos.x >= drawingStart.x && canvasPos.x <= drawingStart.x + drawingSize.x)
+            {
+                // Major tick
+                drawList->AddLine(ImVec2{canvasPos.x, xRulerStart.y},
+                                  ImVec2{canvasPos.x, xRulerStart.y + MAJOR_TICK_LENGTH},
+                                  majorTickColor);
+
+                // Label
+                std::string const label = fmt::format("{:.0f}", worldX);
+                ImVec2 const textSize = ImGui::CalcTextSize(label.c_str());
+                drawList->AddText(ImVec2{canvasPos.x - textSize.x * 0.5f,
+                                         xRulerStart.y + MAJOR_TICK_LENGTH + TEXT_OFFSET},
+                                  rulerTextColor,
+                                  label.c_str());
+
+                // Minor ticks between major ticks
+                float const minorTickSpacing = tickSpacing * 0.2f;
+                for (int i = 1; i < 5; ++i)
+                {
+                    float const minorWorldX = worldX + i * minorTickSpacing;
+                    if (minorWorldX <= bottomRight.x)
+                    {
+                        ImVec2 const minorCanvasPos = worldToCanvasPos(ImVec2{minorWorldX, 0.0f});
+                        if (minorCanvasPos.x >= drawingStart.x &&
+                            minorCanvasPos.x <= drawingStart.x + drawingSize.x)
+                        {
+                            drawList->AddLine(
+                              ImVec2{minorCanvasPos.x, xRulerStart.y},
+                              ImVec2{minorCanvasPos.x, xRulerStart.y + MINOR_TICK_LENGTH},
+                              minorTickColor);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Y-axis ruler (left)
+        ImVec2 const yRulerStart = ImVec2{canvasStart.x, canvasStart.y};
+        ImVec2 const yRulerEnd =
+          ImVec2{canvasStart.x + RULER_WIDTH, drawingStart.y + drawingSize.y};
+
+        // Draw Y ruler background
+        drawList->AddRectFilled(yRulerStart, yRulerEnd, rulerBgColor);
+        drawList->AddLine(
+          ImVec2{yRulerEnd.x, yRulerStart.y}, ImVec2{yRulerEnd.x, yRulerEnd.y}, majorTickColor);
+
+        // Y-axis ticks and labels (note: Y coordinates are flipped in screen space)
+        float const startY =
+          std::floor(std::min(topLeft.y, bottomRight.y) / tickSpacing) * tickSpacing;
+        float const endY = std::max(topLeft.y, bottomRight.y);
+        for (float worldY = startY; worldY <= endY + tickSpacing; worldY += tickSpacing)
+        {
+            ImVec2 const canvasPos = worldToCanvasPos(ImVec2{0.0f, worldY});
+            if (canvasPos.y >= drawingStart.y && canvasPos.y <= drawingStart.y + drawingSize.y)
+            {
+                // Major tick
+                drawList->AddLine(ImVec2{yRulerEnd.x - MAJOR_TICK_LENGTH, canvasPos.y},
+                                  ImVec2{yRulerEnd.x, canvasPos.y},
+                                  majorTickColor);
+
+                // Label
+                std::string const label = fmt::format("{:.0f}", worldY);
+                ImVec2 const textSize = ImGui::CalcTextSize(label.c_str());
+                drawList->AddText(ImVec2{yRulerEnd.x - MAJOR_TICK_LENGTH - textSize.x - TEXT_OFFSET,
+                                         canvasPos.y - textSize.y * 0.5f},
+                                  rulerTextColor,
+                                  label.c_str());
+
+                // Minor ticks between major ticks
+                float const minorTickSpacing = tickSpacing * 0.2f;
+                for (int i = 1; i < 5; ++i)
+                {
+                    float const minorWorldY = worldY + i * minorTickSpacing;
+                    if (minorWorldY <= endY)
+                    {
+                        ImVec2 const minorCanvasPos = worldToCanvasPos(ImVec2{0.0f, minorWorldY});
+                        if (minorCanvasPos.y >= drawingStart.y &&
+                            minorCanvasPos.y <= drawingStart.y + drawingSize.y)
+                        {
+                            drawList->AddLine(
+                              ImVec2{yRulerEnd.x - MINOR_TICK_LENGTH, minorCanvasPos.y},
+                              ImVec2{yRulerEnd.x, minorCanvasPos.y},
+                              minorTickColor);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Draw corner rectangle to complete the ruler frame
+        drawList->AddRectFilled(ImVec2{canvasStart.x, canvasStart.y + canvasSize.y - RULER_WIDTH},
+                                ImVec2{canvasStart.x + RULER_WIDTH, canvasStart.y + canvasSize.y},
+                                rulerBgColor);
     }
 }

@@ -9,6 +9,11 @@ list(APPEND SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BackupManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/BackupManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/BaseExportDialog.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/BaseExportDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/TemplateExportDialog.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/LayerBasedMeshExporter.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/LayerBasedMeshExporter.cpp
 )
 
 add_library(${BINARY}_lib STATIC ${SOURCES})

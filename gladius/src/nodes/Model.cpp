@@ -560,7 +560,17 @@ namespace gladius::nodes
                 auto paramIter = m_inputParameter.find(param.getId());
                 if (param.getParentId() != nodeToRemove->second->getId())
                 {
-                    throw std::runtime_error("parameter is supposed to belong to nodeToRemove");
+                    // Log warning instead of throwing - this can happen in edge cases
+                    if (m_logger)
+                    {
+                        m_logger->addEvent(
+                          {fmt::format("Parameter {} has incorrect parent ID {} instead of {}",
+                                       name,
+                                       param.getParentId(),
+                                       nodeToRemove->second->getId()),
+                           events::Severity::Warning});
+                    }
+                    continue; // Skip this parameter instead of throwing
                 }
                 if (paramIter != std::end(m_inputParameter))
                 {
@@ -622,14 +632,14 @@ namespace gladius::nodes
     {
         m_allInputReferencesAreValid = false;
         m_graph = graph::AdjacencyListDirectedGraph(m_lastId);
-        
+
         // Add all nodes as vertices to ensure they are included in topological sort
         // even if they have no connections
         for (auto const & [id, node] : m_nodes)
         {
             m_graph.addVertex(id);
         }
-        
+
         for (auto & [id, node] : m_nodes)
         {
             for (auto & parameter : node->parameter())

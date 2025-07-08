@@ -69,6 +69,10 @@ if(_change_MSVC_flags)
 endif()
 
 project(gladius)
+
+# Include coverage support after project declaration so compiler info is available
+include(cmake/Coverage.cmake)
+
 if (MSVC)
     add_compile_options(/bigobj /utf-8 /Zc:__cplusplus)
 

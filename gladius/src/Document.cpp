@@ -73,15 +73,15 @@ namespace gladius
     Document::Document(std::shared_ptr<ComputeCore> core)
         : m_core(std::move(core))
     {
-        m_channels.push_back(
-          BitmapChannel{"DownSkin",
-                        [&](float z_mm, Vector2 pixelSize_mm)
-                        { return m_core->generateDownSkinMap(z_mm, std::move(pixelSize_mm)); }});
+        m_channels.push_back(BitmapChannel{"DownSkin", [&](float z_mm, Vector2 pixelSize_mm) {
+                                               return m_core->generateDownSkinMap(
+                                                 z_mm, std::move(pixelSize_mm));
+                                           }});
 
-        m_channels.push_back(
-          BitmapChannel{"UpSkin",
-                        [&](float z_mm, Vector2 pixelSize_mm)
-                        { return m_core->generateUpSkinMap(z_mm, std::move(pixelSize_mm)); }});
+        m_channels.push_back(BitmapChannel{"UpSkin", [&](float z_mm, Vector2 pixelSize_mm) {
+                                               return m_core->generateUpSkinMap(
+                                                 z_mm, std::move(pixelSize_mm));
+                                           }});
 
         newModel();
         resetGeneratorContext();
@@ -210,6 +210,12 @@ namespace gladius
 
     void Document::saveBackup()
     {
+        // Only create backups when UI mode is active
+        if (!m_uiMode)
+        {
+            return;
+        }
+
         // Use the new BackupManager for improved backup handling
         try
         {
@@ -1435,5 +1441,15 @@ namespace gladius
     const BackupManager & Document::getBackupManager() const
     {
         return m_backupManager;
+    }
+
+    void Document::setUiMode(bool uiMode)
+    {
+        m_uiMode = uiMode;
+    }
+
+    bool Document::isUiMode() const
+    {
+        return m_uiMode;
     }
 }
