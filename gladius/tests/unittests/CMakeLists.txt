@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 
 include(GoogleTest)
 include(CTest) # Add this line
+enable_testing()
 
 set(BINARY ${CMAKE_PROJECT_NAME}_test)
 file(GLOB_RECURSE TEST_SOURCES LIST_DIRECTORIES false *.h *.cpp)

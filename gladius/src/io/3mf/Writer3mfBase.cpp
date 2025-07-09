@@ -103,15 +103,28 @@ namespace gladius::io
                 auto existing = metaDataGroup->GetMetaDataByKey("", "CreationDate");
                 if (!existing)
                 {
-                    // Get current time in ISO 8601 format
+                    // Get current time in ISO 8601 format using thread-safe approach
                     auto now = std::chrono::system_clock::now();
-                    auto time_t = std::chrono::system_clock::to_time_t(now);
-                    auto tm = *std::gmtime(&time_t);
+                    auto const time_t = std::chrono::system_clock::to_time_t(now);
 
-                    std::stringstream ss;
-                    ss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S");
+                    // Use thread-safe gmtime_s on Windows, gmtime_r on POSIX
+                    std::tm tm{};
+#ifdef _WIN32
+                    gmtime_s(&tm, &time_t);
+#else
+                    gmtime_r(&time_t, &tm);
+#endif
 
-                    metaDataGroup->AddMetaData("", "CreationDate", ss.str(), "dateTime", true);
+                    // Format using fmt for consistency with project style
+                    auto timeString = fmt::format("{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z",
+                                                  tm.tm_year + 1900,
+                                                  tm.tm_mon + 1,
+                                                  tm.tm_mday,
+                                                  tm.tm_hour,
+                                                  tm.tm_min,
+                                                  tm.tm_sec);
+
+                    metaDataGroup->AddMetaData("", "CreationDate", timeString, "dateTime", true);
                 }
             }
             catch (...)

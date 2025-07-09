@@ -32,17 +32,42 @@ namespace gladius
 
     void errorCallback(int error, const char * description)
     {
-        std::cerr << "Error: " << error << " " << description << "\n";
+        // Validate description pointer to prevent potential buffer overruns
+        if (description != nullptr)
+        {
+            std::cerr << "Error: " << error << " " << description << "\n";
+        }
+        else
+        {
+            std::cerr << "Error: " << error << " (no description)\n";
+        }
     }
 
     GLView::~GLView()
     {
         // Explicitly save ImGui settings before destroying context
-        ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
-        
+        if (!m_iniFileNameStorage.empty())
+        {
+            try
+            {
+                ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+            }
+            catch (...)
+            {
+                // Ignore save errors during destruction to prevent exceptions
+                std::cerr << "Warning: Failed to save ImGui settings during destruction\n";
+            }
+        }
+
+        // Clear window user pointer to prevent dangling references
+        if (m_window)
+        {
+            glfwSetWindowUserPointer(m_window, nullptr);
+        }
+
         ImGui_ImplOpenGL2_Shutdown();
         ImGui_ImplGlfw_Shutdown();
-        
+
         ImGui::DestroyContext();
         glfwTerminate();
     }
@@ -54,9 +79,19 @@ namespace gladius
         m_windowSettings.width = static_cast<int>(io.DisplaySize.x);
         m_windowSettings.height = static_cast<int>(io.DisplaySize.y);
         glfwGetWindowPos(m_window, &m_windowSettings.x, &m_windowSettings.y);
-        
+
         // Explicitly save ImGui settings to ensure current window positions are stored
-        ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+        if (!m_iniFileNameStorage.empty())
+        {
+            try
+            {
+                ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+            }
+            catch (const std::exception & ex)
+            {
+                std::cerr << "Warning: Failed to save ImGui settings: " << ex.what() << "\n";
+            }
+        }
     }
 
     void GLView::addViewCallBack(const ViewCallBack & func)
@@ -92,20 +127,31 @@ namespace gladius
         if (!m_window)
         {
             std::cerr << "Window creation failed\n";
+            glfwTerminate();
             return;
         }
 
-        static auto staticDropCallback = [this](GLFWwindow * window, int count, const char ** paths)
-        { handleDropCallback(window, count, paths); };
+        static auto staticDropCallback = [](GLFWwindow * window, int count, const char ** paths)
+        {
+            // Get the GLView instance from the window user pointer
+            GLView * view = static_cast<GLView *>(glfwGetWindowUserPointer(window));
+            if (view)
+            {
+                view->handleDropCallback(window, count, paths);
+            }
+        };
 
-        glfwSetDropCallback(m_window,
-                            [](GLFWwindow * window, int count, const char ** paths)
-                            { staticDropCallback(window, count, paths); });
+        // Set the window user pointer to this instance
+        glfwSetWindowUserPointer(m_window, this);
+        glfwSetDropCallback(m_window, staticDropCallback);
 
         glfwMakeContextCurrent(m_window);
         if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
         {
             std::cerr << "Initializing glad failed\n";
+            glfwDestroyWindow(m_window);
+            m_window = nullptr;
+            glfwTerminate();
             return;
         }
         glShadeModel(GL_FLAT);
@@ -113,10 +159,16 @@ namespace gladius
 
         // determine hdpi scaling
         determineUiScale();
-        static auto staticWindowSizeCallback = [this](GLFWwindow* window, int width, int height)
-        { determineUiScale(); };
-        glfwSetWindowSizeCallback(m_window, [](GLFWwindow* window, int width, int height)
-        { staticWindowSizeCallback(window, width, height); });
+        static auto staticWindowSizeCallback = [](GLFWwindow * window, int width, int height)
+        {
+            // Get the GLView instance from the window user pointer
+            GLView * view = static_cast<GLView *>(glfwGetWindowUserPointer(window));
+            if (view)
+            {
+                view->determineUiScale();
+            }
+        };
+        glfwSetWindowSizeCallback(m_window, staticWindowSizeCallback);
 
         applyFullscreenMode();
     }
@@ -175,30 +227,59 @@ namespace gladius
         ImGuiIO & io = ImGui::GetIO();
 
         // Set up the UI configuration file path
-        std::filesystem::path gladiusConfigDir =
-          sago::getConfigHome() / std::filesystem::path{"gladius"};
-        m_gladiusImgUiFilename = gladiusConfigDir / "ui.config";
-        
-        if (!std::filesystem::is_directory(gladiusConfigDir))
+        try
         {
-            std::filesystem::create_directory(gladiusConfigDir);
+            std::filesystem::path gladiusConfigDir =
+              sago::getConfigHome() / std::filesystem::path{"gladius"};
+            m_gladiusImgUiFilename = gladiusConfigDir / "ui.config";
+
+            if (!std::filesystem::is_directory(gladiusConfigDir))
+            {
+                std::filesystem::create_directory(gladiusConfigDir);
+            }
+
+            // If our custom config doesn't exist yet but the default ImGui one does, copy it
+            if (!std::filesystem::is_regular_file(m_gladiusImgUiFilename) && io.IniFilename &&
+                std::filesystem::is_regular_file(io.IniFilename))
+            {
+                std::filesystem::copy_file(io.IniFilename, m_gladiusImgUiFilename);
+            }
         }
-        
-        // If our custom config doesn't exist yet but the default ImGui one does, copy it
-        if (!std::filesystem::is_regular_file(m_gladiusImgUiFilename) && 
-            io.IniFilename && std::filesystem::is_regular_file(io.IniFilename))
+        catch (const std::filesystem::filesystem_error & ex)
         {
-            std::filesystem::copy_file(io.IniFilename, m_gladiusImgUiFilename);
-        }
-        
-        // If our custom config exists, load it immediately
-        if (std::filesystem::is_regular_file(m_gladiusImgUiFilename))
-        {
-            ImGui::LoadIniSettingsFromDisk(m_iniFileNameStorage.c_str());
+            std::cerr << "Warning: Failed to set up UI config directory: " << ex.what() << "\n";
+            // Fall back to default ImGui behavior
+            m_gladiusImgUiFilename.clear();
         }
 
-        m_iniFileNameStorage = m_gladiusImgUiFilename.string();
-        io.IniFilename = m_iniFileNameStorage.c_str();
+        // Set the ini filename storage before using it
+        if (!m_gladiusImgUiFilename.empty())
+        {
+            try
+            {
+                m_iniFileNameStorage = m_gladiusImgUiFilename.string();
+                io.IniFilename = m_iniFileNameStorage.c_str();
+
+                // If our custom config exists, load it immediately
+                if (std::filesystem::is_regular_file(m_gladiusImgUiFilename))
+                {
+                    ImGui::LoadIniSettingsFromDisk(m_iniFileNameStorage.c_str());
+                }
+            }
+            catch (const std::exception & ex)
+            {
+                std::cerr << "Warning: Failed to set up ImGui config file: " << ex.what() << "\n";
+                // Clear the filename storage to use ImGui defaults
+                m_iniFileNameStorage.clear();
+                io.IniFilename = nullptr;
+            }
+        }
+        else
+        {
+            // Use ImGui defaults if config setup failed
+            m_iniFileNameStorage.clear();
+            io.IniFilename = nullptr;
+        }
 #ifdef IMGUI_HAS_DOCK
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 #endif
@@ -211,8 +292,13 @@ namespace gladius
 
         auto const font_scaling_factor = 2.f;
         auto const font_size_in_pixels = 16.f;
-        io.Fonts->AddFontFromFileTTF("misc/fonts/Roboto-Medium.ttf",
-                                     font_size_in_pixels * font_scaling_factor);
+
+        // Load main font with fallback
+        if (!io.Fonts->AddFontFromFileTTF("misc/fonts/Roboto-Medium.ttf",
+                                          font_size_in_pixels * font_scaling_factor))
+        {
+            std::cerr << "Warning: Could not load Roboto-Medium.ttf, using default font\n";
+        }
 
         // merge in icons from Font Awesome
         static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
@@ -221,10 +307,14 @@ namespace gladius
         icons_config.PixelSnapH = true;
         icons_config.GlyphOffset.y += 4.f;
 
-        io.Fonts->AddFontFromFileTTF("misc/fonts/fa-solid-900.ttf",
-                                     font_size_in_pixels * font_scaling_factor,
-                                     &icons_config,
-                                     icons_ranges);
+        if (!io.Fonts->AddFontFromFileTTF("misc/fonts/fa-solid-900.ttf",
+                                          font_size_in_pixels * font_scaling_factor,
+                                          &icons_config,
+                                          icons_ranges))
+        {
+            std::cerr
+              << "Warning: Could not load fa-solid-900.ttf, icons may not display correctly\n";
+        }
 
         io.FontGlobalScale /= font_scaling_factor;
 
@@ -327,7 +417,7 @@ namespace gladius
         glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
         float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
         float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
-        
+
         // Calculate scale based on HDPI
         float calculatedScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
         m_uiScale = calculatedScale;
@@ -335,20 +425,39 @@ namespace gladius
 
     void GLView::handleDropCallback(GLFWwindow *, int count, const char ** paths)
     {
+        // Validate parameters to prevent buffer overruns
+        if (paths == nullptr || count <= 0)
+        {
+            return;
+        }
+
         for (int i = 0; i < count; ++i)
         {
-            if (paths[i])
+            if (paths[i] != nullptr)
             {
-                m_fileDrop(std::filesystem::path(paths[i]));
+                try
+                {
+                    m_fileDrop(std::filesystem::path(paths[i]));
+                }
+                catch (const std::exception & ex)
+                {
+                    std::cerr << "Warning: Failed to process dropped file '" << paths[i]
+                              << "': " << ex.what() << "\n";
+                }
             }
         }
     }
 
     GLFWmonitor * findCurrentMonitor(GLFWwindow * window)
     {
+        if (!window)
+        {
+            return nullptr;
+        }
+
         int sizeMonitors;
         auto monitors = glfwGetMonitors(&sizeMonitors);
-        if (sizeMonitors < 1)
+        if (sizeMonitors < 1 || !monitors)
         {
             return nullptr;
         }
@@ -365,7 +474,17 @@ namespace gladius
         int maxOverlap = 0;
         for (int i = 0; i < sizeMonitors; ++i)
         {
+            if (!monitors[i])
+            {
+                continue;
+            }
+
             auto const mode = glfwGetVideoMode(monitors[i]);
+            if (!mode)
+            {
+                continue;
+            }
+
             int monitorX;
             int monitorY;
             glfwGetMonitorPos(monitors[i], &monitorX, &monitorY);
@@ -389,6 +508,11 @@ namespace gladius
 
     void GLView::applyFullscreenMode()
     {
+        if (!m_window)
+        {
+            return;
+        }
+
         if (m_fullScreen != m_glFullScreen)
         {
             auto * monitor = findCurrentMonitor(m_window);
@@ -396,10 +520,22 @@ namespace gladius
             {
                 monitor = glfwGetPrimaryMonitor();
             }
+
+            if (!monitor)
+            {
+                std::cerr << "Warning: No monitor available for fullscreen mode\n";
+                return;
+            }
+
             if (m_fullScreen)
             {
                 storeWindowSettings();
                 const GLFWvidmode * mode = glfwGetVideoMode(monitor);
+                if (!mode)
+                {
+                    std::cerr << "Warning: Could not get video mode for monitor\n";
+                    return;
+                }
 
                 glfwSetWindowMonitor(
                   m_window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
@@ -426,11 +562,16 @@ namespace gladius
 
     auto GLView::getHeight() const -> size_t
     {
-        return static_cast<size_t>(ImGui::GetIO().DisplaySize.x);
+        return static_cast<size_t>(ImGui::GetIO().DisplaySize.y);
     }
 
     void GLView::render()
     {
+        if (!m_window)
+        {
+            return;
+        }
+
         FrameMark;
 
         glfwMakeContextCurrent(m_window);
@@ -441,11 +582,11 @@ namespace gladius
         glPopMatrix();
 
         displayUI();
-        
-        // ImGui automatically saves settings periodically, but this ensures 
+
+        // ImGui automatically saves settings periodically, but this ensures
         // we're using our custom file path if ImGui decides to save this frame
         ImGuiIO & io = ImGui::GetIO();
-        if (io.WantSaveIniSettings)
+        if (io.WantSaveIniSettings && !m_iniFileNameStorage.empty())
         {
             io.IniFilename = m_iniFileNameStorage.c_str();
         }
@@ -467,50 +608,57 @@ namespace gladius
           std::chrono::milliseconds{static_cast<int>(1000. / 120.)};
         auto constexpr minFrameDurationStatic =
           std::chrono::milliseconds{static_cast<int>(1000. / 60.)};
-        while (!m_stateCloseRequested)
+        try
         {
-            if (glfwWindowShouldClose(m_window))
+            while (!m_stateCloseRequested)
             {
-                // Save window settings before handling close request
-                storeWindowSettings();
-                
-                glfwSetWindowShouldClose(m_window, GLFW_FALSE);
-                m_close();
-                m_stateCloseRequested = false;
-            }
+                if (glfwWindowShouldClose(m_window))
+                {
+                    // Save window settings before handling close request
+                    storeWindowSettings();
 
-            auto const durationSinceLastFrame_ms = getTimeStamp_ms() - lastFrame_ms;
-            auto const minFrameDuration =
-              m_isAnimationRunning ? minFrameDurationAnimation : minFrameDurationStatic;
+                    glfwSetWindowShouldClose(m_window, GLFW_FALSE);
+                    m_close();
+                    m_stateCloseRequested = false;
+                }
 
-            auto const delay_ms =
-              std::min(minFrameDuration, minFrameDuration - durationSinceLastFrame_ms);
-            std::this_thread::sleep_for(delay_ms);
+                auto const durationSinceLastFrame_ms = getTimeStamp_ms() - lastFrame_ms;
+                auto const minFrameDuration =
+                  m_isAnimationRunning ? minFrameDurationAnimation : minFrameDurationStatic;
 
-            if (m_isAnimationRunning)
-            {
-                glfwPollEvents();
-                lastAnimationTimePoint_ms = getTimeStamp_ms();
-            }
-            else
-            {
-                auto durationSinceAnimation = getTimeStamp_ms() - lastAnimationTimePoint_ms;
-                if (durationSinceAnimation < std::chrono::seconds{5})
+                auto const delay_ms =
+                  std::min(minFrameDuration, minFrameDuration - durationSinceLastFrame_ms);
+                std::this_thread::sleep_for(delay_ms);
+
+                if (m_isAnimationRunning)
                 {
                     glfwPollEvents();
+                    lastAnimationTimePoint_ms = getTimeStamp_ms();
                 }
                 else
                 {
-                    glfwWaitEventsTimeout(5);
-                    lastAnimationTimePoint_ms = getTimeStamp_ms();
+                    auto durationSinceAnimation = getTimeStamp_ms() - lastAnimationTimePoint_ms;
+                    if (durationSinceAnimation < std::chrono::seconds{5})
+                    {
+                        glfwPollEvents();
+                    }
+                    else
+                    {
+                        glfwWaitEventsTimeout(5);
+                        lastAnimationTimePoint_ms = getTimeStamp_ms();
+                    }
                 }
-            }
 
-            glClearColor(0.0f, 0.0f, 0.0f, 1.00f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            glClear(GL_DEPTH_BUFFER_BIT);
-            render();
-            lastFrame_ms = getTimeStamp_ms();
+                glClearColor(0.0f, 0.0f, 0.0f, 1.00f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                render();
+                lastFrame_ms = getTimeStamp_ms();
+            }
+        }
+        catch (const std::exception & e)
+        {
+            std::cerr << e.what() << '\n';
         }
     }
 
@@ -544,14 +692,4 @@ namespace gladius
     {
         m_isAnimationRunning = false;
     }
-
-    //     HWND GLView::getNativeWindowHandle()
-    //     {
-    // #ifdef _WIN32
-    //         return m_window ? glfwGetWin32Window(m_window) : nullptr;
-    // #else
-    //         return nullptr;
-    // #endif
-    //     }
-
 }
