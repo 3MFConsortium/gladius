@@ -113,13 +113,12 @@ namespace gladius_integration_tests
         auto gladius = getWrapper()->CreateGladius();
         ASSERT_TRUE(gladius);
 
-        gladius->LoadAssembly(FileNames::ImplicitGyroid);
+        gladius->LoadAssembly(FileNames::SimpleGyroid);
 
         auto faceIterator = gladius->GeneratePreviewMesh();
         EXPECT_TRUE(faceIterator);
         EXPECT_GT(faceIterator->GetSize(), 0u);
     }
-
 
     float length(GladiusLib::sVector3f const & vector)
     {

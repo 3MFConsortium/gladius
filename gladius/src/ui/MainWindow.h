@@ -12,6 +12,7 @@
 #include "GLView.h"
 #include "LogView.h"
 #include "MeshExportDialog.h"
+#include "MeshExportDialog3mf.h"
 #include "ModelEditor.h"
 #include "Outline.h"
 #include "RenderWindow.h"
@@ -75,6 +76,11 @@ namespace gladius::ui
          */
         void showShortcutSettings();
 
+        /**
+         * @brief Show the welcome screen and reset overlay opacity
+         */
+        void showWelcomeScreen();
+
       private:
         void render();
         void nodeEditor();
@@ -84,6 +90,7 @@ namespace gladius::ui
         void mainMenu();
         void sliceWindow();
         void meshExportDialog();
+        void meshExportDialog3mf();
         void cliExportDialog();
         void showExitPopUp();
         void showSaveBeforeFileOperationPopUp();
@@ -161,6 +168,7 @@ namespace gladius::ui
 
         bool m_showAuthoringTools{true};
         MeshExportDialog m_meshExporterDialog;
+        MeshExportDialog3mf m_meshExporterDialog3mf;
         CliExportDialog m_cliExportDialog;
         SliceView m_sliceView;
         LogView m_logView;

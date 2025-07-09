@@ -1,6 +1,9 @@
 
 cmake_minimum_required(VERSION 3.5)
 
+include(GoogleTest)
+include(CTest)
+
 set(CMAKE_CURRENT_BINDING_DIR ${CMAKE_SOURCE_DIR}/src/api/GladiusLib_component/Bindings/CppDynamic/)
 
 set(BINARY ${CMAKE_PROJECT_NAME}_integrationtest)
@@ -51,4 +54,5 @@ file(GLOB FONT_FILES
 )
 file(COPY ${FONT_FILES}  DESTINATION "misc/fonts/")
 
-gtest_add_tests(TARGET ${BINARY})
+# Use gtest_discover_tests for automatic test discovery
+gtest_discover_tests(${CMAKE_PROJECT_NAME}_integrationtest)

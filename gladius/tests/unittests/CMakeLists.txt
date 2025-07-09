@@ -1,20 +1,22 @@
 cmake_minimum_required(VERSION 3.12)
 
 include(GoogleTest)
+include(CTest) # Add this line
+enable_testing()
 
 set(BINARY ${CMAKE_PROJECT_NAME}_test)
 file(GLOB_RECURSE TEST_SOURCES LIST_DIRECTORIES false *.h *.cpp)
 
 # Remove OpenCL-requiring tests if disabled
 if(NOT ENABLE_OPENCL_TESTS)
-    list(REMOVE_ITEM TEST_SOURCES 
-        "${CMAKE_CURRENT_SOURCE_DIR}/Assembly_tests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ComputeCore_tests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/CliReader_tests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ToCommandStreamVisitor_tests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Builder_tests.cpp"
-    )
-    message(STATUS "OpenCL tests disabled - excluding OpenCL-requiring unit tests")
+  list(REMOVE_ITEM TEST_SOURCES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/Assembly_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ComputeCore_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/CliReader_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ToCommandStreamVisitor_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Builder_tests.cpp"
+  )
+  message(STATUS "OpenCL tests disabled - excluding OpenCL-requiring unit tests")
 endif()
 
 set(SOURCES ${TEST_SOURCES})
@@ -29,15 +31,13 @@ target_include_directories(${BINARY} PUBLIC ../../src ../../components/nanovdb)
 set(DEPENDENCIES ${CMAKE_PROJECT_NAME}_lib GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main ${FMT_LIBRARY} ${OPENMESH_LIBRARIES} Eigen3::Eigen lodepng Boost::boost unofficial::minizip::minizip)
 
 if (ENABLE_TRACY)
-    set(DEPENDENCIES ${DEPENDENCIES} Tracy::TracyClient)
+  set(DEPENDENCIES ${DEPENDENCIES} Tracy::TracyClient)
 endif()
 
 target_link_libraries(${BINARY} PUBLIC
    ${CMAKE_PROJECT_NAME}_lib
    ${DEPENDENCIES}
    )
-
-
 
 file(GLOB TEST_FILES
   "testdata/*.*"
@@ -50,5 +50,5 @@ file(GLOB FONT_FILES
 )
 file(COPY ${FONT_FILES}  DESTINATION "misc/fonts/")
 
-
-gtest_add_tests(TARGET ${BINARY})
+# Use gtest_discover_tests for automatic test discovery
+gtest_discover_tests(${BINARY})
