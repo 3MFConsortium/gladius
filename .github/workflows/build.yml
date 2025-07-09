@@ -93,23 +93,6 @@ jobs:
         restore-keys: |
           buildcache-${{ runner.os }}-${{ matrix.c_compiler }}-
           buildcache-${{ runner.os }}-
-
-    - name: Set up vcpkg environment variables
-      shell: bash
-      run: |
-        echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
-        echo "VCPKG_OVERLAY_PORTS=${{ github.workspace }}/gladius/vcpkg-overlay-ports" >> $GITHUB_ENV
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          echo "VCPKG_TARGET_TRIPLET=x64-windows-gladius" >> $GITHUB_ENV
-          echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
-          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}\vcpkg-cache" >> $GITHUB_ENV
-        else
-          echo "VCPKG_TARGET_TRIPLET=x64-linux" >> $GITHUB_ENV
-          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" >> $GITHUB_ENV
-        fi
-        # Enable vcpkg binary caching with default source
-        echo "VCPKG_BINARY_SOURCES=default,readwrite" >> $GITHUB_ENV
-
     - name: Cache vcpkg binary packages
       uses: actions/cache@v4
       with:
@@ -163,6 +146,8 @@ jobs:
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -G Ninja
         -S ${{ github.workspace }}/gladius
+      env:
+        VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
 
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
