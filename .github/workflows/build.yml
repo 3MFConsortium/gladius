@@ -102,11 +102,18 @@ jobs:
         restore-keys: |
           vcpkg-binary-${{ runner.os }}-
 
+    - name: Set vcpkg binary cache path
+      shell: bash
+      run: |
+        echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" >> $GITHUB_ENV
+
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: 'f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2'
         vcpkgJsonGlob: '${{ github.workspace }}/gladius/vcpkg.json'
+      env:
+        VCPKG_DEFAULT_BINARY_CACHE: '${{ github.workspace }}/vcpkg-cache'
 
     - name: Verify vcpkg configuration
       shell: bash
