@@ -101,29 +101,14 @@ jobs:
         echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=x64-windows-gladius" >> $GITHUB_ENV
         echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
-    - name: Cache vcpkg binaries
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ runner.os == 'Windows' && 'C:/vcpkg' || '/usr/local/share/vcpkg' }}
-          ${{ runner.os == 'Windows' && 'C:/vcpkg/archives' || '~/.cache/vcpkg/archives' }}
-        key: vcpkg-${{ runner.os }}-${{ matrix.c_compiler }}-${{ hashFiles('gladius/vcpkg.json', 'gladius/vcpkg-overlay-ports/**') }}
-        restore-keys: |
-          vcpkg-${{ runner.os }}-${{ matrix.c_compiler }}-
-          vcpkg-${{ runner.os }}-
-
-    - name: Setup anew (or from cache) vcpkg (and does not build any package)
-      uses: lukka/run-vcpkg@v11 # Always specify the specific _version_ of the
-                              # action you need, `v11` in this case to stay up
-                              # to date with fixes on the v11 branch.
+    - name: Setup vcpkg (with built-in caching)
+      uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: 'f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2'
         vcpkgJsonGlob: '${{ github.workspace }}/gladius/vcpkg.json'
-        # Enable additional caching features
-        doNotCache: false
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
-        VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.os == 'Windows' && 'C:/vcpkg/archives' || '~/.cache/vcpkg/archives' }}
+        VCPKG_OVERLAY_TRIPLETS: '${{ github.workspace }}/gladius/vcpkg-triplets'
 
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
@@ -153,6 +138,8 @@ jobs:
         -S ${{ github.workspace }}/gladius
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
+        VCPKG_OVERLAY_TRIPLETS: '${{ github.workspace }}/gladius/vcpkg-triplets'
+        VCPKG_TARGET_TRIPLET: ${{ runner.os == 'Windows' && 'x64-windows-gladius' || 'x64-linux' }}
 
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
