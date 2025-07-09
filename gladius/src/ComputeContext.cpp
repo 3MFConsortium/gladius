@@ -174,7 +174,8 @@ namespace gladius
 
         std::stable_sort(std::begin(accelerators),
                          std::end(accelerators),
-                         [](Accelerator const & lhs, Accelerator const & rhs) {
+                         [](Accelerator const & lhs, Accelerator const & rhs)
+                         {
                              return lhs.capabilities.performanceEstimation >
                                     rhs.capabilities.performanceEstimation;
                          });
@@ -239,6 +240,33 @@ namespace gladius
         }
 
         m_isValid = true;
+    }
+
+    bool ComputeContext::isOpenCLAvailable()
+    {
+        try
+        {
+            // Try to get all platforms
+            std::vector<cl::Platform> allPlatforms;
+            cl::Platform::get(&allPlatforms);
+
+            if (allPlatforms.empty())
+            {
+                return false;
+            }
+
+            // Query for accelerators with a null stream to avoid console output
+            std::ostringstream nullStream;
+            auto accelerators = queryAccelerators(nullStream);
+
+            // Return true if we found at least one suitable device
+            return !accelerators.empty();
+        }
+        catch (...)
+        {
+            // If any exception occurs (OpenCL not available, driver issues, etc.)
+            return false;
+        }
     }
 
     OutputMethod ComputeContext::outputMethod() const

@@ -3,6 +3,7 @@
  * @brief Comprehensive unit tests for MeshWriter3mf class
  */
 
+#include "../../opencl_test_helper.h"
 #include "ComputeContext.h"
 #include "Document.h"
 #include "EventLogger.h"
@@ -182,6 +183,8 @@ namespace gladius_tests
     // Basic export tests
     TEST_F(MeshWriter3mfTest, ExportSingleMesh_ValidCube_CreatesValidFile)
     {
+        SKIP_IF_OPENCL_UNAVAILABLE();
+
         auto mesh = createTestCube();
         std::filesystem::path outputPath = m_tempDir / "single_cube.3mf";
 
@@ -193,6 +196,8 @@ namespace gladius_tests
 
     TEST_F(MeshWriter3mfTest, ExportSingleMesh_ValidTetrahedron_CreatesValidFile)
     {
+        SKIP_IF_OPENCL_UNAVAILABLE();
+
         auto mesh = createTestTetrahedron();
         std::filesystem::path outputPath = m_tempDir / "single_tetrahedron.3mf";
 

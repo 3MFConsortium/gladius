@@ -1,3 +1,4 @@
+#include "opencl_test_helper.h"
 #include "testhelper.h"
 #include <Document.h>
 #include <fmt/core.h>
@@ -23,7 +24,6 @@ namespace gladius_tests
       protected:
         nodes::SharedAssembly load3mf(std::filesystem::path const & path)
         {
-
             auto context = std::make_shared<ComputeContext>(EnableGLOutput::disabled);
 
             if (!context->isValid())
@@ -49,6 +49,8 @@ namespace gladius_tests
 
     TEST_F(Assembly_Test, CopyAssigment_LoadedAssembly_EqualsOriginal)
     {
+        SKIP_IF_OPENCL_UNAVAILABLE();
+
         nodes::Assembly dolly;
         auto source = load3mf("testdata/SimpleGyroid.3mf");
         dolly = *source;
