@@ -93,19 +93,6 @@ jobs:
         restore-keys: |
           buildcache-${{ runner.os }}-${{ matrix.c_compiler }}-
           buildcache-${{ runner.os }}-
-    - name: Cache vcpkg binary packages
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ github.workspace }}/vcpkg-cache
-        key: vcpkg-binary-${{ runner.os }}-${{ hashFiles('gladius/vcpkg.json', 'gladius/vcpkg-triplets/**') }}
-        restore-keys: |
-          vcpkg-binary-${{ runner.os }}-
-
-    - name: Set vcpkg binary cache path
-      shell: bash
-      run: |
-        echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" >> $GITHUB_ENV
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       shell: bash
@@ -119,20 +106,7 @@ jobs:
         vcpkgGitCommitId: 'f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2'
         vcpkgJsonGlob: '${{ github.workspace }}/gladius/vcpkg.json'
       env:
-        VCPKG_DEFAULT_BINARY_CACHE: '${{ github.workspace }}/vcpkg-cache'
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
-
-    - name: Verify vcpkg configuration
-      shell: bash
-      run: |
-        echo "=== vcpkg Configuration ==="
-        echo "VCPKG_OVERLAY_TRIPLETS: $VCPKG_OVERLAY_TRIPLETS"
-        echo "VCPKG_OVERLAY_PORTS: $VCPKG_OVERLAY_PORTS"
-        echo "VCPKG_TARGET_TRIPLET: $VCPKG_TARGET_TRIPLET"
-        echo "VCPKG_DEFAULT_BINARY_CACHE: $VCPKG_DEFAULT_BINARY_CACHE"
-        echo "VCPKG_BINARY_SOURCES: $VCPKG_BINARY_SOURCES"
-        echo "vcpkg version: $(vcpkg version | head -1)"
-        echo "vcpkg root: $(vcpkg env --help 2>&1 | grep -o 'default: [^)]*' | head -1 || echo 'Unknown')"
 
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
@@ -140,16 +114,6 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-
-    - name: Cache CMake build
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/build
-        key: cmake-${{ runner.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-${{ hashFiles('gladius/CMakeLists.txt', 'gladius/src/**/CMakeLists.txt', 'gladius/vcpkg.json', 'gladius/cmake/**') }}
-        restore-keys: |
-          cmake-${{ runner.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-
-          cmake-${{ runner.os }}-${{ matrix.c_compiler }}-
-
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
