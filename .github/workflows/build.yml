@@ -62,38 +62,6 @@ jobs:
       if: runner.os == 'Windows'
       run: choco install ninja -y
 
-    - name: Install BuildCache on Windows
-      if: runner.os == 'Windows'
-      run: |
-        $url = "https://gitlab.com/bits-n-bites/buildcache/-/releases/v0.28.1/downloads/buildcache-win.zip"
-        Invoke-WebRequest -Uri $url -OutFile buildcache.zip
-        Expand-Archive buildcache.zip -DestinationPath buildcache
-        $buildcachePath = "${{ github.workspace }}\buildcache\bin"
-        echo "$buildcachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        echo "BUILDCACHE_DIR=C:\buildcache" >> $env:GITHUB_ENV
-        echo "CMAKE_C_COMPILER_LAUNCHER=buildcache" >> $env:GITHUB_ENV
-        echo "CMAKE_CXX_COMPILER_LAUNCHER=buildcache" >> $env:GITHUB_ENV
-      shell: powershell
-
-    - name: Install BuildCache on Linux
-      if: runner.os == 'Linux'
-      run: |
-        curl -L https://gitlab.com/bits-n-bites/buildcache/-/releases/v0.28.1/downloads/buildcache-linux.tar.gz | tar xz
-        sudo mv buildcache/bin/buildcache /usr/local/bin/
-        echo "BUILDCACHE_DIR=$HOME/.cache/buildcache" >> $GITHUB_ENV
-        echo "CMAKE_C_COMPILER_LAUNCHER=buildcache" >> $GITHUB_ENV
-        echo "CMAKE_CXX_COMPILER_LAUNCHER=buildcache" >> $GITHUB_ENV
-
-    - name: Cache BuildCache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ runner.os == 'Windows' && 'C:\buildcache' || '~/.cache/buildcache' }}
-        key: buildcache-${{ runner.os }}-${{ matrix.c_compiler }}-${{ hashFiles('gladius/src/**/*.cpp', 'gladius/src/**/*.h') }}
-        restore-keys: |
-          buildcache-${{ runner.os }}-${{ matrix.c_compiler }}-
-          buildcache-${{ runner.os }}-
-
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       shell: bash
@@ -101,17 +69,6 @@ jobs:
         echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=x64-windows-gladius" >> $GITHUB_ENV
         echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
-    - name: Cache vcpkg binaries
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ runner.os == 'Windows' && 'C:/vcpkg' || '/usr/local/share/vcpkg' }}
-          ~/.cache/vcpkg
-        key: vcpkg-${{ runner.os }}-${{ matrix.c_compiler }}-${{ hashFiles('gladius/vcpkg.json', 'gladius/vcpkg-overlay-ports/**') }}
-        restore-keys: |
-          vcpkg-${{ runner.os }}-${{ matrix.c_compiler }}-
-          vcpkg-${{ runner.os }}-
-
     - name: Setup anew (or from cache) vcpkg (and does not build any package)
       uses: lukka/run-vcpkg@v11 # Always specify the specific _version_ of the
                               # action you need, `v11` in this case to stay up
@@ -119,11 +76,8 @@ jobs:
       with:
         vcpkgGitCommitId: 'f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2'
         vcpkgJsonGlob: '${{ github.workspace }}/gladius/vcpkg.json'
-        # Enable additional caching features
-        doNotCache: false
       env:
         VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
-        VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.os == 'Windows' && 'C:/vcpkg/archives' || '~/.cache/vcpkg/archives' }}
 
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
@@ -131,15 +85,6 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-
-    - name: Cache CMake build
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/build
-        key: cmake-${{ runner.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-${{ hashFiles('gladius/CMakeLists.txt', 'gladius/src/CMakeLists.txt', 'gladius/vcpkg.json') }}
-        restore-keys: |
-          cmake-${{ runner.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-
-          cmake-${{ runner.os }}-${{ matrix.c_compiler }}-
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
@@ -157,8 +102,6 @@ jobs:
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
-    - name: Show BuildCache statistics
-      run: buildcache -s
     - name: Run Unit Tests on Linux
       if: runner.os == 'Linux'
       run: |

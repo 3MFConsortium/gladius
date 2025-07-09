@@ -34,4 +34,4 @@ gladius/components/lib3mf/Examples/CSharp/obj/*
 gladius/examples/implicit/*.gcode
 *.so
 gladius/src/api/GladiusLib_component/Examples/CSharp/obj/*
-build/
+build/build_test/
