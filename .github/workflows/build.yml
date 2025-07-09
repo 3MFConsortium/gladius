@@ -97,7 +97,7 @@ jobs:
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       shell: bash
-      run: 
+      run: |
         echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=x64-windows-gladius" >> $GITHUB_ENV
         echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
@@ -106,7 +106,7 @@ jobs:
       with:
         path: |
           ${{ runner.os == 'Windows' && 'C:/vcpkg' || '/usr/local/share/vcpkg' }}
-          ~/.cache/vcpkg
+          ${{ runner.os == 'Windows' && 'C:/vcpkg/archives' || '~/.cache/vcpkg/archives' }}
         key: vcpkg-${{ runner.os }}-${{ matrix.c_compiler }}-${{ hashFiles('gladius/vcpkg.json', 'gladius/vcpkg-overlay-ports/**') }}
         restore-keys: |
           vcpkg-${{ runner.os }}-${{ matrix.c_compiler }}-
@@ -136,7 +136,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/build
-        key: cmake-${{ runner.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-${{ hashFiles('gladius/CMakeLists.txt', 'gladius/src/CMakeLists.txt', 'gladius/vcpkg.json') }}
+        key: cmake-${{ runner.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-${{ hashFiles('gladius/CMakeLists.txt', 'gladius/src/**/CMakeLists.txt', 'gladius/vcpkg.json', 'gladius/cmake/**') }}
         restore-keys: |
           cmake-${{ runner.os }}-${{ matrix.c_compiler }}-${{ matrix.build_type }}-
           cmake-${{ runner.os }}-${{ matrix.c_compiler }}-
