@@ -106,7 +106,13 @@ jobs:
       shell: bash
       run: |
         echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" >> $GITHUB_ENV
-
+    - name: Set VCPKG overlay triplet for Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      run: 
+        echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
+        echo "VCPKG_TARGET_TRIPLET=x64-windows-gladius" >> $GITHUB_ENV
+        echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
@@ -114,6 +120,7 @@ jobs:
         vcpkgJsonGlob: '${{ github.workspace }}/gladius/vcpkg.json'
       env:
         VCPKG_DEFAULT_BINARY_CACHE: '${{ github.workspace }}/vcpkg-cache'
+        VCPKG_OVERLAY_PORTS: '${{ github.workspace }}/gladius/vcpkg-overlay-ports'
 
     - name: Verify vcpkg configuration
       shell: bash
