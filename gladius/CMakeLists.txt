@@ -7,7 +7,7 @@ option(ENABLE_OPENCL_TESTS "Enable tests that require OpenCL" ON)
 
 set(CPACK_PACKAGE_VERSION_MAJOR "1")
 set(CPACK_PACKAGE_VERSION_MINOR "2")
-set(CPACK_PACKAGE_VERSION_PATCH "12")
+set(CPACK_PACKAGE_VERSION_PATCH "13")
 
 # Set the version of the package in src/version.h
 configure_file(
