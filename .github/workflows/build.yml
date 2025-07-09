@@ -158,12 +158,12 @@ jobs:
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
     - name: Show BuildCache statistics
-      run: buildcache -s
-    - name: Run Unit Tests on Linux
+      run: buildcache -s || echo "BuildCache not available or failed to show statistics"
+    - name: Run Tests on Linux
       if: runner.os == 'Linux'
       run: |
         cd ${{ steps.strings.outputs.build-output-dir }}
-        ctest --output-on-failure -C ${{ matrix.build_type }} --tests-regex gladius_test
+        ctest --output-on-failure -C ${{ matrix.build_type }} --tests-regex "gladius_test|gladius_integrationtest"
     - name: Package_Windows
       if: runner.os == 'Windows'
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --target Generate_Installer --config ${{ matrix.build_type }}
