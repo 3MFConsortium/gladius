@@ -62,6 +62,38 @@ jobs:
       if: runner.os == 'Windows'
       run: choco install ninja -y
 
+    - name: Install BuildCache on Windows
+      if: runner.os == 'Windows'
+      run: |
+        $url = "https://gitlab.com/bits-n-bites/buildcache/-/releases/v0.28.1/downloads/buildcache-win.zip"
+        Invoke-WebRequest -Uri $url -OutFile buildcache.zip
+        Expand-Archive buildcache.zip -DestinationPath buildcache
+        $buildcachePath = "${{ github.workspace }}\buildcache\bin"
+        echo "$buildcachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "BUILDCACHE_DIR=C:\buildcache" >> $env:GITHUB_ENV
+        echo "CMAKE_C_COMPILER_LAUNCHER=buildcache" >> $env:GITHUB_ENV
+        echo "CMAKE_CXX_COMPILER_LAUNCHER=buildcache" >> $env:GITHUB_ENV
+      shell: powershell
+
+    - name: Install BuildCache on Linux
+      if: runner.os == 'Linux'
+      run: |
+        curl -L https://gitlab.com/bits-n-bites/buildcache/-/releases/v0.28.1/downloads/buildcache-linux.tar.gz | tar xz
+        sudo mv buildcache/bin/buildcache /usr/local/bin/
+        echo "BUILDCACHE_DIR=$HOME/.cache/buildcache" >> $GITHUB_ENV
+        echo "CMAKE_C_COMPILER_LAUNCHER=buildcache" >> $GITHUB_ENV
+        echo "CMAKE_CXX_COMPILER_LAUNCHER=buildcache" >> $GITHUB_ENV
+
+    - name: Cache BuildCache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ runner.os == 'Windows' && 'C:\buildcache' || '~/.cache/buildcache' }}
+        key: buildcache-${{ runner.os }}-${{ matrix.c_compiler }}-${{ hashFiles('gladius/src/**/*.cpp', 'gladius/src/**/*.h') }}
+        restore-keys: |
+          buildcache-${{ runner.os }}-${{ matrix.c_compiler }}-
+          buildcache-${{ runner.os }}-
+
     - name: Set VCPKG overlay triplet for Windows
       if: runner.os == 'Windows'
       shell: bash
@@ -125,6 +157,9 @@ jobs:
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+      
+    - name: Show BuildCache statistics
+      run: buildcache -s
     - name: Package_Windows
       if: runner.os == 'Windows'
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --target Generate_Installer --config ${{ matrix.build_type }}
