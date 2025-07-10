@@ -41,8 +41,6 @@ jobs:
     - name: Setup vcpkg environment
       shell: bash
       run: |
-        echo "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/gladius/vcpkg-triplets" >> $GITHUB_ENV
-        echo "VCPKG_TARGET_TRIPLET=x64-linux" >> $GITHUB_ENV
         echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
 
     - name: Setup vcpkg
@@ -72,6 +70,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=clang++
         -DCMAKE_C_COMPILER=clang
         -DCMAKE_BUILD_TYPE=Release
+        -DENABLE_OPENCL_TESTS=OFF
         -G Ninja
         -S ${{ github.workspace }}/gladius
       env:
