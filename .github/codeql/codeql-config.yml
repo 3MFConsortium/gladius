@@ -6,7 +6,7 @@ paths-ignore:
   - "vcpkg_installed/**"
   - "**/vcpkg_installed/**"
 
-    - "vcpkg/**"
+  - "vcpkg/**"
   - "**/vcpkg/**"
 
   # Common build artifact directories that may contain vcpkg dependencies
