@@ -1,0 +1,36 @@
+name: "CodeQL Configuration"
+
+# Exclude vcpkg directories and third-party libraries from CodeQL scanning
+paths-ignore:
+  # vcpkg installation directories
+  - "vcpkg_installed/**"
+  - "**/vcpkg_installed/**"
+  
+  # Common build artifact directories that may contain vcpkg dependencies
+  - "build/**"
+  - "**/build/**"
+  - "out/**" 
+  - "**/out/**"
+  
+  # vcpkg tool directory (if cloned locally)
+  - "vcpkg/**"
+  - "**/vcpkg/**"
+  
+  # CMake build directories that might contain FetchContent or vcpkg deps
+  - "_deps/**"
+  - "**/_deps/**"
+  
+  # Other common build artifact directories
+  - ".vs/**"
+  - "**/CMakeFiles/**"
+  - "**/.cmake/**"
+
+# Include only our project source directories
+paths:
+  - "gladius/src/**"
+  - "gladius/library/**" 
+  - "gladius/components/**"
+  - "gladius/examples/**"
+  - "gladius/tests/**"
+  - "gladius/cmake/**"
+  - "scripts/**"
