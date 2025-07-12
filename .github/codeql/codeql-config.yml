@@ -9,6 +9,10 @@ paths-ignore:
   - "vcpkg/**"
   - "**/vcpkg/**"
 
+  # Ignore vcpkg buildtrees directory
+  - "vcpkg/buildtrees/**"
+  - "**/vcpkg/buildtrees/**"
+
   # Common build artifact directories that may contain vcpkg dependencies
   - "build/**"
   - "**/build/**"
