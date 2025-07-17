@@ -32,18 +32,18 @@ namespace gladius
         {
             return vector;
         }
-        return cl_float2{{vector.x / magnitude, vector.y / magnitude}};
+        return cl_float2{vector.x / magnitude, vector.y / magnitude};
     }
 
     cl_float2 normal(cl_float2 vector)
     {
         vector = normalize(vector);
-        return {{vector.y, -vector.x}};
+        return {vector.y, -vector.x};
     }
 
     cl_float2 normal(cl_float2 start, cl_float2 end)
     {
-        cl_float2 const vector{{end.x - start.x, end.y - start.y}};
+        cl_float2 const vector{end.x - start.x, end.y - start.y};
         return normal(vector);
     }
 
