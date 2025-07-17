@@ -1,0 +1,8 @@
+x64-linux/
+x64-linux/share/
+x64-linux/share/cmakerc/
+x64-linux/share/cmakerc/cmakerc-config.cmake
+x64-linux/share/cmakerc/copyright
+x64-linux/share/cmakerc/usage
+x64-linux/share/cmakerc/vcpkg.spdx.json
+x64-linux/share/cmakerc/vcpkg_abi_info.txt
