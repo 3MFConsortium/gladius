@@ -36,3 +36,6 @@ gladius/examples/implicit/*.gcode
 gladius/src/api/GladiusLib_component/Examples/CSharp/obj/*
 build/build_test/
 vcpkg/buildtrees/
+
+# vcpkg dependencies
+**/vcpkg_installed/

@@ -146,7 +146,7 @@ namespace gladius
 
                 for (auto & vertex : contour.vertices)
                 {
-                    verticesIn.getData().push_back({{vertex.x(), vertex.y()}});
+                    verticesIn.getData().push_back({vertex.x(), vertex.y()});
                 }
 
                 auto verticesOut = verticesIn;
@@ -326,10 +326,10 @@ namespace gladius
     void ComputeCore::updateClippingAreaWithPadding() const
     {
         ProfileFunction auto constexpr padding = 10.f;
-        cl_float4 const newClippingArea{{m_boundingBox->min.x - padding,
+        cl_float4 const newClippingArea{m_boundingBox->min.x - padding,
                                          m_boundingBox->min.y - padding,
                                          m_boundingBox->max.x + padding,
-                                         m_boundingBox->max.y + padding}};
+                                         m_boundingBox->max.y + padding};
 
         if (isValidClippingArea(newClippingArea))
         {
@@ -474,7 +474,7 @@ namespace gladius
           std::lock_guard<std::recursive_mutex>
             lock(m_computeMutex);
         setSliceHeight(z_mm);
-        float2 const pixelSize{{pixelSize_mm.x(), pixelSize_mm.y()}};
+        float2 const pixelSize{pixelSize_mm.x(), pixelSize_mm.y()};
 
         updateBoundingBoxFast();
         updateClippingAreaWithPadding();
@@ -506,7 +506,7 @@ namespace gladius
           std::lock_guard<std::recursive_mutex>
             lock(m_computeMutex);
         setSliceHeight(z_mm);
-        float2 const pixelSize{{pixelSize_mm.x(), pixelSize_mm.y()}};
+        float2 const pixelSize{pixelSize_mm.x(), pixelSize_mm.y()};
 
         updateBoundingBoxFast();
         updateClippingAreaWithPadding();

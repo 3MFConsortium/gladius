@@ -65,16 +65,16 @@ namespace gladius
         void addFace(const Face & face)
         {
             m_faceNormals.getData().push_back(
-              cl_float4{{face.normal.x(), face.normal.y(), face.normal.z(), 0.f}});
+              cl_float4{face.normal.x(), face.normal.y(), face.normal.z(), 0.f});
 
             for (int i = 0; i < 3; ++i)
             {
                 const auto vertex = face.vertices[i];
-                m_vertices.getData().push_back({{vertex.x(), vertex.y(), vertex.z(), 0.f}});
+                m_vertices.getData().push_back({vertex.x(), vertex.y(), vertex.z(), 0.f});
 
                 const auto vertexNormal = face.vertexNormals[i];
                 m_vertexNormals.getData().push_back(
-                  {{vertexNormal.x(), vertexNormal.y(), vertexNormal.z(), 0.f}});
+                  {vertexNormal.x(), vertexNormal.y(), vertexNormal.z(), 0.f});
             }
         }
 
