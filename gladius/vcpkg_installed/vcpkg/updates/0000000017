@@ -1,7 +1,0 @@
-Package: cmakerc
-Version: 2023-07-24
-Architecture: x64-linux
-Multi-Arch: same
-Abi: 4c06d4989df034f1844b9626f04162840ae19b3db0f6c8c7c5b5fad69af24750
-Description: A Resource Compiler in a Single CMake Script
-Status: install ok installed

@@ -1,8 +1,0 @@
-Package: clipper2
-Version: 1.5.4
-Depends: vcpkg-cmake, vcpkg-cmake-config
-Architecture: x64-linux
-Multi-Arch: same
-Abi: ab08494effb99ee377894533e8aefaf4c344b55cebdca278e10128d1564776a2
-Description: Polygon Clipping and Offsetting
-Status: install ok installed
