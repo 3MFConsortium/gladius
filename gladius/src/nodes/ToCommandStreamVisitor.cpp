@@ -871,8 +871,7 @@ namespace gladius::nodes
         out << " out[cmds[i].output[0]+15] = fmod(GETPARAM(0,15), GETPARAM(1,15));\n";
         out << "}\n";
 
-
-         out << "if (cmds[i].type == CT_MOD_SCALAR)\n";
+        out << "if (cmds[i].type == CT_MOD_SCALAR)\n";
         out << "{\n";
         out << " out[cmds[i].output[0]] = glsl_mod1f(GETPARAM(0,0), GETPARAM(1,0));\n";
         out << "}\n";
@@ -1518,21 +1517,24 @@ namespace gladius::nodes
         out << " out[cmds[i].output[0]+15] = fpart.sf;\n";
         out << "}\n";
 
-
         // sampleImageNearest4f(float3 uvw, float3 dimensions, int start, PAYLOAD_ARGS)
         out << "if (cmds[i].type == CT_IMAGE_SAMPLER)\n";
         out << "{\n";
         out << " float4 color = (float4)(0.0f, 0.0f, 0.0f, 1.0f);\n";
         out << " float3 const uvw = (float3)(GETPARAM(0,0), GETPARAM(0,1), GETPARAM(0,2));\n";
-        out << " float3 const dimensions = (float3)(GETPARAM(1,0), GETPARAM(1,1), GETPARAM(1,2));\n";
+        out
+          << " float3 const dimensions = (float3)(GETPARAM(1,0), GETPARAM(1,1), GETPARAM(1,2));\n";
         out << " int const start =  convert_int(GETPARAM(2,0));\n";
-        out << " int3 const tileStyle = (int3)(convert_int(GETPARAM(3,0)), convert_int(GETPARAM(4,0)), "
+        out << " int3 const tileStyle = (int3)(convert_int(GETPARAM(3,0)), "
+               "convert_int(GETPARAM(4,0)), "
                "convert_int(GETPARAM(5,0)));\n";
         out << " int filter = convert_int(GETPARAM(6,0));\n";
         out << " if (filter == 0)\n";
-        out << " color = sampleImageNearest4f(uvw, dimensions, start, tileStyle, PASS_PAYLOAD_ARGS);\n";
+        out << " color = sampleImageNearest4f(uvw, dimensions, start, tileStyle, "
+               "PASS_PAYLOAD_ARGS);\n";
         out << " else\n";
-        out << " color = sampleImageLinear4f(uvw, dimensions, start, tileStyle, PASS_PAYLOAD_ARGS);\n";
+        out << " color = sampleImageLinear4f(uvw, dimensions, start, tileStyle, "
+               "PASS_PAYLOAD_ARGS);\n";
         out << " out[cmds[i].output[0]] = color.x;\n";
         out << " out[cmds[i].output[0]+1] = color.y;\n";
         out << " out[cmds[i].output[0]+2] = color.z;\n";
@@ -1745,7 +1747,8 @@ namespace gladius::nodes
         throw std::runtime_error(
           fmt::format("Node type for {} not implemented", node.getUniqueName()));
 
-        //   std::cerr << fmt::format("Skipping node  {}, nodetype it is not implemented", node.getUniqueName())
+        //   std::cerr << fmt::format("Skipping node  {}, nodetype it is not implemented",
+        //   node.getUniqueName())
         //             << std::endl;
     }
 
@@ -1761,7 +1764,6 @@ namespace gladius::nodes
         cmd.id = boxMinMax.getId();
 
         cmd.output[0] = acquireOutputIndex(boxMinMax.getOutputs().at(FieldNames::Shape), 1);
-
 
         cmd.args[0] = getLookUpIndex(boxMinMax.parameter().at(FieldNames::Min))[0];
         cmd.args[1] = getLookUpIndex(boxMinMax.parameter().at(FieldNames::Max))[0];
@@ -2006,7 +2008,7 @@ namespace gladius::nodes
         }
         cmd.id = addition.getId();
 
-        cmd.output[0] = acquireOutputIndex(addition.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(addition.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(addition.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(addition.parameter().at(FieldNames::B))[0];
@@ -2039,7 +2041,7 @@ namespace gladius::nodes
         }
         cmd.id = division.getId();
 
-        cmd.output[0] = acquireOutputIndex(division.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(division.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(division.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(division.parameter().at(FieldNames::B))[0];
@@ -2058,7 +2060,7 @@ namespace gladius::nodes
         cmd.type = CT_DOT_PRODUCT;
         cmd.id = dotProduct.getId();
 
-        cmd.output[0] = acquireOutputIndex(dotProduct.getOutputs().at(FieldNames::Result), 1);
+        cmd.output[0] = acquireOutputIndex(dotProduct.getResultOutputPort(), 1);
 
         cmd.args[0] = getLookUpIndex(dotProduct.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(dotProduct.parameter().at(FieldNames::B))[0];
@@ -2077,7 +2079,7 @@ namespace gladius::nodes
         cmd.type = CT_CROSS_PRODUCT;
         cmd.id = crossProduct.getId();
 
-        cmd.output[0] = acquireOutputIndex(crossProduct.getOutputs().at(FieldNames::Result), 3);
+        cmd.output[0] = acquireOutputIndex(crossProduct.getResultOutputPort(), 3);
 
         cmd.args[0] = getLookUpIndex(crossProduct.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(crossProduct.parameter().at(FieldNames::B))[0];
@@ -2096,8 +2098,7 @@ namespace gladius::nodes
         cmd.type = CT_MATRIX_VECTOR_MULTIPLICATION;
         cmd.id = matrixVectorMultiplication.getId();
 
-        cmd.output[0] =
-          acquireOutputIndex(matrixVectorMultiplication.getOutputs().at(FieldNames::Result), 3);
+        cmd.output[0] = acquireOutputIndex(matrixVectorMultiplication.getResultOutputPort(), 3);
 
         cmd.args[0] = getLookUpIndex(matrixVectorMultiplication.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(matrixVectorMultiplication.parameter().at(FieldNames::B))[0];
@@ -2151,7 +2152,7 @@ namespace gladius::nodes
         }
         cmd.id = subtraction.getId();
 
-        cmd.output[0] = acquireOutputIndex(subtraction.getOutputs()[FieldNames::Result], dimension);
+        cmd.output[0] = acquireOutputIndex(subtraction.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(subtraction.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(subtraction.parameter().at(FieldNames::B))[0];
@@ -2186,8 +2187,7 @@ namespace gladius::nodes
 
         cmd.id = multiplication.getId();
 
-        cmd.output[0] =
-          acquireOutputIndex(multiplication.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(multiplication.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(multiplication.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(multiplication.parameter().at(FieldNames::B))[0];
@@ -2245,7 +2245,7 @@ namespace gladius::nodes
         }
         cmd.id = arcTan2.getId();
 
-        cmd.output[0] = acquireOutputIndex(arcTan2.getOutputs()[FieldNames::Result], dimension);
+        cmd.output[0] = acquireOutputIndex(arcTan2.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(arcTan2.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(arcTan2.parameter().at(FieldNames::B))[0];
@@ -2426,7 +2426,7 @@ namespace gladius::nodes
         cmd.type = CT_VECTOR_FROM_SCALAR;
         cmd.id = vectorFromScalar.getId();
 
-        cmd.output[0] = acquireOutputIndex(vectorFromScalar.getOutputs().at(FieldNames::Result), 3);
+        cmd.output[0] = acquireOutputIndex(vectorFromScalar.getResultOutputPort(), 3);
 
         cmd.args[0] = getLookUpIndex(vectorFromScalar.parameter().at(FieldNames::A))[0];
 
@@ -2462,7 +2462,7 @@ namespace gladius::nodes
         }
         cmd.id = modulus.getId();
 
-        cmd.output[0] = acquireOutputIndex(modulus.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(modulus.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(modulus.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(modulus.parameter().at(FieldNames::B))[0];
@@ -2495,7 +2495,7 @@ namespace gladius::nodes
         }
         cmd.id = modulus.getId();
 
-        cmd.output[0] = acquireOutputIndex(modulus.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(modulus.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(modulus.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(modulus.parameter().at(FieldNames::B))[0];
@@ -2528,7 +2528,7 @@ namespace gladius::nodes
         }
         cmd.id = maxNode.getId();
 
-        cmd.output[0] = acquireOutputIndex(maxNode.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(maxNode.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(maxNode.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(maxNode.parameter().at(FieldNames::B))[0];
@@ -2561,7 +2561,7 @@ namespace gladius::nodes
         }
         cmd.id = minNode.getId();
 
-        cmd.output[0] = acquireOutputIndex(minNode.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(minNode.getResultOutputPort(), dimension);
 
         cmd.args[0] = getLookUpIndex(minNode.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(minNode.parameter().at(FieldNames::B))[0];
@@ -2651,7 +2651,7 @@ namespace gladius::nodes
 
         cmd.output[0] = acquireOutputIndex(imageSampler.getOutputs().at(FieldNames::Color), 3);
         cmd.output[1] = acquireOutputIndex(imageSampler.getOutputs().at(FieldNames::Alpha), 1);
-        
+
         cmd.args[0] = getLookUpIndex(imageSampler.parameter().at(FieldNames::UVW))[0];
         cmd.args[1] = getLookUpIndex(imageSampler.parameter().at(FieldNames::Dimensions))[0];
         cmd.args[2] = getLookUpIndex(imageSampler.parameter().at(FieldNames::Start))[0];

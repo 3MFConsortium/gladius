@@ -10,9 +10,9 @@
 #include "NodeBase.h"
 #include "Parameter.h"
 #include "Port.h"
+#include "ResourceContext.h"
 #include "Visitor.h"
 #include "nodesfwd.h"
-#include "ResourceContext.h"
 
 namespace gladius::nodes
 {
@@ -166,7 +166,6 @@ namespace gladius::nodes
                                    enum CommandType cmdTypeVector,
                                    enum CommandType cmdTypeMatrix);
 
-
         bool isLookUpIndexValid(int & lookUpIndex) const;
 
         std::stringstream m_signature;
@@ -202,15 +201,15 @@ namespace gladius::nodes
         auto const dimension = inputA.getSize();
         Command cmd;
 
-        if (dimension==1)
+        if (dimension == 1)
         {
             cmd.type = cmdTypeScalar;
         }
-        else if (dimension==3)
+        else if (dimension == 3)
         {
             cmd.type = cmdTypeVector;
         }
-        else if (dimension==16)
+        else if (dimension == 16)
         {
             cmd.type = cmdTypeMatrix;
         }
@@ -221,12 +220,11 @@ namespace gladius::nodes
 
         cmd.id = node.getId();
 
-        cmd.output[0] = acquireOutputIndex(node.getOutputs().at(FieldNames::Result), dimension);
+        cmd.output[0] = acquireOutputIndex(node.getResultOutputPort(), dimension);
         for (int i = 1; i < dimension; ++i)
         {
             cmd.output[i] = cmd.output[0] + i;
         }
-            
 
         cmd.args[0] = getLookUpIndex(node.parameter().at(FieldNames::A))[0];
         cmd.args[1] = getLookUpIndex(node.parameter().at(FieldNames::A))[1];
