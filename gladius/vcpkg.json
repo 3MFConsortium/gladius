@@ -49,7 +49,8 @@
     "minizip",
     "tracy",
     "clipper2",
-    "nlohmann-json"
+    "nlohmann-json",
+    "muparser"
   ],
   "overrides": [
     {

@@ -141,6 +141,7 @@ find_package(imgui CONFIG REQUIRED)
 find_package(unofficial-imgui-node-editor CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(muparser CONFIG REQUIRED)
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
 
 
