@@ -3,6 +3,7 @@
 #include "../nodes/History.h"
 #include "LibraryBrowser.h"
 #include "NodeView.h"
+#include "ExpressionDialog.h"
 #include "imguinodeeditor.h"
 
 #include <filesystem>
@@ -76,6 +77,7 @@ namespace gladius::ui
         void requestManualCompile();
         void autoLayoutNodes(float distance = 200.0f);
         void showCreateNodePopup();
+        void showExpressionDialog();
 
         /**
          * @brief Switch to a specific function by its ResourceId
@@ -195,6 +197,9 @@ namespace gladius::ui
 
         // Library browser
         LibraryBrowser m_libraryBrowser;
+
+        // Expression dialog
+        ExpressionDialog m_expressionDialog;
 
         /// Focus management for keyboard-driven workflow
         nodes::NodeId m_nodeToFocus{0};

@@ -35,6 +35,22 @@ namespace gladius::ui
     {
         m_editorContext = ed::CreateEditor();
         m_nodeTypeToColor = createNodeTypeToColors();
+        
+        // Setup expression dialog callbacks
+        m_expressionDialog.setOnApplyCallback([this](std::string const& expression) {
+            // TODO: Convert expression to node graph and add to current model
+            // For now, just log the expression
+            if (m_doc)
+            {
+                // Add a log event to the document's logger if available
+                // m_doc->getLogger()->addEvent(events::Event(fmt::format("Expression applied: {}", expression), events::Severity::Info));
+            }
+        });
+        
+        m_expressionDialog.setOnPreviewCallback([this](std::string const& expression) {
+            // TODO: Preview the expression (maybe show variable values or graph structure)
+            // For now, this is a placeholder
+        });
     }
 
     ModelEditor::~ModelEditor()
@@ -321,6 +337,12 @@ namespace gladius::ui
         {
             ImGui::OpenPopup("Add Function");
             m_showAddModel = true;
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_CALCULATOR "\tExpression")))
+        {
+            showExpressionDialog();
         }
 
         ImGui::Unindent();
@@ -1085,6 +1107,12 @@ namespace gladius::ui
             m_libraryBrowser.render(m_doc);
         }
 
+        // Render the expression dialog if visible
+        if (m_expressionDialog.isVisible())
+        {
+            m_expressionDialog.render();
+        }
+
         if (!m_currentModel->hasBeenLayouted() && m_nodeWidthsInitialized)
         {
             autoLayout();
@@ -1754,6 +1782,11 @@ namespace gladius::ui
         showPopupMenu([&, currentMousePos]() { createNodePopup(-1, currentMousePos); });
         m_showCreateNodePopUp = true;
         ImGui::OpenPopup("Create Node");
+    }
+
+    void ModelEditor::showExpressionDialog()
+    {
+        m_expressionDialog.show();
     }
 
     bool ModelEditor::switchToFunction(nodes::ResourceId functionId)
