@@ -4,6 +4,7 @@
 #include "LibraryBrowser.h"
 #include "NodeView.h"
 #include "ExpressionDialog.h"
+#include "../ExpressionToGraphConverter.h"
 #include "imguinodeeditor.h"
 
 #include <filesystem>

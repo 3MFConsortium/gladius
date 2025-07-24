@@ -9,6 +9,11 @@
 #include <set>
 #include <unordered_map>
 
+// #include "../ExpressionToGraphConverter.h"
+// #include "../ExpressionParser.h"
+#include "../ExpressionToGraphConverter.h"
+#include "../ExpressionParser.h"
+
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
 #include "ComponentsObjectView.h"
@@ -38,12 +43,48 @@ namespace gladius::ui
         
         // Setup expression dialog callbacks
         m_expressionDialog.setOnApplyCallback([this](std::string const& expression) {
-            // TODO: Convert expression to node graph and add to current model
-            // For now, just log the expression
-            if (m_doc)
+            if (m_currentModel && !expression.empty())
             {
-                // Add a log event to the document's logger if available
-                // m_doc->getLogger()->addEvent(events::Event(fmt::format("Expression applied: {}", expression), events::Severity::Info));
+                try 
+                {
+                    // Create a parser instance
+                    ExpressionParser parser;
+                    
+                    // Convert expression to node graph
+                    nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+                        expression, *m_currentModel, parser);
+                    
+                    if (resultNodeId != 0)
+                    {
+                        // Successfully created the graph
+                        markModelAsModified();
+                        
+                        // Close the dialog
+                        m_expressionDialog.hide();
+                    }
+                    else
+                    {
+                        // Failed to convert expression - create a placeholder for debugging
+                        nodes::NodeBase* node = nodes::createNodeFromName("ConstantScalar", *m_currentModel);
+                        if (node)
+                        {
+                            node->setDisplayName("Failed: " + expression);
+                            markModelAsModified();
+                            m_expressionDialog.hide();
+                        }
+                    }
+                }
+                catch (std::exception const& ex)
+                {
+                    // Handle conversion errors - create a placeholder for debugging
+                    nodes::NodeBase* node = nodes::createNodeFromName("ConstantScalar", *m_currentModel);
+                    if (node)
+                    {
+                        node->setDisplayName("Error: " + expression + " (" + ex.what() + ")");
+                        markModelAsModified();
+                        m_expressionDialog.hide();
+                    }
+                }
             }
         });
         

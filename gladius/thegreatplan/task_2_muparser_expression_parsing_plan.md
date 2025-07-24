@@ -53,6 +53,7 @@ This document outlines the plan to integrate a mathematical expression parser in
     - The dialog should be launched from a new button or menu item in the model editor's UI.
     - Real-time validation with error display.
 - **Reasoning**: A dedicated UI is necessary for user interaction. ImGui is already used in the project (inferred from `imgui.ini`), so we should use it for consistency.
+- **Status**: ✅ COMPLETED - Created ExpressionDialog.h/.cpp with full ImGui integration, added to ModelEditor with expression button
 
 ### Step 4: Convert the Expression to a Gladius Node Graph
 
@@ -103,8 +104,8 @@ This document outlines the plan to integrate a mathematical expression parser in
 ## 5. Timeline
 
 - **Week 1**: Step 1 & 2 (Integration and Parser) - ✅ COMPLETED
-- **Week 2**: Step 3 (UI Dialog)
-- **Week 3**: Step 4 & 5 (Bi-directional Conversion)
+- **Week 2**: Step 3 (UI Dialog) - ✅ COMPLETED
+- **Week 3**: Step 4 & 5 (Bi-directional Conversion) - 🔄 IN PROGRESS
 - **Week 4**: Step 6 & 7 (Integration and Testing)
 
 ## 6. Advantages of muParser over SymEngine
