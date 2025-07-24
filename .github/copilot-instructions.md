@@ -5,6 +5,7 @@
 ## Build Instructions
 - **Build System**: Use the "Build ALL" task.
 - **Run Tests**: Use the "Run Gladius Tests" task.
+- **Analyse Test Results**: Use the "testfailure" tool to analyze test results.
 
 ## General
 - **Modern C++**: Use C++11 and later features. Use std::algorithm when possible.
