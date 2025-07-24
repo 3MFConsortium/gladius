@@ -64,6 +64,7 @@ This document outlines the plan to integrate a mathematical expression parser in
     - Each operation type (e.g., addition, multiplication, functions) will be mapped to a specific node type in the Gladius graph.
     - Variables will be mapped to appropriate input nodes in the graph.
 - **Reasoning**: This is the core of the feature, bridging the gap between a user-friendly mathematical expression and the application's internal data structure.
+- **Status**: ✅ COMPLETED - Created ExpressionToGraphConverter.h/.cpp with full functionality
 
 ### Step 5: Convert Gladius Node Graph to Expression
 
@@ -74,6 +75,7 @@ This document outlines the plan to integrate a mathematical expression parser in
     - For example, an "Addition" node will be converted into a "+" operation, with its inputs recursively converted.
     - only nodes with one output will be considered (expressions can only be closed form). If a graph cannot be represented by an expressin the dialog should show a warning.
 - **Reasoning**: This enables round-trip testing to verify the correctness of both conversion processes. It also opens up the possibility of editing existing graphs using the mathematical expression dialog.
+- **Status**: ✅ COMPLETED - Created GraphToExpressionConverter.h/.cpp with full functionality
 
 ### Step 6: Integrate with the Document Model
 
@@ -105,8 +107,8 @@ This document outlines the plan to integrate a mathematical expression parser in
 
 - **Week 1**: Step 1 & 2 (Integration and Parser) - ✅ COMPLETED
 - **Week 2**: Step 3 (UI Dialog) - ✅ COMPLETED
-- **Week 3**: Step 4 & 5 (Bi-directional Conversion) - 🔄 IN PROGRESS
-- **Week 4**: Step 6 & 7 (Integration and Testing)
+- **Week 3**: Step 4 & 5 (Bi-directional Conversion) - ✅ COMPLETED
+- **Week 4**: Step 6 & 7 (Integration and Testing) - 🔄 IN PROGRESS
 
 ## 6. Advantages of muParser over SymEngine
 
