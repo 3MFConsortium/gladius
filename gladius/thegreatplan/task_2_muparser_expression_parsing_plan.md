@@ -71,6 +71,7 @@ This document outlines the plan to integrate a mathematical expression parser in
     - This will be the reverse of Step 4 and will involve a recursive function that starts from an output node and walks up the graph's inputs.
     - Each Gladius node type (e.g., "Addition", "Input") will be mapped to a mathematical operator or variable.
     - For example, an "Addition" node will be converted into a "+" operation, with its inputs recursively converted.
+    - only nodes with one output will be considered (expressions can only be closed form). If a graph cannot be represented by an expressin the dialog should show a warning.
 - **Reasoning**: This enables round-trip testing to verify the correctness of both conversion processes. It also opens up the possibility of editing existing graphs using the mathematical expression dialog.
 
 ### Step 6: Integrate with the Document Model
