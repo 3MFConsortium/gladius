@@ -1,11 +1,11 @@
-#include <gtest/gtest.h>
 #include "ExpressionParser.h"
+#include <gtest/gtest.h>
 
 namespace gladius::tests
 {
     class ExpressionParserTest : public ::testing::Test
     {
-    protected:
+      protected:
         void SetUp() override
         {
             m_parser = std::make_unique<ExpressionParser>();
@@ -31,7 +31,7 @@ namespace gladius::tests
     TEST_F(ExpressionParserTest, ParseInvalidExpression_InvalidSyntax_ReturnsFalse)
     {
         // Arrange
-        std::string const expression = "x + + y"; // Invalid syntax
+        std::string const expression = "x + )"; // Invalid syntax - unmatched parenthesis
 
         // Act
         bool const result = m_parser->parseExpression(expression);
