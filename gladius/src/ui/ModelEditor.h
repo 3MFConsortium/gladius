@@ -86,7 +86,8 @@ namespace gladius::ui
          * @param expression The mathematical expression
          */
         void onCreateFunctionFromExpression(std::string const & functionName,
-                                            std::string const & expression);
+                                            std::string const & expression,
+                                            std::vector<FunctionArgument> const & arguments);
 
         /**
          * @brief Switch to a specific function by its ResourceId

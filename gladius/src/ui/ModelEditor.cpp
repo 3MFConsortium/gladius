@@ -43,8 +43,10 @@ namespace gladius::ui
 
         // Setup expression dialog callbacks
         m_expressionDialog.setOnApplyCallback(
-          [this](std::string const & functionName, std::string const & expression)
-          { onCreateFunctionFromExpression(functionName, expression); });
+          [this](std::string const & functionName,
+                 std::string const & expression,
+                 std::vector<FunctionArgument> const & arguments)
+          { onCreateFunctionFromExpression(functionName, expression, arguments); });
 
         m_expressionDialog.setOnPreviewCallback(
           [this](std::string const & expression)
@@ -1790,8 +1792,10 @@ namespace gladius::ui
         m_expressionDialog.show();
     }
 
-    void ModelEditor::onCreateFunctionFromExpression(std::string const & functionName,
-                                                     std::string const & expression)
+    void
+    ModelEditor::onCreateFunctionFromExpression(std::string const & functionName,
+                                                std::string const & expression,
+                                                std::vector<FunctionArgument> const & arguments)
     {
         if (!m_doc || !m_assembly || functionName.empty() || expression.empty())
         {
@@ -1808,8 +1812,8 @@ namespace gladius::ui
             ExpressionParser parser;
 
             // Convert expression to node graph
-            nodes::NodeId resultNodeId =
-              ExpressionToGraphConverter::convertExpressionToGraph(expression, newModel, parser);
+            nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+              expression, newModel, parser, arguments);
 
             if (resultNodeId != 0)
             {

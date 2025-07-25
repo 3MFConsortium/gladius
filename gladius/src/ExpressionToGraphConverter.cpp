@@ -1,5 +1,6 @@
 #include "ExpressionToGraphConverter.h"
 #include "ExpressionParser.h"
+#include "FunctionArgument.h"
 #include "nodes/DerivedNodes.h"
 #include "nodes/Model.h"
 #include "nodes/NodeBase.h"
@@ -13,10 +14,11 @@
 
 namespace gladius
 {
-    nodes::NodeId
-    ExpressionToGraphConverter::convertExpressionToGraph(std::string const & expression,
-                                                         nodes::Model & model,
-                                                         ExpressionParser & parser)
+    nodes::NodeId ExpressionToGraphConverter::convertExpressionToGraph(
+      std::string const & expression,
+      nodes::Model & model,
+      ExpressionParser & parser,
+      std::vector<FunctionArgument> const & arguments)
     {
         // First validate the expression
         if (!parser.parseExpression(expression) || !parser.hasValidExpression())
@@ -27,8 +29,49 @@ namespace gladius
         // Get variables from the expression
         std::vector<std::string> variables = parser.getVariables();
 
-        // Create input nodes for variables
-        std::map<std::string, nodes::NodeId> variableNodes = createVariableNodes(variables, model);
+        // Create input nodes based on arguments or variables
+        std::map<std::string, nodes::NodeId> variableNodes;
+        if (!arguments.empty())
+        {
+            // Use function arguments to create properly typed input nodes
+            variableNodes = createArgumentNodes(arguments, model);
+
+            // Also create nodes for any additional variables not covered by arguments
+            for (std::string const & varName : variables)
+            {
+                // Check if this variable is a component access (e.g., "A.x")
+                if (isComponentAccess(varName))
+                {
+                    continue; // Component access will be handled during parsing
+                }
+
+                // Check if this variable is already covered by arguments
+                bool covered = false;
+                for (auto const & arg : arguments)
+                {
+                    if (arg.name == varName)
+                    {
+                        covered = true;
+                        break;
+                    }
+                }
+
+                if (!covered)
+                {
+                    // Create a parameter input node for uncovered variables
+                    nodes::NodeBase * node = nodes::createNodeFromName("ConstantScalar", model);
+                    if (node)
+                    {
+                        variableNodes[varName] = node->getId();
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Legacy mode: create variable nodes without type information
+            variableNodes = createVariableNodes(variables, model, arguments);
+        }
 
         // Parse the expression and build the graph
         return parseAndBuildGraph(expression, model, variableNodes);
@@ -36,7 +79,8 @@ namespace gladius
 
     std::map<std::string, nodes::NodeId>
     ExpressionToGraphConverter::createVariableNodes(std::vector<std::string> const & variables,
-                                                    nodes::Model & model)
+                                                    nodes::Model & model,
+                                                    std::vector<FunctionArgument> const & arguments)
     {
         std::map<std::string, nodes::NodeId> variableNodes;
 
@@ -155,6 +199,12 @@ namespace gladius
                 return parseAndBuildGraph(
                   cleanExpr.substr(1, cleanExpr.length() - 2), model, variableNodes);
             }
+        }
+
+        // Check if it's a component access (e.g., "A.x", "pos.y")
+        if (isComponentAccess(cleanExpr))
+        {
+            return parseComponentAccess(cleanExpr, variableNodes, model);
         }
 
         // Check if it's a variable
@@ -523,6 +573,122 @@ namespace gladius
         default:
             return 0;
         }
+    }
+
+    std::map<std::string, nodes::NodeId>
+    ExpressionToGraphConverter::createArgumentNodes(std::vector<FunctionArgument> const & arguments,
+                                                    nodes::Model & model)
+    {
+        std::map<std::string, nodes::NodeId> argumentNodes;
+
+        for (auto const & arg : arguments)
+        {
+            nodes::NodeBase * node = nullptr;
+
+            if (arg.type == ArgumentType::Scalar)
+            {
+                // Create a scalar input node
+                node = nodes::createNodeFromName("ConstantScalar", model);
+            }
+            else if (arg.type == ArgumentType::Vector)
+            {
+                // Create a vector input node
+                node = nodes::createNodeFromName("ConstantVector", model);
+            }
+
+            if (node)
+            {
+                argumentNodes[arg.name] = node->getId();
+                node->setDisplayName(arg.name);
+            }
+        }
+
+        return argumentNodes;
+    }
+
+    nodes::NodeId ExpressionToGraphConverter::parseComponentAccess(
+      std::string const & expression,
+      std::map<std::string, nodes::NodeId> const & argumentNodes,
+      nodes::Model & model)
+    {
+        auto [argName, component] = parseComponentExpression(expression);
+
+        if (argName.empty() || component.empty())
+        {
+            return 0; // Invalid component access
+        }
+
+        // Find the argument node
+        auto it = argumentNodes.find(argName);
+        if (it == argumentNodes.end())
+        {
+            return 0; // Argument not found
+        }
+
+        // Create a DecomposeVector node
+        nodes::NodeBase * decomposeNode = nodes::createNodeFromName("DecomposeVector", model);
+        if (!decomposeNode)
+        {
+            return 0; // Failed to create decompose node
+        }
+
+        // Connect the vector argument to the decompose node
+        if (!connectNodes(model,
+                          it->second,
+                          getOutputPortName(model, it->second),
+                          decomposeNode->getId(),
+                          "Vector"))
+        {
+            return 0; // Failed to connect
+        }
+
+        // Return the appropriate component output port
+        std::string outputPort;
+        if (component == "x")
+        {
+            outputPort = "X";
+        }
+        else if (component == "y")
+        {
+            outputPort = "Y";
+        }
+        else if (component == "z")
+        {
+            outputPort = "Z";
+        }
+        else
+        {
+            return 0; // Invalid component
+        }
+
+        return decomposeNode->getId();
+    }
+
+    bool ExpressionToGraphConverter::isComponentAccess(std::string const & expression)
+    {
+        return expression.find('.') != std::string::npos && expression.find('.') != 0 &&
+               expression.find('.') != expression.length() - 1;
+    }
+
+    std::pair<std::string, std::string>
+    ExpressionToGraphConverter::parseComponentExpression(std::string const & expression)
+    {
+        size_t dotPos = expression.find('.');
+        if (dotPos == std::string::npos || dotPos == 0 || dotPos == expression.length() - 1)
+        {
+            return {"", ""}; // Invalid format
+        }
+
+        std::string argName = expression.substr(0, dotPos);
+        std::string component = expression.substr(dotPos + 1);
+
+        // Validate component name
+        if (component != "x" && component != "y" && component != "z")
+        {
+            return {"", ""}; // Invalid component
+        }
+
+        return {argName, component};
     }
 
 } // namespace gladius

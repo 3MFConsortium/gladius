@@ -1,8 +1,10 @@
 #pragma once
 
+#include "../FunctionArgument.h"
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace gladius
 {
@@ -22,7 +24,9 @@ namespace gladius::ui
     {
       public:
         using OnApplyCallback =
-          std::function<void(std::string const & functionName, std::string const & expression)>;
+          std::function<void(std::string const & functionName,
+                             std::string const & expression,
+                             std::vector<FunctionArgument> const & arguments)>;
         using OnPreviewCallback = std::function<void(std::string const & expression)>;
 
         /**
@@ -83,6 +87,18 @@ namespace gladius::ui
         std::string const & getExpression() const;
 
         /**
+         * @brief Get the current function arguments
+         * @return Vector of function arguments
+         */
+        std::vector<FunctionArgument> const & getFunctionArguments() const;
+
+        /**
+         * @brief Set the function arguments
+         * @param arguments Vector of function arguments
+         */
+        void setFunctionArguments(std::vector<FunctionArgument> const & arguments);
+
+        /**
          * @brief Set callback for when Apply button is clicked
          * @param callback Function to call with the function name and validated expression
          */
@@ -99,6 +115,11 @@ namespace gladius::ui
          * @brief Validate the current expression and update UI state
          */
         void validateExpression();
+
+        /**
+         * @brief Render the function arguments section
+         */
+        void renderArgumentsSection();
 
         /**
          * @brief Render the function name input field
@@ -133,6 +154,9 @@ namespace gladius::ui
         bool m_isValid = false;
         bool m_needsValidation = true;
 
+        // Function arguments
+        std::vector<FunctionArgument> m_arguments;
+
         // Callbacks
         OnApplyCallback m_onApplyCallback;
         OnPreviewCallback m_onPreviewCallback;
@@ -140,10 +164,14 @@ namespace gladius::ui
         // Input buffers for ImGui
         static constexpr size_t FUNCTION_NAME_BUFFER_SIZE = 256;
         static constexpr size_t EXPRESSION_BUFFER_SIZE = 1024;
+        static constexpr size_t ARGUMENT_NAME_BUFFER_SIZE = 64;
         char m_functionNameBuffer[FUNCTION_NAME_BUFFER_SIZE] = {0};
         char m_expressionBuffer[EXPRESSION_BUFFER_SIZE] = {0};
+        char m_newArgumentNameBuffer[ARGUMENT_NAME_BUFFER_SIZE] = {0};
 
-        // Disable copy and move
+        // UI state for argument editing
+        int m_selectedArgumentType = 0; // 0 = Scalar, 1 = Vector
+        int m_argumentToRemove = -1;    // Disable copy and move
         ExpressionDialog(ExpressionDialog const &) = delete;
         ExpressionDialog & operator=(ExpressionDialog const &) = delete;
         ExpressionDialog(ExpressionDialog &&) = delete;

@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "FunctionArgument.h"
+
 namespace gladius
 {
     class ExpressionParser;
@@ -35,21 +37,48 @@ namespace gladius
          * @param expression The mathematical expression as a string
          * @param model The model to add nodes to
          * @param parser The expression parser to use
+         * @param arguments Optional function arguments (for vector support)
          * @return The NodeId of the output node, or 0 if conversion failed
          */
-        static nodes::NodeId convertExpressionToGraph(std::string const & expression,
-                                                      nodes::Model & model,
-                                                      ExpressionParser & parser);
+        static nodes::NodeId
+        convertExpressionToGraph(std::string const & expression,
+                                 nodes::Model & model,
+                                 ExpressionParser & parser,
+                                 std::vector<FunctionArgument> const & arguments = {});
 
       private:
         /**
          * @brief Create variable input nodes for the expression
          * @param variables List of variable names found in the expression
          * @param model The model to add nodes to
+         * @param arguments Function arguments for type information
          * @return Map of variable names to their corresponding node IDs
          */
         static std::map<std::string, nodes::NodeId>
-        createVariableNodes(std::vector<std::string> const & variables, nodes::Model & model);
+        createVariableNodes(std::vector<std::string> const & variables,
+                            nodes::Model & model,
+                            std::vector<FunctionArgument> const & arguments);
+
+        /**
+         * @brief Create argument input nodes based on function arguments
+         * @param arguments Function arguments definition
+         * @param model The model to add nodes to
+         * @return Map of argument names to their corresponding node IDs
+         */
+        static std::map<std::string, nodes::NodeId>
+        createArgumentNodes(std::vector<FunctionArgument> const & arguments, nodes::Model & model);
+
+        /**
+         * @brief Parse component access expression (e.g., "A.x", "pos.y")
+         * @param expression The component access expression
+         * @param argumentNodes Map of argument names to node IDs
+         * @param model The model to add nodes to
+         * @return The NodeId of the component output, or 0 if parsing failed
+         */
+        static nodes::NodeId
+        parseComponentAccess(std::string const & expression,
+                             std::map<std::string, nodes::NodeId> const & argumentNodes,
+                             nodes::Model & model);
 
         /**
          * @brief Create a mathematical operation node
@@ -148,6 +177,21 @@ namespace gladius
          * @brief Get operator precedence
          */
         static int getOperatorPrecedence(char op);
+
+        /**
+         * @brief Check if an expression is a component access (e.g., "A.x")
+         * @param expression The expression to check
+         * @return true if it's a component access expression
+         */
+        static bool isComponentAccess(std::string const & expression);
+
+        /**
+         * @brief Extract argument name and component from component access expression
+         * @param expression The component access expression (e.g., "A.x")
+         * @return Pair of argument name and component name, or empty strings if invalid
+         */
+        static std::pair<std::string, std::string>
+        parseComponentExpression(std::string const & expression);
 
         /**
          * @brief Get the correct output port name for a node
