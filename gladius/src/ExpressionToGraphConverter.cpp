@@ -8,64 +8,61 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iostream>
+#include <regex>
 #include <set>
 #include <stack>
 #include <stdexcept>
 
 namespace gladius
 {
+    // Static member definitions
+    std::map<nodes::NodeId, std::string> ExpressionToGraphConverter::s_componentMap;
+    std::map<std::string, nodes::NodeId> ExpressionToGraphConverter::s_vectorDecomposeNodes;
+
     nodes::NodeId ExpressionToGraphConverter::convertExpressionToGraph(
       std::string const & expression,
       nodes::Model & model,
       ExpressionParser & parser,
       std::vector<FunctionArgument> const & arguments)
     {
-        // First validate the expression
-        if (!parser.parseExpression(expression) || !parser.hasValidExpression())
+        // Clear any previous component mappings
+        s_componentMap.clear();
+        s_vectorDecomposeNodes.clear();
+
+        // Debug: Check expression parsing
+        bool parseResult = parser.parseExpression(expression);
+        bool hasValid = parser.hasValidExpression();
+
+        if (!parseResult)
         {
             return 0; // Invalid expression
         }
 
-        // Get variables from the expression
+        if (!hasValid)
+        {
+            return 0; // Invalid expression
+        }
+
+        // Get variables from the expression (these are in original form like "pos.x")
         std::vector<std::string> variables = parser.getVariables();
 
         // Create input nodes based on arguments or variables
         std::map<std::string, nodes::NodeId> variableNodes;
+
         if (!arguments.empty())
         {
             // Use function arguments to create properly typed input nodes
             variableNodes = createArgumentNodes(arguments, model);
 
-            // Also create nodes for any additional variables not covered by arguments
-            for (std::string const & varName : variables)
+            // Debug: Check if argument nodes were created
+            if (variableNodes.empty())
             {
-                // Check if this variable is a component access (e.g., "A.x")
-                if (isComponentAccess(varName))
-                {
-                    continue; // Component access will be handled during parsing
-                }
-
-                // Check if this variable is already covered by arguments
-                bool covered = false;
-                for (auto const & arg : arguments)
-                {
-                    if (arg.name == varName)
-                    {
-                        covered = true;
-                        break;
-                    }
-                }
-
-                if (!covered)
-                {
-                    // Create a parameter input node for uncovered variables
-                    nodes::NodeBase * node = nodes::createNodeFromName("ConstantScalar", model);
-                    if (node)
-                    {
-                        variableNodes[varName] = node->getId();
-                    }
-                }
+                return 0;
             }
+
+            // Note: Component access will be handled later in parseAndBuildGraph
+            // when it encounters expressions like "pos.x"
         }
         else
         {
@@ -74,7 +71,15 @@ namespace gladius
         }
 
         // Parse the expression and build the graph
-        return parseAndBuildGraph(expression, model, variableNodes);
+        nodes::NodeId result = parseAndBuildGraph(expression, model, variableNodes);
+
+        // Debug: Check if parseAndBuildGraph succeeded
+        if (result == 0)
+        {
+            // parseAndBuildGraph failed
+        }
+
+        return result;
     }
 
     std::map<std::string, nodes::NodeId>
@@ -205,6 +210,13 @@ namespace gladius
         if (isComponentAccess(cleanExpr))
         {
             return parseComponentAccess(cleanExpr, variableNodes, model);
+        }
+
+        // Check if it's a preprocessed component access (e.g., "pos_x" -> "pos.x")
+        if (isPreprocessedComponentAccess(cleanExpr))
+        {
+            std::string originalForm = convertPreprocessedToOriginal(cleanExpr);
+            return parseComponentAccess(originalForm, variableNodes, model);
         }
 
         // Check if it's a variable
@@ -545,10 +557,29 @@ namespace gladius
         }
         nodes::NodeBase * node = nodeOpt.value();
 
+        // Check if this is a DecomposeVector node with component information
+        auto componentIt = s_componentMap.find(nodeId);
+        if (componentIt != s_componentMap.end())
+        {
+            std::string const & component = componentIt->second;
+            if (component == "x")
+                return nodes::FieldNames::X;
+            else if (component == "y")
+                return nodes::FieldNames::Y;
+            else if (component == "z")
+                return nodes::FieldNames::Z;
+        }
+
         // Check if the node has a "Result" output port (math operations)
         if (node->findOutputPort(nodes::FieldNames::Result))
         {
             return nodes::FieldNames::Result;
+        }
+
+        // Check if the node has a "Vector" output port (ConstantVector nodes)
+        if (node->findOutputPort(nodes::FieldNames::Vector))
+        {
+            return nodes::FieldNames::Vector;
         }
 
         // Otherwise, assume it has a "Value" output port (constants, variables)
@@ -625,49 +656,107 @@ namespace gladius
             return 0; // Argument not found
         }
 
-        // Create a DecomposeVector node
-        nodes::NodeBase * decomposeNode = nodes::createNodeFromName("DecomposeVector", model);
+        // Validate that the argument node is a vector type (not scalar)
+        auto nodeOpt = model.getNode(it->second);
+        if (!nodeOpt.has_value())
+        {
+            return 0; // Node not found
+        }
+
+        nodes::NodeBase * argNode = nodeOpt.value();
+        std::string nodeTypeName = argNode->name();
+
+        // Only vector nodes (ConstantVector) should allow component access, not scalar nodes
+        // (ConstantScalar)
+        if (nodeTypeName.find("ConstantVector") == std::string::npos)
+        {
+            return 0; // Component access not allowed on non-vector types
+        }
+
+        // Check if we already have a DecomposeVector node for this vector
+        auto decomposeIt = s_vectorDecomposeNodes.find(argName);
+        nodes::NodeBase * decomposeNode = nullptr;
+
+        if (decomposeIt != s_vectorDecomposeNodes.end())
+        {
+            // Reuse existing DecomposeVector node
+            auto nodeOpt = model.getNode(decomposeIt->second);
+            if (nodeOpt.has_value())
+            {
+                decomposeNode = nodeOpt.value();
+            }
+        }
+
         if (!decomposeNode)
         {
-            return 0; // Failed to create decompose node
+            // Create a new DecomposeVector node
+            decomposeNode = nodes::createNodeFromName("DecomposeVector", model);
+            if (!decomposeNode)
+            {
+                return 0; // Failed to create decompose node
+            }
+
+            // Connect the vector argument to the decompose node
+            if (!connectNodes(model,
+                              it->second,
+                              getOutputPortName(model, it->second),
+                              decomposeNode->getId(),
+                              nodes::FieldNames::A))
+            {
+                return 0; // Failed to connect
+            }
+
+            // Store the DecomposeVector node for reuse
+            s_vectorDecomposeNodes[argName] = decomposeNode->getId();
         }
 
-        // Connect the vector argument to the decompose node
-        if (!connectNodes(model,
-                          it->second,
-                          getOutputPortName(model, it->second),
-                          decomposeNode->getId(),
-                          "Vector"))
-        {
-            return 0; // Failed to connect
-        }
+        // Create a unique identifier for this component access
+        std::string componentAccessKey = expression; // Use the full expression like "pos.x"
 
-        // Return the appropriate component output port
-        std::string outputPort;
-        if (component == "x")
-        {
-            outputPort = "X";
-        }
-        else if (component == "y")
-        {
-            outputPort = "Y";
-        }
-        else if (component == "z")
-        {
-            outputPort = "Z";
-        }
-        else
-        {
-            return 0; // Invalid component
-        }
+        // Map this DecomposeVector node to the specific component
+        // This will be used later when connecting nodes
+        s_componentMap[decomposeNode->getId()] = component;
 
+        // Return the DecomposeVector node directly
         return decomposeNode->getId();
     }
 
     bool ExpressionToGraphConverter::isComponentAccess(std::string const & expression)
     {
-        return expression.find('.') != std::string::npos && expression.find('.') != 0 &&
-               expression.find('.') != expression.length() - 1;
+        // Check if it contains a dot, but is not at start or end
+        size_t dotPos = expression.find('.');
+        if (dotPos == std::string::npos || dotPos == 0 || dotPos == expression.length() - 1)
+        {
+            return false;
+        }
+
+        // Check if the expression is ONLY a component access (variable.component)
+        // This means no operators should be present
+        std::string operatorChars = "+-*/()";
+        for (char op : operatorChars)
+        {
+            if (expression.find(op) != std::string::npos)
+            {
+                return false; // Contains operators, so it's not a simple component access
+            }
+        }
+
+        // Check if there's exactly one dot
+        if (expression.find('.', dotPos + 1) != std::string::npos)
+        {
+            return false; // Multiple dots
+        }
+
+        // Check if the part before the dot is a valid identifier
+        std::string varName = expression.substr(0, dotPos);
+        if (varName.empty() || !std::isalpha(varName[0]))
+        {
+            return false;
+        }
+
+        // Check if the part after the dot is a valid component (x, y, or z)
+        std::string component = expression.substr(dotPos + 1);
+        return component == "x" || component == "y" || component == "z";
     }
 
     std::pair<std::string, std::string>
@@ -689,6 +778,63 @@ namespace gladius
         }
 
         return {argName, component};
+    }
+
+    bool ExpressionToGraphConverter::isPreprocessedComponentAccess(std::string const & expression)
+    {
+        // Check if it matches pattern: identifier_[xyz]
+        std::regex preprocessedRegex(R"([a-zA-Z][a-zA-Z0-9_]*_[xyz])");
+        return std::regex_match(expression, preprocessedRegex);
+    }
+
+    std::string
+    ExpressionToGraphConverter::convertPreprocessedToOriginal(std::string const & expression)
+    {
+        // Convert pos_x -> pos.x
+        size_t underscorePos = expression.rfind('_');
+        if (underscorePos != std::string::npos && underscorePos > 0 &&
+            underscorePos < expression.length() - 1)
+        {
+            char component = expression[underscorePos + 1];
+            if (component == 'x' || component == 'y' || component == 'z')
+            {
+                std::string argName = expression.substr(0, underscorePos);
+                return argName + "." + component;
+            }
+        }
+        return expression; // Return unchanged if not valid preprocessed form
+    }
+
+    nodes::NodeBase *
+    ExpressionToGraphConverter::createComponentExtractorNode(std::string const & component,
+                                                             nodes::Model & model)
+    {
+        // Create a simple pass-through node using multiplication by 1.0
+        // This effectively creates a node that takes one input and outputs the same value
+        nodes::NodeBase * multiplyNode = nodes::createNodeFromName("Multiplication", model);
+        if (!multiplyNode)
+        {
+            return nullptr;
+        }
+
+        // Create a constant node with value 1.0 for the second input
+        nodes::NodeId constantNodeId = createConstantNode(1.0, model);
+        if (constantNodeId == 0)
+        {
+            return nullptr;
+        }
+
+        // Connect the constant 1.0 to the second input of the multiplication node
+        if (!connectNodes(model,
+                          constantNodeId,
+                          nodes::FieldNames::Value,
+                          multiplyNode->getId(),
+                          nodes::FieldNames::B))
+        {
+            return nullptr;
+        }
+
+        return multiplyNode;
     }
 
 } // namespace gladius

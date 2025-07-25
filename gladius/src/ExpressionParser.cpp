@@ -104,16 +104,32 @@ namespace gladius
         {
             std::string result = expression;
 
-            // Replace component access notation (var.x, var.y, var.z) with valid variable names
-            // Use regex to find patterns like "identifier.x", "identifier.y", "identifier.z"
-            std::regex componentRegex(R"(([a-zA-Z][a-zA-Z0-9_]*)\.([xyz]))");
+            // First, check for any dot notation patterns
+            std::regex anyDotRegex(R"(([a-zA-Z][a-zA-Z0-9_]*)\.([a-zA-Z0-9_]+))");
+            std::smatch match;
+            std::string::const_iterator searchStart = expression.cbegin();
 
-            // Replace all matches with underscore notation
+            while (std::regex_search(searchStart, expression.cend(), match, anyDotRegex))
+            {
+                std::string component = match[2].str();
+
+                // Only accept single character components x, y, z
+                if (component.length() != 1 ||
+                    (component != "x" && component != "y" && component != "z"))
+                {
+                    // Invalid component - return original expression to let muParser fail
+                    return expression;
+                }
+
+                searchStart = match.suffix().first;
+            }
+
+            // Now replace valid component access notation with underscore notation
+            std::regex componentRegex(R"(([a-zA-Z][a-zA-Z0-9_]*)\.([xyz]))");
             result = std::regex_replace(result, componentRegex, "$1_$2");
 
             return result;
         }
-
         std::vector<std::string> extractVariablesFromOriginal(std::string const & expression) const
         {
             std::vector<std::string> variables;
@@ -151,19 +167,30 @@ namespace gladius
                 {
                     // Check if this variable is part of a component access
                     bool isPartOfComponentAccess = false;
-                    size_t varPos = match.position(0);
+                    size_t absolutePos =
+                      std::distance(expression.cbegin(), searchStart) + match.position(0);
 
                     // Check if this variable is followed by ".x", ".y", or ".z"
-                    if (varPos + var.length() < expression.length() &&
-                        expression[varPos + var.length()] == '.')
+                    if (absolutePos + var.length() < expression.length() &&
+                        expression[absolutePos + var.length()] == '.')
                     {
-                        if (varPos + var.length() + 1 < expression.length())
+                        if (absolutePos + var.length() + 1 < expression.length())
                         {
-                            char component = expression[varPos + var.length() + 1];
+                            char component = expression[absolutePos + var.length() + 1];
                             if (component == 'x' || component == 'y' || component == 'z')
                             {
                                 isPartOfComponentAccess = true;
                             }
+                        }
+                    }
+
+                    // Also check if this variable is a component character (x,y,z) preceded by a
+                    // dot
+                    if ((var == "x" || var == "y" || var == "z") && var.length() == 1)
+                    {
+                        if (absolutePos > 0 && expression[absolutePos - 1] == '.')
+                        {
+                            isPartOfComponentAccess = true;
                         }
                     }
 

@@ -111,4 +111,108 @@ namespace gladius::tests
         EXPECT_DOUBLE_EQ(result, 11.0); // 3 + 4 * 2 = 11
     }
 
+    // Vector Component Access Tests
+    TEST_F(ExpressionParserTest, ParseExpression_VectorComponentAccess_ValidatesCorrectly)
+    {
+        // Test that vector component access expressions are properly preprocessed and validated
+        EXPECT_TRUE(m_parser->parseExpression("pos.x"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        EXPECT_TRUE(m_parser->parseExpression("pos.y + vel.z"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        EXPECT_TRUE(m_parser->parseExpression("sqrt(normal.x * normal.x + normal.y * normal.y)"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+    }
+
+    TEST_F(ExpressionParserTest, ParseExpression_InvalidVectorComponent_FailsValidation)
+    {
+        // Test that invalid vector components are rejected
+        EXPECT_FALSE(m_parser->parseExpression("pos.w")); // Invalid component
+        EXPECT_FALSE(m_parser->hasValidExpression());
+
+        EXPECT_FALSE(m_parser->parseExpression("pos.xy")); // Invalid component
+        EXPECT_FALSE(m_parser->hasValidExpression());
+    }
+
+    TEST_F(ExpressionParserTest, GetVariables_VectorComponentAccess_ReturnsOriginalSyntax)
+    {
+        // Test that getVariables returns the original dot notation
+        m_parser->parseExpression("pos.x + vel.y");
+        auto variables = m_parser->getVariables();
+
+        // Should contain the original component access syntax
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "pos.x"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "vel.y"), variables.end());
+    }
+
+    TEST_F(ExpressionParserTest, GetVariables_MixedVariables_ReturnsCorrectList)
+    {
+        // Test mixed scalar and vector component variables
+        m_parser->parseExpression("scale * pos.x + offset");
+        auto variables = m_parser->getVariables();
+
+        // Should contain both scalar and component access variables
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "scale"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "pos.x"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "offset"), variables.end());
+    }
+
+    TEST_F(ExpressionParserTest, ParseExpression_ComplexVectorExpression_ValidatesCorrectly)
+    {
+        // Test complex expression with multiple vector components
+        std::string expression = "sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z) - radius";
+        EXPECT_TRUE(m_parser->parseExpression(expression));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        auto variables = m_parser->getVariables();
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "pos.x"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "pos.y"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "pos.z"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "radius"), variables.end());
+    }
+
+    TEST_F(ExpressionParserTest, ParseExpression_VectorComponentsInFunctions_ValidatesCorrectly)
+    {
+        // Test vector components used as function arguments
+        EXPECT_TRUE(m_parser->parseExpression("sin(angle.x) + cos(angle.y)"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        EXPECT_TRUE(m_parser->parseExpression("sqrt(base.x * base.x + base.y * base.y)"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        EXPECT_TRUE(m_parser->parseExpression("abs(a.x) + exp(a.y)"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+    }
+
+    TEST_F(ExpressionParserTest, ParseExpression_NestedVectorExpressions_ValidatesCorrectly)
+    {
+        // Test nested expressions with vector components
+        std::string expression = "(a.x + b.x) * (a.y - b.y) / (a.z * b.z)";
+        EXPECT_TRUE(m_parser->parseExpression(expression));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        auto variables = m_parser->getVariables();
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "a.x"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "b.x"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "a.y"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "b.y"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "a.z"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "b.z"), variables.end());
+    }
+
+    TEST_F(ExpressionParserTest,
+           ParseExpression_VariableNotPartOfComponentAccess_IncludedInVariables)
+    {
+        // Test that standalone variables are included even when component access is present
+        m_parser->parseExpression("scale + pos.x");
+        auto variables = m_parser->getVariables();
+
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "scale"), variables.end());
+        EXPECT_NE(std::find(variables.begin(), variables.end(), "pos.x"), variables.end());
+
+        // "pos" alone should not be in the variables list since it's part of "pos.x"
+        EXPECT_EQ(std::find(variables.begin(), variables.end(), "pos"), variables.end());
+    }
+
 } // namespace gladius::tests

@@ -81,6 +81,25 @@ namespace gladius
                              nodes::Model & model);
 
         /**
+         * @brief Create a component extractor node (pass-through for vector components)
+         * @param component The component name ("x", "y", or "z")
+         * @param model The model to add the node to
+         * @return The created node, or nullptr if creation failed
+         */
+        static nodes::NodeBase * createComponentExtractorNode(std::string const & component,
+                                                              nodes::Model & model);
+
+        /**
+         * @brief Track DecomposeVector node component mappings
+         */
+        static std::map<nodes::NodeId, std::string> s_componentMap;
+
+        /**
+         * @brief Track vector nodes to reuse DecomposeVector nodes
+         */
+        static std::map<std::string, nodes::NodeId> s_vectorDecomposeNodes;
+
+        /**
          * @brief Create a mathematical operation node
          * @param operation The operation name (e.g., "Addition", "Multiplication")
          * @param model The model to add the node to
@@ -197,6 +216,20 @@ namespace gladius
          * @brief Get the correct output port name for a node
          */
         static std::string getOutputPortName(nodes::Model & model, nodes::NodeId nodeId);
+
+        /**
+         * @brief Check if an expression is a preprocessed component access (e.g., "pos_x")
+         * @param expression The expression to check
+         * @return true if it's a preprocessed component access expression
+         */
+        static bool isPreprocessedComponentAccess(std::string const & expression);
+
+        /**
+         * @brief Convert preprocessed component access back to original form
+         * @param expression The preprocessed expression (e.g., "pos_x")
+         * @return Original form (e.g., "pos.x"), or unchanged if not valid
+         */
+        static std::string convertPreprocessedToOriginal(std::string const & expression);
     };
 
 } // namespace gladius
