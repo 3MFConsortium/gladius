@@ -127,9 +127,20 @@ namespace gladius::ui
         void renderFunctionNameInput();
 
         /**
-         * @brief Render the expression input field
+         * @brief Render the expression input field with autocomplete
          */
         void renderExpressionInput();
+
+        /**
+         * @brief Show autocomplete suggestions based on current input
+         */
+        void renderAutocompleteSuggestions();
+
+        /**
+         * @brief Get autocomplete suggestions for the current cursor position
+         * @return Vector of suggestion strings
+         */
+        std::vector<std::string> getAutocompleteSuggestions() const;
 
         /**
          * @brief Render the validation status and error messages
@@ -171,7 +182,12 @@ namespace gladius::ui
 
         // UI state for argument editing
         int m_selectedArgumentType = 0; // 0 = Scalar, 1 = Vector
-        int m_argumentToRemove = -1;    // Disable copy and move
+        int m_argumentToRemove = -1;
+
+        // Autocomplete state
+        bool m_showAutocomplete = false;
+        std::vector<std::string> m_autocompleteSuggestions;
+        int m_selectedSuggestion = -1; // Disable copy and move
         ExpressionDialog(ExpressionDialog const &) = delete;
         ExpressionDialog & operator=(ExpressionDialog const &) = delete;
         ExpressionDialog(ExpressionDialog &&) = delete;

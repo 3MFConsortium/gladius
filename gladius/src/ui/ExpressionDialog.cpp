@@ -289,18 +289,210 @@ namespace gladius::ui
         ImGui::Text("Enter Mathematical Expression:");
         ImGui::PushItemWidth(-1); // Full width
 
+        // Get cursor position before input
+        bool inputActive = ImGui::IsItemActive();
+
         if (ImGui::InputTextMultiline(
               "##expression", m_expressionBuffer, EXPRESSION_BUFFER_SIZE, ImVec2(-1, 80)))
         {
             m_expression = m_expressionBuffer;
             m_needsValidation = true;
+
+            // Update autocomplete suggestions when text changes
+            m_autocompleteSuggestions = getAutocompleteSuggestions();
+            m_showAutocomplete = !m_autocompleteSuggestions.empty();
+            m_selectedSuggestion = -1;
+        }
+
+        // Handle keyboard navigation for autocomplete
+        if (ImGui::IsItemActive() && m_showAutocomplete)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+            {
+                m_selectedSuggestion =
+                  (m_selectedSuggestion + 1) % m_autocompleteSuggestions.size();
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+            {
+                m_selectedSuggestion = m_selectedSuggestion > 0
+                                         ? m_selectedSuggestion - 1
+                                         : m_autocompleteSuggestions.size() - 1;
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Tab) || ImGui::IsKeyPressed(ImGuiKey_Enter))
+            {
+                if (m_selectedSuggestion >= 0 &&
+                    m_selectedSuggestion < m_autocompleteSuggestions.size())
+                {
+                    // Insert the selected suggestion
+                    std::string suggestion = m_autocompleteSuggestions[m_selectedSuggestion];
+                    m_expression += suggestion;
+                    strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
+                    m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+                    m_needsValidation = true;
+                    m_showAutocomplete = false;
+                }
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+            {
+                m_showAutocomplete = false;
+            }
         }
 
         ImGui::PopItemWidth();
 
-        // Show some example expressions
+        // Show autocomplete popup
+        if (m_showAutocomplete)
+        {
+            renderAutocompleteSuggestions();
+        }
+
+        // Show some example expressions with syntax highlighting hints
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
                            "Examples: x + y, sin(x) * cos(y), sqrt(x*x + y*y)");
+        ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.0f),
+                           "Vector components: pos.x, pos.y, pos.z");
+        if (!m_arguments.empty())
+        {
+            ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.6f, 1.0f), "Available arguments:");
+            ImGui::SameLine();
+            for (size_t i = 0; i < m_arguments.size(); ++i)
+            {
+                if (i > 0)
+                    ImGui::SameLine();
+                ImVec4 color = m_arguments[i].type == ArgumentType::Vector
+                                 ? ImVec4(0.6f, 0.9f, 0.6f, 1.0f)
+                                 : ImVec4(0.9f, 0.6f, 0.9f, 1.0f);
+                ImGui::TextColored(color, "%s", m_arguments[i].name.c_str());
+                if (i < m_arguments.size() - 1)
+                    ImGui::SameLine();
+            }
+        }
+    }
+
+    void ExpressionDialog::renderAutocompleteSuggestions()
+    {
+        if (m_autocompleteSuggestions.empty())
+        {
+            return;
+        }
+
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
+        ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 0));
+
+        if (ImGui::Begin("##autocomplete",
+                         nullptr,
+                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_Tooltip))
+        {
+            for (int i = 0; i < m_autocompleteSuggestions.size(); ++i)
+            {
+                bool isSelected = (i == m_selectedSuggestion);
+
+                if (isSelected)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+                }
+
+                if (ImGui::Selectable(m_autocompleteSuggestions[i].c_str(), isSelected))
+                {
+                    // Insert the selected suggestion
+                    m_expression += m_autocompleteSuggestions[i];
+                    strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
+                    m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+                    m_needsValidation = true;
+                    m_showAutocomplete = false;
+                }
+
+                if (isSelected)
+                {
+                    ImGui::PopStyleColor();
+                }
+            }
+        }
+        ImGui::End();
+    }
+
+    std::vector<std::string> ExpressionDialog::getAutocompleteSuggestions() const
+    {
+        std::vector<std::string> suggestions;
+
+        if (m_expression.empty())
+        {
+            return suggestions;
+        }
+
+        // Get the last word/token from the expression
+        std::string lastToken;
+        for (int i = m_expression.length() - 1; i >= 0; --i)
+        {
+            char c = m_expression[i];
+            if (std::isalnum(c) || c == '_')
+            {
+                lastToken = c + lastToken;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (lastToken.empty())
+        {
+            return suggestions;
+        }
+
+        // Function suggestions
+        std::vector<std::string> functions = {
+          "sin(",  "cos(",   "tan(",   "asin(",  "acos(", "atan(", "atan2(", "sinh(", "cosh(",
+          "tanh(", "exp(",   "log(",   "log10(", "log2(", "sqrt(", "abs(",   "sign(", "floor(",
+          "ceil(", "round(", "fract(", "pow(",   "min(",  "max(",  "fmod("};
+
+        for (const auto & func : functions)
+        {
+            std::string funcName = func.substr(0, func.find('('));
+            if (funcName.find(lastToken) == 0) // starts with lastToken
+            {
+                suggestions.push_back(func.substr(lastToken.length()));
+            }
+        }
+
+        // Argument suggestions (if we have vector arguments, suggest component access)
+        for (const auto & arg : m_arguments)
+        {
+            if (arg.type == ArgumentType::Vector)
+            {
+                if (arg.name.find(lastToken) == 0)
+                {
+                    suggestions.push_back(".x");
+                    suggestions.push_back(".y");
+                    suggestions.push_back(".z");
+                }
+                else if ((arg.name + ".").find(lastToken) == 0)
+                {
+                    std::string remaining = (arg.name + ".").substr(lastToken.length());
+                    if (remaining == "x" || remaining == "y" || remaining == "z")
+                    {
+                        suggestions.push_back(remaining);
+                    }
+                }
+            }
+            else if (arg.name.find(lastToken) == 0) // Scalar argument
+            {
+                suggestions.push_back(arg.name.substr(lastToken.length()));
+            }
+        }
+
+        // Common mathematical constants
+        std::vector<std::string> constants = {"pi", "e"};
+        for (const auto & constant : constants)
+        {
+            if (constant.find(lastToken) == 0)
+            {
+                suggestions.push_back(constant.substr(lastToken.length()));
+            }
+        }
+
+        return suggestions;
     }
 
     void ExpressionDialog::renderValidationStatus()
