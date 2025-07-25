@@ -5,6 +5,7 @@
 #include "nodes/Model.h"
 #include "nodes/NodeBase.h"
 #include "nodes/nodesfwd.h"
+#include "nodes/types.h"
 
 #include <algorithm>
 #include <cctype>
@@ -19,6 +20,10 @@ namespace gladius
     // Static member definitions
     std::map<nodes::NodeId, std::string> ExpressionToGraphConverter::s_componentMap;
     std::map<std::string, nodes::NodeId> ExpressionToGraphConverter::s_vectorDecomposeNodes;
+    std::map<std::string, ArgumentType> ExpressionToGraphConverter::s_beginNodeArguments;
+
+    // Track the current variable context for Begin node port resolution
+    thread_local std::string ExpressionToGraphConverter::s_currentVariableContext;
 
     nodes::NodeId ExpressionToGraphConverter::convertExpressionToGraph(
       std::string const & expression,
@@ -29,6 +34,7 @@ namespace gladius
         // Clear any previous component mappings
         s_componentMap.clear();
         s_vectorDecomposeNodes.clear();
+        s_beginNodeArguments.clear();
 
         // Debug: Check expression parsing
         bool parseResult = parser.parseExpression(expression);
@@ -223,6 +229,8 @@ namespace gladius
         auto varIt = variableNodes.find(cleanExpr);
         if (varIt != variableNodes.end())
         {
+            // Set the current variable context for Begin node port resolution
+            s_currentVariableContext = cleanExpr;
             return varIt->second;
         }
 
@@ -557,6 +565,19 @@ namespace gladius
         }
         nodes::NodeBase * node = nodeOpt.value();
 
+        // Check if this is a Begin node - if so, use the current variable context
+        if (dynamic_cast<nodes::Begin *>(node) != nullptr)
+        {
+            if (!s_currentVariableContext.empty())
+            {
+                // Clear the context after use
+                std::string context = s_currentVariableContext;
+                s_currentVariableContext.clear();
+                return context; // Return the argument name as the port name
+            }
+            return nodes::FieldNames::Value; // Fallback
+        }
+
         // Check if this is a DecomposeVector node with component information
         auto componentIt = s_componentMap.find(nodeId);
         if (componentIt != s_componentMap.end())
@@ -612,26 +633,40 @@ namespace gladius
     {
         std::map<std::string, nodes::NodeId> argumentNodes;
 
+        // Ensure Begin/End nodes exist for function arguments
+        if (!model.getBeginNode())
+        {
+            model.createBeginEnd();
+        }
+
+        nodes::Begin * beginNode = model.getBeginNode();
+
         for (auto const & arg : arguments)
         {
-            nodes::NodeBase * node = nullptr;
-
             if (arg.type == ArgumentType::Scalar)
             {
-                // Create a scalar input node
-                node = nodes::createNodeFromName("ConstantScalar", model);
+                // Add scalar argument to Begin node
+                nodes::VariantParameter parameter(float{0.0f});
+                model.addArgument(arg.name, parameter);
             }
             else if (arg.type == ArgumentType::Vector)
             {
-                // Create a vector input node
-                node = nodes::createNodeFromName("ConstantVector", model);
+                // Add vector argument to Begin node
+                nodes::VariantParameter parameter(nodes::float3{0.0f, 0.0f, 0.0f});
+                model.addArgument(arg.name, parameter);
             }
 
-            if (node)
-            {
-                argumentNodes[arg.name] = node->getId();
-                node->setDisplayName(arg.name);
-            }
+            // Store the Begin node ID as the source for this argument
+            // and track the argument type for port resolution
+            argumentNodes[arg.name] = beginNode->getId();
+            s_beginNodeArguments[arg.name] = arg.type; // Store argument type
+        }
+
+        // Register outputs and update node IDs after adding all arguments
+        if (!arguments.empty())
+        {
+            model.registerOutputs(*beginNode);
+            beginNode->updateNodeIds();
         }
 
         return argumentNodes;
@@ -666,11 +701,30 @@ namespace gladius
         nodes::NodeBase * argNode = nodeOpt.value();
         std::string nodeTypeName = argNode->name();
 
-        // Only vector nodes (ConstantVector) should allow component access, not scalar nodes
-        // (ConstantScalar)
-        if (nodeTypeName.find("ConstantVector") == std::string::npos)
+        // Allow component access on vector nodes (ConstantVector) or Begin nodes with vector
+        // arguments
+        bool isVector = (nodeTypeName.find("ConstantVector") != std::string::npos);
+        bool isBeginNode =
+          (nodeTypeName == "Input" || dynamic_cast<nodes::Begin *>(argNode) != nullptr);
+
+        if (!isVector && !isBeginNode)
         {
             return 0; // Component access not allowed on non-vector types
+        }
+
+        // For Begin nodes, we need to verify the argument is actually a vector type
+        if (isBeginNode)
+        {
+            // Check if this argument was registered as a vector argument
+            auto argIt = s_beginNodeArguments.find(argName);
+            if (argIt == s_beginNodeArguments.end())
+            {
+                return 0; // Argument not found in Begin node arguments
+            }
+            if (argIt->second != ArgumentType::Vector)
+            {
+                return 0; // Argument is not a vector type, component access not allowed
+            }
         }
 
         // Check if we already have a DecomposeVector node for this vector
@@ -697,6 +751,12 @@ namespace gladius
             }
 
             // Connect the vector argument to the decompose node
+            // For Begin nodes, set the context so getOutputPortName knows which argument to use
+            if (isBeginNode)
+            {
+                s_currentVariableContext = argName;
+            }
+
             if (!connectNodes(model,
                               it->second,
                               getOutputPortName(model, it->second),

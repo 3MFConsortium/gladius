@@ -100,6 +100,17 @@ namespace gladius
         static std::map<std::string, nodes::NodeId> s_vectorDecomposeNodes;
 
         /**
+         * @brief Track Begin node argument output ports and their types
+         * Maps argument name to ArgumentType for Begin node outputs
+         */
+        static std::map<std::string, ArgumentType> s_beginNodeArguments;
+
+        /**
+         * @brief Track current variable context for Begin node port resolution
+         */
+        static thread_local std::string s_currentVariableContext;
+
+        /**
          * @brief Create a mathematical operation node
          * @param operation The operation name (e.g., "Addition", "Multiplication")
          * @param model The model to add the node to
