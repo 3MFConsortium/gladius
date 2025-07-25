@@ -4,6 +4,7 @@
 
 #include "imgui.h"
 #include <algorithm>
+#include <iostream>
 #include <fmt/format.h>
 
 namespace gladius::ui
@@ -137,6 +138,8 @@ namespace gladius::ui
         }
 
         m_isValid = m_parser->parseExpression(m_expression);
+        std::cout << "Expression validation - expression: '" << m_expression << "', isValid: " << m_isValid 
+                  << ", hasValidExpression: " << m_parser->hasValidExpression() << std::endl;
     }
 
     void ExpressionDialog::renderArgumentsSection()
@@ -578,10 +581,23 @@ namespace gladius::ui
 
         if (ImGui::Button("Create Function", ImVec2(120, 0)))
         {
+            std::cout << "Create Function button clicked!" << std::endl;
+            std::cout << "canApply: " << canApply << std::endl;
+            std::cout << "m_isValid: " << m_isValid << std::endl;
+            std::cout << "hasValidExpression: " << m_parser->hasValidExpression() << std::endl;
+            std::cout << "functionName empty: " << m_functionName.empty() << std::endl;
+            std::cout << "m_onApplyCallback set: " << (m_onApplyCallback ? "true" : "false") << std::endl;
+            
             if (m_onApplyCallback && canApply)
             {
+                std::cout << "Calling apply callback with: " << m_functionName << ", " << m_expression << std::endl;
                 m_onApplyCallback(m_functionName, m_expression, m_arguments);
                 hide(); // Close dialog after applying
+            }
+            else
+            {
+                std::cout << "Apply callback not called - callback: " << (m_onApplyCallback ? "set" : "not set") 
+                         << ", canApply: " << canApply << std::endl;
             }
         }
 
