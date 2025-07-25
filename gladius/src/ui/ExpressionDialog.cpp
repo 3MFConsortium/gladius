@@ -2,8 +2,8 @@
 #include "../ExpressionParser.h"
 
 #include "imgui.h"
-#include <fmt/format.h>
 #include <algorithm>
+#include <fmt/format.h>
 
 namespace gladius::ui
 {
@@ -37,11 +37,13 @@ namespace gladius::ui
             return;
         }
 
-        ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
-        
-        if (ImGui::Begin("Mathematical Expression Editor", &m_visible, 
-                        ImGuiWindowFlags_NoCollapse))
+        ImGui::SetNextWindowSize(ImVec2(500, 450), ImGuiCond_FirstUseEver);
+
+        if (ImGui::Begin(
+              "Mathematical Expression Function Creator", &m_visible, ImGuiWindowFlags_NoCollapse))
         {
+            renderFunctionNameInput();
+            ImGui::Separator();
             renderExpressionInput();
             ImGui::Separator();
             renderValidationStatus();
@@ -59,19 +61,34 @@ namespace gladius::ui
         }
     }
 
-    void ExpressionDialog::setExpression(std::string const& expression)
+    void ExpressionDialog::setFunctionName(std::string const & functionName)
+    {
+        m_functionName = functionName;
+
+        // Copy to ImGui buffer, ensuring null termination
+        size_t copySize = std::min(functionName.length(), FUNCTION_NAME_BUFFER_SIZE - 1);
+        std::copy(functionName.begin(), functionName.begin() + copySize, m_functionNameBuffer);
+        m_functionNameBuffer[copySize] = '\0';
+    }
+
+    std::string const & ExpressionDialog::getFunctionName() const
+    {
+        return m_functionName;
+    }
+
+    void ExpressionDialog::setExpression(std::string const & expression)
     {
         m_expression = expression;
-        
+
         // Copy to ImGui buffer, ensuring null termination
         size_t copySize = std::min(expression.length(), EXPRESSION_BUFFER_SIZE - 1);
         std::copy(expression.begin(), expression.begin() + copySize, m_expressionBuffer);
         m_expressionBuffer[copySize] = '\0';
-        
+
         m_needsValidation = true;
     }
 
-    std::string const& ExpressionDialog::getExpression() const
+    std::string const & ExpressionDialog::getExpression() const
     {
         return m_expression;
     }
@@ -105,23 +122,41 @@ namespace gladius::ui
         m_isValid = m_parser->parseExpression(m_expression);
     }
 
+    void ExpressionDialog::renderFunctionNameInput()
+    {
+        ImGui::Text("Function Name:");
+        ImGui::PushItemWidth(-1); // Full width
+
+        if (ImGui::InputText("##functionName", m_functionNameBuffer, FUNCTION_NAME_BUFFER_SIZE))
+        {
+            m_functionName = m_functionNameBuffer;
+        }
+
+        ImGui::PopItemWidth();
+
+        // Show naming guidelines
+        ImGui::TextColored(
+          ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+          "Name your function descriptively (e.g., 'Distance_To_Center', 'Wave_Pattern')");
+    }
+
     void ExpressionDialog::renderExpressionInput()
     {
         ImGui::Text("Enter Mathematical Expression:");
         ImGui::PushItemWidth(-1); // Full width
-        
-        if (ImGui::InputTextMultiline("##expression", m_expressionBuffer, 
-                                     EXPRESSION_BUFFER_SIZE, ImVec2(-1, 80)))
+
+        if (ImGui::InputTextMultiline(
+              "##expression", m_expressionBuffer, EXPRESSION_BUFFER_SIZE, ImVec2(-1, 80)))
         {
             m_expression = m_expressionBuffer;
             m_needsValidation = true;
         }
-        
+
         ImGui::PopItemWidth();
 
         // Show some example expressions
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 
-                          "Examples: x + y, sin(x) * cos(y), sqrt(x*x + y*y)");
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                           "Examples: x + y, sin(x) * cos(y), sqrt(x*x + y*y)");
     }
 
     void ExpressionDialog::renderValidationStatus()
@@ -137,7 +172,7 @@ namespace gladius::ui
         if (m_isValid)
         {
             ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f), "✓ Expression is valid");
-            
+
             // Show the parsed expression
             if (m_parser->hasValidExpression())
             {
@@ -151,7 +186,7 @@ namespace gladius::ui
         else
         {
             ImGui::TextColored(ImVec4(0.8f, 0.0f, 0.0f, 1.0f), "✗ Invalid expression");
-            
+
             std::string error = m_parser->getLastError();
             if (!error.empty())
             {
@@ -168,7 +203,7 @@ namespace gladius::ui
         }
 
         std::vector<std::string> variables = m_parser->getVariables();
-        
+
         if (variables.empty())
         {
             ImGui::Text("No variables found (expression uses only constants)");
@@ -177,80 +212,86 @@ namespace gladius::ui
 
         ImGui::Text("Variables found:");
         ImGui::Indent();
-        
-        for (std::string const& var : variables)
+
+        for (std::string const & var : variables)
         {
             ImGui::BulletText("%s", var.c_str());
         }
-        
+
         ImGui::Unindent();
-        
+
         if (variables.size() > 3)
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.0f, 1.0f), 
-                              "Note: Many variables detected. Consider using fewer for better performance.");
+            ImGui::TextColored(
+              ImVec4(0.8f, 0.8f, 0.0f, 1.0f),
+              "Note: Many variables detected. Consider using fewer for better performance.");
         }
     }
 
     void ExpressionDialog::renderButtons()
     {
         ImGui::Spacing();
-        
-        // Apply button - only enabled if expression is valid
-        bool canApply = m_isValid && m_parser->hasValidExpression();
-        
+
+        // Apply button - only enabled if expression is valid and function name is not empty
+        bool canApply = m_isValid && m_parser->hasValidExpression() && !m_functionName.empty();
+
         if (!canApply)
         {
             ImGui::BeginDisabled();
         }
-        
-        if (ImGui::Button("Apply", ImVec2(100, 0)))
+
+        if (ImGui::Button("Create Function", ImVec2(120, 0)))
         {
             if (m_onApplyCallback && canApply)
             {
-                m_onApplyCallback(m_expression);
+                m_onApplyCallback(m_functionName, m_expression);
                 hide(); // Close dialog after applying
             }
         }
-        
+
         if (!canApply)
         {
             ImGui::EndDisabled();
         }
-        
+
         ImGui::SameLine();
-        
+
         // Preview button - enabled if expression is valid
-        if (!canApply)
+        bool canPreview = m_isValid && m_parser->hasValidExpression();
+
+        if (!canPreview)
         {
             ImGui::BeginDisabled();
         }
-        
+
         if (ImGui::Button("Preview", ImVec2(100, 0)))
         {
-            if (m_onPreviewCallback && canApply)
+            if (m_onPreviewCallback && canPreview)
             {
                 m_onPreviewCallback(m_expression);
             }
         }
-        
-        if (!canApply)
+
+        if (!canPreview)
         {
             ImGui::EndDisabled();
         }
-        
+
         ImGui::SameLine();
-        
+
         // Cancel button - always enabled
         if (ImGui::Button("Cancel", ImVec2(100, 0)))
         {
             hide();
         }
-        
+
         // Help text
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 
-                          "Supported functions: sin, cos, tan, exp, log, sqrt, abs, etc.");
+        ImGui::TextColored(
+          ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+          "Supported functions: sin, cos, tan, exp, log, sqrt, abs, pow, min, max, etc.");
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                           "Variables (x, y, z) will become input nodes in the function graph.");
     }
 
 } // namespace gladius::ui

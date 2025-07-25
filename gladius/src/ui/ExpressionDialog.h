@@ -1,8 +1,8 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
-#include <functional>
 
 namespace gladius
 {
@@ -13,15 +13,17 @@ namespace gladius::ui
 {
     /**
      * @brief Dialog for entering and validating mathematical expressions
-     * 
+     *
      * Allows users to input mathematical expressions, validates them in real-time,
      * and provides feedback about syntax errors or variable extraction.
+     * Creates new functions with user-specified names.
      */
     class ExpressionDialog
     {
-    public:
-        using OnApplyCallback = std::function<void(std::string const& expression)>;
-        using OnPreviewCallback = std::function<void(std::string const& expression)>;
+      public:
+        using OnApplyCallback =
+          std::function<void(std::string const & functionName, std::string const & expression)>;
+        using OnPreviewCallback = std::function<void(std::string const & expression)>;
 
         /**
          * @brief Construct a new ExpressionDialog
@@ -51,26 +53,38 @@ namespace gladius::ui
 
         /**
          * @brief Render the dialog
-         * 
+         *
          * This should be called every frame if the dialog is visible.
          */
         void render();
 
         /**
+         * @brief Set the initial function name
+         * @param functionName The function name to display in the dialog
+         */
+        void setFunctionName(std::string const & functionName);
+
+        /**
+         * @brief Get the current function name
+         * @return The current function name string
+         */
+        std::string const & getFunctionName() const;
+
+        /**
          * @brief Set the initial expression text
          * @param expression The expression to display in the dialog
          */
-        void setExpression(std::string const& expression);
+        void setExpression(std::string const & expression);
 
         /**
          * @brief Get the current expression text
          * @return The current expression string
          */
-        std::string const& getExpression() const;
+        std::string const & getExpression() const;
 
         /**
          * @brief Set callback for when Apply button is clicked
-         * @param callback Function to call with the validated expression
+         * @param callback Function to call with the function name and validated expression
          */
         void setOnApplyCallback(OnApplyCallback callback);
 
@@ -80,11 +94,16 @@ namespace gladius::ui
          */
         void setOnPreviewCallback(OnPreviewCallback callback);
 
-    private:
+      private:
         /**
          * @brief Validate the current expression and update UI state
          */
         void validateExpression();
+
+        /**
+         * @brief Render the function name input field
+         */
+        void renderFunctionNameInput();
 
         /**
          * @brief Render the expression input field
@@ -108,24 +127,27 @@ namespace gladius::ui
 
         std::unique_ptr<ExpressionParser> m_parser;
         bool m_visible = false;
+        std::string m_functionName;
         std::string m_expression;
         std::string m_lastValidatedExpression;
         bool m_isValid = false;
         bool m_needsValidation = true;
-        
+
         // Callbacks
         OnApplyCallback m_onApplyCallback;
         OnPreviewCallback m_onPreviewCallback;
-        
-        // Input buffer for ImGui
+
+        // Input buffers for ImGui
+        static constexpr size_t FUNCTION_NAME_BUFFER_SIZE = 256;
         static constexpr size_t EXPRESSION_BUFFER_SIZE = 1024;
+        char m_functionNameBuffer[FUNCTION_NAME_BUFFER_SIZE] = {0};
         char m_expressionBuffer[EXPRESSION_BUFFER_SIZE] = {0};
-        
+
         // Disable copy and move
-        ExpressionDialog(ExpressionDialog const&) = delete;
-        ExpressionDialog& operator=(ExpressionDialog const&) = delete;
-        ExpressionDialog(ExpressionDialog&&) = delete;
-        ExpressionDialog& operator=(ExpressionDialog&&) = delete;
+        ExpressionDialog(ExpressionDialog const &) = delete;
+        ExpressionDialog & operator=(ExpressionDialog const &) = delete;
+        ExpressionDialog(ExpressionDialog &&) = delete;
+        ExpressionDialog & operator=(ExpressionDialog &&) = delete;
     };
 
 } // namespace gladius::ui

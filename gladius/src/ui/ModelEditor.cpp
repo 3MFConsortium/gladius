@@ -11,8 +11,8 @@
 
 // #include "../ExpressionToGraphConverter.h"
 // #include "../ExpressionParser.h"
-#include "../ExpressionToGraphConverter.h"
 #include "../ExpressionParser.h"
+#include "../ExpressionToGraphConverter.h"
 
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
@@ -40,58 +40,18 @@ namespace gladius::ui
     {
         m_editorContext = ed::CreateEditor();
         m_nodeTypeToColor = createNodeTypeToColors();
-        
+
         // Setup expression dialog callbacks
-        m_expressionDialog.setOnApplyCallback([this](std::string const& expression) {
-            if (m_currentModel && !expression.empty())
-            {
-                try 
-                {
-                    // Create a parser instance
-                    ExpressionParser parser;
-                    
-                    // Convert expression to node graph
-                    nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-                        expression, *m_currentModel, parser);
-                    
-                    if (resultNodeId != 0)
-                    {
-                        // Successfully created the graph
-                        markModelAsModified();
-                        
-                        // Close the dialog
-                        m_expressionDialog.hide();
-                    }
-                    else
-                    {
-                        // Failed to convert expression - create a placeholder for debugging
-                        nodes::NodeBase* node = nodes::createNodeFromName("ConstantScalar", *m_currentModel);
-                        if (node)
-                        {
-                            node->setDisplayName("Failed: " + expression);
-                            markModelAsModified();
-                            m_expressionDialog.hide();
-                        }
-                    }
-                }
-                catch (std::exception const& ex)
-                {
-                    // Handle conversion errors - create a placeholder for debugging
-                    nodes::NodeBase* node = nodes::createNodeFromName("ConstantScalar", *m_currentModel);
-                    if (node)
-                    {
-                        node->setDisplayName("Error: " + expression + " (" + ex.what() + ")");
-                        markModelAsModified();
-                        m_expressionDialog.hide();
-                    }
-                }
-            }
-        });
-        
-        m_expressionDialog.setOnPreviewCallback([this](std::string const& expression) {
-            // TODO: Preview the expression (maybe show variable values or graph structure)
-            // For now, this is a placeholder
-        });
+        m_expressionDialog.setOnApplyCallback(
+          [this](std::string const & functionName, std::string const & expression)
+          { onCreateFunctionFromExpression(functionName, expression); });
+
+        m_expressionDialog.setOnPreviewCallback(
+          [this](std::string const & expression)
+          {
+              // TODO: Preview the expression (maybe show variable values or graph structure)
+              // For now, this is a placeholder
+          });
     }
 
     ModelEditor::~ModelEditor()
@@ -379,7 +339,7 @@ namespace gladius::ui
             ImGui::OpenPopup("Add Function");
             m_showAddModel = true;
         }
-        
+
         ImGui::SameLine();
         if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_CALCULATOR "\tExpression")))
         {
@@ -1828,6 +1788,54 @@ namespace gladius::ui
     void ModelEditor::showExpressionDialog()
     {
         m_expressionDialog.show();
+    }
+
+    void ModelEditor::onCreateFunctionFromExpression(std::string const & functionName,
+                                                     std::string const & expression)
+    {
+        if (!m_doc || !m_assembly || functionName.empty() || expression.empty())
+        {
+            return;
+        }
+
+        try
+        {
+            // Create a new function model
+            nodes::Model & newModel = m_doc->createNewFunction();
+            newModel.setDisplayName(functionName);
+
+            // Create a parser instance
+            ExpressionParser parser;
+
+            // Convert expression to node graph
+            nodes::NodeId resultNodeId =
+              ExpressionToGraphConverter::convertExpressionToGraph(expression, newModel, parser);
+
+            if (resultNodeId != 0)
+            {
+                // Successfully created the graph - switch to the new function
+                m_currentModel = m_assembly->findModel(newModel.getResourceId());
+                switchModel();
+                markModelAsModified();
+
+                // Close the dialog
+                m_expressionDialog.hide();
+            }
+            else
+            {
+                // Failed to convert expression - remove the created function
+                m_doc->deleteFunction(newModel.getResourceId());
+
+                // TODO: Show error message to user
+                std::cerr << "Failed to convert expression to graph: " << expression << std::endl;
+            }
+        }
+        catch (std::exception const & ex)
+        {
+            // Handle conversion errors
+            std::cerr << "Error creating function from expression: " << ex.what() << std::endl;
+            // TODO: Show error message to user
+        }
     }
 
     bool ModelEditor::switchToFunction(nodes::ResourceId functionId)

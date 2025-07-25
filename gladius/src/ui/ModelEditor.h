@@ -1,10 +1,10 @@
 #pragma once
 
+#include "../ExpressionToGraphConverter.h"
 #include "../nodes/History.h"
+#include "ExpressionDialog.h"
 #include "LibraryBrowser.h"
 #include "NodeView.h"
-#include "ExpressionDialog.h"
-#include "../ExpressionToGraphConverter.h"
 #include "imguinodeeditor.h"
 
 #include <filesystem>
@@ -79,6 +79,14 @@ namespace gladius::ui
         void autoLayoutNodes(float distance = 200.0f);
         void showCreateNodePopup();
         void showExpressionDialog();
+
+        /**
+         * @brief Handle creation of a function from mathematical expression
+         * @param functionName The name for the new function
+         * @param expression The mathematical expression
+         */
+        void onCreateFunctionFromExpression(std::string const & functionName,
+                                            std::string const & expression);
 
         /**
          * @brief Switch to a specific function by its ResourceId
@@ -164,7 +172,7 @@ namespace gladius::ui
         nodes::SharedAssembly m_assembly;
         nodes::SharedModel m_currentModel;
 
-        static void noOp() {};
+        static void noOp(){};
         PopupMenuFunction m_popupMenuFunction = noOp;
         NodeView m_nodeViewVisitor;
 
