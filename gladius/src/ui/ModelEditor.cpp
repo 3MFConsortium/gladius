@@ -13,6 +13,7 @@
 // #include "../ExpressionParser.h"
 #include "../ExpressionParser.h"
 #include "../ExpressionToGraphConverter.h"
+#include "../FunctionArgument.h"
 
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
@@ -45,8 +46,9 @@ namespace gladius::ui
         m_expressionDialog.setOnApplyCallback(
           [this](std::string const & functionName,
                  std::string const & expression,
-                 std::vector<FunctionArgument> const & arguments)
-          { onCreateFunctionFromExpression(functionName, expression, arguments); });
+                 std::vector<FunctionArgument> const & arguments,
+                 FunctionOutput const & output)
+          { onCreateFunctionFromExpression(functionName, expression, arguments, output); });
 
         m_expressionDialog.setOnPreviewCallback(
           [this](std::string const & expression)
@@ -1795,7 +1797,8 @@ namespace gladius::ui
     void
     ModelEditor::onCreateFunctionFromExpression(std::string const & functionName,
                                                 std::string const & expression,
-                                                std::vector<FunctionArgument> const & arguments)
+                                                std::vector<FunctionArgument> const & arguments,
+                                                FunctionOutput const & output)
     {
         if (!m_doc || !m_assembly || functionName.empty() || expression.empty())
         {
@@ -1813,7 +1816,7 @@ namespace gladius::ui
 
             // Convert expression to node graph
             nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-              expression, newModel, parser, arguments);
+              expression, newModel, parser, arguments, output);
 
             if (resultNodeId != 0)
             {

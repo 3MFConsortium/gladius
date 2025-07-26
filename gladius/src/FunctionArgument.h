@@ -31,6 +31,28 @@ namespace gladius
     };
 
     /**
+     * @brief Represents a function output with name and type
+     */
+    struct FunctionOutput
+    {
+        std::string name;
+        ArgumentType type;
+
+        FunctionOutput() = default;
+        FunctionOutput(std::string const & outputName, ArgumentType outputType)
+            : name(outputName)
+            , type(outputType)
+        {
+        }
+
+        // Default constructor with "result" name and Scalar type
+        static FunctionOutput defaultOutput()
+        {
+            return FunctionOutput("result", ArgumentType::Scalar);
+        }
+    };
+
+    /**
      * @brief Represents a component access (e.g., A.x, B.y)
      */
     struct ComponentAccess

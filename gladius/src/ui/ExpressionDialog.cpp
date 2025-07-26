@@ -4,14 +4,18 @@
 
 #include "imgui.h"
 #include <algorithm>
-#include <iostream>
+#include <cstring>
 #include <fmt/format.h>
+#include <iostream>
 
 namespace gladius::ui
 {
     ExpressionDialog::ExpressionDialog()
         : m_parser(std::make_unique<ExpressionParser>())
+        , m_output(FunctionOutput::defaultOutput())
     {
+        // Initialize output name buffer
+        std::strcpy(m_outputNameBuffer, m_output.name.c_str());
     }
 
     ExpressionDialog::~ExpressionDialog() = default;
@@ -28,6 +32,20 @@ namespace gladius::ui
         m_newArgumentNameBuffer[0] = '\0';
         m_selectedArgumentType = 0;
         m_argumentToRemove = -1;
+    }
+
+    FunctionOutput const & ExpressionDialog::getFunctionOutput() const
+    {
+        return m_output;
+    }
+
+    void ExpressionDialog::setFunctionOutput(FunctionOutput const & output)
+    {
+        m_output = output;
+        // Update buffer
+        size_t copySize = std::min(output.name.length(), OUTPUT_NAME_BUFFER_SIZE - 1);
+        std::copy(output.name.begin(), output.name.begin() + copySize, m_outputNameBuffer);
+        m_outputNameBuffer[copySize] = '\0';
     }
 
     void ExpressionDialog::show()
@@ -61,6 +79,8 @@ namespace gladius::ui
             renderFunctionNameInput();
             ImGui::Separator();
             renderArgumentsSection();
+            ImGui::Separator();
+            renderOutputSection();
             ImGui::Separator();
             renderExpressionInput();
             ImGui::Separator();
@@ -138,8 +158,18 @@ namespace gladius::ui
         }
 
         m_isValid = m_parser->parseExpression(m_expression);
-        std::cout << "Expression validation - expression: '" << m_expression << "', isValid: " << m_isValid 
-                  << ", hasValidExpression: " << m_parser->hasValidExpression() << std::endl;
+
+        // Update output type based on expression
+        if (m_isValid)
+        {
+            m_output.type = deduceOutputType();
+        }
+
+        std::cout << "Expression validation - expression: '" << m_expression
+                  << "', isValid: " << m_isValid
+                  << ", hasValidExpression: " << m_parser->hasValidExpression()
+                  << ", deduced type: "
+                  << (m_output.type == ArgumentType::Scalar ? "Scalar" : "Vector") << std::endl;
     }
 
     void ExpressionDialog::renderArgumentsSection()
@@ -586,18 +616,26 @@ namespace gladius::ui
             std::cout << "m_isValid: " << m_isValid << std::endl;
             std::cout << "hasValidExpression: " << m_parser->hasValidExpression() << std::endl;
             std::cout << "functionName empty: " << m_functionName.empty() << std::endl;
-            std::cout << "m_onApplyCallback set: " << (m_onApplyCallback ? "true" : "false") << std::endl;
-            
+            std::cout << "m_onApplyCallback set: " << (m_onApplyCallback ? "true" : "false")
+                      << std::endl;
+
             if (m_onApplyCallback && canApply)
             {
-                std::cout << "Calling apply callback with: " << m_functionName << ", " << m_expression << std::endl;
-                m_onApplyCallback(m_functionName, m_expression, m_arguments);
+                // Update output name from buffer
+                m_output.name = std::string(m_outputNameBuffer);
+
+                std::cout << "Calling apply callback with: " << m_functionName << ", "
+                          << m_expression << ", output: " << m_output.name << " ("
+                          << (m_output.type == ArgumentType::Scalar ? "Scalar" : "Vector") << ")"
+                          << std::endl;
+                m_onApplyCallback(m_functionName, m_expression, m_arguments, m_output);
                 hide(); // Close dialog after applying
             }
             else
             {
-                std::cout << "Apply callback not called - callback: " << (m_onApplyCallback ? "set" : "not set") 
-                         << ", canApply: " << canApply << std::endl;
+                std::cout << "Apply callback not called - callback: "
+                          << (m_onApplyCallback ? "set" : "not set") << ", canApply: " << canApply
+                          << std::endl;
             }
         }
 
@@ -644,6 +682,98 @@ namespace gladius::ui
           "Supported functions: sin, cos, tan, exp, log, sqrt, abs, pow, min, max, etc.");
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
                            "Variables (x, y, z) will become input nodes in the function graph.");
+    }
+
+    void ExpressionDialog::renderOutputSection()
+    {
+        ImGui::Text("Function Output:");
+
+        // Output name input
+        ImGui::PushItemWidth(200);
+        if (ImGui::InputText("Output Name", m_outputNameBuffer, OUTPUT_NAME_BUFFER_SIZE))
+        {
+            m_output.name = std::string(m_outputNameBuffer);
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "(default: result)");
+
+        // Display deduced output type
+        ImGui::Text("Output Type: ");
+        ImGui::SameLine();
+
+        if (m_isValid)
+        {
+            ArgumentType deducedType = deduceOutputType();
+            if (deducedType == ArgumentType::Scalar)
+            {
+                ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f), "Scalar");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(single value)");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.0f, 0.6f, 0.8f, 1.0f), "Vector");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(x, y, z components)");
+            }
+        }
+        else
+        {
+            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.0f, 1.0f), "Unknown");
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(validate expression first)");
+        }
+    }
+
+    ArgumentType ExpressionDialog::deduceOutputType() const
+    {
+        // For now, implement basic type deduction rules
+        // Vector operations that return vectors:
+        // 1. Vector component access patterns don't create vectors (they extract scalars)
+        // 2. Direct vector arguments would return vectors, but most math operations return scalars
+        // 3. Only specific vector construction operations would return vectors
+
+        std::string expr = m_expression;
+
+        // Check for vector component access (e.g., "pos.x", "A.y") - these return scalars
+        if (expr.find('.') != std::string::npos)
+        {
+            return ArgumentType::Scalar;
+        }
+
+        // Check for vector arguments used directly (without component access)
+        for (const auto & arg : m_arguments)
+        {
+            if (arg.type == ArgumentType::Vector)
+            {
+                // If we have a vector argument name used directly (not with .x, .y, .z)
+                size_t pos = expr.find(arg.name);
+                if (pos != std::string::npos)
+                {
+                    // Check if it's followed by a component accessor
+                    if (pos + arg.name.length() < expr.length() &&
+                        expr[pos + arg.name.length()] == '.')
+                    {
+                        continue; // This is component access, keep looking
+                    }
+                    else
+                    {
+                        // Vector used directly - this could be a vector operation
+                        // For simplicity, most math operations on vectors return scalars
+                        // Only return Vector if it's a simple pass-through
+                        if (expr == arg.name)
+                        {
+                            return ArgumentType::Vector;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Most mathematical expressions return scalars
+        return ArgumentType::Scalar;
     }
 
 } // namespace gladius::ui

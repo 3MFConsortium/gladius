@@ -30,8 +30,8 @@ namespace gladius::tests
         std::string const expression = "x + y";
 
         // Act
-        nodes::NodeId resultNodeId =
-          ExpressionToGraphConverter::convertExpressionToGraph(expression, *m_model, *m_parser);
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -52,8 +52,8 @@ namespace gladius::tests
         std::string const expression = "x + y * z";
 
         // Act
-        nodes::NodeId resultNodeId =
-          ExpressionToGraphConverter::convertExpressionToGraph(expression, *m_model, *m_parser);
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -77,8 +77,8 @@ namespace gladius::tests
         std::string const expression = "x + )"; // Invalid syntax
 
         // Act
-        nodes::NodeId resultNodeId =
-          ExpressionToGraphConverter::convertExpressionToGraph(expression, *m_model, *m_parser);
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_EQ(resultNodeId, 0);
@@ -90,8 +90,8 @@ namespace gladius::tests
         std::string const expression = "42";
 
         // Act
-        nodes::NodeId resultNodeId =
-          ExpressionToGraphConverter::convertExpressionToGraph(expression, *m_model, *m_parser);
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -106,8 +106,8 @@ namespace gladius::tests
         std::string const expression = "x";
 
         // Act
-        nodes::NodeId resultNodeId =
-          ExpressionToGraphConverter::convertExpressionToGraph(expression, *m_model, *m_parser);
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -123,8 +123,8 @@ namespace gladius::tests
         std::string const expression = "(x + y) * z";
 
         // Act
-        nodes::NodeId resultNodeId =
-          ExpressionToGraphConverter::convertExpressionToGraph(expression, *m_model, *m_parser);
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -164,8 +164,8 @@ namespace gladius::tests
             auto model = std::make_unique<nodes::Model>();
 
             // Act
-            nodes::NodeId resultNodeId =
-              ExpressionToGraphConverter::convertExpressionToGraph(expression, *model, *m_parser);
+            nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+              expression, *model, *m_parser, {}, FunctionOutput::defaultOutput());
 
             // Assert
             EXPECT_NE(resultNodeId, 0) << "Failed for expression: " << expression;
@@ -185,7 +185,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -211,7 +211,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -251,7 +251,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -280,7 +280,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -305,7 +305,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -340,7 +340,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_EQ(resultNodeId, 0); // Should fail for invalid component
@@ -356,7 +356,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_EQ(resultNodeId, 0); // Should fail for component access on scalar
@@ -373,7 +373,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, arguments);
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -406,8 +406,8 @@ namespace gladius::tests
         std::string const expression = "x + y"; // Old style without arguments
 
         // Act
-        nodes::NodeId resultNodeId =
-          ExpressionToGraphConverter::convertExpressionToGraph(expression, *m_model, *m_parser);
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_NE(resultNodeId, 0);
@@ -463,7 +463,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_GT(result, 0) << "Expression conversion should succeed for single vector component";
@@ -479,7 +479,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_GT(result, 0) << "Expression conversion should succeed for multiple components";
@@ -496,7 +496,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_GT(result, 0) << "Expression conversion should succeed for complex expression";
@@ -515,7 +515,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_GT(result, 0) << "Expression conversion should succeed for multiple vectors";
@@ -532,7 +532,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_GT(result, 0) << "Expression conversion should succeed for all components";
@@ -549,7 +549,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_GT(result, 0) << "Expression conversion should succeed for vector and scalar mix";
@@ -567,7 +567,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_GT(result, 0) << "Expression conversion should succeed for nested operations";
@@ -602,7 +602,7 @@ namespace gladius::tests
 
         // Act
         nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
-          expression, *m_model, *m_parser, m_vectorArgs);
+          expression, *m_model, *m_parser, m_vectorArgs, FunctionOutput::defaultOutput());
 
         // Assert
         EXPECT_EQ(result, 0) << "Empty expression should return 0";

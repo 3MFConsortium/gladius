@@ -87,7 +87,8 @@ namespace gladius::ui
          */
         void onCreateFunctionFromExpression(std::string const & functionName,
                                             std::string const & expression,
-                                            std::vector<FunctionArgument> const & arguments);
+                                            std::vector<FunctionArgument> const & arguments,
+                                            FunctionOutput const & output);
 
         /**
          * @brief Switch to a specific function by its ResourceId

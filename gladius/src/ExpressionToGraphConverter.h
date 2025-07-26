@@ -33,18 +33,20 @@ namespace gladius
     {
       public:
         /**
-         * @brief Convert an expression to a node graph
-         * @param expression The mathematical expression as a string
+         * @brief Convert a mathematical expression to a node graph
+         * @param expression The mathematical expression string
          * @param model The model to add nodes to
-         * @param parser The expression parser to use
+         * @param parser The expression parser instance
          * @param arguments Optional function arguments (for vector support)
+         * @param output Optional function output specification (name and type)
          * @return The NodeId of the output node, or 0 if conversion failed
          */
         static nodes::NodeId
         convertExpressionToGraph(std::string const & expression,
                                  nodes::Model & model,
                                  ExpressionParser & parser,
-                                 std::vector<FunctionArgument> const & arguments = {});
+                                 std::vector<FunctionArgument> const & arguments = {},
+                                 FunctionOutput const & output = {});
 
       private:
         /**
@@ -241,6 +243,28 @@ namespace gladius
          * @return Original form (e.g., "pos.x"), or unchanged if not valid
          */
         static std::string convertPreprocessedToOriginal(std::string const & expression);
+
+        /**
+         * @brief Connect the expression result to the End node with specified output
+         * @param model The model containing the nodes
+         * @param resultNodeId The node ID of the expression result
+         * @param output The function output specification
+         * @return true if connection was successful
+         */
+        static bool connectToEndNode(nodes::Model & model,
+                                     nodes::NodeId resultNodeId,
+                                     FunctionOutput const & output);
+
+        /**
+         * @brief Validate that the expression result type matches the expected output type
+         * @param model The model containing the nodes
+         * @param resultNodeId The node ID of the expression result
+         * @param expectedType The expected output type
+         * @return true if types are compatible
+         */
+        static bool validateOutputType(nodes::Model & model,
+                                       nodes::NodeId resultNodeId,
+                                       ArgumentType expectedType);
     };
 
 } // namespace gladius

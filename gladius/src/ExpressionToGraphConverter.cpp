@@ -29,7 +29,8 @@ namespace gladius
       std::string const & expression,
       nodes::Model & model,
       ExpressionParser & parser,
-      std::vector<FunctionArgument> const & arguments)
+      std::vector<FunctionArgument> const & arguments,
+      FunctionOutput const & output)
     {
         // Clear any previous component mappings
         s_componentMap.clear();
@@ -83,6 +84,18 @@ namespace gladius
         if (result == 0)
         {
             // parseAndBuildGraph failed
+            return 0;
+        }
+
+        // Validate output type and connect to End node
+        if (!validateOutputType(model, result, output.type))
+        {
+            return 0; // Type validation failed
+        }
+
+        if (!connectToEndNode(model, result, output))
+        {
+            return 0; // Failed to connect to End node
         }
 
         return result;
@@ -895,6 +908,100 @@ namespace gladius
         }
 
         return multiplyNode;
+    }
+
+    bool ExpressionToGraphConverter::validateOutputType(nodes::Model & model,
+                                                        nodes::NodeId resultNodeId,
+                                                        ArgumentType expectedType)
+    {
+        auto nodeOpt = model.getNode(resultNodeId);
+        if (!nodeOpt.has_value())
+        {
+            return false; // Node not found
+        }
+
+        nodes::NodeBase * node = nodeOpt.value();
+        std::string nodeTypeName = node->name();
+
+        // Determine the type of the result node
+        bool isVectorResult = false;
+        bool isScalarResult = false;
+
+        // Check for vector-producing nodes
+        if (nodeTypeName.find("ConstantVector") != std::string::npos ||
+            nodeTypeName.find("VectorCompose") != std::string::npos)
+        {
+            isVectorResult = true;
+        }
+        // Check for scalar-producing nodes
+        else if (nodeTypeName.find("ConstantScalar") != std::string::npos ||
+                 nodeTypeName.find("Addition") != std::string::npos ||
+                 nodeTypeName.find("Subtraction") != std::string::npos ||
+                 nodeTypeName.find("Multiplication") != std::string::npos ||
+                 nodeTypeName.find("Division") != std::string::npos ||
+                 nodeTypeName.find("DecomposeVector") != std::string::npos ||
+                 nodeTypeName == "Input") // Begin node outputs can be scalar or vector
+        {
+            // For Begin node, check the actual argument type
+            if (nodeTypeName == "Input")
+            {
+                // This is a Begin node, check if we have argument type information
+                // For now, we'll be more permissive and allow it
+                return true;
+            }
+            isScalarResult = true;
+        }
+        else
+        {
+            // For other math functions, assume scalar output
+            isScalarResult = true;
+        }
+
+        // Validate type compatibility
+        if (expectedType == ArgumentType::Scalar && !isScalarResult)
+        {
+            return false; // Expected scalar but got vector
+        }
+        if (expectedType == ArgumentType::Vector && !isVectorResult)
+        {
+            return false; // Expected vector but got scalar
+        }
+
+        return true;
+    }
+
+    bool ExpressionToGraphConverter::connectToEndNode(nodes::Model & model,
+                                                      nodes::NodeId resultNodeId,
+                                                      FunctionOutput const & output)
+    {
+        // Ensure End node exists
+        nodes::End * endNode = model.getEndNode();
+        if (!endNode)
+        {
+            // Create Begin/End nodes if they don't exist
+            model.createBeginEnd();
+            endNode = model.getEndNode();
+            if (!endNode)
+            {
+                return false; // Failed to create End node
+            }
+        }
+
+        // Add the output parameter to the End node
+        if (output.type == ArgumentType::Scalar)
+        {
+            nodes::VariantParameter parameter(float{0.0f});
+            model.addFunctionOutput(output.name, parameter);
+        }
+        else if (output.type == ArgumentType::Vector)
+        {
+            nodes::VariantParameter parameter(nodes::float3{0.0f, 0.0f, 0.0f});
+            model.addFunctionOutput(output.name, parameter);
+        }
+
+        // Connect the result node to the End node's input parameter
+        std::string resultPortName = getOutputPortName(model, resultNodeId);
+        return connectNodes(model, resultNodeId, resultPortName, endNode->getId(), output.name);
     }
 
 } // namespace gladius
