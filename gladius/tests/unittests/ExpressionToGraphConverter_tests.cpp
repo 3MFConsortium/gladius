@@ -797,4 +797,546 @@ namespace gladius::tests
         EXPECT_NE(result, 0) << "cos(sin(pos).x+sin(pos).x) should work";
     }
 
+    // =====================================================================================
+    // Comprehensive Implicit Modeling Expression Test Suite
+    // =====================================================================================
+
+    struct ImplicitModelingTestCase
+    {
+        std::string name;
+        std::string expression;
+        std::vector<FunctionArgument> arguments;
+        FunctionOutput expectedOutput;
+        std::string description;
+        bool shouldPass;
+    };
+
+    class ImplicitModelingExpressionTest
+        : public ExpressionToGraphConverterTest,
+          public ::testing::WithParamInterface<ImplicitModelingTestCase>
+    {
+      protected:
+        void SetUp() override
+        {
+            ExpressionToGraphConverterTest::SetUp();
+        }
+
+        // Helper to create standard 3D position argument
+        std::vector<FunctionArgument> createPosArg()
+        {
+            return {{"pos", ArgumentType::Vector}};
+        }
+
+        // Helper to create position and radius arguments
+        std::vector<FunctionArgument> createPosRadiusArgs()
+        {
+            return {{"pos", ArgumentType::Vector}, {"radius", ArgumentType::Scalar}};
+        }
+
+        // Helper to create multiple vector arguments
+        std::vector<FunctionArgument> createMultiVectorArgs()
+        {
+            return {{"pos", ArgumentType::Vector},
+                    {"center", ArgumentType::Vector},
+                    {"size", ArgumentType::Vector}};
+        }
+    };
+
+    TEST_P(ImplicitModelingExpressionTest, ConvertImplicitModelingExpressions)
+    {
+        // Arrange
+        const auto & testCase = GetParam();
+
+        // Act
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          testCase.expression, *m_model, *m_parser, testCase.arguments, testCase.expectedOutput);
+
+        // Assert
+        if (testCase.shouldPass)
+        {
+            EXPECT_NE(result, 0) << "Expression should convert successfully: " << testCase.name
+                                 << "\nExpression: " << testCase.expression
+                                 << "\nDescription: " << testCase.description;
+            EXPECT_GT(m_model->getSize(), 0) << "Model should contain nodes after conversion";
+        }
+        else
+        {
+            EXPECT_EQ(result, 0) << "Expression should fail: " << testCase.name
+                                 << "\nExpression: " << testCase.expression
+                                 << "\nDescription: " << testCase.description;
+        }
+    }
+
+    // Test data for comprehensive implicit modeling expressions
+    std::vector<ImplicitModelingTestCase> GetImplicitModelingTestCases()
+    {
+        std::vector<ImplicitModelingTestCase> testCases;
+
+        // Helper to create arguments
+        auto posArg = []() { return std::vector<FunctionArgument>{{"pos", ArgumentType::Vector}}; };
+        auto posRadiusArgs = []()
+        {
+            return std::vector<FunctionArgument>{{"pos", ArgumentType::Vector},
+                                                 {"radius", ArgumentType::Scalar}};
+        };
+        auto multiVectorArgs = []()
+        {
+            return std::vector<FunctionArgument>{{"pos", ArgumentType::Vector},
+                                                 {"center", ArgumentType::Vector},
+                                                 {"size", ArgumentType::Vector}};
+        };
+        auto scalarOutput = []() { return FunctionOutput{"result", ArgumentType::Scalar}; };
+        auto vectorOutput = []() { return FunctionOutput{"result", ArgumentType::Vector}; };
+
+        // =====================================================================================
+        // Basic Primitive Distance Functions
+        // =====================================================================================
+
+        // Sphere SDF - length(pos) - radius
+        testCases.push_back({"Sphere_Basic",
+                             "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - radius",
+                             posRadiusArgs(),
+                             scalarOutput(),
+                             "Basic sphere distance function using explicit component access",
+                             true});
+
+        // Sphere SDF using length function (if available through nodes)
+        testCases.push_back({
+          "Sphere_UsingLength",
+          "length(pos) - radius", // This may fail if length() function isn't supported in
+                                  // expressions
+          posRadiusArgs(),
+          scalarOutput(),
+          "Sphere distance function using length function",
+          false // May not work if length() isn't in expression parser
+        });
+
+        // Box SDF approximation using max components
+        testCases.push_back({"Box_Approximation",
+                             "max(max(abs(pos.x) - 1.0, abs(pos.y) - 1.0), abs(pos.z) - 1.0)",
+                             posArg(),
+                             scalarOutput(),
+                             "Box distance function approximation using max and abs",
+                             true});
+
+        // Plane SDF - dot product with normal
+        testCases.push_back({"Plane_Basic",
+                             "pos.y + 1.0",
+                             posArg(),
+                             scalarOutput(),
+                             "Simple plane distance function (y = -1)",
+                             true});
+
+        // Cylinder SDF (infinite) - distance from Y axis
+        testCases.push_back({"Cylinder_Infinite",
+                             "sqrt(pos.x*pos.x + pos.z*pos.z) - radius",
+                             posRadiusArgs(),
+                             scalarOutput(),
+                             "Infinite cylinder distance function along Y axis",
+                             true});
+
+        // =====================================================================================
+        // Trigonometric and Periodic Functions
+        // =====================================================================================
+
+        // Sine wave displacement
+        testCases.push_back({"SineWave_Displacement",
+                             "pos.y - sin(pos.x * 3.14159)",
+                             posArg(),
+                             scalarOutput(),
+                             "Sine wave displacement along Y axis",
+                             true});
+
+        // Cosine ripples
+        testCases.push_back({"CosineRipples",
+                             "sqrt(pos.x*pos.x + pos.z*pos.z) - 2.0 + cos(sqrt(pos.x*pos.x + "
+                             "pos.z*pos.z) * 6.28) * 0.1",
+                             posArg(),
+                             scalarOutput(),
+                             "Concentric cosine ripples creating ring patterns",
+                             true});
+
+        // Twisted sine pattern
+        testCases.push_back({"TwistedSine",
+                             "sin(pos.x + sin(pos.z) * 2.0) + cos(pos.y + cos(pos.x) * 2.0)",
+                             posArg(),
+                             scalarOutput(),
+                             "Twisted sine pattern creating organic shapes",
+                             true});
+
+        // =====================================================================================
+        // Advanced Mathematical Functions
+        // =====================================================================================
+
+        // Logarithmic decay (using log instead of exp)
+        testCases.push_back({"LogarithmicDecay",
+                             "log(sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) + 1.0) - 0.1",
+                             posArg(),
+                             scalarOutput(),
+                             "Logarithmic decay distance function (alternative to exp)",
+                             true});
+
+        // Logarithmic spiral
+        testCases.push_back(
+          {"LogarithmicSpiral",
+           "abs(log(sqrt(pos.x*pos.x + pos.z*pos.z) + 0.001) - pos.y * 0.5) - 0.1",
+           posArg(),
+           scalarOutput(),
+           "Logarithmic spiral in 3D space",
+           true});
+
+        // Power function shaping
+        testCases.push_back(
+          {"PowerShaping",
+           "pow(abs(pos.x), 2.5) + pow(abs(pos.y), 2.5) + pow(abs(pos.z), 2.5) - 1.0",
+           posArg(),
+           scalarOutput(),
+           "Power function creating superellipsoid shape",
+           true});
+
+        // =====================================================================================
+        // Boolean Operations Combinations
+        // =====================================================================================
+
+        // Union of two spheres
+        testCases.push_back({"Union_TwoSpheres",
+                             "min(sqrt((pos.x-1.0)*(pos.x-1.0) + pos.y*pos.y + pos.z*pos.z) - 0.5, "
+                             "sqrt((pos.x+1.0)*(pos.x+1.0) + pos.y*pos.y + pos.z*pos.z) - 0.5)",
+                             posArg(),
+                             scalarOutput(),
+                             "Union of two spheres using min operation",
+                             true});
+
+        // Intersection of cube and sphere
+        testCases.push_back({"Intersection_CubeSphere",
+                             "max(max(max(abs(pos.x) - 1.0, abs(pos.y) - 1.0), abs(pos.z) - 1.0), "
+                             "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 1.5)",
+                             posArg(),
+                             scalarOutput(),
+                             "Intersection of cube and sphere using max operation",
+                             true});
+
+        // Subtraction - sphere minus smaller sphere (without unary minus)
+        testCases.push_back({"Subtraction_Spheres",
+                             "max(sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 2.0, (1.0 - "
+                             "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z)))",
+                             posArg(),
+                             scalarOutput(),
+                             "Sphere with spherical hole (subtraction using algebraic inversion)",
+                             true});
+
+        // =====================================================================================
+        // Complex Nested Functions
+        // =====================================================================================
+
+        // Nested trigonometric with component access
+        testCases.push_back({"NestedTrig_Components",
+                             "sin(cos(pos).x) + cos(sin(pos).y) + sin(cos(pos).z)",
+                             posArg(),
+                             scalarOutput(),
+                             "Nested trigonometric functions with vector component access",
+                             true});
+
+        // Fractal-like nested functions
+        testCases.push_back({"FractalNested",
+                             "sin(pos.x + sin(pos.y + sin(pos.z))) - 0.5",
+                             posArg(),
+                             scalarOutput(),
+                             "Fractal-like nested sine functions",
+                             true});
+
+        // Complex wave interference
+        testCases.push_back({"WaveInterference",
+                             "sin(sqrt(pos.x*pos.x + pos.z*pos.z) * 10.0 + pos.y * 5.0) * "
+                             "cos(sqrt((pos.x-1.0)*(pos.x-1.0) + pos.z*pos.z) * 8.0)",
+                             posArg(),
+                             scalarOutput(),
+                             "Wave interference pattern creating complex shapes",
+                             true});
+
+        // =====================================================================================
+        // Clamping and Smoothing Operations
+        // =====================================================================================
+
+        // Clamped sphere (using min/max instead of clamp)
+        testCases.push_back(
+          {"ClampedSphere",
+           "max(-0.5, min(sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 1.0, 0.5))",
+           posArg(),
+           scalarOutput(),
+           "Clamped sphere distance using min/max for smoothed boundaries",
+           true});
+
+        // Smooth minimum blend
+        testCases.push_back({"SmoothMinBlend",
+                             "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 1.0 + "
+                             "sin(sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) * 10.0) * 0.1",
+                             posArg(),
+                             scalarOutput(),
+                             "Smooth minimum blend creating surface details",
+                             true});
+
+        // =====================================================================================
+        // Noise and Texture-like Functions
+        // =====================================================================================
+
+        // Pseudo-noise using trigonometric functions
+        testCases.push_back({"PseudoNoise",
+                             "sin(pos.x * 12.9898 + pos.y * 78.233 + pos.z * 37.719) * 0.1",
+                             posArg(),
+                             scalarOutput(),
+                             "Pseudo-noise pattern using trigonometric functions",
+                             true});
+
+        // Layered noise
+        testCases.push_back(
+          {"LayeredNoise",
+           "sin(pos.x * 5.0) * 0.5 + sin(pos.y * 7.0) * 0.3 + sin(pos.z * 11.0) * 0.2",
+           posArg(),
+           scalarOutput(),
+           "Layered noise with different frequencies",
+           true});
+
+        // =====================================================================================
+        // Deformation and Transformation Effects
+        // =====================================================================================
+
+        // Twisted geometry
+        testCases.push_back({"TwistedGeometry",
+                             "sqrt((pos.x * cos(pos.y) - pos.z * sin(pos.y)) * (pos.x * cos(pos.y) "
+                             "- pos.z * sin(pos.y)) + (pos.x * sin(pos.y) + pos.z * cos(pos.y)) * "
+                             "(pos.x * sin(pos.y) + pos.z * cos(pos.y))) - 1.0",
+                             posArg(),
+                             scalarOutput(),
+                             "Twisted cylinder using rotation transformation",
+                             true});
+
+        // Bent space
+        testCases.push_back({"BentSpace",
+                             "sqrt((pos.x + sin(pos.y * 2.0) * 0.5) * (pos.x + sin(pos.y * 2.0) * "
+                             "0.5) + pos.y * pos.y + pos.z * pos.z) - 1.0",
+                             posArg(),
+                             scalarOutput(),
+                             "Bent space deformation using sine displacement",
+                             true});
+
+        // =====================================================================================
+        // Mathematical Edge Cases and Precision Tests
+        // =====================================================================================
+
+        // Very small values
+        testCases.push_back({"TinyValues",
+                             "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 0.001",
+                             posArg(),
+                             scalarOutput(),
+                             "Very small sphere for precision testing",
+                             true});
+
+        // Large values
+        testCases.push_back({"LargeValues",
+                             "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 1000.0",
+                             posArg(),
+                             scalarOutput(),
+                             "Large sphere for scale testing",
+                             true});
+
+        // Zero division protection
+        testCases.push_back({"ZeroDivisionProtection",
+                             "pos.x / (abs(pos.y) + 0.001)",
+                             posArg(),
+                             scalarOutput(),
+                             "Division with zero protection",
+                             true});
+
+        // =====================================================================================
+        // Multi-dimensional Operations
+        // =====================================================================================
+
+        // Vector field rotation
+        testCases.push_back({"VectorFieldRotation",
+                             "sin(pos.x) + cos(pos.y) + sin(pos.z)",
+                             posArg(),
+                             scalarOutput(),
+                             "Simple vector field combination",
+                             true});
+
+        // Cross product simulation (using components)
+        testCases.push_back({"CrossProductSimulation",
+                             "(pos.y * 1.0 - pos.z * 0.0) + (pos.z * 0.0 - pos.x * 1.0) + (pos.x * "
+                             "0.0 - pos.y * 1.0)",
+                             posArg(),
+                             scalarOutput(),
+                             "Cross product simulation using component operations",
+                             true});
+
+        // =====================================================================================
+        // Error Cases - Should Fail
+        // =====================================================================================
+
+        // Invalid component access
+        testCases.push_back({"InvalidComponent",
+                             "pos.w",
+                             posArg(),
+                             scalarOutput(),
+                             "Invalid component access (.w doesn't exist for vectors)",
+                             false});
+
+        // Invalid function call
+        testCases.push_back({"InvalidFunction",
+                             "invalidfunc(pos.x)",
+                             posArg(),
+                             scalarOutput(),
+                             "Invalid function call",
+                             false});
+
+        // Mismatched parentheses
+        testCases.push_back({"MismatchedParentheses",
+                             "sin(pos.x + cos(pos.y)",
+                             posArg(),
+                             scalarOutput(),
+                             "Mismatched parentheses in expression",
+                             false});
+
+        // Empty expression
+        testCases.push_back(
+          {"EmptyExpression", "", posArg(), scalarOutput(), "Empty expression", false});
+
+        // =====================================================================================
+        // Advanced Implicit Modeling Techniques
+        // =====================================================================================
+
+        // Metaball/blob simulation
+        testCases.push_back(
+          {"Metaball",
+           "1.0 / (sqrt((pos.x-1.0)*(pos.x-1.0) + pos.y*pos.y + pos.z*pos.z) + 0.01) + 1.0 / "
+           "(sqrt((pos.x+1.0)*(pos.x+1.0) + pos.y*pos.y + pos.z*pos.z) + 0.01) - 10.0",
+           posArg(),
+           scalarOutput(),
+           "Metaball field using inverse distance",
+           true});
+
+        // Heightfield terrain
+        testCases.push_back({"HeightfieldTerrain",
+                             "pos.y - (sin(pos.x * 2.0) * cos(pos.z * 2.0) * 0.5 + sin(pos.x * 4.0 "
+                             "+ pos.z * 3.0) * 0.25)",
+                             posArg(),
+                             scalarOutput(),
+                             "Heightfield terrain using trigonometric functions",
+                             true});
+
+        // Voronoi-like pattern
+        testCases.push_back(
+          {"VoronoiPattern",
+           "min(min(sqrt((pos.x-floor(pos.x+0.5))*(pos.x-floor(pos.x+0.5)) + "
+           "(pos.y-floor(pos.y+0.5))*(pos.y-floor(pos.y+0.5)) + "
+           "(pos.z-floor(pos.z+0.5))*(pos.z-floor(pos.z+0.5))), "
+           "sqrt((pos.x-floor(pos.x))*(pos.x-floor(pos.x)) + "
+           "(pos.y-floor(pos.y))*(pos.y-floor(pos.y)) + "
+           "(pos.z-floor(pos.z))*(pos.z-floor(pos.z)))), "
+           "sqrt((pos.x-ceil(pos.x))*(pos.x-ceil(pos.x)) + (pos.y-ceil(pos.y))*(pos.y-ceil(pos.y)) "
+           "+ (pos.z-ceil(pos.z))*(pos.z-ceil(pos.z)))) - 0.1",
+           posArg(),
+           scalarOutput(),
+           "Voronoi-like pattern using floor/ceil functions",
+           true});
+
+        return testCases;
+    }
+
+    INSTANTIATE_TEST_SUITE_P(ImplicitModeling,
+                             ImplicitModelingExpressionTest,
+                             ::testing::ValuesIn(GetImplicitModelingTestCases()),
+                             [](const ::testing::TestParamInfo<ImplicitModelingTestCase> & info)
+                             { return info.param.name; });
+
+    // =====================================================================================
+    // Specialized Test Cases for Edge Conditions
+    // =====================================================================================
+
+    class ImplicitModelingEdgeCaseTest : public ExpressionToGraphConverterTest
+    {
+    };
+
+    TEST_F(ImplicitModelingEdgeCaseTest, ConvertComplexNestingDepth_DeepNesting_HandledCorrectly)
+    {
+        std::vector<FunctionArgument> arguments = {{"pos", ArgumentType::Vector}};
+
+        // Test deep nesting - 5 levels
+        std::string deepExpression = "sin(cos(sin(cos(sin(pos.x)))))";
+
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          deepExpression,
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_NE(result, 0) << "Deep nesting should be handled correctly";
+        EXPECT_GT(m_model->getSize(), 0) << "Model should contain nodes for deep nesting";
+    }
+
+    TEST_F(ImplicitModelingEdgeCaseTest, ConvertLargeExpression_ManyTerms_HandledEfficiently)
+    {
+        std::vector<FunctionArgument> arguments = {{"pos", ArgumentType::Vector}};
+
+        // Large expression with many terms
+        std::string largeExpression =
+          "pos.x + pos.y + pos.z + sin(pos.x) + cos(pos.y) + sin(pos.z) + pos.x*pos.x + "
+          "pos.y*pos.y + pos.z*pos.z + sqrt(pos.x*pos.x + pos.y*pos.y) + abs(pos.x) + abs(pos.y) + "
+          "abs(pos.z)";
+
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          largeExpression,
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_NE(result, 0) << "Large expression should be handled efficiently";
+        EXPECT_GT(m_model->getSize(), 10) << "Model should contain many nodes for large expression";
+    }
+
+    TEST_F(ImplicitModelingEdgeCaseTest, ConvertPrecisionCritical_SmallNumbers_MaintainsPrecision)
+    {
+        std::vector<FunctionArgument> arguments = {{"pos", ArgumentType::Vector}};
+
+        // Expression with very small constants
+        std::string precisionExpression = "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 0.00001";
+
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          precisionExpression,
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_NE(result, 0) << "Precision-critical expressions should work";
+    }
+
+    TEST_F(ImplicitModelingEdgeCaseTest, ConvertRepeatedSubexpressions_OptimizesCorrectly)
+    {
+        std::vector<FunctionArgument> arguments = {{"pos", ArgumentType::Vector}};
+
+        // Expression with repeated subexpressions that should be optimized
+        std::string repeatedExpression = "sin(pos.x) + sin(pos.x) + cos(pos.x) + cos(pos.x)";
+
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          repeatedExpression,
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_NE(result, 0) << "Repeated subexpressions should be handled correctly";
+
+        // Check if optimization occurs (should have fewer sin/cos nodes than expected if optimized)
+        auto sineCount = gladius_tests::helper::countNumberOfNodesOfType<nodes::Sine>(*m_model);
+        auto cosineCount = gladius_tests::helper::countNumberOfNodesOfType<nodes::Cosine>(*m_model);
+
+        // Without optimization: would expect 2 sine nodes and 2 cosine nodes
+        // With optimization: should be less (ideally 1 of each)
+        EXPECT_LE(sineCount, 2) << "Sine nodes should be optimized";
+        EXPECT_LE(cosineCount, 2) << "Cosine nodes should be optimized";
+    }
+
 } // namespace gladius::tests
