@@ -308,6 +308,45 @@ namespace gladius
             }
         }
 
+        // Handle unary minus operator
+        if (cleanExpr.length() > 1 && cleanExpr[0] == '-')
+        {
+            // Check if this is a unary minus (not a subtraction)
+            // It's unary if it's at the start or follows an operator or opening parenthesis
+            std::string innerExpr = cleanExpr.substr(1);
+            nodes::NodeId innerNode = parseAndBuildGraph(innerExpr, model, variableNodes);
+            if (innerNode == 0)
+            {
+                return 0; // Failed to parse inner expression
+            }
+
+            // Create a multiplication by -1 to represent unary minus
+            nodes::NodeId negativeOne = createConstantNode(-1.0, model);
+            if (negativeOne == 0)
+            {
+                return 0; // Failed to create constant
+            }
+
+            nodes::NodeId multiplyNode = createMathOperationNode("Multiplication", model);
+            if (multiplyNode == 0)
+            {
+                return 0; // Failed to create multiplication node
+            }
+
+            // Connect -1 to first input and inner expression to second input
+            std::string negativeOneOutput = getOutputPortName(model, negativeOne);
+            std::string innerOutput = getOutputPortName(model, innerNode);
+
+            if (!connectNodes(
+                  model, negativeOne, negativeOneOutput, multiplyNode, nodes::FieldNames::A) ||
+                !connectNodes(model, innerNode, innerOutput, multiplyNode, nodes::FieldNames::B))
+            {
+                return 0; // Failed to connect nodes
+            }
+
+            return multiplyNode;
+        }
+
         // Check if it's a component access (e.g., "A.x", "pos.y")
         if (isComponentAccess(cleanExpr))
         {
@@ -477,6 +516,8 @@ namespace gladius
             nodeTypeName = "Round";
         else if (functionName == "fract")
             nodeTypeName = "Fract";
+        else if (functionName == "clamp")
+            nodeTypeName = "Clamp";
         else
         {
             // Handle binary functions
@@ -544,6 +585,31 @@ namespace gladius
             connectNodes(model, arg1NodeId, arg1PortName, functionNodeId, nodes::FieldNames::A);
             connectNodes(model, arg2NodeId, arg2PortName, functionNodeId, nodes::FieldNames::B);
         }
+        else if (isTernaryFunction(functionName))
+        {
+            if (arguments.size() != 3)
+            {
+                return 0; // Wrong number of arguments
+            }
+
+            nodes::NodeId arg1NodeId = parseAndBuildGraph(arguments[0], model, variableNodes);
+            nodes::NodeId arg2NodeId = parseAndBuildGraph(arguments[1], model, variableNodes);
+            nodes::NodeId arg3NodeId = parseAndBuildGraph(arguments[2], model, variableNodes);
+
+            if (arg1NodeId == 0 || arg2NodeId == 0 || arg3NodeId == 0)
+            {
+                return 0;
+            }
+
+            std::string arg1PortName = getOutputPortName(model, arg1NodeId);
+            std::string arg2PortName = getOutputPortName(model, arg2NodeId);
+            std::string arg3PortName = getOutputPortName(model, arg3NodeId);
+
+            // For clamp: clamp(value, min, max) -> A=value, Min=min, Max=max
+            connectNodes(model, arg1NodeId, arg1PortName, functionNodeId, nodes::FieldNames::A);
+            connectNodes(model, arg2NodeId, arg2PortName, functionNodeId, nodes::FieldNames::Min);
+            connectNodes(model, arg3NodeId, arg3PortName, functionNodeId, nodes::FieldNames::Max);
+        }
         else
         {
             return 0; // Unsupported function type
@@ -608,6 +674,13 @@ namespace gladius
         static const std::set<std::string> binaryFunctions = {"pow", "atan2", "fmod", "min", "max"};
 
         return binaryFunctions.find(functionName) != binaryFunctions.end();
+    }
+
+    bool ExpressionToGraphConverter::isTernaryFunction(std::string const & functionName)
+    {
+        static const std::set<std::string> ternaryFunctions = {"clamp"};
+
+        return ternaryFunctions.find(functionName) != ternaryFunctions.end();
     }
 
     std::string ExpressionToGraphConverter::removeWhitespace(std::string const & expr)
@@ -1041,6 +1114,7 @@ namespace gladius
                  nodeTypeName.find("Log") != std::string::npos ||
                  nodeTypeName.find("Sqrt") != std::string::npos ||
                  nodeTypeName.find("Arc") != std::string::npos ||
+                 nodeTypeName.find("Clamp") != std::string::npos ||
                  nodeTypeName == "Input") // Begin node outputs can be scalar or vector
         {
             // For Begin node, check the actual argument type
@@ -1429,6 +1503,8 @@ namespace gladius
                 nodeTypeName = "Min";
             else if (functionName == "max")
                 nodeTypeName = "Max";
+            else if (functionName == "clamp")
+                nodeTypeName = "Clamp";
             else
             {
                 return 0; // Unsupported function

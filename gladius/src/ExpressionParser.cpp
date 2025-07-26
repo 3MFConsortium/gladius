@@ -1,5 +1,7 @@
 #include "ExpressionParser.h"
 
+#include <algorithm>
+#include <cmath>
 #include <exception>
 #include <muParser.h>
 #include <regex>
@@ -14,6 +16,12 @@ namespace gladius
         std::string m_lastError;
         bool m_hasValidExpression = false;
         std::map<std::string, double> m_variables;
+
+        /// Constructor to set up custom functions
+        Impl()
+        {
+            setupCustomFunctions();
+        }
 
         bool parseExpression(std::string const & expressionStr)
         {
@@ -100,6 +108,18 @@ namespace gladius
         }
 
       private:
+        /// Setup custom functions for muParser
+        void setupCustomFunctions()
+        {
+            // Add exp function (exponential)
+            m_parser.DefineFun("exp", [](double x) -> double { return std::exp(x); });
+
+            // Add clamp function (clamp value between min and max)
+            m_parser.DefineFun("clamp",
+                               [](double x, double minVal, double maxVal) -> double
+                               { return std::min(std::max(x, minVal), maxVal); });
+        }
+
         std::string preprocessComponentAccess(std::string const & expression) const
         {
             std::string result = expression;
@@ -163,7 +183,8 @@ namespace gladius
                 // Skip known functions
                 if (var != "sin" && var != "cos" && var != "tan" && var != "exp" && var != "log" &&
                     var != "sqrt" && var != "abs" && var != "pi" && var != "e" && var != "pow" &&
-                    var != "min" && var != "max" && var != "atan2" && var != "fmod")
+                    var != "min" && var != "max" && var != "atan2" && var != "fmod" &&
+                    var != "clamp")
                 {
                     // Check if this variable is part of a component access
                     bool isPartOfComponentAccess = false;
@@ -223,7 +244,7 @@ namespace gladius
 
                 // Skip known functions (extend this list as needed)
                 if (var != "sin" && var != "cos" && var != "tan" && var != "exp" && var != "log" &&
-                    var != "sqrt" && var != "abs" && var != "pi" && var != "e")
+                    var != "sqrt" && var != "abs" && var != "pi" && var != "e" && var != "clamp")
                 {
                     // Check if variable is already in the list
                     if (std::find(variables.begin(), variables.end(), var) == variables.end())

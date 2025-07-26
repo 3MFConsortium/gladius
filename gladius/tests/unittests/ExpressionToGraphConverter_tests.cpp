@@ -968,12 +968,40 @@ namespace gladius::tests
         // Advanced Mathematical Functions
         // =====================================================================================
 
-        // Logarithmic decay (using log instead of exp)
-        testCases.push_back({"LogarithmicDecay",
-                             "log(sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) + 1.0) - 0.1",
+        // Test simple exponential (without negative sign)
+        testCases.push_back(
+          {"SimpleExp", "exp(1.0)", {}, scalarOutput(), "Simple exponential function test", true});
+
+        // Test simple negative
+        testCases.push_back({"SimpleNegative",
+                             "exp(-1.0)",
+                             {},
+                             scalarOutput(),
+                             "Simple negative input to exponential",
+                             true});
+
+        // Test with variable but no sqrt
+        testCases.push_back({"ExpWithVariable",
+                             "exp(-pos.x)",
                              posArg(),
                              scalarOutput(),
-                             "Logarithmic decay distance function (alternative to exp)",
+                             "Exponential with negative variable",
+                             true});
+
+        // Test with sqrt but no variable
+        testCases.push_back({"ExpWithSqrt",
+                             "exp(-sqrt(1.0))",
+                             {},
+                             scalarOutput(),
+                             "Exponential with negative sqrt",
+                             true});
+
+        // Exponential decay (now using supported exp function)
+        testCases.push_back({"ExponentialDecay",
+                             "exp(-sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z)) - 0.1",
+                             posArg(),
+                             scalarOutput(),
+                             "Exponential decay distance function",
                              true});
 
         // Logarithmic spiral
@@ -1058,13 +1086,21 @@ namespace gladius::tests
         // Clamping and Smoothing Operations
         // =====================================================================================
 
-        // Clamped sphere (using min/max instead of clamp)
+        // Test simple clamp function
+        testCases.push_back({"SimpleClamp",
+                             "clamp(1.5, 0.0, 2.0)",
+                             {},
+                             scalarOutput(),
+                             "Simple clamp function test",
+                             true});
+
+        // Clamped sphere (now using supported clamp function)
         testCases.push_back(
           {"ClampedSphere",
-           "max(-0.5, min(sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 1.0, 0.5))",
+           "clamp(sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - 1.0, -0.5, 0.5)",
            posArg(),
            scalarOutput(),
-           "Clamped sphere distance using min/max for smoothed boundaries",
+           "Clamped sphere distance for smoothed boundaries",
            true});
 
         // Smooth minimum blend

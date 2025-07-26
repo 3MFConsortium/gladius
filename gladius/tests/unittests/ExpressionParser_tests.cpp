@@ -1,4 +1,5 @@
 #include "ExpressionParser.h"
+#include <cmath>
 #include <gtest/gtest.h>
 
 namespace gladius::tests
@@ -213,6 +214,50 @@ namespace gladius::tests
 
         // "pos" alone should not be in the variables list since it's part of "pos.x"
         EXPECT_EQ(std::find(variables.begin(), variables.end(), "pos"), variables.end());
+    }
+
+    // Custom Function Tests
+    TEST_F(ExpressionParserTest, ParseExpression_ExpFunction_ValidatesAndEvaluatesCorrectly)
+    {
+        // Test exp function
+        EXPECT_TRUE(m_parser->parseExpression("exp(1.0)"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        std::map<std::string, double> variables;
+        double result = m_parser->evaluate(variables);
+        EXPECT_NEAR(result, std::exp(1.0), 1e-10);
+    }
+
+    TEST_F(ExpressionParserTest, ParseExpression_ClampFunction_ValidatesAndEvaluatesCorrectly)
+    {
+        // Test clamp function
+        EXPECT_TRUE(m_parser->parseExpression("clamp(2.5, 0.0, 2.0)"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        std::map<std::string, double> variables;
+        double result = m_parser->evaluate(variables);
+        EXPECT_DOUBLE_EQ(result, 2.0);
+
+        // Test clamp with value below range
+        EXPECT_TRUE(m_parser->parseExpression("clamp(-1.5, 0.0, 2.0)"));
+        result = m_parser->evaluate(variables);
+        EXPECT_DOUBLE_EQ(result, 0.0);
+
+        // Test clamp with value in range
+        EXPECT_TRUE(m_parser->parseExpression("clamp(1.0, 0.0, 2.0)"));
+        result = m_parser->evaluate(variables);
+        EXPECT_DOUBLE_EQ(result, 1.0);
+    }
+
+    TEST_F(ExpressionParserTest, ParseExpression_ExpWithVariables_ValidatesAndEvaluatesCorrectly)
+    {
+        // Test exp function with variables
+        EXPECT_TRUE(m_parser->parseExpression("exp(-x*x)"));
+        EXPECT_TRUE(m_parser->hasValidExpression());
+
+        std::map<std::string, double> variables = {{"x", 2.0}};
+        double result = m_parser->evaluate(variables);
+        EXPECT_NEAR(result, std::exp(-4.0), 1e-10);
     }
 
 } // namespace gladius::tests

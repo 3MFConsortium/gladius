@@ -260,6 +260,11 @@ namespace gladius
         static bool isBinaryFunction(std::string const & functionName);
 
         /**
+         * @brief Check if a function takes three arguments
+         */
+        static bool isTernaryFunction(std::string const & functionName);
+
+        /**
          * @brief Remove whitespace from expression
          */
         static std::string removeWhitespace(std::string const & expr);
