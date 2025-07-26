@@ -608,4 +608,193 @@ namespace gladius::tests
         EXPECT_EQ(result, 0) << "Empty expression should return 0";
     }
 
+    // Test vector function conversion with proper output types
+    TEST_F(ExpressionToGraphConverterTest, ConvertVectorSine_VectorArgument_AcceptsVectorOutput)
+    {
+        // Arrange
+        std::string expression = "sin(pos)";
+        std::vector<FunctionArgument> vectorArgs = {{"pos", ArgumentType::Vector}};
+        FunctionOutput vectorOutput = {"result", ArgumentType::Vector};
+
+        // Act
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, vectorArgs, vectorOutput);
+
+        // Assert
+        EXPECT_NE(result, 0) << "sin(pos) with vector output should succeed";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConvertScalarCombination_VectorComponents_AcceptsScalarOutput)
+    {
+        // Arrange
+        std::string expression = "sin(pos.x) * cos(pos.y) * sin(pos.z)";
+        std::vector<FunctionArgument> vectorArgs = {{"pos", ArgumentType::Vector}};
+        FunctionOutput scalarOutput = {"result", ArgumentType::Scalar};
+
+        // Act
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, vectorArgs, scalarOutput);
+
+        // Assert
+        EXPECT_NE(result, 0) << "Component-based expression with scalar output should succeed";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConvertVectorFunctionComponent_VectorToScalar_AcceptsScalarOutput)
+    {
+        // Arrange - Use exact same pattern as working test
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("pos", ArgumentType::Vector);
+        std::string const expression = "pos.x";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0) << "pos.x with default scalar output should succeed";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConvertFunctionCallWithComponent_VectorFunction_AcceptsScalarOutput)
+    {
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("pos", ArgumentType::Vector);
+
+        // Test that sin(pos).x works correctly
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          "sin(pos).x",
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_NE(result, 0) << "sin(pos).x should work as function call with component access";
+        EXPECT_GT(m_model->getSize(), 0) << "Model should contain nodes after successful parsing";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConvertFunctionCallWithComponent_AllComponents_Work)
+    {
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("pos", ArgumentType::Vector);
+
+        // Test .x component
+        nodes::NodeId resultX = ExpressionToGraphConverter::convertExpressionToGraph(
+          "sin(pos).x",
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+        EXPECT_NE(resultX, 0) << "sin(pos).x should work";
+
+        // Clear model for next test
+        m_model = std::make_unique<nodes::Model>();
+
+        // Test .y component
+        nodes::NodeId resultY = ExpressionToGraphConverter::convertExpressionToGraph(
+          "cos(pos).y",
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+        EXPECT_NE(resultY, 0) << "cos(pos).y should work";
+
+        // Clear model for next test
+        m_model = std::make_unique<nodes::Model>();
+
+        // Test .z component
+        nodes::NodeId resultZ = ExpressionToGraphConverter::convertExpressionToGraph(
+          "sin(pos).z",
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+        EXPECT_NE(resultZ, 0) << "sin(pos).z should work";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, CanConvertToGraph_FunctionCallWithComponent_ReturnsTrue)
+    {
+        // Test that the validation function recognizes function calls with component access
+        EXPECT_TRUE(ExpressionToGraphConverter::canConvertToGraph("sin(pos).x", *m_parser));
+        EXPECT_TRUE(ExpressionToGraphConverter::canConvertToGraph("cos(pos).y", *m_parser));
+        EXPECT_TRUE(ExpressionToGraphConverter::canConvertToGraph("sin(pos).z", *m_parser));
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, CanConvertToGraph_RegularExpression_ReturnsTrue)
+    {
+        // Test that regular expressions still work
+        EXPECT_TRUE(ExpressionToGraphConverter::canConvertToGraph("x + y", *m_parser));
+        EXPECT_TRUE(ExpressionToGraphConverter::canConvertToGraph("sin(x)", *m_parser));
+        EXPECT_TRUE(ExpressionToGraphConverter::canConvertToGraph("pos.x", *m_parser));
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, CanConvertToGraph_InvalidExpression_ReturnsFalse)
+    {
+        // Test that invalid expressions return false
+        EXPECT_FALSE(ExpressionToGraphConverter::canConvertToGraph("", *m_parser));
+        EXPECT_FALSE(ExpressionToGraphConverter::canConvertToGraph("invalid()()", *m_parser));
+        EXPECT_FALSE(
+          ExpressionToGraphConverter::canConvertToGraph("sin(pos).w", *m_parser)); // .w is invalid
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConvertFunctionCallWithComponent_InvalidComponent_Fails)
+    {
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("pos", ArgumentType::Vector);
+
+        // Test invalid component (.w is not valid for Vector)
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          "sin(pos).w",
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_EQ(result, 0) << "sin(pos).w should fail because .w is not a valid component";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           CanConvertToGraph_NestedFunctionCallWithComponent_ReturnsTrue)
+    {
+        // Test validation of nested function calls with component access
+        EXPECT_TRUE(
+          ExpressionToGraphConverter::canConvertToGraph("cos(sin(pos).x+sin(pos).x)", *m_parser));
+        EXPECT_TRUE(ExpressionToGraphConverter::canConvertToGraph("sin(cos(pos).y)", *m_parser));
+        EXPECT_TRUE(
+          ExpressionToGraphConverter::canConvertToGraph("cos(sin(pos).x + cos(pos).y)", *m_parser));
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConvertNestedFunctionCallWithComponent_SimpleCase_Works)
+    {
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("pos", ArgumentType::Vector);
+
+        // Test a simple nested case: sin(cos(pos).x)
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          "sin(cos(pos).x)",
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_NE(result, 0) << "sin(cos(pos).x) should work";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConvertNestedFunctionCallWithComponent_ComplexCase_Works)
+    {
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("pos", ArgumentType::Vector);
+
+        // Test the main case: cos(sin(pos).x+sin(pos).x)
+        nodes::NodeId result = ExpressionToGraphConverter::convertExpressionToGraph(
+          "cos(sin(pos).x+sin(pos).x)",
+          *m_model,
+          *m_parser,
+          arguments,
+          FunctionOutput{"result", ArgumentType::Scalar});
+
+        EXPECT_NE(result, 0) << "cos(sin(pos).x+sin(pos).x) should work";
+    }
+
 } // namespace gladius::tests
