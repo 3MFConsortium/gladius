@@ -182,6 +182,17 @@ namespace gladius::ui
         void insertTemplate(std::string const & templateExpr);
 
         /**
+         * @brief Add expected arguments for a template expression
+         * @param templateExpr The template expression to analyze
+         */
+        void addExpectedArgumentsForTemplate(std::string const & templateExpr);
+
+        /**
+         * @brief Render notifications about template argument changes
+         */
+        void renderTemplateNotifications();
+
+        /**
          * @brief Render enhanced expression input with syntax highlighting
          */
         void renderEnhancedExpressionInput();
@@ -291,6 +302,23 @@ namespace gladius::ui
         // Enhanced text editing
         std::vector<ImVec4> m_syntaxColors;
         bool m_needsSyntaxUpdate = true;
+
+        // Template auto-add notifications
+        struct AutoAddedArgument
+        {
+            std::string name;
+            ArgumentType type;
+        };
+
+        struct ArgumentTypeConflict
+        {
+            std::string name;
+            ArgumentType existingType;
+            ArgumentType expectedType;
+        };
+
+        std::vector<AutoAddedArgument> m_autoAddedArguments;
+        std::vector<ArgumentTypeConflict> m_argumentTypeConflicts;
 
         // Disable copy and move
         ExpressionDialog(ExpressionDialog const &) = delete;

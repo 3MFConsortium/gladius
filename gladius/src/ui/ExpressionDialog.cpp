@@ -177,6 +177,9 @@ namespace gladius::ui
     {
         ImGui::TextUnformatted("Input Parameters");
 
+        // Show template notifications
+        renderTemplateNotifications();
+
         if (m_arguments.empty())
         {
             ImGui::TextColored(
@@ -263,10 +266,20 @@ namespace gladius::ui
             if (!ArgumentUtils::isValidArgumentName(newArgName))
             {
                 ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "Invalid name");
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Argument names must be valid identifiers\n(letters, "
+                                      "numbers, underscore; can't start with number)");
+                }
             }
             else
             {
                 ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "Already exists");
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("An argument with this name already exists.\nArgument names "
+                                      "must be unique within a function.");
+                }
             }
         }
 
@@ -1226,21 +1239,153 @@ namespace gladius::ui
 
     void ExpressionDialog::insertTemplate(std::string const & templateExpr)
     {
-        // Replace current expression or append if empty
-        if (m_expression.empty())
-        {
-            m_expression = templateExpr;
-        }
-        else
-        {
-            m_expression = templateExpr; // Replace for now, could enhance to merge
-        }
-
+        // Replace current expression
+        m_expression = templateExpr;
         strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
         m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+
+        // Auto-add expected arguments based on template
+        addExpectedArgumentsForTemplate(templateExpr);
+
         m_needsValidation = true;
         m_needsSyntaxUpdate = true;
         m_showExpressionTemplates = false;
+    }
+
+    void ExpressionDialog::addExpectedArgumentsForTemplate(std::string const & templateExpr)
+    {
+        // Define expected arguments for common template patterns
+        struct TemplateArgument
+        {
+            std::string name;
+            ArgumentType type;
+            std::string description;
+        };
+
+        std::vector<TemplateArgument> expectedArgs;
+
+        // Analyze template and determine expected arguments
+        if (templateExpr.find("pos.x") != std::string::npos ||
+            templateExpr.find("pos.y") != std::string::npos ||
+            templateExpr.find("pos.z") != std::string::npos)
+        {
+            expectedArgs.push_back({"pos", ArgumentType::Vector, "Position vector (x,y,z)"});
+        }
+
+        if (templateExpr.find("radius") != std::string::npos)
+        {
+            expectedArgs.push_back({"radius", ArgumentType::Scalar, "Sphere radius"});
+        }
+
+        if (templateExpr.find("size") != std::string::npos)
+        {
+            expectedArgs.push_back({"size", ArgumentType::Scalar, "Box size"});
+        }
+
+        if (templateExpr.find("frequency") != std::string::npos)
+        {
+            expectedArgs.push_back({"frequency", ArgumentType::Scalar, "Wave frequency"});
+        }
+
+        // Add arguments that don't already exist
+        for (auto const & expectedArg : expectedArgs)
+        {
+            // Check if argument already exists
+            bool exists = std::find_if(m_arguments.begin(),
+                                       m_arguments.end(),
+                                       [&expectedArg](FunctionArgument const & arg) {
+                                           return arg.name == expectedArg.name;
+                                       }) != m_arguments.end();
+
+            if (!exists)
+            {
+                m_arguments.emplace_back(expectedArg.name, expectedArg.type);
+                std::cout << "Auto-added argument: " << expectedArg.name << " ("
+                          << (expectedArg.type == ArgumentType::Scalar ? "Scalar" : "Vector")
+                          << ") - " << expectedArg.description << std::endl;
+
+                // Add to notification list for UI feedback
+                m_autoAddedArguments.push_back({expectedArg.name, expectedArg.type});
+            }
+            else
+            {
+                std::cout << "Argument '" << expectedArg.name << "' already exists, skipping"
+                          << std::endl;
+
+                // Check if existing argument has different type
+                auto existingArg = std::find_if(m_arguments.begin(),
+                                                m_arguments.end(),
+                                                [&expectedArg](FunctionArgument const & arg)
+                                                { return arg.name == expectedArg.name; });
+
+                if (existingArg != m_arguments.end() && existingArg->type != expectedArg.type)
+                {
+                    m_argumentTypeConflicts.push_back(
+                      {expectedArg.name, existingArg->type, expectedArg.type});
+                }
+            }
+        }
+    }
+
+    void ExpressionDialog::renderTemplateNotifications()
+    {
+        // Show auto-added arguments
+        if (!m_autoAddedArguments.empty())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
+            ImGui::Text("Auto-added arguments:");
+            ImGui::PopStyleColor();
+
+            ImGui::SameLine();
+            if (ImGui::SmallButton("✓ OK"))
+            {
+                m_autoAddedArguments.clear();
+            }
+
+            ImGui::Indent();
+            for (auto const & arg : m_autoAddedArguments)
+            {
+                ImGui::BulletText("%s (%s)",
+                                  arg.name.c_str(),
+                                  (arg.type == ArgumentType::Scalar ? "Scalar" : "Vector"));
+            }
+            ImGui::Unindent();
+            ImGui::Spacing();
+        }
+
+        // Show type conflicts
+        if (!m_argumentTypeConflicts.empty())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.7f, 0.2f, 1.0f));
+            ImGui::Text("Type conflicts detected:");
+            ImGui::PopStyleColor();
+
+            ImGui::SameLine();
+            if (ImGui::SmallButton("✓ OK##conflicts"))
+            {
+                m_argumentTypeConflicts.clear();
+            }
+
+            ImGui::Indent();
+            for (auto const & conflict : m_argumentTypeConflicts)
+            {
+                ImGui::BulletText(
+                  "%s: existing %s, expected %s",
+                  conflict.name.c_str(),
+                  (conflict.existingType == ArgumentType::Scalar ? "Scalar" : "Vector"),
+                  (conflict.expectedType == ArgumentType::Scalar ? "Scalar" : "Vector"));
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip(
+                      "Template expected %s type, but existing argument is %s.\nYou may need to "
+                      "manually adjust the argument type.",
+                      (conflict.expectedType == ArgumentType::Scalar ? "Scalar" : "Vector"),
+                      (conflict.existingType == ArgumentType::Scalar ? "Scalar" : "Vector"));
+                }
+            }
+            ImGui::Unindent();
+            ImGui::Spacing();
+        }
     }
 
     void ExpressionDialog::renderExpressionTemplates()
@@ -1257,18 +1402,20 @@ namespace gladius::ui
         static std::vector<Template> templates = {
           {"Sphere",
            "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - radius",
-           "Distance field for a sphere"},
-          {"Wave Pattern", "sin(pos.x) * cos(pos.y)", "Sine wave pattern"},
+           "Distance field for a sphere\nAdds: pos (Vector), radius (Scalar)"},
+          {"Wave Pattern", "sin(pos.x) * cos(pos.y)", "Sine wave pattern\nAdds: pos (Vector)"},
           {"Exponential Decay",
            "exp(-sqrt(pos.x*pos.x + pos.y*pos.y))",
-           "Exponential falloff from center"},
+           "Exponential falloff from center\nAdds: pos (Vector)"},
           {"Box Distance",
            "max(abs(pos.x), max(abs(pos.y), abs(pos.z))) - size",
-           "Distance field for a box"},
+           "Distance field for a box\nAdds: pos (Vector), size (Scalar)"},
           {"Ripples",
            "sin(sqrt(pos.x*pos.x + pos.y*pos.y) * frequency)",
-           "Circular ripple pattern"},
-          {"Twisted", "sin(pos.x + pos.y) * cos(pos.z)", "Twisted geometric pattern"}};
+           "Circular ripple pattern\nAdds: pos (Vector), frequency (Scalar)"},
+          {"Twisted",
+           "sin(pos.x + pos.y) * cos(pos.z)",
+           "Twisted geometric pattern\nAdds: pos (Vector)"}};
 
         ImGui::Columns(3, "Templates", false);
         for (size_t i = 0; i < templates.size(); ++i)
