@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../FunctionArgument.h"
+#include "imgui.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -151,6 +152,56 @@ namespace gladius::ui
         void renderFunctionNameInput();
 
         /**
+         * @brief Render the basic function setup (name, arguments, output)
+         */
+        void renderFunctionBasics();
+
+        /**
+         * @brief Render the enhanced expression editor with templates
+         */
+        void renderExpressionEditor();
+
+        /**
+         * @brief Render the smart assistant panel
+         */
+        void renderSmartAssistant();
+
+        /**
+         * @brief Render improved action buttons
+         */
+        void renderActionButtons();
+
+        /**
+         * @brief Render expression templates section
+         */
+        void renderExpressionTemplates();
+
+        /**
+         * @brief Insert a template into the expression
+         */
+        void insertTemplate(std::string const & templateExpr);
+
+        /**
+         * @brief Render enhanced expression input with syntax highlighting
+         */
+        void renderEnhancedExpressionInput();
+
+        /**
+         * @brief Apply syntax highlighting colors to text
+         */
+        void applySyntaxHighlighting(std::string const & text, std::vector<ImVec4> & colors);
+
+        /**
+         * @brief Check if a word is a mathematical function
+         */
+        bool isMathFunction(std::string const & word) const;
+
+        /**
+         * @brief Check if a word is a user-defined argument
+         */
+        bool isUserArgument(std::string const & word) const;
+
+        /**
          * @brief Render the expression input field with autocomplete
          */
         void renderExpressionInput();
@@ -172,6 +223,19 @@ namespace gladius::ui
         void renderValidationStatus();
 
         /**
+         * @brief Insert autocomplete suggestion at cursor position
+         * @param suggestion Suggestion to insert
+         */
+        void insertAutocompleteSuggestion(std::string const & suggestion);
+
+        /**
+         * @brief Get description for a function
+         * @param funcName Function name
+         * @return Description string
+         */
+        std::string getFunctionDescription(std::string const & funcName) const;
+
+        /**
          * @brief Render the variables found in the expression
          */
         void renderVariablesList();
@@ -181,6 +245,7 @@ namespace gladius::ui
          */
         void renderButtons();
 
+      private:
         std::unique_ptr<ExpressionParser> m_parser;
         bool m_visible = false;
         std::string m_functionName;
@@ -216,7 +281,18 @@ namespace gladius::ui
         // Autocomplete state
         bool m_showAutocomplete = false;
         std::vector<std::string> m_autocompleteSuggestions;
-        int m_selectedSuggestion = -1; // Disable copy and move
+        int m_selectedSuggestion = -1;
+
+        // UI state
+        bool m_showAdvancedOptions = false;
+        bool m_showExpressionTemplates = false;
+        int m_selectedTemplate = -1;
+
+        // Enhanced text editing
+        std::vector<ImVec4> m_syntaxColors;
+        bool m_needsSyntaxUpdate = true;
+
+        // Disable copy and move
         ExpressionDialog(ExpressionDialog const &) = delete;
         ExpressionDialog & operator=(ExpressionDialog const &) = delete;
         ExpressionDialog(ExpressionDialog &&) = delete;

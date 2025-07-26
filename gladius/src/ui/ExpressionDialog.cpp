@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fmt/format.h>
 #include <iostream>
+#include <memory>
 
 namespace gladius::ui
 {
@@ -72,24 +73,23 @@ namespace gladius::ui
             return;
         }
 
-        ImGui::SetNextWindowSize(ImVec2(600, 550), ImGuiCond_FirstUseEver);
+        // Slightly larger default size for better UX
+        ImGui::SetNextWindowSize(ImVec2(700, 600), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin(
-              "Mathematical Expression Function Creator", &m_visible, ImGuiWindowFlags_NoCollapse))
+        if (ImGui::Begin("Create Mathematical Function", &m_visible, ImGuiWindowFlags_NoCollapse))
         {
-            renderFunctionNameInput();
+            // Main content with better spacing
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 12));
+
+            renderFunctionBasics();
             ImGui::Separator();
-            renderArgumentsSection();
+            renderExpressionEditor();
             ImGui::Separator();
-            renderOutputSection();
+            renderSmartAssistant();
             ImGui::Separator();
-            renderExpressionInput();
-            ImGui::Separator();
-            renderValidationStatus();
-            ImGui::Separator();
-            renderVariablesList();
-            ImGui::Separator();
-            renderButtons();
+            renderActionButtons();
+
+            ImGui::PopStyleVar();
         }
         ImGui::End();
 
@@ -175,74 +175,61 @@ namespace gladius::ui
 
     void ExpressionDialog::renderArgumentsSection()
     {
-        ImGui::Text("Function Arguments:");
+        ImGui::TextUnformatted("Input Parameters");
 
         if (m_arguments.empty())
         {
-            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                               "No arguments defined. This function will take no inputs.");
+            ImGui::TextColored(
+              ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+              "No parameters defined - this function will work with constants only");
         }
         else
         {
-            // Display existing arguments in a table
-            if (ImGui::BeginTable(
-                  "##ArgumentsTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+            // Compact argument display
+            ImGui::Indent();
+            for (size_t i = 0; i < m_arguments.size(); ++i)
             {
-                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-                ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-                ImGui::TableHeadersRow();
+                ImGui::PushID(static_cast<int>(i));
 
-                for (size_t i = 0; i < m_arguments.size(); ++i)
+                // Argument name with type indicator
+                std::string typeIcon =
+                  (m_arguments[i].type == ArgumentType::Vector) ? "[Vec]" : "[Num]";
+                std::string argDisplay =
+                  fmt::format("{} {} ({})",
+                              typeIcon,
+                              m_arguments[i].name,
+                              ArgumentUtils::argumentTypeToString(m_arguments[i].type));
+
+                ImGui::TextUnformatted(argDisplay.c_str());
+                ImGui::SameLine();
+
+                // Small remove button
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
+                if (ImGui::Button("×"))
                 {
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%s", m_arguments[i].name.c_str());
-
-                    ImGui::TableSetColumnIndex(1);
-                    std::string typeStr = ArgumentUtils::argumentTypeToString(m_arguments[i].type);
-                    ImGui::Text("%s", typeStr.c_str());
-
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::PushID(static_cast<int>(i));
-                    if (ImGui::Button("Remove", ImVec2(70, 0)))
-                    {
-                        m_argumentToRemove = static_cast<int>(i);
-                    }
-                    ImGui::PopID();
+                    m_argumentToRemove = static_cast<int>(i);
                 }
+                ImGui::PopStyleVar();
 
-                ImGui::EndTable();
+                ImGui::PopID();
             }
+            ImGui::Unindent();
         }
 
+        // Quick add section
         ImGui::Spacing();
 
-        // Add new argument section
-        ImGui::Text("Add New Argument:");
-
-        // Argument name input
-        ImGui::Text("Name:");
-        ImGui::SameLine();
+        // Inline parameter addition
         ImGui::SetNextItemWidth(150);
-        if (ImGui::InputText("##newArgName", m_newArgumentNameBuffer, ARGUMENT_NAME_BUFFER_SIZE))
-        {
-            // Input changed - validation will happen when adding
-        }
+        ImGui::InputText("##newArgName", m_newArgumentNameBuffer, ARGUMENT_NAME_BUFFER_SIZE);
+        ImGui::SameLine();
 
-        // Argument type selection
-        ImGui::SameLine();
-        ImGui::Text("Type:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(100);
+        ImGui::SetNextItemWidth(80);
         const char * typeItems[] = {"Scalar", "Vector"};
         ImGui::Combo("##argType", &m_selectedArgumentType, typeItems, IM_ARRAYSIZE(typeItems));
-
-        // Add button
         ImGui::SameLine();
 
-        // Validate input before enabling add button
+        // Validate and show add button
         std::string newArgName = m_newArgumentNameBuffer;
         bool canAdd = !newArgName.empty() && ArgumentUtils::isValidArgumentName(newArgName) &&
                       std::find_if(m_arguments.begin(),
@@ -250,54 +237,54 @@ namespace gladius::ui
                                    [&newArgName](FunctionArgument const & arg)
                                    { return arg.name == newArgName; }) == m_arguments.end();
 
-        if (!canAdd)
+        if (!canAdd && !newArgName.empty())
         {
             ImGui::BeginDisabled();
         }
 
-        if (ImGui::Button("Add Argument"))
+        if (ImGui::Button("+ Add"))
         {
             ArgumentType type =
               (m_selectedArgumentType == 0) ? ArgumentType::Scalar : ArgumentType::Vector;
             m_arguments.emplace_back(newArgName, type);
-            m_newArgumentNameBuffer[0] = '\0'; // Clear input
-            m_needsValidation = true;          // Re-validate expression with new arguments
+            m_newArgumentNameBuffer[0] = '\0';
+            m_needsValidation = true;
         }
 
-        if (!canAdd)
+        if (!canAdd && !newArgName.empty())
         {
             ImGui::EndDisabled();
         }
 
-        // Show validation message for argument name
+        // Show validation error inline
         if (!newArgName.empty() && !canAdd)
         {
+            ImGui::SameLine();
             if (!ArgumentUtils::isValidArgumentName(newArgName))
             {
-                ImGui::TextColored(ImVec4(0.8f, 0.0f, 0.0f, 1.0f),
-                                   "Invalid name: use letters, numbers, underscore only");
+                ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "Invalid name");
             }
             else
             {
-                ImGui::TextColored(ImVec4(0.8f, 0.0f, 0.0f, 1.0f), "Argument name already exists");
+                ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "Already exists");
             }
         }
 
-        // Handle removal (do this after rendering to avoid iterator invalidation)
+        // Handle removal
         if (m_argumentToRemove >= 0 && m_argumentToRemove < static_cast<int>(m_arguments.size()))
         {
             m_arguments.erase(m_arguments.begin() + m_argumentToRemove);
             m_argumentToRemove = -1;
-            m_needsValidation = true; // Re-validate expression
+            m_needsValidation = true;
         }
 
-        // Show helpful information
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                           "Scalar arguments can be used as single values (e.g., 'radius')");
-        ImGui::TextColored(
-          ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-          "Vector arguments can be accessed as components (e.g., 'pos.x', 'pos.y', 'pos.z')");
+        // Compact help
+        if (m_arguments.empty())
+        {
+            ImGui::TextColored(
+              ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+              "[Num] Scalar: single number • [Vec] Vector: pos.x, pos.y, pos.z components");
+        }
     }
 
     void ExpressionDialog::renderFunctionNameInput()
@@ -410,40 +397,139 @@ namespace gladius::ui
             return;
         }
 
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
-        ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 0));
+        // Position the popup near the text cursor
+        ImVec2 textPos = ImGui::GetItemRectMin();
+        ImVec2 textSize = ImGui::GetItemRectSize();
 
-        if (ImGui::Begin("##autocomplete",
-                         nullptr,
-                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_Tooltip))
+        // Try to position near cursor, fallback to below text input
+        ImGui::SetNextWindowPos(ImVec2(textPos.x, textPos.y + textSize.y + 2));
+        ImGui::SetNextWindowSize(ImVec2(std::max(300.0f, textSize.x * 0.8f), 0));
+
+        ImGuiWindowFlags popupFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_Tooltip |
+                                      ImGuiWindowFlags_NoFocusOnAppearing;
+
+        if (ImGui::Begin("##autocomplete", nullptr, popupFlags))
         {
-            for (int i = 0; i < m_autocompleteSuggestions.size(); ++i)
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+
+            // Header
+            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                               "Autocomplete (Tab or Enter to insert):");
+            ImGui::Separator();
+
+            for (int i = 0; i < m_autocompleteSuggestions.size() && i < 10;
+                 ++i) // Limit to 10 suggestions
             {
                 bool isSelected = (i == m_selectedSuggestion);
 
-                if (isSelected)
+                // Color coding for different types of suggestions
+                ImVec4 itemColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+                std::string prefix = "";
+
+                std::string suggestion = m_autocompleteSuggestions[i];
+                if (suggestion.find("(") != std::string::npos)
                 {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+                    itemColor = ImVec4(0.4f, 0.8f, 0.9f, 1.0f); // Blue for functions
+                    prefix = "[Fn] ";
+                }
+                else if (suggestion.find(".") != std::string::npos)
+                {
+                    itemColor = ImVec4(0.8f, 0.4f, 0.8f, 1.0f); // Purple for components
+                    prefix = "[Vec] ";
+                }
+                else
+                {
+                    itemColor = ImVec4(0.7f, 0.9f, 0.7f, 1.0f); // Green for variables
+                    prefix = "[Var] ";
                 }
 
-                if (ImGui::Selectable(m_autocompleteSuggestions[i].c_str(), isSelected))
+                if (isSelected)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.3f, 0.6f, 0.8f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.4f, 0.4f, 0.7f, 0.8f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.2f, 0.5f, 0.8f));
+                }
+
+                std::string displayText = prefix + suggestion;
+                if (ImGui::Selectable(
+                      displayText.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick))
                 {
                     // Insert the selected suggestion
-                    m_expression += m_autocompleteSuggestions[i];
-                    strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
-                    m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
-                    m_needsValidation = true;
-                    m_showAutocomplete = false;
+                    insertAutocompleteSuggestion(suggestion);
                 }
 
                 if (isSelected)
                 {
-                    ImGui::PopStyleColor();
+                    ImGui::PopStyleColor(3);
+
+                    // Show tooltip with description for functions
+                    if (suggestion.find("(") != std::string::npos)
+                    {
+                        std::string funcName = suggestion.substr(0, suggestion.find('('));
+                        std::string description = getFunctionDescription(funcName);
+                        if (!description.empty())
+                        {
+                            ImGui::SameLine();
+                            ImGui::TextColored(
+                              ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "- %s", description.c_str());
+                        }
+                    }
                 }
             }
+
+            ImGui::PopStyleVar(2);
         }
         ImGui::End();
+    }
+
+    void ExpressionDialog::insertAutocompleteSuggestion(std::string const & suggestion)
+    {
+        // Find the cursor position and insert suggestion
+        size_t cursorPos = strlen(m_expressionBuffer);
+
+        // Find the start of the current word
+        size_t wordStart = cursorPos;
+        while (wordStart > 0 && (std::isalnum(m_expressionBuffer[wordStart - 1]) ||
+                                 m_expressionBuffer[wordStart - 1] == '_'))
+        {
+            wordStart--;
+        }
+
+        // Replace from wordStart to cursor with suggestion
+        std::string beforeWord = m_expression.substr(0, wordStart);
+        std::string afterCursor = m_expression.substr(cursorPos);
+
+        m_expression = beforeWord + suggestion + afterCursor;
+        strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
+        m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+
+        m_needsValidation = true;
+        m_needsSyntaxUpdate = true;
+        m_showAutocomplete = false;
+    }
+
+    std::string ExpressionDialog::getFunctionDescription(std::string const & funcName) const
+    {
+        static std::map<std::string, std::string> descriptions = {
+          {"sin", "Sine function"},
+          {"cos", "Cosine function"},
+          {"tan", "Tangent function"},
+          {"exp", "Exponential function (e^x)"},
+          {"log", "Natural logarithm"},
+          {"sqrt", "Square root"},
+          {"abs", "Absolute value"},
+          {"pow", "Power function (x^y)"},
+          {"min", "Minimum of two values"},
+          {"max", "Maximum of two values"},
+          {"clamp", "Clamp value between min and max"},
+          {"floor", "Floor function (round down)"},
+          {"ceil", "Ceiling function (round up)"},
+          {"round", "Round to nearest integer"}};
+
+        auto it = descriptions.find(funcName);
+        return (it != descriptions.end()) ? it->second : "";
     }
 
     std::vector<std::string> ExpressionDialog::getAutocompleteSuggestions() const
@@ -475,48 +561,60 @@ namespace gladius::ui
             return suggestions;
         }
 
-        // Function suggestions
-        std::vector<std::string> functions = {
-          "sin(",  "cos(",   "tan(",   "asin(",  "acos(", "atan(", "atan2(", "sinh(", "cosh(",
-          "tanh(", "exp(",   "log(",   "log10(", "log2(", "sqrt(", "abs(",   "sign(", "floor(",
-          "ceil(", "round(", "fract(", "pow(",   "min(",  "max(",  "fmod("};
+        // Enhanced function suggestions with descriptions
+        std::vector<std::pair<std::string, std::string>> functions = {
+          {"sin(", "Sine function"},
+          {"cos(", "Cosine function"},
+          {"tan(", "Tangent function"},
+          {"asin(", "Arc sine"},
+          {"acos(", "Arc cosine"},
+          {"atan(", "Arc tangent"},
+          {"atan2(", "Two-argument arc tangent"},
+          {"exp(", "Exponential function (e^x)"},
+          {"log(", "Natural logarithm"},
+          {"log10(", "Base-10 logarithm"},
+          {"sqrt(", "Square root"},
+          {"abs(", "Absolute value"},
+          {"pow(", "Power function (x^y)"},
+          {"min(", "Minimum of two values"},
+          {"max(", "Maximum of two values"},
+          {"clamp(", "Clamp value between min and max"},
+          {"floor(", "Floor function"},
+          {"ceil(", "Ceiling function"},
+          {"round(", "Round to nearest integer"}};
 
         for (const auto & func : functions)
         {
-            std::string funcName = func.substr(0, func.find('('));
-            if (funcName.find(lastToken) == 0) // starts with lastToken
+            std::string funcName = func.first.substr(0, func.first.find('('));
+            if (funcName.find(lastToken) == 0)
             {
-                suggestions.push_back(func.substr(lastToken.length()));
+                suggestions.push_back(func.first.substr(lastToken.length()));
             }
         }
 
-        // Argument suggestions (if we have vector arguments, suggest component access)
+        // Smart argument suggestions
         for (const auto & arg : m_arguments)
         {
             if (arg.type == ArgumentType::Vector)
             {
                 if (arg.name.find(lastToken) == 0)
                 {
-                    suggestions.push_back(".x");
-                    suggestions.push_back(".y");
-                    suggestions.push_back(".z");
-                }
-                else if ((arg.name + ".").find(lastToken) == 0)
-                {
-                    std::string remaining = (arg.name + ".").substr(lastToken.length());
-                    if (remaining == "x" || remaining == "y" || remaining == "z")
+                    suggestions.push_back(arg.name.substr(lastToken.length()));
+                    if (arg.name == lastToken) // Exact match, suggest components
                     {
-                        suggestions.push_back(remaining);
+                        suggestions.push_back(".x");
+                        suggestions.push_back(".y");
+                        suggestions.push_back(".z");
                     }
                 }
             }
-            else if (arg.name.find(lastToken) == 0) // Scalar argument
+            else if (arg.name.find(lastToken) == 0)
             {
                 suggestions.push_back(arg.name.substr(lastToken.length()));
             }
         }
 
-        // Common mathematical constants
+        // Mathematical constants
         std::vector<std::string> constants = {"pi", "e"};
         for (const auto & constant : constants)
         {
@@ -525,6 +623,10 @@ namespace gladius::ui
                 suggestions.push_back(constant.substr(lastToken.length()));
             }
         }
+
+        // Remove duplicates and sort
+        std::sort(suggestions.begin(), suggestions.end());
+        suggestions.erase(std::unique(suggestions.begin(), suggestions.end()), suggestions.end());
 
         return suggestions;
     }
@@ -694,44 +796,28 @@ namespace gladius::ui
 
     void ExpressionDialog::renderOutputSection()
     {
-        ImGui::Text("Function Output:");
+        ImGui::TextUnformatted("Output");
 
-        // Output name input
-        ImGui::PushItemWidth(200);
-        if (ImGui::InputText("Output Name", m_outputNameBuffer, OUTPUT_NAME_BUFFER_SIZE))
+        // Compact output configuration
+        ImGui::SetNextItemWidth(200);
+        if (ImGui::InputText("Name##output", m_outputNameBuffer, OUTPUT_NAME_BUFFER_SIZE))
         {
             m_output.name = std::string(m_outputNameBuffer);
         }
-        ImGui::PopItemWidth();
-
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "(default: result)");
+        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(default: result)");
 
-        // Display deduced output type
-        ImGui::Text("Output Type: ");
-        ImGui::SameLine();
-
+        // Auto-detected type with icon
         if (m_isValid)
         {
             ArgumentType deducedType = deduceOutputType();
-            if (deducedType == ArgumentType::Scalar)
-            {
-                ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f), "Scalar");
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(single value)");
-            }
-            else
-            {
-                ImGui::TextColored(ImVec4(0.0f, 0.6f, 0.8f, 1.0f), "Vector");
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(x, y, z components)");
-            }
+            std::string typeText =
+              (deducedType == ArgumentType::Scalar) ? "Single value" : "Vector (x,y,z)";
+            ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Type: %s", typeText.c_str());
         }
         else
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.0f, 1.0f), "Unknown");
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(validate expression first)");
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Type: Auto-detected");
         }
     }
 
@@ -895,6 +981,462 @@ namespace gladius::ui
         // Default: if we have direct vector arguments, assume vector output
         // This covers cases like vector arithmetic operations
         return hasDirectVectorArgument ? ArgumentType::Vector : ArgumentType::Scalar;
+    }
+
+    void ExpressionDialog::renderFunctionBasics()
+    {
+        // Function name with cleaner styling
+        ImGui::TextUnformatted("Function Name");
+        ImGui::PushItemWidth(-1);
+        if (ImGui::InputText("##functionName", m_functionNameBuffer, FUNCTION_NAME_BUFFER_SIZE))
+        {
+            m_functionName = m_functionNameBuffer;
+        }
+        ImGui::PopItemWidth();
+
+        if (m_functionName.empty())
+        {
+            ImGui::TextColored(
+              ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+              "Give your function a descriptive name (e.g., 'wave_pattern', 'distance_field')");
+        }
+
+        ImGui::Spacing();
+
+        // Collapsible advanced options
+        if (ImGui::CollapsingHeader("Function Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            renderArgumentsSection();
+            ImGui::Spacing();
+            renderOutputSection();
+        }
+    }
+
+    void ExpressionDialog::renderExpressionEditor()
+    {
+        ImGui::TextUnformatted("Mathematical Expression");
+
+        // Quick template buttons
+        if (ImGui::Button("Templates"))
+        {
+            m_showExpressionTemplates = !m_showExpressionTemplates;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Functions"))
+        {
+            // Show function reference
+            ImGui::OpenPopup("FunctionReference");
+        }
+
+        // Templates section
+        if (m_showExpressionTemplates)
+        {
+            renderExpressionTemplates();
+            ImGui::Spacing();
+        }
+
+        // Function reference popup
+        if (ImGui::BeginPopup("FunctionReference"))
+        {
+            ImGui::Text("Available Functions:");
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Basic Math:");
+            ImGui::BulletText("sin(), cos(), tan(), asin(), acos(), atan()");
+            ImGui::BulletText("exp(), log(), sqrt(), abs(), pow(x,y)");
+            ImGui::BulletText("min(x,y), max(x,y), clamp(x,min,max)");
+            ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Operators:");
+            ImGui::BulletText("+ - * / ( )");
+            ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Vector Components:");
+            ImGui::BulletText("pos.x, pos.y, pos.z");
+            ImGui::EndPopup();
+        }
+
+        // Main expression input
+        renderEnhancedExpressionInput();
+
+        // Autocomplete
+        if (m_showAutocomplete)
+        {
+            renderAutocompleteSuggestions();
+        }
+
+        // Quick examples for empty expression
+        if (m_expression.empty())
+        {
+            ImGui::TextColored(
+              ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+              "Examples: sin(pos.x), sqrt(pos.x*pos.x + pos.y*pos.y), exp(-radius)");
+        }
+    }
+
+    void ExpressionDialog::renderEnhancedExpressionInput()
+    {
+        ImGui::PushItemWidth(-1);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 8));
+
+        // Update syntax highlighting if needed
+        if (m_needsSyntaxUpdate)
+        {
+            applySyntaxHighlighting(m_expression, m_syntaxColors);
+            m_needsSyntaxUpdate = false;
+        }
+
+        // Custom text input with syntax highlighting
+        ImGuiInputTextFlags flags = ImGuiInputTextFlags_AllowTabInput |
+                                    ImGuiInputTextFlags_CallbackCompletion |
+                                    ImGuiInputTextFlags_CallbackCharFilter;
+
+        // Enhanced text input callback
+        auto callback = [](ImGuiInputTextCallbackData * data) -> int
+        {
+            ExpressionDialog * dialog = static_cast<ExpressionDialog *>(data->UserData);
+
+            if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion)
+            {
+                // Handle Tab completion
+                dialog->m_autocompleteSuggestions = dialog->getAutocompleteSuggestions();
+                if (!dialog->m_autocompleteSuggestions.empty())
+                {
+                    dialog->m_showAutocomplete = true;
+                    dialog->m_selectedSuggestion = 0;
+                }
+                return 0;
+            }
+
+            if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter)
+            {
+                // Mark for syntax highlighting update
+                dialog->m_needsSyntaxUpdate = true;
+                return 0;
+            }
+
+            return 0;
+        };
+
+        if (ImGui::InputTextMultiline("##expression",
+                                      m_expressionBuffer,
+                                      EXPRESSION_BUFFER_SIZE,
+                                      ImVec2(-1, 100),
+                                      flags,
+                                      callback,
+                                      this))
+        {
+            m_expression = m_expressionBuffer;
+            m_needsValidation = true;
+            m_needsSyntaxUpdate = true;
+            m_autocompleteSuggestions = getAutocompleteSuggestions();
+            m_showAutocomplete = !m_autocompleteSuggestions.empty();
+            m_selectedSuggestion = -1;
+        }
+
+        ImGui::PopStyleVar();
+        ImGui::PopItemWidth();
+
+        // Show syntax-highlighted overlay (simplified approach)
+        if (!m_expression.empty() && m_syntaxColors.size() == m_expression.length())
+        {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetItemRectSize().x);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetItemRectSize().y);
+
+            // Note: This is a simplified approach. For full syntax highlighting,
+            // we'd need a more sophisticated text rendering system
+        }
+    }
+
+    void ExpressionDialog::applySyntaxHighlighting(std::string const & text,
+                                                   std::vector<ImVec4> & colors)
+    {
+        colors.clear();
+        colors.resize(text.length(), ImVec4(1.0f, 1.0f, 1.0f, 1.0f)); // Default white
+
+        // Simple tokenization for syntax highlighting
+        for (size_t i = 0; i < text.length(); ++i)
+        {
+            char c = text[i];
+
+            // Numbers
+            if (std::isdigit(c) || c == '.')
+            {
+                colors[i] = ImVec4(0.8f, 0.8f, 0.4f, 1.0f); // Yellow for numbers
+            }
+            // Operators
+            else if (c == '+' || c == '-' || c == '*' || c == '/' || c == '=' || c == '(' ||
+                     c == ')' || c == ',' || c == '.')
+            {
+                colors[i] = ImVec4(0.9f, 0.6f, 0.3f, 1.0f); // Orange for operators
+            }
+            // Check for function names and arguments
+            else if (std::isalpha(c) || c == '_')
+            {
+                // Extract word
+                std::string word;
+                size_t start = i;
+                while (i < text.length() && (std::isalnum(text[i]) || text[i] == '_'))
+                {
+                    word += text[i];
+                    ++i;
+                }
+                --i; // Adjust for loop increment
+
+                ImVec4 wordColor;
+                if (isMathFunction(word))
+                {
+                    wordColor = ImVec4(0.4f, 0.8f, 0.9f, 1.0f); // Light blue for functions
+                }
+                else if (isUserArgument(word))
+                {
+                    wordColor = ImVec4(0.8f, 0.4f, 0.8f, 1.0f); // Purple for user arguments
+                }
+                else
+                {
+                    wordColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White for unknown words
+                }
+
+                // Apply color to the entire word
+                for (size_t j = start; j <= i && j < colors.size(); ++j)
+                {
+                    colors[j] = wordColor;
+                }
+            }
+        }
+    }
+
+    bool ExpressionDialog::isMathFunction(std::string const & word) const
+    {
+        static std::vector<std::string> mathFunctions = {
+          "sin",   "cos",   "tan",   "asin", "acos", "atan", "atan2", "exp",
+          "log",   "log10", "sqrt",  "abs",  "pow",  "min",  "max",   "clamp",
+          "floor", "ceil",  "round", "fmod", "sinh", "cosh", "tanh"};
+
+        return std::find(mathFunctions.begin(), mathFunctions.end(), word) != mathFunctions.end();
+    }
+
+    bool ExpressionDialog::isUserArgument(std::string const & word) const
+    {
+        for (const auto & arg : m_arguments)
+        {
+            if (arg.name == word)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void ExpressionDialog::insertTemplate(std::string const & templateExpr)
+    {
+        // Replace current expression or append if empty
+        if (m_expression.empty())
+        {
+            m_expression = templateExpr;
+        }
+        else
+        {
+            m_expression = templateExpr; // Replace for now, could enhance to merge
+        }
+
+        strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
+        m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+        m_needsValidation = true;
+        m_needsSyntaxUpdate = true;
+        m_showExpressionTemplates = false;
+    }
+
+    void ExpressionDialog::renderExpressionTemplates()
+    {
+        ImGui::Text("Quick Templates:");
+
+        struct Template
+        {
+            std::string name;
+            std::string expression;
+            std::string description;
+        };
+
+        static std::vector<Template> templates = {
+          {"Sphere",
+           "sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z) - radius",
+           "Distance field for a sphere"},
+          {"Wave Pattern", "sin(pos.x) * cos(pos.y)", "Sine wave pattern"},
+          {"Exponential Decay",
+           "exp(-sqrt(pos.x*pos.x + pos.y*pos.y))",
+           "Exponential falloff from center"},
+          {"Box Distance",
+           "max(abs(pos.x), max(abs(pos.y), abs(pos.z))) - size",
+           "Distance field for a box"},
+          {"Ripples",
+           "sin(sqrt(pos.x*pos.x + pos.y*pos.y) * frequency)",
+           "Circular ripple pattern"},
+          {"Twisted", "sin(pos.x + pos.y) * cos(pos.z)", "Twisted geometric pattern"}};
+
+        ImGui::Columns(3, "Templates", false);
+        for (size_t i = 0; i < templates.size(); ++i)
+        {
+            if (ImGui::Button(templates[i].name.c_str(), ImVec2(-1, 30)))
+            {
+                insertTemplate(templates[i].expression);
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", templates[i].description.c_str());
+            }
+            if ((i + 1) % 3 != 0)
+                ImGui::NextColumn();
+        }
+        ImGui::Columns(1);
+    }
+
+    void ExpressionDialog::renderSmartAssistant()
+    {
+        validateExpression();
+
+        // Status indicator with better visual feedback
+        if (m_expression.empty())
+        {
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Enter an expression above");
+            return;
+        }
+
+        // Validation status with icons
+        if (m_isValid)
+        {
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "[OK] Expression is valid");
+
+            // Show detected variables in a cleaner way
+            if (m_parser->hasValidExpression())
+            {
+                std::vector<std::string> variables = m_parser->getVariables();
+                if (!variables.empty())
+                {
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.9f, 1.0f), "Variables: ");
+                    ImGui::SameLine();
+                    for (size_t i = 0; i < variables.size(); ++i)
+                    {
+                        if (i > 0)
+                        {
+                            ImGui::SameLine();
+                            ImGui::Text(",");
+                            ImGui::SameLine();
+                        }
+                        ImGui::TextColored(
+                          ImVec4(0.9f, 0.7f, 0.9f, 1.0f), "%s", variables[i].c_str());
+                    }
+                }
+            }
+
+            // Output type with better styling
+            ImGui::Spacing();
+            ArgumentType outputType = deduceOutputType();
+            if (outputType == ArgumentType::Scalar)
+            {
+                ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Output: Single value (Scalar)");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.9f, 1.0f),
+                                   "Output: Vector (x, y, z components)");
+            }
+        }
+        else
+        {
+            ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "[ERROR] Expression has errors");
+
+            std::string error = m_parser->getLastError();
+            if (!error.empty())
+            {
+                ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.6f, 1.0f), "Error: %s", error.c_str());
+            }
+        }
+    }
+
+    void ExpressionDialog::renderActionButtons()
+    {
+        ImGui::Spacing();
+
+        // Center the buttons
+        float buttonWidth = 120.0f;
+        float spacing = 10.0f;
+        float totalWidth = buttonWidth * 3 + spacing * 2;
+        float availWidth = ImGui::GetContentRegionAvail().x;
+        float offsetX = (availWidth - totalWidth) * 0.5f;
+        if (offsetX > 0)
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+
+        // Create Function button - primary action
+        bool hasParserValidExpression = m_parser->hasValidExpression();
+        bool isFunctionWithComponent =
+          ExpressionToGraphConverter::canConvertToGraph(m_expression, *m_parser) &&
+          !hasParserValidExpression;
+        bool canApply = m_isValid && (hasParserValidExpression || isFunctionWithComponent) &&
+                        !m_functionName.empty();
+
+        if (canApply)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.6f, 0.1f, 1.0f));
+        }
+        else
+        {
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::Button("Create Function", ImVec2(buttonWidth, 35)))
+        {
+            if (m_onApplyCallback && canApply)
+            {
+                m_output.name = std::string(m_outputNameBuffer);
+                m_onApplyCallback(m_functionName, m_expression, m_arguments, m_output);
+                hide();
+            }
+        }
+
+        if (canApply)
+        {
+            ImGui::PopStyleColor(3);
+        }
+        else
+        {
+            ImGui::EndDisabled();
+        }
+
+        // Preview button
+        ImGui::SameLine();
+        bool canPreview = m_isValid && (hasParserValidExpression || isFunctionWithComponent);
+
+        if (!canPreview)
+        {
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::Button("Preview", ImVec2(buttonWidth, 35)))
+        {
+            if (m_onPreviewCallback && canPreview)
+            {
+                m_onPreviewCallback(m_expression);
+            }
+        }
+
+        if (!canPreview)
+        {
+            ImGui::EndDisabled();
+        }
+
+        // Cancel button
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(buttonWidth, 35)))
+        {
+            hide();
+        }
+
+        // Help text at bottom
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextColored(
+          ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+          "Use templates for quick start • Press Tab for autocomplete • Hover functions for help");
     }
 
 } // namespace gladius::ui
