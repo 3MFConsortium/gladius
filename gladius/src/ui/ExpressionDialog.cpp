@@ -1,5 +1,6 @@
 #include "ExpressionDialog.h"
 #include "../ExpressionParser.h"
+#include "../ExpressionToGraphConverter.h"
 #include "../FunctionArgument.h"
 
 #include "imgui.h"
@@ -157,16 +158,16 @@ namespace gladius::ui
             return;
         }
 
-        m_isValid = m_parser->parseExpression(m_expression);
+        // Check if the expression can be converted to a graph
+        // This includes both standard parser validation AND function calls with component access
+        m_isValid = ExpressionToGraphConverter::canConvertToGraph(m_expression, *m_parser);
 
-        // Update output type based on expression
-        if (m_isValid)
-        {
-            m_output.type = deduceOutputType();
-        }
+        // Update output type based on expression (regardless of parser validity)
+        // Our type deduction is more sophisticated than the basic expression parser
+        m_output.type = deduceOutputType();
 
         std::cout << "Expression validation - expression: '" << m_expression
-                  << "', isValid: " << m_isValid
+                  << "', canConvertToGraph: " << m_isValid
                   << ", hasValidExpression: " << m_parser->hasValidExpression()
                   << ", deduced type: "
                   << (m_output.type == ArgumentType::Scalar ? "Scalar" : "Vector") << std::endl;
@@ -602,7 +603,13 @@ namespace gladius::ui
         ImGui::Spacing();
 
         // Apply button - only enabled if expression is valid and function name is not empty
-        bool canApply = m_isValid && m_parser->hasValidExpression() && !m_functionName.empty();
+        // For function calls with component access, we don't require parser.hasValidExpression()
+        bool hasParserValidExpression = m_parser->hasValidExpression();
+        bool isFunctionWithComponent =
+          ExpressionToGraphConverter::canConvertToGraph(m_expression, *m_parser) &&
+          !hasParserValidExpression;
+        bool canApply = m_isValid && (hasParserValidExpression || isFunctionWithComponent) &&
+                        !m_functionName.empty();
 
         if (!canApply)
         {
@@ -647,7 +654,8 @@ namespace gladius::ui
         ImGui::SameLine();
 
         // Preview button - enabled if expression is valid
-        bool canPreview = m_isValid && m_parser->hasValidExpression();
+        // For function calls with component access, we don't require parser.hasValidExpression()
+        bool canPreview = m_isValid && (hasParserValidExpression || isFunctionWithComponent);
 
         if (!canPreview)
         {
@@ -729,51 +737,164 @@ namespace gladius::ui
 
     ArgumentType ExpressionDialog::deduceOutputType() const
     {
-        // For now, implement basic type deduction rules
-        // Vector operations that return vectors:
-        // 1. Vector component access patterns don't create vectors (they extract scalars)
-        // 2. Direct vector arguments would return vectors, but most math operations return scalars
-        // 3. Only specific vector construction operations would return vectors
-
         std::string expr = m_expression;
 
-        // Check for vector component access (e.g., "pos.x", "A.y") - these return scalars
-        if (expr.find('.') != std::string::npos)
+        // Remove whitespace for easier parsing
+        expr.erase(std::remove_if(expr.begin(), expr.end(), ::isspace), expr.end());
+
+        // Check for component access at the end of the expression (e.g., "sin(pos).x")
+        // This indicates we're extracting a scalar component from a vector result
+        std::vector<std::string> components = {".x", ".y", ".z"};
+        for (const auto & comp : components)
         {
-            return ArgumentType::Scalar;
+            if (expr.length() >= comp.length() &&
+                expr.substr(expr.length() - comp.length()) == comp)
+            {
+                return ArgumentType::Scalar;
+            }
         }
 
-        // Check for vector arguments used directly (without component access)
+        // Check for argument component access (e.g., "pos.x", "A.y")
+        // Look for patterns like argumentName.component
+        bool hasArgumentComponentAccess = false;
+        for (const auto & arg : m_arguments)
+        {
+            for (const auto & comp : components)
+            {
+                std::string pattern = arg.name + comp;
+                if (expr.find(pattern) != std::string::npos)
+                {
+                    hasArgumentComponentAccess = true;
+                    break;
+                }
+            }
+            if (hasArgumentComponentAccess)
+                break;
+        }
+
+        // If we have argument component access, check if that's ALL we have
+        if (hasArgumentComponentAccess)
+        {
+            // Count how many vector arguments are used directly (without component access)
+            int directVectorUsage = 0;
+            for (const auto & arg : m_arguments)
+            {
+                if (arg.type == ArgumentType::Vector)
+                {
+                    // Check if argument is used directly (not just in component access)
+                    size_t pos = 0;
+                    while ((pos = expr.find(arg.name, pos)) != std::string::npos)
+                    {
+                        // Check if this occurrence is NOT followed by a component accessor
+                        if (pos + arg.name.length() >= expr.length() ||
+                            expr[pos + arg.name.length()] != '.')
+                        {
+                            directVectorUsage++;
+                            break;
+                        }
+                        pos += arg.name.length();
+                    }
+                }
+            }
+
+            // If we only have component access (no direct vector usage), result is scalar
+            if (directVectorUsage == 0)
+            {
+                return ArgumentType::Scalar;
+            }
+        }
+
+        // Check if expression contains vector arguments used directly
+        bool hasDirectVectorArgument = false;
         for (const auto & arg : m_arguments)
         {
             if (arg.type == ArgumentType::Vector)
             {
-                // If we have a vector argument name used directly (not with .x, .y, .z)
-                size_t pos = expr.find(arg.name);
-                if (pos != std::string::npos)
+                // Check if argument is used directly (not just in component access)
+                size_t pos = 0;
+                while ((pos = expr.find(arg.name, pos)) != std::string::npos)
                 {
-                    // Check if it's followed by a component accessor
-                    if (pos + arg.name.length() < expr.length() &&
-                        expr[pos + arg.name.length()] == '.')
+                    // Check if this occurrence is NOT followed by a component accessor
+                    if (pos + arg.name.length() >= expr.length() ||
+                        expr[pos + arg.name.length()] != '.')
                     {
-                        continue; // This is component access, keep looking
+                        hasDirectVectorArgument = true;
+                        break;
                     }
-                    else
-                    {
-                        // Vector used directly - this could be a vector operation
-                        // For simplicity, most math operations on vectors return scalars
-                        // Only return Vector if it's a simple pass-through
-                        if (expr == arg.name)
-                        {
-                            return ArgumentType::Vector;
-                        }
-                    }
+                    pos += arg.name.length();
                 }
+                if (hasDirectVectorArgument)
+                    break;
             }
         }
 
-        // Most mathematical expressions return scalars
-        return ArgumentType::Scalar;
+        // If no direct vector arguments, result is scalar
+        if (!hasDirectVectorArgument)
+        {
+            return ArgumentType::Scalar;
+        }
+
+        // Check for vector-preserving operations (element-wise functions)
+        std::vector<std::string> vectorFunctions = {"sin",
+                                                    "cos",
+                                                    "tan",
+                                                    "asin",
+                                                    "acos",
+                                                    "atan",
+                                                    "exp",
+                                                    "log",
+                                                    "sqrt",
+                                                    "abs",
+                                                    "floor",
+                                                    "ceil",
+                                                    "round",
+                                                    "pow",
+                                                    "+",
+                                                    "-",
+                                                    "*",
+                                                    "/"};
+
+        // If expression is just a vector argument name, return vector
+        for (const auto & arg : m_arguments)
+        {
+            if (arg.type == ArgumentType::Vector && expr == arg.name)
+            {
+                return ArgumentType::Vector;
+            }
+        }
+
+        // Check if expression uses vector-preserving functions
+        bool hasVectorPreservingOperation = false;
+        for (const auto & func : vectorFunctions)
+        {
+            if (expr.find(func) != std::string::npos)
+            {
+                hasVectorPreservingOperation = true;
+                break;
+            }
+        }
+
+        // If we have direct vector arguments and vector-preserving operations, result is vector
+        if (hasDirectVectorArgument && hasVectorPreservingOperation)
+        {
+            return ArgumentType::Vector;
+        }
+
+        // Check for reduction operations that return scalars even with vector inputs
+        std::vector<std::string> scalarFunctions = {
+          "length", "dot", "cross", "magnitude", "norm", "min", "max", "sum", "mean", "distance"};
+
+        for (const auto & func : scalarFunctions)
+        {
+            if (expr.find(func) != std::string::npos)
+            {
+                return ArgumentType::Scalar;
+            }
+        }
+
+        // Default: if we have direct vector arguments, assume vector output
+        // This covers cases like vector arithmetic operations
+        return hasDirectVectorArgument ? ArgumentType::Vector : ArgumentType::Scalar;
     }
 
 } // namespace gladius::ui

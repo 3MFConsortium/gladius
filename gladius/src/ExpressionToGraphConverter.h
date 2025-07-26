@@ -48,6 +48,14 @@ namespace gladius
                                  std::vector<FunctionArgument> const & arguments = {},
                                  FunctionOutput const & output = {});
 
+        /**
+         * @brief Check if an expression can be converted to a graph
+         * @param expression The expression to check
+         * @param parser The expression parser to use for validation
+         * @return true if the expression can be converted to a graph
+         */
+        static bool canConvertToGraph(std::string const & expression, ExpressionParser & parser);
+
       private:
         /**
          * @brief Create variable input nodes for the expression
@@ -172,6 +180,67 @@ namespace gladius
         parseFunctionCall(std::string const & expression,
                           nodes::Model & model,
                           std::map<std::string, nodes::NodeId> const & variableNodes);
+
+        /**
+         * @brief Check if expression is a function call with component access (e.g., "sin(pos).x")
+         * @param expression The expression to check
+         * @return true if it's a function call followed by component access
+         */
+        static bool isFunctionCallWithComponentAccess(std::string const & expression);
+
+        /**
+         * @brief Check if expression contains function calls with component access anywhere within
+         * it
+         * @param expression The expression to check
+         * @return true if it contains function calls with component access
+         */
+        static bool containsFunctionCallWithComponentAccess(std::string const & expression);
+
+        /**
+         * @brief Parse a function call with component access (e.g., "sin(pos).x")
+         * @param expression The expression to parse
+         * @param model The model to add nodes to
+         * @param variableNodes Map of variable names to node IDs
+         * @return The NodeId of the component result, or 0 if parsing failed
+         */
+        static nodes::NodeId parseFunctionCallWithComponentAccess(
+          std::string const & expression,
+          nodes::Model & model,
+          std::map<std::string, nodes::NodeId> const & variableNodes);
+
+        /**
+         * @brief Parse a nested function call with component access (e.g.,
+         * "cos(sin(pos).x+sin(pos).x)")
+         * @param expression The expression to parse
+         * @param model The model to add nodes to
+         * @param variableNodes Map of variable names to node IDs
+         * @return The NodeId of the result node, or 0 if parsing failed
+         */
+        static nodes::NodeId parseNestedFunctionCallWithComponentAccess(
+          std::string const & expression,
+          nodes::Model & model,
+          std::map<std::string, nodes::NodeId> const & variableNodes);
+
+        /**
+         * @brief Preprocess component access in expressions by replacing them with temporary
+         * variables
+         * @param expression The expression containing component access patterns
+         * @return The preprocessed expression that muParser can understand
+         */
+        static std::string preprocessComponentAccess(std::string const & expression);
+
+        /**
+         * @brief Parse complex expressions that may contain nested function calls with component
+         * access
+         * @param expression The expression to parse
+         * @param model The model to add nodes to
+         * @param variableNodes Map of variable names to node IDs
+         * @return The NodeId of the result node, or 0 if parsing failed
+         */
+        static nodes::NodeId
+        parseComplexExpression(std::string const & expression,
+                               nodes::Model & model,
+                               std::map<std::string, nodes::NodeId> const & variableNodes);
 
         /**
          * @brief Parse a comma-separated argument list
