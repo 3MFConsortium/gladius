@@ -35,3 +35,4 @@ gladius/examples/implicit/*.gcode
 *.so
 gladius/src/api/GladiusLib_component/Examples/CSharp/obj/*
 build/
+gladius/vcpkg_installed/*
