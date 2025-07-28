@@ -174,6 +174,8 @@ else()
     set(INSTALL_PREFIX /opt/gladius/${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
     set(INSTALL_BIN_DIR ${INSTALL_PREFIX})
     set(SYMLINK_BIN_DIR /usr/bin)
+    # Set RPATH for installed binaries on Linux to find shared libraries
+    set(CMAKE_INSTALL_RPATH "${INSTALL_PREFIX}/lib:$ORIGIN/lib")
 endif()
 
 add_subdirectory(tests)
@@ -257,6 +259,19 @@ install(
     PATTERN "io" EXCLUDE
     PATTERN "kernel" EXCLUDE
 )
+
+# Install vcpkg shared libraries on Linux
+if(UNIX AND NOT WIN32)
+    install(
+        DIRECTORY ${PROJECT_BINARY_DIR}/vcpkg_installed/x64-linux-gladius/lib/
+        DESTINATION ${INSTALL_PREFIX}/lib
+        FILES_MATCHING 
+        REGEX ".*\\.so\\.[0-9]+"
+        PATTERN "*.so"
+        PATTERN "pkgconfig" EXCLUDE
+        PATTERN "cmake" EXCLUDE
+    )
+endif()
 
 # Create a symbolic link in /usr/bin
 if(UNIX)
