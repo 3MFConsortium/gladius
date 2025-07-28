@@ -50,7 +50,8 @@
     "tracy",
     "clipper2",
     "nlohmann-json",
-    "muparser"
+    "muparser",
+    "cpp-httplib"
   ],
   "overrides": [
     {

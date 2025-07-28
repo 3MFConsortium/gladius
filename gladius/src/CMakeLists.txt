@@ -1,6 +1,10 @@
 set(BINARY ${CMAKE_PROJECT_NAME})
 file(GLOB SOURCES LIST_DIRECTORIES true *.h *.cpp)
 
+# Add MCP sources
+file(GLOB MCP_SOURCES LIST_DIRECTORIES true mcp/*.h mcp/*.cpp)
+set(SOURCES ${SOURCES} ${MCP_SOURCES})
+
 
 
 add_library(${BINARY}_lib STATIC ${SOURCES})
@@ -58,6 +62,8 @@ set(DEPENDENCIES
     unofficial::imgui-node-editor::imgui-node-editor
     PkgConfig::Clipper2
     muparser::muparser
+    httplib::httplib
+    nlohmann_json::nlohmann_json
 )
 
 if (WIN32)
