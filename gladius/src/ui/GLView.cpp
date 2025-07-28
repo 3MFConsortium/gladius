@@ -168,7 +168,19 @@ namespace gladius
                 view->determineUiScale();
             }
         };
+
+        static auto staticContentScaleCallback = [](GLFWwindow * window, float xscale, float yscale)
+        {
+            // Get the GLView instance from the window user pointer
+            GLView * view = static_cast<GLView *>(glfwGetWindowUserPointer(window));
+            if (view)
+            {
+                view->determineUiScale();
+            }
+        };
+
         glfwSetWindowSizeCallback(m_window, staticWindowSizeCallback);
+        glfwSetWindowContentScaleCallback(m_window, staticContentScaleCallback);
 
         applyFullscreenMode();
     }
@@ -411,16 +423,53 @@ namespace gladius
         ImGui_ImplWin32_EnableDpiAwareness();
 #endif
 
+        // First, try to use GLFW's content scale detection (preferred method)
+        float xscale, yscale;
+        glfwGetWindowContentScale(m_window, &xscale, &yscale);
+
+        // Debug output to help diagnose issues
+#ifdef DEBUG
+        std::cout << "GLFW Content Scale: " << xscale << " x " << yscale << std::endl;
+#endif
+
+        // GLFW's content scale is more reliable as it considers system DPI settings
+        if (xscale > 0.0f && yscale > 0.0f)
+        {
+            m_uiScale = (xscale + yscale) / 2.0f;
+#ifdef DEBUG
+            std::cout << "Using GLFW content scale: " << m_uiScale << std::endl;
+#endif
+            return;
+        }
+
+        // Fallback to framebuffer vs window size ratio (legacy method)
         int width, height;
         glfwGetWindowSize(m_window, &width, &height);
         int fbWidth, fbHeight;
         glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
-        float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
-        float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
 
-        // Calculate scale based on HDPI
-        float calculatedScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
-        m_uiScale = calculatedScale;
+#ifdef DEBUG
+        std::cout << "Window size: " << width << " x " << height << std::endl;
+        std::cout << "Framebuffer size: " << fbWidth << " x " << fbHeight << std::endl;
+#endif
+
+        if (width > 0 && height > 0 && fbWidth > 0 && fbHeight > 0)
+        {
+            float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
+            float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
+            m_uiScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
+#ifdef DEBUG
+            std::cout << "Using framebuffer ratio scale: " << m_uiScale << std::endl;
+#endif
+        }
+        else
+        {
+            // Final fallback
+            m_uiScale = 1.0f;
+#ifdef DEBUG
+            std::cout << "Using fallback scale: " << m_uiScale << std::endl;
+#endif
+        }
     }
 
     void GLView::handleDropCallback(GLFWwindow *, int count, const char ** paths)
