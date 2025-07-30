@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "mcp/MCPApplicationInterface.h"
+#include "MCPApplicationInterface.h"
 #include <memory>
 
 namespace gladius

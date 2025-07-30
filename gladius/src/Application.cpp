@@ -89,7 +89,7 @@ namespace gladius
         try
         {
             // Create the adapter that will bridge this Application to the MCP interface
-            m_mcpAdapter = std::make_unique<mcp::ApplicationMCPAdapter>(this);
+            m_mcpAdapter = std::make_unique<ApplicationMCPAdapter>(this);
 
             // Create the MCP server with the adapter
             m_mcpServer = std::make_unique<mcp::MCPServer>(m_mcpAdapter.get());

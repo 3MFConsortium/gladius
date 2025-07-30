@@ -7,7 +7,11 @@
 namespace gladius::mcp
 {
     class MCPServer;
-    class ApplicationMCPAdapter;
+}
+
+namespace gladius
+{
+    class ApplicationMCPAdapter; // Forward declaration
 }
 
 namespace gladius
@@ -71,6 +75,6 @@ namespace gladius
         ConfigManager m_configManager;
         ui::MainWindow m_mainWindow;
         std::unique_ptr<mcp::MCPServer> m_mcpServer;
-        std::unique_ptr<mcp::ApplicationMCPAdapter> m_mcpAdapter;
+        std::unique_ptr<ApplicationMCPAdapter> m_mcpAdapter;
     };
 }
