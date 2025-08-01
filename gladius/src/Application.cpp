@@ -16,7 +16,6 @@ namespace gladius
     {
         m_mainWindow.setConfigManager(m_configManager);
         m_mainWindow.setup();
-        m_mainWindow.startMainLoop();
     }
 
     Application::Application(int argc, char ** argv)
@@ -48,7 +47,6 @@ namespace gladius
         {
             std::cout << "No file specified" << std::endl;
         }
-        m_mainWindow.startMainLoop();
     }
 
     Application::Application(std::filesystem::path const & filename)
@@ -68,6 +66,10 @@ namespace gladius
         {
             std::cout << "File does not exist: " << filename << std::endl;
         }
+    }
+
+    void Application::startMainLoop()
+    {
         m_mainWindow.startMainLoop();
     }
 

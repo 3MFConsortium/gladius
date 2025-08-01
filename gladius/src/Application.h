@@ -63,6 +63,12 @@ namespace gladius
         bool isMCPServerEnabled() const;
 
         /**
+         * @brief Start the main application loop
+         * This method blocks until the application exits
+         */
+        void startMainLoop();
+
+        /**
          * @brief Get the main window reference
          * @return Reference to the main window
          */

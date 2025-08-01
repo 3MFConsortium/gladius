@@ -74,7 +74,7 @@ int main(int argc, char ** argv)
     // Create application based on arguments
     gladius::Application app;
 
-    // Enable MCP server if requested
+    // Enable MCP server if requested (before starting main loop)
     if (enableMCP)
     {
         if (app.enableMCPServer(mcpPort))
@@ -103,7 +103,7 @@ int main(int argc, char ** argv)
     }
 
     // Start the main loop (this will block until the application exits)
-    app.getMainWindow().startMainLoop();
+    app.startMainLoop();
 
     // Clean up MCP server before exit
     if (enableMCP)
