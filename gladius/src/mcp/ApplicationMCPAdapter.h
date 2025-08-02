@@ -7,6 +7,7 @@
 
 #include "MCPApplicationInterface.h"
 #include <memory>
+#include <nlohmann/json.hpp>
 
 namespace gladius
 {
@@ -56,5 +57,10 @@ namespace gladius
         std::string getStringParameter(uint32_t modelId,
                                        const std::string & nodeName,
                                        const std::string & parameterName) override;
+
+        // Expression and function operations
+        bool createFunctionFromExpression(const std::string & name,
+                                          const std::string & expression,
+                                          const std::string & outputType) override;
     };
 }

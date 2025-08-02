@@ -134,6 +134,13 @@ namespace gladius::mcp
          */
         nlohmann::json executeTool(const std::string & toolName, const nlohmann::json & params);
 
+        /**
+         * @brief Process JSON-RPC request and return response (for testing)
+         * @param request JSON-RPC request
+         * @return JSON-RPC response
+         */
+        nlohmann::json processJSONRPCRequest(const nlohmann::json & request);
+
       private:
         MCPApplicationInterface *
           m_application; // Raw pointer (can work with shared_ptr or adapter)
@@ -170,16 +177,14 @@ namespace gladius::mcp
         nlohmann::json handleCallTool(const nlohmann::json & request);
 
         /// Create error response
-        nlohmann::json createErrorResponse(int id, int code, const std::string & message) const;
+        nlohmann::json
+        createErrorResponse(const nlohmann::json & id, int code, const std::string & message) const;
 
         /// Handle stdio message processing
         void handleStdioMessage(const std::string & line);
 
         /// Send JSON response to stdout
         void sendStdioResponse(const nlohmann::json & response);
-
-        /// Process JSON-RPC request and return response
-        nlohmann::json processJSONRPCRequest(const nlohmann::json & request);
     };
 
 } // namespace gladius::mcp

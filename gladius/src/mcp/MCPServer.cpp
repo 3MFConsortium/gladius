@@ -291,8 +291,12 @@ namespace gladius::mcp
                              {"inputSchema", info.schema}});
         }
 
-        json response = {
-          {"jsonrpc", "2.0"}, {"id", request.value("id", 0)}, {"result", {{"tools", tools}}}};
+        json response = {{"jsonrpc", "2.0"}, {"result", {{"tools", tools}}}};
+
+        if (request.contains("id"))
+        {
+            response["id"] = request["id"];
+        }
 
         return response;
     }
@@ -303,8 +307,9 @@ namespace gladius::mcp
         {
             if (!request.contains("params") || !request["params"].contains("name"))
             {
-                return createErrorResponse(
-                  request.value("id", 0), -32602, "Invalid params - missing tool name");
+                return createErrorResponse(request.contains("id") ? request["id"] : json(nullptr),
+                                           -32602,
+                                           "Invalid params - missing tool name");
             }
 
             std::string toolName = request["params"]["name"];
@@ -312,8 +317,9 @@ namespace gladius::mcp
 
             if (toolIt == m_tools.end())
             {
-                return createErrorResponse(
-                  request.value("id", 0), -32602, "Tool not found: " + toolName);
+                return createErrorResponse(request.contains("id") ? request["id"] : json(nullptr),
+                                           -32601,
+                                           "Tool not found: " + toolName);
             }
 
             json params = request["params"].value("arguments", json::object());
@@ -321,19 +327,26 @@ namespace gladius::mcp
 
             json response = {
               {"jsonrpc", "2.0"},
-              {"id", request.value("id", 0)},
               {"result", {{"content", {{{"type", "text"}, {"text", result.dump()}}}}}}};
+
+            if (request.contains("id"))
+            {
+                response["id"] = request["id"];
+            }
 
             return response;
         }
         catch (const std::exception & e)
         {
-            return createErrorResponse(
-              request.value("id", 0), -32603, "Tool execution error: " + std::string(e.what()));
+            return createErrorResponse(request.contains("id") ? request["id"] : json(nullptr),
+                                       -32603,
+                                       "Tool execution error: " + std::string(e.what()));
         }
     }
 
-    json MCPServer::createErrorResponse(int id, int code, const std::string & message) const
+    json MCPServer::createErrorResponse(const nlohmann::json & id,
+                                        int code,
+                                        const std::string & message) const
     {
         return {{"jsonrpc", "2.0"}, {"id", id}, {"error", {{"code", code}, {"message", message}}}};
     }
@@ -573,15 +586,18 @@ namespace gladius::mcp
               std::string type = params["type"];
 
               bool success = false;
+              json valueToReturn;
               if (type == "float")
               {
                   float value = params["value"];
+                  valueToReturn = value;
                   success =
                     m_application->setFloatParameter(modelId, nodeName, parameterName, value);
               }
               else if (type == "string")
               {
                   std::string value = params["value"];
+                  valueToReturn = value;
                   success =
                     m_application->setStringParameter(modelId, nodeName, parameterName, value);
               }
@@ -595,6 +611,7 @@ namespace gladius::mcp
                 {"model_id", modelId},
                 {"node_name", nodeName},
                 {"parameter_name", parameterName},
+                {"value", valueToReturn},
                 {"type", type},
                 {"message", success ? "Parameter set successfully" : "Failed to set parameter"}};
           });
@@ -739,6 +756,61 @@ namespace gladius::mcp
 
               return info;
           });
+
+        // Phase 2A: Expression-based function creation
+        registerTool(
+          "create_function_from_expression",
+          "Create a new function from a mathematical expression (supports TPMS, lattices, "
+          "primitives, and custom expressions)",
+          {{"type", "object"},
+           {"properties",
+            {{"name", {{"type", "string"}, {"description", "Function name"}}},
+             {"expression",
+              {{"type", "string"},
+               {"description", "Mathematical expression (e.g., 'sin(x*2)*cos(y*3)')"}}},
+             {"arguments",
+              {{"type", "array"},
+               {"items",
+                {{"type", "object"},
+                 {"properties",
+                  {{"name", {{"type", "string"}}},
+                   {"type", {{"type", "string"}, {"enum", {"float", "vec3"}}}},
+                   {"default_value", {{"type", "number"}}}}},
+                 {"required", {"name", "type"}}}},
+               {"description", "Function input arguments"}}},
+             {"output_type",
+              {{"type", "string"},
+               {"enum", {"float", "vec3"}},
+               {"description", "Output type (default: float)"}}}}},
+           {"required", {"name", "expression"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("name") || !params.contains("expression"))
+              {
+                  return {{"error", "Missing required parameters: name, expression"}};
+              }
+
+              std::string name = params["name"];
+              std::string expression = params["expression"];
+              std::string outputType = params.value("output_type", "float");
+
+              try
+              {
+                  bool success =
+                    m_application->createFunctionFromExpression(name, expression, outputType);
+                  return {
+                    {"success", success},
+                    {"function_name", name},
+                    {"expression", expression},
+                    {"output_type", outputType},
+                    {"message",
+                     success ? "Function created successfully" : "Failed to create function"}};
+              }
+              catch (const std::exception & e)
+              {
+                  return {{"error", "Failed to create function: " + std::string(e.what())}};
+              }
+          });
     }
 
     void MCPServer::runStdioLoop()
@@ -784,13 +856,19 @@ namespace gladius::mcp
     nlohmann::json MCPServer::processJSONRPCRequest(const nlohmann::json & request)
     {
         // Check for required fields
+        if (!request.contains("jsonrpc") || request["jsonrpc"] != "2.0")
+        {
+            return createErrorResponse(
+              json(nullptr), -32600, "Invalid Request - missing or invalid jsonrpc");
+        }
+
         if (!request.contains("method"))
         {
-            return createErrorResponse(0, -32600, "Invalid Request - missing method");
+            return createErrorResponse(json(nullptr), -32600, "Invalid Request - missing method");
         }
 
         std::string method = request["method"];
-        int id = request.value("id", 0);
+        auto id = request.contains("id") ? request["id"] : json(nullptr);
 
         if (method == "initialize")
         {

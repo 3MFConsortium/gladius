@@ -6,6 +6,7 @@
 #pragma once
 
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <string>
 
 namespace gladius
@@ -53,5 +54,10 @@ namespace gladius
         virtual std::string getStringParameter(uint32_t modelId,
                                                const std::string & nodeName,
                                                const std::string & parameterName) = 0;
+
+        // Expression and function operations
+        virtual bool createFunctionFromExpression(const std::string & name,
+                                                  const std::string & expression,
+                                                  const std::string & outputType) = 0;
     };
 }

@@ -7,6 +7,7 @@
 #include "../Application.h"
 #include "../Document.h"
 #include <filesystem> // Only include here, not in header
+#include <nlohmann/json.hpp>
 
 namespace gladius
 {
@@ -291,6 +292,42 @@ namespace gladius
         catch (const std::exception &)
         {
             return "";
+        }
+    }
+
+    bool ApplicationMCPAdapter::createFunctionFromExpression(const std::string & name,
+                                                             const std::string & expression,
+                                                             const std::string & outputType)
+    {
+        if (!m_application)
+        {
+            return false;
+        }
+
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            if (document)
+            {
+                // TODO: Implement expression-to-function conversion
+                // This would use ExpressionParser and ExpressionToGraphConverter
+                // to create a new function from the mathematical expression
+                //
+                // Examples of expressions that could be supported:
+                // - TPMS structures: "sin(x*2*pi/10)*cos(y*2*pi/10) + sin(y*2*pi/10)*cos(z*2*pi/10)
+                // + sin(z*2*pi/10)*cos(x*2*pi/10) - 0.2" (gyroid)
+                // - Basic shapes: "sqrt(x*x + y*y + z*z) - 5" (sphere)
+                // - Complex geometry: "max(abs(x) - 5, max(abs(y) - 3, abs(z) - 2))" (rounded box)
+                // - Lattices: "min(sin(x), min(sin(y), sin(z)))" (simple lattice)
+
+                // For now, return false until implementation is complete
+                return false;
+            }
+            return false;
+        }
+        catch (const std::exception &)
+        {
+            return false;
         }
     }
 }
