@@ -83,7 +83,8 @@ namespace gladius::tests
         bool createFunctionFromExpression(const std::string &,
                                           const std::string &,
                                           const std::string &,
-                                          const std::vector<FunctionArgument> & = {}) override
+                                          const std::vector<FunctionArgument> & = {},
+                                          const std::string & = "") override
         {
             return true;
         }

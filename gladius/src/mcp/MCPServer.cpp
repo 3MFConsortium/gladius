@@ -765,7 +765,8 @@ namespace gladius::mcp
           "Function Arguments:\n"
           "- Define function inputs using the 'arguments' parameter\n"
           "- Each argument has a name and type ('float' for scalars, 'vec3' for 3D vectors)\n"
-          "- If no arguments are provided, auto-detection creates 'pos' vec3 for x,y,z usage\n\n"
+          "- If no arguments are provided, auto-detection creates 'pos' vec3 for x,y,z usage\n"
+          "- Specify output name with 'output_name' parameter (default: 'result')\n\n"
           "Supported expression syntax:\n"
           "- Basic math: +, -, *, /, ^, sqrt(), abs(), min(), max()\n"
           "- Trigonometric: sin(), cos(), tan(), atan2()\n"
@@ -774,13 +775,15 @@ namespace gladius::mcp
           "- Variables: Use defined argument names or component access (e.g., 'pos.x')\n"
           "- Custom functions: clamp()\n\n"
           "Examples:\n"
-          "1. Auto-detected coordinates:\n"
+          "1. Auto-detected coordinates with custom output name:\n"
           "   Expression: 'sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)'\n"
-          "   (Creates 'pos' vec3 input, transforms to pos.x, pos.y, pos.z)\n\n"
+          "   Output name: 'distance'\n"
+          "   (Creates 'pos' vec3 input, output named 'distance')\n\n"
           "2. Custom scalar inputs:\n"
           "   Arguments: [{\"name\": \"radius\", \"type\": \"float\"}, {\"name\": \"height\", "
           "\"type\": \"float\"}]\n"
-          "   Expression: 'sqrt(radius*radius + height*height)'\n\n"
+          "   Expression: 'sqrt(radius*radius + height*height)'\n"
+          "   Output name: 'magnitude'\n\n"
           "3. Custom vector input:\n"
           "   Arguments: [{\"name\": \"point\", \"type\": \"vec3\"}]\n"
           "   Expression: 'sin(point.x)*cos(point.y) + point.z'\n\n"
@@ -810,7 +813,10 @@ namespace gladius::mcp
              {"output_type",
               {{"type", "string"},
                {"enum", {"float", "vec3"}},
-               {"description", "Output type (default: float)"}}}}},
+               {"description", "Output type (default: float)"}}},
+             {"output_name",
+              {{"type", "string"},
+               {"description", "Name for the output parameter (default: 'result')"}}}}},
            {"required", {"name", "expression"}}},
           [this](const json & params) -> json
           {
@@ -824,6 +830,7 @@ namespace gladius::mcp
               std::string name = params["name"];
               std::string expression = params["expression"];
               std::string outputType = params.value("output_type", "float");
+              std::string outputName = params.value("output_name", "");
 
               if (name.empty())
               {
@@ -886,7 +893,7 @@ namespace gladius::mcp
                   }
 
                   bool success = m_application->createFunctionFromExpression(
-                    name, expression, outputType, arguments);
+                    name, expression, outputType, arguments, outputName);
 
                   // Get detailed error message from adapter
                   std::string detailedMessage = m_application->getLastErrorMessage();
@@ -895,6 +902,7 @@ namespace gladius::mcp
                           {"function_name", name},
                           {"expression", expression},
                           {"output_type", outputType},
+                          {"output_name", outputName.empty() ? "result" : outputName},
                           {"message",
                            detailedMessage.empty() ? (success ? "Function created successfully"
                                                               : "Failed to create function")
@@ -907,6 +915,7 @@ namespace gladius::mcp
                           {"function_name", name},
                           {"expression", expression},
                           {"output_type", outputType},
+                          {"output_name", outputName.empty() ? "result" : outputName},
                           {"message", "An unexpected error occurred while creating the function"}};
               }
           });

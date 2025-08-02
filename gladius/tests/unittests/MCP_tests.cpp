@@ -50,7 +50,8 @@ namespace gladius::tests
                     (const std::string &,
                      const std::string &,
                      const std::string &,
-                     const std::vector<FunctionArgument> &),
+                     const std::vector<FunctionArgument> &,
+                     const std::string &),
                     (override));
 
         MOCK_METHOD(std::string, getLastErrorMessage, (), (const, override));
@@ -238,9 +239,9 @@ namespace gladius::tests
     TEST_F(MCPServerTest, CreateFunctionFromExpressionTool_ValidExpression_CallsAdapter)
     {
         // Arrange
-        EXPECT_CALL(
-          *m_mockApp,
-          createFunctionFromExpression("test_function", "sin(x) + cos(y)", "float", ::testing::_))
+        EXPECT_CALL(*m_mockApp,
+                    createFunctionFromExpression(
+                      "test_function", "sin(x) + cos(y)", "float", ::testing::_, ::testing::_))
           .WillOnce(::testing::Return(true));
 
         json request = {{"jsonrpc", "2.0"},
@@ -374,6 +375,7 @@ namespace gladius::tests
                       "gyroid",
                       ::testing::HasSubstr("sin"), // Should contain sin functions for gyroid
                       "float",
+                      ::testing::_,
                       ::testing::_))
           .WillOnce(::testing::Return(true));
 

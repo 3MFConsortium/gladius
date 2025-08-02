@@ -301,7 +301,8 @@ namespace gladius
       const std::string & name,
       const std::string & expression,
       const std::string & outputType,
-      const std::vector<FunctionArgument> & providedArguments)
+      const std::vector<FunctionArgument> & providedArguments,
+      const std::string & outputName)
     {
         if (!m_application)
         {
@@ -485,7 +486,7 @@ namespace gladius
 
             // Create function output specification
             FunctionOutput output;
-            output.name = "result";
+            output.name = outputName.empty() ? "result" : outputName;
             output.type = (outputType == "vec3") ? ArgumentType::Vector : ArgumentType::Scalar;
 
             // Create a new function model and get reference to it

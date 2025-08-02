@@ -66,10 +66,10 @@ namespace gladius
                                        const std::string & parameterName) override;
 
         // Expression and function operations
-        bool
-        createFunctionFromExpression(const std::string & name,
-                                     const std::string & expression,
-                                     const std::string & outputType,
-                                     const std::vector<FunctionArgument> & arguments = {}) override;
+        bool createFunctionFromExpression(const std::string & name,
+                                          const std::string & expression,
+                                          const std::string & outputType,
+                                          const std::vector<FunctionArgument> & arguments = {},
+                                          const std::string & outputName = "") override;
     };
 }

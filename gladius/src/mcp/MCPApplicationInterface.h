@@ -63,7 +63,8 @@ namespace gladius
         createFunctionFromExpression(const std::string & name,
                                      const std::string & expression,
                                      const std::string & outputType,
-                                     const std::vector<FunctionArgument> & arguments = {}) = 0;
+                                     const std::vector<FunctionArgument> & arguments = {},
+                                     const std::string & outputName = "") = 0;
 
         // Error handling
         virtual std::string getLastErrorMessage() const = 0;
