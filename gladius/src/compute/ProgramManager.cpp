@@ -15,15 +15,15 @@
 #include <lodepng.h>
 
 #include "CliReader.h"
-#include "Mesh.h"
-#include "ProgramManager.h"
-#include "compute/ProgramManager.h"
-#include "gpgpu.h"
 #include "Contour.h"
+#include "Mesh.h"
 #include "Profiling.h"
+#include "ProgramManager.h"
 #include "RenderProgram.h"
 #include "ResourceContext.h"
 #include "SlicerProgram.h"
+#include "compute/ProgramManager.h"
+#include "gpgpu.h"
 #include "nodes/GraphFlattener.h"
 #include "nodes/OptimizeOutputs.h"
 #include <ToCommandStreamVisitor.h>
@@ -135,7 +135,7 @@ namespace gladius
     {
         ProfileFunction
 
-        m_optimizedRenderProgram->setModelKernel(m_modelSource);
+          m_optimizedRenderProgram->setModelKernel(m_modelSource);
         m_slicerProgram->setModelKernel(m_modelSource);
 
         m_optimizedRenderProgram->recompileBlocking();
@@ -195,7 +195,7 @@ namespace gladius
     {
         if (!m_eventLogger)
         {
-            std::cout << msg << "\n";
+            std::cerr << msg << "\n";
             return;
         }
         getLogger().addEvent({std::move(msg), events::Severity::Info});

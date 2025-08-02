@@ -33,11 +33,18 @@ namespace gladius::mcp
         nlohmann::json schema;
     };
 
+    /// Transport type for MCP server
+    enum class TransportType
+    {
+        HTTP, ///< HTTP transport (for web clients)
+        STDIO ///< Stdio transport (for VS Code and other tools)
+    };
+
     /**
-     * @brief MCP Server implementation (MVP version)
+     * @brief MCP Server implementation supporting both HTTP and stdio transports
      *
-     * Provides a basic Model Context Protocol server foundation.
-     * HTTP server functionality will be added in later iterations.
+     * Provides a Model Context Protocol server that can work with VS Code
+     * (via stdio) or web clients (via HTTP).
      */
     class MCPServer
     {
@@ -71,11 +78,30 @@ namespace gladius::mcp
                           ToolFunction func);
 
         /**
-         * @brief Start the MCP server (MVP placeholder)
-         * @param port Port to listen on (default: 8080)
+         * @brief Start the MCP server
+         * @param port Port to listen on (for HTTP transport, default: 8080)
+         * @param transport Transport type (HTTP or STDIO)
          * @return true if server started successfully
          */
-        bool start(int port = 8080);
+        bool start(int port = 8080, TransportType transport = TransportType::HTTP);
+
+        /**
+         * @brief Start the MCP server with stdio transport
+         * @return true if server started successfully
+         */
+        bool startStdio();
+
+        /**
+         * @brief Start the MCP server with HTTP transport
+         * @param port Port to listen on
+         * @return true if server started successfully
+         */
+        bool startHTTP(int port);
+
+        /**
+         * @brief Run the stdio message loop (blocking)
+         */
+        void runStdioLoop();
 
         /**
          * @brief Stop the MCP server
@@ -116,10 +142,14 @@ namespace gladius::mcp
         std::map<std::string, ToolFunction> m_tools;
         std::atomic<bool> m_running{false};
         int m_port{0};
+        TransportType m_transportType{TransportType::HTTP};
 
         // HTTP server components
         std::unique_ptr<httplib::Server> m_server;
         std::thread m_serverThread;
+
+        // Stdio transport components
+        std::thread m_stdioThread;
 
         /// Setup built-in tools
         void setupBuiltinTools();
@@ -141,6 +171,15 @@ namespace gladius::mcp
 
         /// Create error response
         nlohmann::json createErrorResponse(int id, int code, const std::string & message) const;
+
+        /// Handle stdio message processing
+        void handleStdioMessage(const std::string & line);
+
+        /// Send JSON response to stdout
+        void sendStdioResponse(const nlohmann::json & response);
+
+        /// Process JSON-RPC request and return response
+        nlohmann::json processJSONRPCRequest(const nlohmann::json & request);
     };
 
 } // namespace gladius::mcp

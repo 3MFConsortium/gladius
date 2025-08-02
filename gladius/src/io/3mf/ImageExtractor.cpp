@@ -319,7 +319,7 @@ namespace gladius::io
             unz_file_info fileInfo;
             unzGetCurrentFileInfo(
               m_archive, &fileInfo, filename, sizeof(filename), nullptr, 0, nullptr, 0);
-            std::cout << filename << std::endl;
+            std::cerr << filename << std::endl;
         } while (unzGoToNextFile(m_archive) == UNZ_OK);
     }
 
@@ -340,4 +340,3 @@ namespace gladius::io
         return m_pngInfo;
     }
 } // namespace gladius::io
-

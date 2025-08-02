@@ -37,9 +37,37 @@ namespace gladius::events
             m_countWarnings++;
         }
         m_events.push_back(event);
+
+        // Only output to console if not in silent mode
+        if (m_outputMode == OutputMode::Console)
+        {
 #ifdef _DEBUG
-        std::cout << event.getMessage() << "\n";
+            std::cerr << event.getMessage() << "\n";
+#else
+            // In release mode, output to stderr to keep stdout clean for MCP
+            std::cerr << event.getMessage() << "\n";
 #endif
+        }
+    }
+
+    void Logger::logInfo(const std::string & message)
+    {
+        addEvent(Event(message, Severity::Info));
+    }
+
+    void Logger::logWarning(const std::string & message)
+    {
+        addEvent(Event(message, Severity::Warning));
+    }
+
+    void Logger::logError(const std::string & message)
+    {
+        addEvent(Event(message, Severity::Error));
+    }
+
+    void Logger::logFatalError(const std::string & message)
+    {
+        addEvent(Event(message, Severity::FatalError));
     }
 
     void Logger::clear()

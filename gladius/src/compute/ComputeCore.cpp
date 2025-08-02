@@ -731,7 +731,7 @@ namespace gladius
     {
         if (!m_eventLogger)
         {
-            std::cout << msg << "\n";
+            std::cerr << msg << "\n";
             return;
         }
         getLogger().addEvent({std::move(msg), events::Severity::Info});

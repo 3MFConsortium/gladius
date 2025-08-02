@@ -161,11 +161,11 @@ namespace gladius
 
         if (allPlatforms.empty())
         {
-            std::cout << " No platforms found. Check OpenCL installation!\n";
+            std::cerr << " No platforms found. Check OpenCL installation!\n";
             exit(1);
         }
 
-        auto accelerators = queryAccelerators(std::cout);
+        auto accelerators = queryAccelerators(std::cerr);
 
         if (accelerators.empty())
         {
@@ -182,8 +182,8 @@ namespace gladius
         m_device = accelerators.front().device;
         cl::Platform defaultPlatform = accelerators.front().platform;
 
-        std::cout << "\n\n";
-        std::cout << "\nUsing device: " << m_device.getInfo<CL_DEVICE_NAME>() << "\n";
+        std::cerr << "\n\n";
+        std::cerr << "\nUsing device: " << m_device.getInfo<CL_DEVICE_NAME>() << "\n";
 
         if (m_outputGL == EnableGLOutput::disabled)
         {
@@ -228,13 +228,13 @@ namespace gladius
             }
             if (err == CL_SUCCESS)
             {
-                std::cout << "Enabling opengl sharing using interop method\n";
+                std::cerr << "Enabling opengl sharing using interop method\n";
             }
             else
             {
                 m_context = std::make_unique<cl::Context>(cl::Context({m_device}));
                 m_outputMethod = OutputMethod::readpixel;
-                std::cout << "Enabling opengl sharing using the readpixel method\n";
+                std::cerr << "Enabling opengl sharing using the readpixel method\n";
             }
         }
 

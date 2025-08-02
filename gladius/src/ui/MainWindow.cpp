@@ -798,11 +798,7 @@ namespace gladius::ui
                     vdb::MeshExporter exporter;
                     exporter.setQualityLevel(1);
                     exporter.beginExport(filename.value(), *m_core);
-                    while (exporter.advanceExport(*m_core))
-                    {
-                        std::cout << " Processing layer with z = " << m_core->getSliceHeight()
-                                  << "\n";
-                    }
+                    while (exporter.advanceExport(*m_core)) {}
                     exporter.finalizeExportVdb();
                 }
             }
@@ -815,11 +811,7 @@ namespace gladius::ui
                 {
                     vdb::MeshExporter exporter;
                     exporter.beginExport(filename.value(), *m_core);
-                    while (exporter.advanceExport(*m_core))
-                    {
-                        std::cout << " Processing layer with z = " << m_core->getSliceHeight()
-                                  << "\n";
-                    }
+                    while (exporter.advanceExport(*m_core)) {}
                     exporter.finalizeExportNanoVdb();
                 }
             }
@@ -1779,7 +1771,7 @@ namespace gladius::ui
         nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>(
           "recentFiles", "files", nlohmann::json::array());
         // print size of recentFiles
-        std::cout << "Size of recentFiles: " << recentFiles.size() << std::endl;
+        std::cerr << "Size of recentFiles: " << recentFiles.size() << std::endl;
         // Process each entry
         for (auto & entry : recentFiles)
         {

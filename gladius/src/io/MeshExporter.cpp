@@ -150,7 +150,6 @@ namespace gladius::vdb
                     ++trianglesWritten;
                 }
             }
-            std::cout << "triangles written: " << trianglesWritten << "\n";
             outputFile.close();
         }
     }

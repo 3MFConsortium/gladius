@@ -11,16 +11,21 @@ namespace gladius
     Application::Application()
         : m_configManager()
         , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
         , m_mcpServer(nullptr)
         , m_mcpAdapter(nullptr)
     {
         m_mainWindow.setConfigManager(m_configManager);
-        m_mainWindow.setup();
+        if (!m_headlessMode)
+        {
+            m_mainWindow.setup();
+        }
     }
 
     Application::Application(int argc, char ** argv)
         : m_configManager()
         , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
         , m_mcpServer(nullptr)
         , m_mcpAdapter(nullptr)
     {
@@ -32,26 +37,27 @@ namespace gladius
         {
             std::filesystem::path filename{argv[1]};
 
-            // because this is a console application, we print to the console
-            std::cout << "Opening file: " << filename << std::endl;
+            // Use the global logger instead of cout
+            m_globalLogger->logInfo("Opening file: " + filename.string());
             if (std::filesystem::exists(filename))
             {
                 m_mainWindow.open(filename);
             }
             else
             {
-                std::cout << "File does not exist: " << filename << std::endl;
+                m_globalLogger->logError("File does not exist: " + filename.string());
             }
         }
         else
         {
-            std::cout << "No file specified" << std::endl;
+            m_globalLogger->logInfo("No file specified");
         }
     }
 
     Application::Application(std::filesystem::path const & filename)
         : m_configManager()
         , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
         , m_mcpServer(nullptr)
         , m_mcpAdapter(nullptr)
     {
@@ -64,7 +70,7 @@ namespace gladius
         }
         else
         {
-            std::cout << "File does not exist: " << filename << std::endl;
+            m_globalLogger->logError("File does not exist: " + filename.string());
         }
     }
 
@@ -84,7 +90,7 @@ namespace gladius
     {
         if (m_mcpServer && m_mcpServer->isRunning())
         {
-            std::cout << "MCP Server is already running" << std::endl;
+            m_globalLogger->logWarning("MCP Server is already running");
             return false;
         }
 
@@ -95,15 +101,16 @@ namespace gladius
 
             // Create the MCP server with the adapter
             m_mcpServer = std::make_unique<mcp::MCPServer>(m_mcpAdapter.get());
-            bool success = m_mcpServer->start(port);
+            bool success = m_mcpServer->start(port, mcp::TransportType::HTTP);
 
             if (success)
             {
-                std::cout << "MCP Server enabled on port " << port << std::endl;
+                m_globalLogger->logInfo("MCP Server enabled on port " + std::to_string(port));
             }
             else
             {
-                std::cout << "Failed to enable MCP Server on port " << port << std::endl;
+                m_globalLogger->logError("Failed to enable MCP Server on port " +
+                                         std::to_string(port));
                 m_mcpServer.reset();
                 m_mcpAdapter.reset();
             }
@@ -112,7 +119,39 @@ namespace gladius
         }
         catch (const std::exception & e)
         {
-            std::cout << "Error enabling MCP Server: " << e.what() << std::endl;
+            m_globalLogger->logError("Error enabling MCP Server: " + std::string(e.what()));
+            m_mcpServer.reset();
+            m_mcpAdapter.reset();
+            return false;
+        }
+    }
+
+    bool Application::enableMCPServerStdio()
+    {
+        if (m_mcpServer && m_mcpServer->isRunning())
+        {
+            return false; // Don't print anything in stdio mode
+        }
+
+        try
+        {
+            // Create the adapter that will bridge this Application to the MCP interface
+            m_mcpAdapter = std::make_unique<ApplicationMCPAdapter>(this);
+
+            // Create the MCP server with the adapter
+            m_mcpServer = std::make_unique<mcp::MCPServer>(m_mcpAdapter.get());
+            bool success = m_mcpServer->start(0, mcp::TransportType::STDIO);
+
+            if (!success)
+            {
+                m_mcpServer.reset();
+                m_mcpAdapter.reset();
+            }
+
+            return success;
+        }
+        catch (const std::exception & e)
+        {
             m_mcpServer.reset();
             m_mcpAdapter.reset();
             return false;
@@ -126,12 +165,35 @@ namespace gladius
             m_mcpServer->stop();
             m_mcpServer.reset();
             m_mcpAdapter.reset();
-            std::cout << "MCP Server disabled" << std::endl;
+            m_globalLogger->logInfo("MCP Server disabled");
         }
     }
 
     bool Application::isMCPServerEnabled() const
     {
         return m_mcpServer && m_mcpServer->isRunning();
+    }
+
+    events::SharedLogger Application::getGlobalLogger() const
+    {
+        return m_globalLogger;
+    }
+
+    void Application::setLoggerOutputMode(events::OutputMode mode)
+    {
+        if (m_globalLogger)
+        {
+            m_globalLogger->setOutputMode(mode);
+        }
+    }
+
+    void Application::setHeadlessMode(bool headless)
+    {
+        m_headlessMode = headless;
+    }
+
+    bool Application::isHeadlessMode() const
+    {
+        return m_headlessMode;
     }
 }

@@ -63,8 +63,6 @@ namespace gladius
             sliceParameter.zHeight_mm = z_mm;
             generator.requestContourUpdate(sliceParameter);
             writeLayer(generator.getContour()->getContour(), z_mm);
-            std::cout << "Exporting layer " << i << " of " << numberLayer << " with height " << z_mm
-                      << " mm\n";
         }
 
         m_file << "$$GEOMETRYEND\n";

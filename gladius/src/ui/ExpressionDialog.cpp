@@ -165,12 +165,6 @@ namespace gladius::ui
         // Update output type based on expression (regardless of parser validity)
         // Our type deduction is more sophisticated than the basic expression parser
         m_output.type = deduceOutputType();
-
-        std::cout << "Expression validation - expression: '" << m_expression
-                  << "', canConvertToGraph: " << m_isValid
-                  << ", hasValidExpression: " << m_parser->hasValidExpression()
-                  << ", deduced type: "
-                  << (m_output.type == ArgumentType::Scalar ? "Scalar" : "Vector") << std::endl;
     }
 
     void ExpressionDialog::renderArgumentsSection()
@@ -733,31 +727,13 @@ namespace gladius::ui
 
         if (ImGui::Button("Create Function", ImVec2(120, 0)))
         {
-            std::cout << "Create Function button clicked!" << std::endl;
-            std::cout << "canApply: " << canApply << std::endl;
-            std::cout << "m_isValid: " << m_isValid << std::endl;
-            std::cout << "hasValidExpression: " << m_parser->hasValidExpression() << std::endl;
-            std::cout << "functionName empty: " << m_functionName.empty() << std::endl;
-            std::cout << "m_onApplyCallback set: " << (m_onApplyCallback ? "true" : "false")
-                      << std::endl;
 
             if (m_onApplyCallback && canApply)
             {
                 // Update output name from buffer
                 m_output.name = std::string(m_outputNameBuffer);
-
-                std::cout << "Calling apply callback with: " << m_functionName << ", "
-                          << m_expression << ", output: " << m_output.name << " ("
-                          << (m_output.type == ArgumentType::Scalar ? "Scalar" : "Vector") << ")"
-                          << std::endl;
                 m_onApplyCallback(m_functionName, m_expression, m_arguments, m_output);
                 hide(); // Close dialog after applying
-            }
-            else
-            {
-                std::cout << "Apply callback not called - callback: "
-                          << (m_onApplyCallback ? "set" : "not set") << ", canApply: " << canApply
-                          << std::endl;
             }
         }
 
@@ -1300,16 +1276,13 @@ namespace gladius::ui
             if (!exists)
             {
                 m_arguments.emplace_back(expectedArg.name, expectedArg.type);
-                std::cout << "Auto-added argument: " << expectedArg.name << " ("
-                          << (expectedArg.type == ArgumentType::Scalar ? "Scalar" : "Vector")
-                          << ") - " << expectedArg.description << std::endl;
 
                 // Add to notification list for UI feedback
                 m_autoAddedArguments.push_back({expectedArg.name, expectedArg.type});
             }
             else
             {
-                std::cout << "Argument '" << expectedArg.name << "' already exists, skipping"
+                std::cerr << "Argument '" << expectedArg.name << "' already exists, skipping"
                           << std::endl;
 
                 // Check if existing argument has different type

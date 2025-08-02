@@ -20,7 +20,7 @@ namespace gladius::mcp
     {
         setupRoutes();
         setupBuiltinTools();
-        std::cout << "MCP Server initialized with HTTP support" << std::endl;
+        // Only print to stdout in HTTP mode
     }
 
     MCPServer::MCPServer(MCPApplicationInterface * app)
@@ -30,7 +30,7 @@ namespace gladius::mcp
     {
         setupRoutes();
         setupBuiltinTools();
-        std::cout << "MCP Server initialized with HTTP support (adapter)" << std::endl;
+        // Only print to stdout in HTTP mode
     }
 
     MCPServer::~MCPServer()
@@ -45,14 +45,52 @@ namespace gladius::mcp
     {
         m_toolInfo[name] = {name, description, schema};
         m_tools[name] = std::move(func);
-        std::cout << "Registered MCP tool: " << name << std::endl;
+        // Only log in HTTP mode, not stdio mode
+        if (m_transportType == TransportType::HTTP)
+        {
+            std::cerr << "Registered MCP tool: " << name << std::endl;
+        }
     }
 
-    bool MCPServer::start(int port)
+    bool MCPServer::start(int port, TransportType transport)
     {
         if (m_running)
         {
-            std::cout << "MCP Server is already running" << std::endl;
+            return false; // Don't print in case we're in stdio mode
+        }
+
+        m_transportType = transport;
+
+        if (transport == TransportType::STDIO)
+        {
+            return startStdio();
+        }
+        else
+        {
+            return startHTTP(port);
+        }
+    }
+
+    bool MCPServer::startStdio()
+    {
+        if (m_running)
+        {
+            return false;
+        }
+
+        m_running = true;
+
+        // Start stdio processing in a separate thread
+        m_stdioThread = std::thread([this]() { runStdioLoop(); });
+
+        return true;
+    }
+
+    bool MCPServer::startHTTP(int port)
+    {
+        if (m_running)
+        {
+            std::cerr << "MCP Server is already running" << std::endl;
             return false;
         }
 
@@ -63,7 +101,7 @@ namespace gladius::mcp
           [this, port]()
           {
               m_running = true;
-              std::cout << "MCP Server starting on port " << port << std::endl;
+              std::cerr << "MCP Server starting on port " << port << std::endl;
 
               if (!m_server->listen("localhost", port))
               {
@@ -86,15 +124,30 @@ namespace gladius::mcp
         }
 
         m_running = false;
-        m_server->stop();
 
-        if (m_serverThread.joinable())
+        if (m_transportType == TransportType::HTTP)
         {
-            m_serverThread.join();
+            m_server->stop();
+            if (m_serverThread.joinable())
+            {
+                m_serverThread.join();
+            }
+        }
+        else if (m_transportType == TransportType::STDIO)
+        {
+            // For stdio, the thread will exit when m_running becomes false
+            if (m_stdioThread.joinable())
+            {
+                m_stdioThread.join();
+            }
         }
 
         m_port = 0;
-        std::cout << "MCP Server stopped" << std::endl;
+        // Only print if not in stdio mode
+        if (m_transportType == TransportType::HTTP)
+        {
+            std::cerr << "MCP Server stopped" << std::endl;
+        }
     }
 
     bool MCPServer::isRunning() const
@@ -393,6 +446,75 @@ namespace gladius::mcp
 
                          return {{"result", result}, {"operation", op}, {"operands", {a, b}}};
                      });
+    }
+
+    void MCPServer::runStdioLoop()
+    {
+        std::string line;
+        while (m_running && std::getline(std::cin, line))
+        {
+            if (!line.empty())
+            {
+                handleStdioMessage(line);
+            }
+        }
+    }
+
+    void MCPServer::handleStdioMessage(const std::string & line)
+    {
+        try
+        {
+            json request = json::parse(line);
+            json response = processJSONRPCRequest(request);
+            sendStdioResponse(response);
+        }
+        catch (const json::parse_error & e)
+        {
+            json errorResponse =
+              createErrorResponse(0, -32700, "Parse error: " + std::string(e.what()));
+            sendStdioResponse(errorResponse);
+        }
+        catch (const std::exception & e)
+        {
+            json errorResponse =
+              createErrorResponse(0, -32603, "Internal error: " + std::string(e.what()));
+            sendStdioResponse(errorResponse);
+        }
+    }
+
+    void MCPServer::sendStdioResponse(const nlohmann::json & response)
+    {
+        std::cout << response.dump() << std::endl;
+        std::cout.flush();
+    }
+
+    nlohmann::json MCPServer::processJSONRPCRequest(const nlohmann::json & request)
+    {
+        // Check for required fields
+        if (!request.contains("method"))
+        {
+            return createErrorResponse(0, -32600, "Invalid Request - missing method");
+        }
+
+        std::string method = request["method"];
+        int id = request.value("id", 0);
+
+        if (method == "initialize")
+        {
+            return handleInitialize(request);
+        }
+        else if (method == "tools/list")
+        {
+            return handleListTools(request);
+        }
+        else if (method == "tools/call")
+        {
+            return handleCallTool(request);
+        }
+        else
+        {
+            return createErrorResponse(id, -32601, "Method not found: " + method);
+        }
     }
 
 } // namespace gladius::mcp

@@ -48,7 +48,7 @@ namespace gladius
         {
             data->callBack->value()();
         }
-        
+
         if ((data->sender != nullptr) && buildWasSuccessful)
         {
             data->sender->compilationFinishedHandler();
@@ -230,7 +230,7 @@ namespace gladius
 
         const auto arguments = generateDefineSymbol();
 
-        std::cout << "Compiling program with " << numberOfLines(m_sources) << " lines\n";
+        std::cerr << "Compiling program with " << numberOfLines(m_sources) << " lines\n";
 
         m_callBackUserData.computeContext = m_ComputeContext.get();
         m_callBackUserData.callBack = &callBack;

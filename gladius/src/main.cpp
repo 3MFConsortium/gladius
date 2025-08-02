@@ -9,18 +9,23 @@ void printUsage()
 {
     std::cout << "Usage: gladius [options] [file]\n";
     std::cout << "Options:\n";
-    std::cout << "  --mcp-server [port]  Enable MCP server (default port: 8080)\n";
+    std::cout
+      << "  --mcp-server [port]  Enable MCP server with HTTP transport (default port: 8080)\n";
+    std::cout << "  --mcp-stdio          Enable MCP server with stdio transport (for VS Code)\n";
     std::cout << "  --help              Show this help message\n";
     std::cout << "Examples:\n";
     std::cout << "  gladius                           # Start with welcome screen\n";
     std::cout << "  gladius model.3mf                # Open specific file\n";
     std::cout << "  gladius --mcp-server              # Start with MCP server on port 8080\n";
     std::cout << "  gladius --mcp-server 8081         # Start with MCP server on port 8081\n";
+    std::cout
+      << "  gladius --mcp-stdio               # Start with MCP server using stdio (VS Code mode)\n";
 }
 
 int main(int argc, char ** argv)
 {
     bool enableMCP = false;
+    bool mcpStdio = false;
     int mcpPort = 8080;
     std::optional<std::filesystem::path> filename;
 
@@ -32,6 +37,7 @@ int main(int argc, char ** argv)
         if (arg == "--mcp-server")
         {
             enableMCP = true;
+            mcpStdio = false;
             // Check if next argument is a port number
             if (i + 1 < argc && argv[i + 1][0] != '-')
             {
@@ -50,6 +56,11 @@ int main(int argc, char ** argv)
                     return 1;
                 }
             }
+        }
+        else if (arg == "--mcp-stdio")
+        {
+            enableMCP = true;
+            mcpStdio = true;
         }
         else if (arg == "--help")
         {
@@ -77,14 +88,46 @@ int main(int argc, char ** argv)
     // Enable MCP server if requested (before starting main loop)
     if (enableMCP)
     {
-        if (app.enableMCPServer(mcpPort))
+        bool success;
+        if (mcpStdio)
         {
-            std::cout << "MCP Server enabled on port " << mcpPort << std::endl;
+            // In stdio mode, redirect stdout to stderr to avoid interfering with JSON-RPC
+            // Save original stdout for restoration later
+            std::streambuf * orig_cout = std::cout.rdbuf();
+            std::cout.rdbuf(std::cerr.rdbuf());
+
+            // Set logger to silent mode for stdio transport to avoid interfering with JSON-RPC
+            app.setLoggerOutputMode(gladius::events::OutputMode::Silent);
+
+            success = app.enableMCPServerStdio();
+
+            // Restore stdout for MCP protocol
+            std::cout.rdbuf(orig_cout);
+
+            if (!success)
+            {
+                // Use stderr for error since stdout is reserved for MCP protocol
+                std::cerr << "Failed to enable MCP Server with stdio transport" << std::endl;
+                return 1;
+            }
+            // In stdio mode, we start the main loop which will handle stdio communication
         }
         else
         {
-            std::cerr << "Failed to enable MCP Server on port " << mcpPort << std::endl;
-            return 1;
+            success = app.enableMCPServer(mcpPort);
+            if (success)
+            {
+                auto logger = app.getGlobalLogger();
+                if (logger)
+                {
+                    logger->logInfo("MCP Server enabled on port " + std::to_string(mcpPort));
+                }
+            }
+            else
+            {
+                std::cerr << "Failed to enable MCP Server on port " << mcpPort << std::endl;
+                return 1;
+            }
         }
     }
 
@@ -93,12 +136,26 @@ int main(int argc, char ** argv)
     {
         if (std::filesystem::exists(*filename))
         {
-            std::cout << "Opening file: " << *filename << std::endl;
+            if (!mcpStdio)
+            {
+                auto logger = app.getGlobalLogger();
+                if (logger)
+                {
+                    logger->logInfo("Opening file: " + filename->string());
+                }
+            }
             app.getMainWindow().open(*filename);
         }
         else
         {
-            std::cout << "File does not exist: " << *filename << std::endl;
+            if (!mcpStdio)
+            {
+                auto logger = app.getGlobalLogger();
+                if (logger)
+                {
+                    logger->logError("File does not exist: " + filename->string());
+                }
+            }
         }
     }
 

@@ -15,6 +15,12 @@ namespace gladius::events
         FatalError
     };
 
+    enum class OutputMode
+    {
+        Console, ///< Output to console (normal mode)
+        Silent   ///< Silent mode (for MCP stdio transport)
+    };
+
     class Event
     {
       public:
@@ -36,9 +42,33 @@ namespace gladius::events
     class Logger
     {
       public:
+        Logger() = default;
+        explicit Logger(OutputMode mode)
+            : m_outputMode(mode)
+        {
+        }
+
         virtual void addEvent(Event const & event);
 
         void clear();
+
+        /// Set output mode (Console or Silent)
+        void setOutputMode(OutputMode mode)
+        {
+            m_outputMode = mode;
+        }
+
+        /// Get current output mode
+        OutputMode getOutputMode() const
+        {
+            return m_outputMode;
+        }
+
+        /// Convenience methods for logging different severity levels
+        void logInfo(const std::string & message);
+        void logWarning(const std::string & message);
+        void logError(const std::string & message);
+        void logFatalError(const std::string & message);
 
         [[nodiscard]] Events::iterator begin();
 
@@ -53,10 +83,12 @@ namespace gladius::events
         [[nodiscard]] size_t getErrorCount() const;
 
         [[nodiscard]] size_t getWarningCount() const;
+
       private:
         Events m_events;
         size_t m_countErrors{};
         size_t m_countWarnings{};
+        OutputMode m_outputMode{OutputMode::Console};
     };
 
     using SharedLogger = std::shared_ptr<Logger>;

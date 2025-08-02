@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ConfigManager.h"
+#include "EventLogger.h"
 #include "ui/MainWindow.h"
 #include <memory>
 
@@ -52,6 +53,23 @@ namespace gladius
         bool enableMCPServer(int port = 8080);
 
         /**
+         * @brief Enable MCP server with stdio transport (for VS Code)
+         * @return true if server started successfully
+         */
+        bool enableMCPServerStdio();
+
+        /**
+         * @brief Enable headless mode (no GUI initialization)
+         */
+        void setHeadlessMode(bool headless);
+
+        /**
+         * @brief Check if running in headless mode
+         * @return true if in headless mode
+         */
+        bool isHeadlessMode() const;
+
+        /**
          * @brief Disable MCP server
          */
         void disableMCPServer();
@@ -61,6 +79,18 @@ namespace gladius
          * @return true if MCP server is running
          */
         bool isMCPServerEnabled() const;
+
+        /**
+         * @brief Get the global logger instance
+         * @return Shared pointer to the global logger
+         */
+        events::SharedLogger getGlobalLogger() const;
+
+        /**
+         * @brief Set the global logger output mode
+         * @param mode Output mode (Console or Silent)
+         */
+        void setLoggerOutputMode(events::OutputMode mode);
 
         /**
          * @brief Start the main application loop
@@ -80,7 +110,9 @@ namespace gladius
       private:
         ConfigManager m_configManager;
         ui::MainWindow m_mainWindow;
+        events::SharedLogger m_globalLogger;
         std::unique_ptr<mcp::MCPServer> m_mcpServer;
         std::unique_ptr<ApplicationMCPAdapter> m_mcpAdapter;
+        bool m_headlessMode{false};
     };
 }
