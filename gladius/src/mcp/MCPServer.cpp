@@ -504,9 +504,22 @@ namespace gladius::mcp
           [this](const json & params) -> json
           {
               bool success = m_application->saveDocument();
-              return {
-                {"success", success},
-                {"message", success ? "Document saved successfully" : "Failed to save document"}};
+
+              json result = {{"success", success}};
+
+              // Include detailed error message from the application adapter
+              std::string errorMessage = m_application->getLastErrorMessage();
+              if (!errorMessage.empty())
+              {
+                  result["message"] = errorMessage;
+              }
+              else
+              {
+                  result["message"] =
+                    success ? "Document saved successfully" : "Failed to save document";
+              }
+
+              return result;
           });
 
         registerTool(
@@ -525,10 +538,22 @@ namespace gladius::mcp
 
               std::string path = params["path"];
               bool success = m_application->saveDocumentAs(path);
-              return {
-                {"success", success},
-                {"path", path},
-                {"message", success ? "Document saved successfully" : "Failed to save document"}};
+
+              json result = {{"success", success}, {"path", path}};
+
+              // Include detailed error message from the application adapter
+              std::string errorMessage = m_application->getLastErrorMessage();
+              if (!errorMessage.empty())
+              {
+                  result["message"] = errorMessage;
+              }
+              else
+              {
+                  result["message"] =
+                    success ? "Document saved successfully" : "Failed to save document";
+              }
+
+              return result;
           });
 
         registerTool(

@@ -126,45 +126,95 @@ namespace gladius
     {
         if (!m_application)
         {
+            m_lastErrorMessage = "No application instance available";
             return false;
         }
 
         try
         {
             auto document = m_application->getCurrentDocument();
-            if (document)
+            if (!document)
             {
-                // This would require knowing the current filename
-                // For now, return false until we implement proper saving
-                return false; // TODO: Implement when Document has getCurrentFilename
+                m_lastErrorMessage =
+                  "No active document available. Please create or open a document first.";
+                return false;
             }
-            return false;
+
+            // Check if document has a current filename
+            auto currentPath = document->getCurrentAssemblyFilename();
+            if (!currentPath.has_value())
+            {
+                m_lastErrorMessage = "Document has not been saved before. Use 'save_document_as' "
+                                     "to specify a filename.";
+                return false;
+            }
+
+            document->saveAs(currentPath.value());
+            m_lastErrorMessage = "Document saved successfully to " + currentPath->string();
+            return true;
         }
-        catch (const std::exception &)
+        catch (const std::exception & e)
         {
+            m_lastErrorMessage = "Exception while saving document: " + std::string(e.what());
             return false;
         }
     }
 
     bool ApplicationMCPAdapter::saveDocumentAs(const std::string & path)
     {
-        if (!m_application)
-        {
-            return false;
-        }
-
         try
         {
-            auto document = m_application->getCurrentDocument();
-            if (document)
+            std::filesystem::path filePath(path);
+
+            // Validate path first (this can be tested without application instance)
+            if (path.empty())
             {
-                document->saveAs(std::filesystem::path(path));
-                return true;
+                m_lastErrorMessage = "File path cannot be empty";
+                return false;
             }
-            return false;
+
+            // Check file extension
+            if (!filePath.has_extension() || filePath.extension() != ".3mf")
+            {
+                m_lastErrorMessage = "File must have .3mf extension. Current path: " + path;
+                return false;
+            }
+
+            // Now check application instance
+            if (!m_application)
+            {
+                m_lastErrorMessage = "No application instance available";
+                return false;
+            }
+
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                m_lastErrorMessage =
+                  "No active document available. Please create or open a document first.";
+                return false;
+            }
+
+            // Check if directory exists and create if necessary
+            auto parentDir = filePath.parent_path();
+            if (!parentDir.empty() && !std::filesystem::exists(parentDir))
+            {
+                std::error_code ec;
+                if (!std::filesystem::create_directories(parentDir, ec))
+                {
+                    m_lastErrorMessage = "Failed to create directory: " + parentDir.string() +
+                                         " (error: " + ec.message() + ")";
+                    return false;
+                }
+            }
+
+            document->saveAs(filePath);
+            m_lastErrorMessage = "Document saved successfully to " + path;
+            return true;
         }
-        catch (const std::exception &)
+        catch (const std::exception & e)
         {
+            m_lastErrorMessage = "Exception while saving document: " + std::string(e.what());
             return false;
         }
     }
