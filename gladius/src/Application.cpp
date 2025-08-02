@@ -196,4 +196,9 @@ namespace gladius
     {
         return m_headlessMode;
     }
+
+    std::shared_ptr<Document> Application::getCurrentDocument() const
+    {
+        return m_mainWindow.getCurrentDocument();
+    }
 }

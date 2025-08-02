@@ -5,6 +5,11 @@
 #include "ui/MainWindow.h"
 #include <memory>
 
+namespace gladius
+{
+    class Document; // Forward declaration
+}
+
 namespace gladius::mcp
 {
     class MCPServer;
@@ -106,6 +111,12 @@ namespace gladius
         {
             return m_mainWindow;
         }
+
+        /**
+         * @brief Get the current active document
+         * @return Shared pointer to the current document, or nullptr if none
+         */
+        std::shared_ptr<Document> getCurrentDocument() const;
 
       private:
         ConfigManager m_configManager;

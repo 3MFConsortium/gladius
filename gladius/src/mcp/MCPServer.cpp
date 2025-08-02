@@ -448,6 +448,254 @@ namespace gladius::mcp
 
                          return {{"result", result}, {"operation", op}, {"operands", {a, b}}};
                      });
+
+        // Phase 1B: Document management tools
+        registerTool(
+          "create_document",
+          "Create a new empty document",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              bool success = m_application->createNewDocument();
+              return {{"success", success},
+                      {"message", success ? "New document created" : "Failed to create document"}};
+          });
+
+        registerTool(
+          "open_document",
+          "Open a document from file",
+          {{"type", "object"},
+           {"properties",
+            {{"path", {{"type", "string"}, {"description", "Path to the file to open"}}}}},
+           {"required", {"path"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("path"))
+              {
+                  return {{"error", "Missing required parameter: path"}};
+              }
+
+              std::string path = params["path"];
+              bool success = m_application->openDocument(path);
+              return {
+                {"success", success},
+                {"path", path},
+                {"message", success ? "Document opened successfully" : "Failed to open document"}};
+          });
+
+        registerTool(
+          "save_document",
+          "Save the current document",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              bool success = m_application->saveDocument();
+              return {
+                {"success", success},
+                {"message", success ? "Document saved successfully" : "Failed to save document"}};
+          });
+
+        registerTool(
+          "save_document_as",
+          "Save the current document with a new filename",
+          {{"type", "object"},
+           {"properties",
+            {{"path", {{"type", "string"}, {"description", "Path where to save the file"}}}}},
+           {"required", {"path"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("path"))
+              {
+                  return {{"error", "Missing required parameter: path"}};
+              }
+
+              std::string path = params["path"];
+              bool success = m_application->saveDocumentAs(path);
+              return {
+                {"success", success},
+                {"path", path},
+                {"message", success ? "Document saved successfully" : "Failed to save document"}};
+          });
+
+        registerTool(
+          "export_document",
+          "Export the document in a specific format",
+          {{"type", "object"},
+           {"properties",
+            {{"path", {{"type", "string"}, {"description", "Path where to export the file"}}},
+             {"format",
+              {{"type", "string"}, {"enum", {"stl"}}, {"description", "Export format"}}}}},
+           {"required", {"path", "format"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("path") || !params.contains("format"))
+              {
+                  return {{"error", "Missing required parameters: path, format"}};
+              }
+
+              std::string path = params["path"];
+              std::string format = params["format"];
+              bool success = m_application->exportDocument(path, format);
+              return {{"success", success},
+                      {"path", path},
+                      {"format", format},
+                      {"message",
+                       success ? "Document exported successfully" : "Failed to export document"}};
+          });
+
+        // Phase 1C: Parameter management tools
+        registerTool(
+          "set_parameter",
+          "Set a parameter value in the document",
+          {{"type", "object"},
+           {"properties",
+            {{"model_id", {{"type", "integer"}, {"description", "Model ID"}}},
+             {"node_name", {{"type", "string"}, {"description", "Node name"}}},
+             {"parameter_name", {{"type", "string"}, {"description", "Parameter name"}}},
+             {"value", {{"description", "Parameter value (number or string)"}}},
+             {"type",
+              {{"type", "string"},
+               {"enum", {"float", "string"}},
+               {"description", "Parameter type"}}}}},
+           {"required", {"model_id", "node_name", "parameter_name", "value", "type"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("model_id") || !params.contains("node_name") ||
+                  !params.contains("parameter_name") || !params.contains("value") ||
+                  !params.contains("type"))
+              {
+                  return {{"error", "Missing required parameters"}};
+              }
+
+              uint32_t modelId = params["model_id"];
+              std::string nodeName = params["node_name"];
+              std::string parameterName = params["parameter_name"];
+              std::string type = params["type"];
+
+              bool success = false;
+              if (type == "float")
+              {
+                  float value = params["value"];
+                  success =
+                    m_application->setFloatParameter(modelId, nodeName, parameterName, value);
+              }
+              else if (type == "string")
+              {
+                  std::string value = params["value"];
+                  success =
+                    m_application->setStringParameter(modelId, nodeName, parameterName, value);
+              }
+              else
+              {
+                  return {{"error", "Invalid parameter type: " + type}};
+              }
+
+              return {
+                {"success", success},
+                {"model_id", modelId},
+                {"node_name", nodeName},
+                {"parameter_name", parameterName},
+                {"type", type},
+                {"message", success ? "Parameter set successfully" : "Failed to set parameter"}};
+          });
+
+        registerTool(
+          "get_parameter",
+          "Get a parameter value from the document",
+          {{"type", "object"},
+           {"properties",
+            {{"model_id", {{"type", "integer"}, {"description", "Model ID"}}},
+             {"node_name", {{"type", "string"}, {"description", "Node name"}}},
+             {"parameter_name", {{"type", "string"}, {"description", "Parameter name"}}},
+             {"type",
+              {{"type", "string"},
+               {"enum", {"float", "string"}},
+               {"description", "Parameter type"}}}}},
+           {"required", {"model_id", "node_name", "parameter_name", "type"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("model_id") || !params.contains("node_name") ||
+                  !params.contains("parameter_name") || !params.contains("type"))
+              {
+                  return {{"error", "Missing required parameters"}};
+              }
+
+              uint32_t modelId = params["model_id"];
+              std::string nodeName = params["node_name"];
+              std::string parameterName = params["parameter_name"];
+              std::string type = params["type"];
+
+              try
+              {
+                  if (type == "float")
+                  {
+                      float value =
+                        m_application->getFloatParameter(modelId, nodeName, parameterName);
+                      return {{"success", true},
+                              {"model_id", modelId},
+                              {"node_name", nodeName},
+                              {"parameter_name", parameterName},
+                              {"type", type},
+                              {"value", value}};
+                  }
+                  else if (type == "string")
+                  {
+                      std::string value =
+                        m_application->getStringParameter(modelId, nodeName, parameterName);
+                      return {{"success", true},
+                              {"model_id", modelId},
+                              {"node_name", nodeName},
+                              {"parameter_name", parameterName},
+                              {"type", type},
+                              {"value", value}};
+                  }
+                  else
+                  {
+                      return {{"error", "Invalid parameter type: " + type}};
+                  }
+              }
+              catch (const std::exception & e)
+              {
+                  return {{"error", "Failed to get parameter: " + std::string(e.what())}};
+              }
+          });
+
+        // Phase 1D: Analysis tools (placeholder implementations)
+        registerTool(
+          "analyze_geometry",
+          "Analyze geometry properties of the current document",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              if (!m_application->hasActiveDocument())
+              {
+                  return {{"error", "No active document"}};
+              }
+
+              // TODO: Implement actual geometry analysis
+              return {
+                {"success", true},
+                {"analysis",
+                 {{"message", "Geometry analysis not yet implemented"}, {"has_document", true}}}};
+          });
+
+        registerTool(
+          "get_scene_hierarchy",
+          "Get the scene hierarchy of the current document",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              if (!m_application->hasActiveDocument())
+              {
+                  return {{"error", "No active document"}};
+              }
+
+              // TODO: Implement actual scene hierarchy retrieval
+              return {
+                {"success", true},
+                {"hierarchy",
+                 {{"message", "Scene hierarchy not yet implemented"}, {"has_document", true}}}};
+          });
     }
 
     void MCPServer::runStdioLoop()

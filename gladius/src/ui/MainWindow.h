@@ -81,6 +81,15 @@ namespace gladius::ui
          */
         void showWelcomeScreen();
 
+        /**
+         * @brief Get the current document
+         * @return Shared pointer to the current document
+         */
+        std::shared_ptr<Document> getCurrentDocument() const
+        {
+            return m_doc;
+        }
+
       private:
         void render();
         void nodeEditor();

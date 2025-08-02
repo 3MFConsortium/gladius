@@ -33,5 +33,28 @@ namespace gladius
         std::string getStatus() const override;
         bool hasActiveDocument() const override;
         std::string getActiveDocumentPath() const override;
+
+        // Document lifecycle operations
+        bool createNewDocument() override;
+        bool openDocument(const std::string & path) override;
+        bool saveDocument() override;
+        bool saveDocumentAs(const std::string & path) override;
+        bool exportDocument(const std::string & path, const std::string & format) override;
+
+        // Parameter operations
+        bool setFloatParameter(uint32_t modelId,
+                               const std::string & nodeName,
+                               const std::string & parameterName,
+                               float value) override;
+        float getFloatParameter(uint32_t modelId,
+                                const std::string & nodeName,
+                                const std::string & parameterName) override;
+        bool setStringParameter(uint32_t modelId,
+                                const std::string & nodeName,
+                                const std::string & parameterName,
+                                const std::string & value) override;
+        std::string getStringParameter(uint32_t modelId,
+                                       const std::string & nodeName,
+                                       const std::string & parameterName) override;
     };
 }
