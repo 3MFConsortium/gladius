@@ -21,11 +21,18 @@ namespace gladius
     class ApplicationMCPAdapter : public MCPApplicationInterface
     {
       private:
-        Application * m_application; // Raw pointer to avoid circular dependencies
+        Application * m_application;            // Raw pointer to avoid circular dependencies
+        mutable std::string m_lastErrorMessage; // Store detailed error information
 
       public:
         explicit ApplicationMCPAdapter(Application * app);
         ~ApplicationMCPAdapter() override = default;
+
+        // Get the last error message for debugging
+        std::string getLastErrorMessage() const override
+        {
+            return m_lastErrorMessage;
+        }
 
         // MCPApplicationInterface implementation
         std::string getVersion() const override;
@@ -59,8 +66,10 @@ namespace gladius
                                        const std::string & parameterName) override;
 
         // Expression and function operations
-        bool createFunctionFromExpression(const std::string & name,
-                                          const std::string & expression,
-                                          const std::string & outputType) override;
+        bool
+        createFunctionFromExpression(const std::string & name,
+                                     const std::string & expression,
+                                     const std::string & outputType,
+                                     const std::vector<FunctionArgument> & arguments = {}) override;
     };
 }

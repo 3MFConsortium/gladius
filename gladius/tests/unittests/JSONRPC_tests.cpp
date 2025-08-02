@@ -1,3 +1,4 @@
+#include "FunctionArgument.h"
 #include "mcp/MCPApplicationInterface.h"
 #include "mcp/MCPServer.h"
 #include <gtest/gtest.h>
@@ -81,9 +82,15 @@ namespace gladius::tests
 
         bool createFunctionFromExpression(const std::string &,
                                           const std::string &,
-                                          const std::string &) override
+                                          const std::string &,
+                                          const std::vector<FunctionArgument> & = {}) override
         {
             return true;
+        }
+
+        std::string getLastErrorMessage() const override
+        {
+            return "";
         }
     };
 

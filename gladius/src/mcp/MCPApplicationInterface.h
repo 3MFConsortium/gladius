@@ -8,6 +8,9 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
+
+#include "FunctionArgument.h"
 
 namespace gladius
 {
@@ -56,8 +59,13 @@ namespace gladius
                                                const std::string & parameterName) = 0;
 
         // Expression and function operations
-        virtual bool createFunctionFromExpression(const std::string & name,
-                                                  const std::string & expression,
-                                                  const std::string & outputType) = 0;
+        virtual bool
+        createFunctionFromExpression(const std::string & name,
+                                     const std::string & expression,
+                                     const std::string & outputType,
+                                     const std::vector<FunctionArgument> & arguments = {}) = 0;
+
+        // Error handling
+        virtual std::string getLastErrorMessage() const = 0;
     };
 }

@@ -6,6 +6,8 @@
 #include "ApplicationMCPAdapter.h"
 #include "../Application.h"
 #include "../Document.h"
+#include "../ExpressionParser.h"
+#include "../ExpressionToGraphConverter.h"
 #include <filesystem> // Only include here, not in header
 #include <nlohmann/json.hpp>
 
@@ -295,38 +297,239 @@ namespace gladius
         }
     }
 
-    bool ApplicationMCPAdapter::createFunctionFromExpression(const std::string & name,
-                                                             const std::string & expression,
-                                                             const std::string & outputType)
+    bool ApplicationMCPAdapter::createFunctionFromExpression(
+      const std::string & name,
+      const std::string & expression,
+      const std::string & outputType,
+      const std::vector<FunctionArgument> & providedArguments)
     {
         if (!m_application)
         {
+            m_lastErrorMessage = "No application instance available";
+            return false;
+        }
+
+        if (name.empty())
+        {
+            m_lastErrorMessage = "Function name cannot be empty";
+            return false;
+        }
+
+        if (expression.empty())
+        {
+            m_lastErrorMessage = "Expression cannot be empty";
+            return false;
+        }
+
+        // Validate output type
+        if (outputType != "float" && outputType != "vec3")
+        {
+            m_lastErrorMessage =
+              "Invalid output type '" + outputType + "'. Must be 'float' or 'vec3'";
             return false;
         }
 
         try
         {
             auto document = m_application->getCurrentDocument();
-            if (document)
+            if (!document)
             {
-                // TODO: Implement expression-to-function conversion
-                // This would use ExpressionParser and ExpressionToGraphConverter
-                // to create a new function from the mathematical expression
-                //
-                // Examples of expressions that could be supported:
-                // - TPMS structures: "sin(x*2*pi/10)*cos(y*2*pi/10) + sin(y*2*pi/10)*cos(z*2*pi/10)
-                // + sin(z*2*pi/10)*cos(x*2*pi/10) - 0.2" (gyroid)
-                // - Basic shapes: "sqrt(x*x + y*y + z*z) - 5" (sphere)
-                // - Complex geometry: "max(abs(x) - 5, max(abs(y) - 3, abs(z) - 2))" (rounded box)
-                // - Lattices: "min(sin(x), min(sin(y), sin(z)))" (simple lattice)
-
-                // For now, return false until implementation is complete
+                m_lastErrorMessage =
+                  "No active document available. Please create or open a document first.";
                 return false;
             }
-            return false;
+
+            // Parse and validate the expression syntax
+            ExpressionParser parser;
+            if (!parser.parseExpression(expression))
+            {
+                m_lastErrorMessage =
+                  "Expression parsing failed: " + parser.getLastError() +
+                  "\n\nSupported syntax:" + "\n- Variables: x, y, z (for 3D coordinates)" +
+                  "\n- Math operators: +, -, *, /, ^ (power)" +
+                  "\n- Functions: sin(), cos(), tan(), sqrt(), abs(), exp(), log(), pow()" +
+                  "\n- Constants: pi, e" +
+                  "\n- Component access: pos.x, pos.y, pos.z (for vec3 inputs)" +
+                  "\n- Parentheses for grouping: (x + y) * z" + "\n\nExample valid expressions:" +
+                  "\n- Gyroid: 'sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)'" +
+                  "\n- Sphere: 'sqrt(x*x + y*y + z*z) - 5'" +
+                  "\n- Scaled wave: 'sin(x*2*pi/10)*cos(y*2*pi/10)'";
+                return false;
+            }
+
+            // Convert expression to node graph using ExpressionToGraphConverter
+            auto variables = parser.getVariables();
+
+            // Create function arguments - use provided arguments or auto-detect
+            std::vector<FunctionArgument> arguments;
+            std::string transformedExpression = expression;
+
+            if (!providedArguments.empty())
+            {
+                // Use the provided arguments
+                arguments = providedArguments;
+
+                // Validate that all variables in the expression are covered by the arguments
+                for (const auto & variable : variables)
+                {
+                    bool found = false;
+                    for (const auto & arg : arguments)
+                    {
+                        if (arg.name == variable ||
+                            (arg.type == ArgumentType::Vector &&
+                             (variable == arg.name + ".x" || variable == arg.name + ".y" ||
+                              variable == arg.name + ".z")))
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        m_lastErrorMessage =
+                          "Variable '" + variable +
+                          "' used in expression is not defined in function arguments. " +
+                          "Please define it as a function input or use component access like "
+                          "'pos.x' for vector inputs.";
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                // Auto-detect arguments from expression variables
+                // Check if expression uses x, y, z coordinates
+                bool usesXYZ = false;
+                for (const auto & variable : variables)
+                {
+                    if (variable == "x" || variable == "y" || variable == "z")
+                    {
+                        usesXYZ = true;
+                        break;
+                    }
+                }
+
+                if (usesXYZ)
+                {
+                    // For expressions using x, y, z coordinates, create a single 3D position input
+                    FunctionArgument posArg("pos", ArgumentType::Vector);
+                    arguments.push_back(posArg);
+
+                    // Transform the expression to use component access
+                    // Replace x, y, z with pos.x, pos.y, pos.z
+                    size_t pos = 0;
+                    while ((pos = transformedExpression.find("x", pos)) != std::string::npos)
+                    {
+                        // Make sure it's a standalone variable, not part of another word
+                        bool isStandalone =
+                          (pos == 0 || !std::isalnum(transformedExpression[pos - 1])) &&
+                          (pos + 1 >= transformedExpression.length() ||
+                           !std::isalnum(transformedExpression[pos + 1]));
+                        if (isStandalone)
+                        {
+                            transformedExpression.replace(pos, 1, "pos.x");
+                            pos += 5; // Skip past "pos.x"
+                        }
+                        else
+                        {
+                            pos += 1;
+                        }
+                    }
+
+                    pos = 0;
+                    while ((pos = transformedExpression.find("y", pos)) != std::string::npos)
+                    {
+                        bool isStandalone =
+                          (pos == 0 || !std::isalnum(transformedExpression[pos - 1])) &&
+                          (pos + 1 >= transformedExpression.length() ||
+                           !std::isalnum(transformedExpression[pos + 1]));
+                        if (isStandalone)
+                        {
+                            transformedExpression.replace(pos, 1, "pos.y");
+                            pos += 5; // Skip past "pos.y"
+                        }
+                        else
+                        {
+                            pos += 1;
+                        }
+                    }
+
+                    pos = 0;
+                    while ((pos = transformedExpression.find("z", pos)) != std::string::npos)
+                    {
+                        bool isStandalone =
+                          (pos == 0 || !std::isalnum(transformedExpression[pos - 1])) &&
+                          (pos + 1 >= transformedExpression.length() ||
+                           !std::isalnum(transformedExpression[pos + 1]));
+                        if (isStandalone)
+                        {
+                            transformedExpression.replace(pos, 1, "pos.z");
+                            pos += 5; // Skip past "pos.z"
+                        }
+                        else
+                        {
+                            pos += 1;
+                        }
+                    }
+                }
+                else
+                {
+                    // For other variables, create scalar arguments
+                    for (const auto & variable : variables)
+                    {
+                        FunctionArgument arg(variable, ArgumentType::Scalar);
+                        arguments.push_back(arg);
+                    }
+                }
+            }
+
+            // Create function output specification
+            FunctionOutput output;
+            output.name = "result";
+            output.type = (outputType == "vec3") ? ArgumentType::Vector : ArgumentType::Scalar;
+
+            // Create a new function model and get reference to it
+            auto & model = document->createNewFunction();
+
+            // Convert expression to node graph
+            auto resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+              transformedExpression, model, parser, arguments, output);
+
+            if (resultNodeId == 0)
+            {
+                m_lastErrorMessage = std::string("Failed to convert expression to node graph. ") +
+                                     "The expression '" + transformedExpression +
+                                     "' with arguments [";
+                for (size_t i = 0; i < arguments.size(); ++i)
+                {
+                    if (i > 0)
+                        m_lastErrorMessage += ", ";
+                    m_lastErrorMessage +=
+                      arguments[i].name + ":" +
+                      (arguments[i].type == ArgumentType::Vector ? "vec3" : "float");
+                }
+                m_lastErrorMessage += "] could not be converted to a valid node graph.";
+                return false;
+            }
+
+            // Success!
+            m_lastErrorMessage = std::string("Function '") + name +
+                                 "' created successfully with expression '" +
+                                 transformedExpression + "' and arguments [";
+            for (size_t i = 0; i < arguments.size(); ++i)
+            {
+                if (i > 0)
+                    m_lastErrorMessage += ", ";
+                m_lastErrorMessage +=
+                  arguments[i].name + ":" +
+                  (arguments[i].type == ArgumentType::Vector ? "vec3" : "float");
+            }
+            m_lastErrorMessage += "]";
+            return true;
         }
-        catch (const std::exception &)
+        catch (const std::exception & e)
         {
+            m_lastErrorMessage = "Exception during expression validation: " + std::string(e.what());
             return false;
         }
     }

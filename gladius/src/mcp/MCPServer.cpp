@@ -4,6 +4,7 @@
  */
 
 #include "MCPServer.h"
+#include "FunctionArgument.h"
 #include "MCPApplicationInterface.h"
 #include <chrono>
 #include <iostream>
@@ -760,8 +761,33 @@ namespace gladius::mcp
         // Phase 2A: Expression-based function creation
         registerTool(
           "create_function_from_expression",
-          "Create a new function from a mathematical expression (supports TPMS, lattices, "
-          "primitives, and custom expressions)",
+          "Create a new function from a mathematical expression.\n\n"
+          "Function Arguments:\n"
+          "- Define function inputs using the 'arguments' parameter\n"
+          "- Each argument has a name and type ('float' for scalars, 'vec3' for 3D vectors)\n"
+          "- If no arguments are provided, auto-detection creates 'pos' vec3 for x,y,z usage\n\n"
+          "Supported expression syntax:\n"
+          "- Basic math: +, -, *, /, ^, sqrt(), abs(), min(), max()\n"
+          "- Trigonometric: sin(), cos(), tan(), atan2()\n"
+          "- Exponential: exp(), log(), pow()\n"
+          "- Constants: pi, e\n"
+          "- Variables: Use defined argument names or component access (e.g., 'pos.x')\n"
+          "- Custom functions: clamp()\n\n"
+          "Examples:\n"
+          "1. Auto-detected coordinates:\n"
+          "   Expression: 'sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)'\n"
+          "   (Creates 'pos' vec3 input, transforms to pos.x, pos.y, pos.z)\n\n"
+          "2. Custom scalar inputs:\n"
+          "   Arguments: [{\"name\": \"radius\", \"type\": \"float\"}, {\"name\": \"height\", "
+          "\"type\": \"float\"}]\n"
+          "   Expression: 'sqrt(radius*radius + height*height)'\n\n"
+          "3. Custom vector input:\n"
+          "   Arguments: [{\"name\": \"point\", \"type\": \"vec3\"}]\n"
+          "   Expression: 'sin(point.x)*cos(point.y) + point.z'\n\n"
+          "4. Mixed inputs:\n"
+          "   Arguments: [{\"name\": \"center\", \"type\": \"vec3\"}, {\"name\": \"scale\", "
+          "\"type\": \"float\"}]\n"
+          "   Expression: 'sqrt(center.x*center.x + center.y*center.y) * scale'",
           {{"type", "object"},
            {"properties",
             {{"name", {{"type", "string"}, {"description", "Function name"}}},
@@ -773,11 +799,14 @@ namespace gladius::mcp
                {"items",
                 {{"type", "object"},
                  {"properties",
-                  {{"name", {{"type", "string"}}},
-                   {"type", {{"type", "string"}, {"enum", {"float", "vec3"}}}},
-                   {"default_value", {{"type", "number"}}}}},
+                  {{"name", {{"type", "string"}, {"description", "Argument name"}}},
+                   {"type",
+                    {{"type", "string"},
+                     {"enum", {"float", "vec3"}},
+                     {"description", "Argument type"}}}}},
                  {"required", {"name", "type"}}}},
-               {"description", "Function input arguments"}}},
+               {"description",
+                "Function input arguments (optional - auto-detects if not provided)"}}},
              {"output_type",
               {{"type", "string"},
                {"enum", {"float", "vec3"}},
@@ -787,28 +816,98 @@ namespace gladius::mcp
           {
               if (!params.contains("name") || !params.contains("expression"))
               {
-                  return {{"error", "Missing required parameters: name, expression"}};
+                  return {{"success", false},
+                          {"error", "Missing required parameters: name, expression"},
+                          {"message", "Both 'name' and 'expression' parameters are required"}};
               }
 
               std::string name = params["name"];
               std::string expression = params["expression"];
               std::string outputType = params.value("output_type", "float");
 
+              if (name.empty())
+              {
+                  return {{"success", false},
+                          {"error", "Function name cannot be empty"},
+                          {"message", "Please provide a non-empty function name"}};
+              }
+
+              if (expression.empty())
+              {
+                  return {{"success", false},
+                          {"error", "Expression cannot be empty"},
+                          {"message", "Please provide a valid mathematical expression"}};
+              }
+
               try
               {
-                  bool success =
-                    m_application->createFunctionFromExpression(name, expression, outputType);
-                  return {
-                    {"success", success},
-                    {"function_name", name},
-                    {"expression", expression},
-                    {"output_type", outputType},
-                    {"message",
-                     success ? "Function created successfully" : "Failed to create function"}};
+                  // Parse arguments if provided
+                  std::vector<FunctionArgument> arguments;
+                  if (params.contains("arguments") && params["arguments"].is_array())
+                  {
+                      for (const auto & argJson : params["arguments"])
+                      {
+                          if (!argJson.contains("name") || !argJson.contains("type"))
+                          {
+                              return {
+                                {"success", false},
+                                {"error", "Invalid argument definition"},
+                                {"message", "Each argument must have 'name' and 'type' fields"}};
+                          }
+
+                          std::string argName = argJson["name"];
+                          std::string argType = argJson["type"];
+
+                          if (argName.empty())
+                          {
+                              return {{"success", false},
+                                      {"error", "Argument name cannot be empty"},
+                                      {"message", "Please provide a valid argument name"}};
+                          }
+
+                          ArgumentType type;
+                          if (argType == "float")
+                          {
+                              type = ArgumentType::Scalar;
+                          }
+                          else if (argType == "vec3")
+                          {
+                              type = ArgumentType::Vector;
+                          }
+                          else
+                          {
+                              return {{"success", false},
+                                      {"error", "Invalid argument type: " + argType},
+                                      {"message", "Argument type must be 'float' or 'vec3'"}};
+                          }
+
+                          arguments.emplace_back(argName, type);
+                      }
+                  }
+
+                  bool success = m_application->createFunctionFromExpression(
+                    name, expression, outputType, arguments);
+
+                  // Get detailed error message from adapter
+                  std::string detailedMessage = m_application->getLastErrorMessage();
+
+                  return {{"success", success},
+                          {"function_name", name},
+                          {"expression", expression},
+                          {"output_type", outputType},
+                          {"message",
+                           detailedMessage.empty() ? (success ? "Function created successfully"
+                                                              : "Failed to create function")
+                                                   : detailedMessage}};
               }
               catch (const std::exception & e)
               {
-                  return {{"error", "Failed to create function: " + std::string(e.what())}};
+                  return {{"success", false},
+                          {"error", "Exception during function creation: " + std::string(e.what())},
+                          {"function_name", name},
+                          {"expression", expression},
+                          {"output_type", outputType},
+                          {"message", "An unexpected error occurred while creating the function"}};
               }
           });
     }
