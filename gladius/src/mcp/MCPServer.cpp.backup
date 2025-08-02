@@ -343,7 +343,11 @@ namespace gladius::mcp
         // Tool: get_status - Get application status
         registerTool("get_status",
                      "Get the current status of Gladius application",
-                     {{"type", "object"}, {"properties", {}}, {"required", json::array()}},
+                     {
+                         {"type", "object"},
+                         {"properties", json::object()},
+                         {"required", json::array()}
+                     },
                      [this](const json & params) -> json
                      {
                          return {{"status", m_application->getStatus()},
@@ -364,10 +368,16 @@ namespace gladius::mcp
         registerTool(
           "ping",
           "Simple ping tool to test connectivity",
-          {{"type", "object"},
-           {"properties",
-            {{"message", {{"type", "string"}, {"description", "Optional message to echo back"}}}}},
-           {"required", json::array()}},
+          {
+              {"type", "object"},
+              {"properties", {
+                  {"message", {
+                      {"type", "string"},
+                      {"description", "Optional message to echo back"}
+                  }}
+              }},
+              {"required", json::array()}
+          },
           [](const json & params) -> json
           {
               std::string message = params.value("message", "pong");
@@ -381,7 +391,11 @@ namespace gladius::mcp
         // Tool: list_tools - List available tools
         registerTool("list_tools",
                      "List all available MCP tools",
-                     {{"type", "object"}, {"properties", {}}, {"required", json::array()}},
+                     {
+                         {"type", "object"},
+                         {"properties", json::object()},
+                         {"required", json::array()}
+                     },
                      [this](const json & params) -> json
                      {
                          json tools = json::array();
@@ -397,15 +411,25 @@ namespace gladius::mcp
         // Tool: test_computation - Test basic computation
         registerTool("test_computation",
                      "Test basic mathematical computation",
-                     {{"type", "object"},
-                      {"properties",
-                       {{"a", {{"type", "number"}, {"description", "First number"}}},
-                        {"b", {{"type", "number"}, {"description", "Second number"}}},
-                        {"operation",
-                         {{"type", "string"},
-                          {"enum", {"add", "subtract", "multiply", "divide"}},
-                          {"description", "Mathematical operation to perform"}}}}},
-                      {"required", {"a", "b", "operation"}}},
+                     {
+                         {"type", "object"},
+                         {"properties", {
+                             {"a", {
+                                 {"type", "number"},
+                                 {"description", "First number"}
+                             }},
+                             {"b", {
+                                 {"type", "number"},
+                                 {"description", "Second number"}
+                             }},
+                             {"operation", {
+                                 {"type", "string"},
+                                 {"enum", json::array({"add", "subtract", "multiply", "divide"})},
+                                 {"description", "Mathematical operation to perform"}
+                             }}
+                         }},
+                         {"required", json::array({"a", "b", "operation"})}
+                     },
                      [](const json & params) -> json
                      {
                          if (!params.contains("a") || !params.contains("b") ||
