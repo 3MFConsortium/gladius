@@ -696,6 +696,49 @@ namespace gladius::mcp
                 {"hierarchy",
                  {{"message", "Scene hierarchy not yet implemented"}, {"has_document", true}}}};
           });
+
+        // Diagnostic tool for document loading verification
+        registerTool(
+          "get_document_info",
+          "Get detailed information about the current document state",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              json info = {{"has_document", m_application->hasActiveDocument()},
+                           {"document_path", m_application->getActiveDocumentPath()},
+                           {"timestamp",
+                            std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count()}};
+
+              if (m_application->hasActiveDocument())
+              {
+                  std::string path = m_application->getActiveDocumentPath();
+                  info["path_length"] = path.length();
+                  info["path_empty"] = path.empty();
+                  info["has_valid_path"] = !path.empty();
+
+                  // Add file existence check if path is not empty
+                  if (!path.empty())
+                  {
+                      try
+                      {
+                          std::filesystem::path filePath(path);
+                          info["file_exists"] = std::filesystem::exists(filePath);
+                          info["file_size"] = std::filesystem::exists(filePath)
+                                                ? std::filesystem::file_size(filePath)
+                                                : 0;
+                          info["file_extension"] = filePath.extension().string();
+                      }
+                      catch (const std::exception & e)
+                      {
+                          info["file_check_error"] = e.what();
+                      }
+                  }
+              }
+
+              return info;
+          });
     }
 
     void MCPServer::runStdioLoop()

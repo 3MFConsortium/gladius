@@ -71,8 +71,13 @@ namespace gladius
         }
 
         // Get the current assembly filename from the document
-        // TODO: Add method to Document to get current filename
-        return ""; // For now, return empty until we add the method
+        auto filename = document->getCurrentAssemblyFilename();
+        if (filename.has_value())
+        {
+            return filename->string();
+        }
+
+        return "";
     }
 
     bool ApplicationMCPAdapter::createNewDocument()
@@ -84,13 +89,10 @@ namespace gladius
 
         try
         {
-            auto document = m_application->getCurrentDocument();
-            if (document)
-            {
-                document->newModel();
-                return true;
-            }
-            return false;
+            // Use MainWindow's newModel method and hide welcome screen like the UI callback does
+            m_application->getMainWindow().newModel();
+            m_application->getMainWindow().hideWelcomeScreen();
+            return true;
         }
         catch (const std::exception &)
         {
@@ -107,13 +109,9 @@ namespace gladius
 
         try
         {
-            auto document = m_application->getCurrentDocument();
-            if (document)
-            {
-                document->loadNonBlocking(std::filesystem::path(path));
-                return true;
-            }
-            return false;
+            // Use MainWindow's open method to properly hide welcome screen and handle UI updates
+            m_application->getMainWindow().open(std::filesystem::path(path));
+            return true;
         }
         catch (const std::exception &)
         {

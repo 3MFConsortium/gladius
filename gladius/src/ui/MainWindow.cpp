@@ -2306,6 +2306,11 @@ namespace gladius::ui
         m_welcomeScreen.show();
     }
 
+    void MainWindow::hideWelcomeScreen()
+    {
+        m_welcomeScreen.hide();
+    }
+
     void MainWindow::saveRenderSettings()
     {
         if (!m_configManager)

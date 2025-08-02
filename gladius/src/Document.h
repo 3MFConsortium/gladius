@@ -132,6 +132,12 @@ namespace gladius
         void invalidatePrimitiveData();
         nodes::SharedAssembly getAssembly() const;
 
+        /**
+         * @brief Get the current assembly filename
+         * @return The current assembly filename if available, empty optional otherwise
+         */
+        std::optional<std::filesystem::path> getCurrentAssemblyFilename() const;
+
         float getFloatParameter(ResourceId modelId,
                                 std::string const & nodeName,
                                 std::string const & parameterName);

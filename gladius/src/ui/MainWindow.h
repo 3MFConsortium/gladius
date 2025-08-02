@@ -82,6 +82,16 @@ namespace gladius::ui
         void showWelcomeScreen();
 
         /**
+         * @brief Hide the welcome screen
+         */
+        void hideWelcomeScreen();
+
+        /**
+         * @brief Create a new model
+         */
+        void newModel();
+
+        /**
          * @brief Get the current document
          * @return Shared pointer to the current document
          */
@@ -109,7 +119,6 @@ namespace gladius::ui
         void refreshModel();
 
         void markFileAsChanged();
-        void newModel();
         void import();
         void updateContours();
         void close();

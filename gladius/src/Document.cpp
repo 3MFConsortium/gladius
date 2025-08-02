@@ -223,14 +223,20 @@ namespace gladius
             auto tempDir = std::filesystem::temp_directory_path();
             auto tempBackupFile = tempDir / "gladius_temp_backup.3mf";
 
+            // Preserve the original filename before saving backup
+            auto originalFilename = m_currentAssemblyFileName;
+
             // Save current model to temporary file
             saveAs(tempBackupFile, false);
 
+            // Restore the original filename (backup shouldn't change current file)
+            m_currentAssemblyFileName = originalFilename;
+
             // Get original filename for backup naming
             std::string originalName = "untitled";
-            if (m_currentAssemblyFileName.has_value() && !m_currentAssemblyFileName->empty())
+            if (originalFilename.has_value() && !originalFilename->empty())
             {
-                originalName = m_currentAssemblyFileName->stem().string();
+                originalName = originalFilename->stem().string();
             }
 
             // Create backup using BackupManager
@@ -550,6 +556,11 @@ namespace gladius
     {
 
         return m_assembly;
+    }
+
+    std::optional<std::filesystem::path> Document::getCurrentAssemblyFilename() const
+    {
+        return m_currentAssemblyFileName;
     }
 
     float Document::getFloatParameter(ResourceId modelId,
