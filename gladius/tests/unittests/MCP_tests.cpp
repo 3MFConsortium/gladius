@@ -404,4 +404,192 @@ namespace gladius::tests
                                      ::testing::HasSubstr("cos(y"),
                                      ::testing::HasSubstr("sin(z")));
     }
+
+    // ========================================
+    // Save Document As Tests
+    // ========================================
+
+    TEST_F(MCPServerTest, SaveDocumentAsTool_ValidPath_ReturnsSuccess)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, saveDocumentAs("/tmp/test.3mf")).WillOnce(::testing::Return(true));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return("Document saved successfully to /tmp/test.3mf"));
+
+        json request = {
+          {"jsonrpc", "2.0"},
+          {"id", 1},
+          {"method", "tools/call"},
+          {"params", {{"name", "save_document_as"}, {"arguments", {{"path", "/tmp/test.3mf"}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json saveResult = json::parse(jsonString);
+        EXPECT_EQ(saveResult["success"], true);
+        EXPECT_EQ(saveResult["path"], "/tmp/test.3mf");
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("Document saved successfully"));
+    }
+
+    TEST_F(MCPServerTest, SaveDocumentAsTool_InvalidPath_ReturnsDetailedError)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, saveDocumentAs("invalid_path")).WillOnce(::testing::Return(false));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return("File must have .3mf extension. Current path: invalid_path"));
+
+        json request = {
+          {"jsonrpc", "2.0"},
+          {"id", 1},
+          {"method", "tools/call"},
+          {"params", {{"name", "save_document_as"}, {"arguments", {{"path", "invalid_path"}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json saveResult = json::parse(jsonString);
+        EXPECT_EQ(saveResult["success"], false);
+        EXPECT_EQ(saveResult["path"], "invalid_path");
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("File must have .3mf extension"));
+    }
+
+    TEST_F(MCPServerTest, SaveDocumentAsTool_NoActiveDocument_ReturnsDetailedError)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, saveDocumentAs("/tmp/test.3mf")).WillOnce(::testing::Return(false));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return(
+            "No active document available. Please create or open a document first."));
+
+        json request = {
+          {"jsonrpc", "2.0"},
+          {"id", 1},
+          {"method", "tools/call"},
+          {"params", {{"name", "save_document_as"}, {"arguments", {{"path", "/tmp/test.3mf"}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json saveResult = json::parse(jsonString);
+        EXPECT_EQ(saveResult["success"], false);
+        EXPECT_EQ(saveResult["path"], "/tmp/test.3mf");
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("No active document available"));
+    }
+
+    TEST_F(MCPServerTest, SaveDocumentAsTool_ExceptionDuringSave_ReturnsDetailedError)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, saveDocumentAs("/tmp/test.3mf")).WillOnce(::testing::Return(false));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return("Exception while saving document: Permission denied"));
+
+        json request = {
+          {"jsonrpc", "2.0"},
+          {"id", 1},
+          {"method", "tools/call"},
+          {"params", {{"name", "save_document_as"}, {"arguments", {{"path", "/tmp/test.3mf"}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json saveResult = json::parse(jsonString);
+        EXPECT_EQ(saveResult["success"], false);
+        EXPECT_EQ(saveResult["path"], "/tmp/test.3mf");
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("Exception while saving document"));
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("Permission denied"));
+    }
+
+    TEST_F(MCPServerTest, SaveDocumentAsTool_MissingPathParameter_ReturnsError)
+    {
+        // Arrange - no expectations as the request should fail validation
+
+        json request = {
+          {"jsonrpc", "2.0"},
+          {"id", 1},
+          {"method", "tools/call"},
+          {"params", {{"name", "save_document_as"}, {"arguments", {}}}}}; // Missing path parameter
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json saveResult = json::parse(jsonString);
+        EXPECT_TRUE(saveResult.contains("error"));
+        EXPECT_THAT(saveResult["error"].get<std::string>(),
+                    ::testing::HasSubstr("Missing required parameter"));
+    }
+
+    // ========================================
+    // Save Document Tests (for comparison)
+    // ========================================
+
+    TEST_F(MCPServerTest, SaveDocumentTool_HasCurrentFile_ReturnsSuccess)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, saveDocument()).WillOnce(::testing::Return(true));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return("Document saved successfully to /current/file.3mf"));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params", {{"name", "save_document"}, {"arguments", {}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json saveResult = json::parse(jsonString);
+        EXPECT_EQ(saveResult["success"], true);
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("Document saved successfully"));
+    }
+
+    TEST_F(MCPServerTest, SaveDocumentTool_NoCurrentFile_ReturnsDetailedError)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, saveDocument()).WillOnce(::testing::Return(false));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return(
+            "Document has not been saved before. Use 'save_document_as' to specify a filename."));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params", {{"name", "save_document"}, {"arguments", {}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json saveResult = json::parse(jsonString);
+        EXPECT_EQ(saveResult["success"], false);
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("Document has not been saved before"));
+        EXPECT_THAT(saveResult["message"].get<std::string>(),
+                    ::testing::HasSubstr("Use 'save_document_as'"));
+    }
 }

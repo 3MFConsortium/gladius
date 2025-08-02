@@ -251,4 +251,140 @@ namespace gladius::tests
         std::make_tuple("torus", "sqrt((sqrt(x*x + y*y) - 5)*(sqrt(x*x + y*y) - 5) + z*z) - 1"),
         std::make_tuple("cylinder", "sqrt(x*x + y*y) - 3"),
         std::make_tuple("plane", "z")));
+
+    // ========================================
+    // Save Document Tests
+    // ========================================
+
+    TEST_F(ApplicationMCPAdapterTest, SaveDocument_NullApplication_ReturnsFalseWithErrorMessage)
+    {
+        // Act
+        bool result = m_adapter->saveDocument();
+
+        // Assert
+        EXPECT_FALSE(result);
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("No application instance available"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, SaveDocumentAs_NullApplication_ReturnsFalseWithErrorMessage)
+    {
+        // Act
+        bool result = m_adapter->saveDocumentAs("/tmp/test.3mf");
+
+        // Assert
+        EXPECT_FALSE(result);
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("No application instance available"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, SaveDocumentAs_EmptyPath_ReturnsFalseWithErrorMessage)
+    {
+        // Act
+        bool result = m_adapter->saveDocumentAs("");
+
+        // Assert
+        EXPECT_FALSE(result);
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("File path cannot be empty"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, SaveDocumentAs_InvalidExtension_ReturnsFalseWithErrorMessage)
+    {
+        // Act
+        bool result = m_adapter->saveDocumentAs("/tmp/test.txt");
+
+        // Assert
+        EXPECT_FALSE(result);
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("File must have .3mf extension"));
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("/tmp/test.txt"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, SaveDocumentAs_NoExtension_ReturnsFalseWithErrorMessage)
+    {
+        // Act
+        bool result = m_adapter->saveDocumentAs("/tmp/test_file");
+
+        // Assert
+        EXPECT_FALSE(result);
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("File must have .3mf extension"));
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("/tmp/test_file"));
+    }
+
+    class SaveDocumentAsPathTest
+        : public ApplicationMCPAdapterTest,
+          public ::testing::WithParamInterface<std::pair<std::string, std::string>>
+    {
+    };
+
+    TEST_P(SaveDocumentAsPathTest, SaveDocumentAs_VariousInvalidPaths_ReturnsAppropriateErrors)
+    {
+        // Arrange
+        auto [path, expectedErrorSubstring] = GetParam();
+
+        // Act
+        bool result = m_adapter->saveDocumentAs(path);
+
+        // Assert
+        EXPECT_FALSE(result);
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr(expectedErrorSubstring));
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+      InvalidPathTests,
+      SaveDocumentAsPathTest,
+      ::testing::Values(std::make_pair("", "File path cannot be empty"),
+                        std::make_pair("no_extension", "File must have .3mf extension"),
+                        std::make_pair("wrong.stl", "File must have .3mf extension"),
+                        std::make_pair("wrong.obj", "File must have .3mf extension"),
+                        std::make_pair("multiple.dots.txt", "File must have .3mf extension"),
+                        std::make_pair("/path/file.3MF",
+                                       "File must have .3mf extension"), // Case sensitive test
+                        std::make_pair("relative/path/file.xml", "File must have .3mf extension"),
+                        std::make_pair("/absolute/path.doc", "File must have .3mf extension")));
+
+    // ========================================
+    // Error Message Tests
+    // ========================================
+
+    TEST_F(ApplicationMCPAdapterTest, GetLastErrorMessage_InitialState_ReturnsEmptyString)
+    {
+        // Act
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+
+        // Assert
+        EXPECT_TRUE(errorMessage.empty());
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, GetLastErrorMessage_AfterSaveError_ReturnsDetailedMessage)
+    {
+        // Arrange
+        m_adapter->saveDocumentAs("invalid_file");
+
+        // Act
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+
+        // Assert
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("File must have .3mf extension"));
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("invalid_file"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, GetLastErrorMessage_AfterMultipleErrors_ReturnsLatestMessage)
+    {
+        // Arrange
+        m_adapter->saveDocumentAs("");         // First error
+        m_adapter->saveDocumentAs("test.txt"); // Second error
+
+        // Act
+        std::string errorMessage = m_adapter->getLastErrorMessage();
+
+        // Assert - Should contain the latest error message
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("File must have .3mf extension"));
+        EXPECT_THAT(errorMessage, ::testing::HasSubstr("test.txt"));
+        EXPECT_THAT(errorMessage,
+                    ::testing::Not(::testing::HasSubstr("File path cannot be empty")));
+    }
 }
