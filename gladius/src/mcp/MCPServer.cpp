@@ -341,24 +341,25 @@ namespace gladius::mcp
     void MCPServer::setupBuiltinTools()
     {
         // Tool: get_status - Get application status
-        registerTool("get_status",
-                     "Get the current status of Gladius application",
-                     {{"type", "object"}, {"properties", {}}, {"required", json::array()}},
-                     [this](const json & params) -> json
-                     {
-                         return {{"status", m_application->getStatus()},
-                                 {"application", m_application->getApplicationName()},
-                                 {"version", m_application->getVersion()},
-                                 {"is_running", m_application->isRunning()},
-                                 {"mcp_server_running", m_running.load()},
-                                 {"available_tools", m_tools.size()},
-                                 {"has_active_document", m_application->hasActiveDocument()},
-                                 {"active_document_path", m_application->getActiveDocumentPath()},
-                                 {"timestamp",
-                                  std::chrono::duration_cast<std::chrono::milliseconds>(
-                                    std::chrono::system_clock::now().time_since_epoch())
-                                    .count()}};
-                     });
+        registerTool(
+          "get_status",
+          "Get the current status of Gladius application",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              return {{"status", m_application->getStatus()},
+                      {"application", m_application->getApplicationName()},
+                      {"version", m_application->getVersion()},
+                      {"is_running", m_application->isRunning()},
+                      {"mcp_server_running", m_running.load()},
+                      {"available_tools", m_tools.size()},
+                      {"has_active_document", m_application->hasActiveDocument()},
+                      {"active_document_path", m_application->getActiveDocumentPath()},
+                      {"timestamp",
+                       std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count()}};
+          });
 
         // Tool: ping - Simple ping tool
         registerTool(
@@ -379,20 +380,21 @@ namespace gladius::mcp
           });
 
         // Tool: list_tools - List available tools
-        registerTool("list_tools",
-                     "List all available MCP tools",
-                     {{"type", "object"}, {"properties", {}}, {"required", json::array()}},
-                     [this](const json & params) -> json
-                     {
-                         json tools = json::array();
-                         for (const auto & [name, info] : m_toolInfo)
-                         {
-                             tools.push_back({{"name", info.name},
-                                              {"description", info.description},
-                                              {"schema", info.schema}});
-                         }
-                         return {{"tools", tools}, {"count", tools.size()}};
-                     });
+        registerTool(
+          "list_tools",
+          "List all available MCP tools",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              json tools = json::array();
+              for (const auto & [name, info] : m_toolInfo)
+              {
+                  tools.push_back({{"name", info.name},
+                                   {"description", info.description},
+                                   {"schema", info.schema}});
+              }
+              return {{"tools", tools}, {"count", tools.size()}};
+          });
 
         // Tool: test_computation - Test basic computation
         registerTool("test_computation",
