@@ -144,7 +144,7 @@ namespace gladius::events
         bool m_initialized{false};
         std::shared_ptr<coro::thread_pool> m_fileWritePool;
         std::chrono::steady_clock::time_point m_lastFlushTime{std::chrono::steady_clock::now()};
-        static constexpr std::chrono::seconds FLUSH_INTERVAL{1};
+        static constexpr std::chrono::milliseconds FLUSH_INTERVAL{50};
 
         /// Thread safety
         mutable std::mutex m_eventsMutex; ///< Protects m_events, m_countErrors, m_countWarnings
