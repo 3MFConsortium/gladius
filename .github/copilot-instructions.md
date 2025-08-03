@@ -3,7 +3,7 @@
 # C++ Coding Guidelines
 
 ## Build Instructions
-- **Build System**: Use the "Build ALL" task.
+- **Build System**: Use the "Build ALL" task. Never run cmake manually.
 - **Run Tests**: Use the "Run Gladius Tests" task.
 - **Analyse Test Results**: Use the "testfailure" tool to analyze test results.
 
@@ -15,6 +15,7 @@
 - **KISS Principle**: Keep it simple, stupid. Avoid unnecessary complexity.
 - **DRY Principle**: Don't repeat yourself. Avoid code duplication.
 - **YAGNI Principle**: You aren't gonna need it. Avoid adding features until they are necessary.
+- **Tool usage**: Prefer using tools rather than doing things manually in the terminal.
 
 ## Code Structure
 - **Headers**: Use `.h` for declarations, `.cpp` for definitions.
