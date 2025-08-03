@@ -540,9 +540,19 @@ namespace gladius::io
 
         if (writeThumbnail)
         {
-            m_logger->logInfo("Starting thumbnail update");
-            updateThumbnail(const_cast<Document &>(doc), model);
-            m_logger->logInfo("Thumbnail update completed");
+            try
+            {
+                m_logger->logInfo("Starting thumbnail update");
+                updateThumbnail(const_cast<Document &>(doc), model);
+                m_logger->logInfo("Thumbnail update completed");
+            }
+            catch (const std::exception & e)
+            {
+                m_logger->addEvent(
+                  {fmt::format("Failed to update thumbnail. Writing file without thumbnail: {}",
+                               e.what()),
+                   events::Severity::Warning});
+            }
         }
 
         try

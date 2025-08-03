@@ -71,7 +71,7 @@ namespace gladius::mcp
             co_await m_backgroundPool->schedule();
 
             // This now runs on background thread - no UI blocking!
-            document->saveAs(std::filesystem::path(path));
+            document->saveAs(std::filesystem::path(path), false);
 
             // Success
             m_lastErrorMessage = "Document saved successfully";
@@ -106,7 +106,7 @@ namespace gladius::mcp
             auto saveTask = [this, &path, document]() -> coro::task<bool>
             {
                 co_await m_backgroundPool->schedule();
-                document->saveAs(std::filesystem::path(path));
+                document->saveAs(std::filesystem::path(path), true); // Save with thumbnail
                 co_return true;
             };
 
@@ -159,7 +159,7 @@ namespace gladius::mcp
         {
             // Use coro::sync_wait to bridge async/sync worlds
             // This blocks the current thread but the actual work happens on background threads
-            return coro::sync_wait(saveDocumentWithThumbnailAsync(path));
+            return coro::sync_wait(saveDocumentAsync(path));
         }
         catch (const std::exception & e)
         {
