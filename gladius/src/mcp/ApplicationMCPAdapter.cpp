@@ -8,6 +8,7 @@
 #include "../Document.h"
 #include "../ExpressionParser.h"
 #include "../ExpressionToGraphConverter.h"
+#include "CoroMCPAdapter.h"
 #include <filesystem> // Only include here, not in header
 #include <nlohmann/json.hpp>
 
@@ -16,7 +17,18 @@ namespace gladius
     ApplicationMCPAdapter::ApplicationMCPAdapter(Application * app)
         : m_application(app)
     {
+        // Initialize the coroutine adapter for async operations
+        if (m_application)
+        {
+            m_coroAdapter =
+              std::make_unique<mcp::CoroMCPAdapter>(m_application,
+                                                    2, // Background I/O threads
+                                                    4  // Compute threads for OpenCL operations
+              );
+        }
     }
+
+    ApplicationMCPAdapter::~ApplicationMCPAdapter() = default;
 
     std::string ApplicationMCPAdapter::getVersion() const
     {
@@ -124,9 +136,9 @@ namespace gladius
 
     bool ApplicationMCPAdapter::saveDocument()
     {
-        if (!m_application)
+        if (!m_application || !m_coroAdapter)
         {
-            m_lastErrorMessage = "No application instance available";
+            m_lastErrorMessage = "No application instance or coroutine adapter available";
             return false;
         }
 
@@ -149,9 +161,17 @@ namespace gladius
                 return false;
             }
 
-            document->saveAs(currentPath.value());
-            m_lastErrorMessage = "Document saved successfully to " + currentPath->string();
-            return true;
+            // Use the async coroutine adapter for non-blocking save
+            bool result = m_coroAdapter->saveDocumentAs(currentPath->string());
+            if (result)
+            {
+                m_lastErrorMessage = "Document saved successfully to " + currentPath->string();
+            }
+            else
+            {
+                m_lastErrorMessage = "Save failed: " + m_coroAdapter->getLastErrorMessage();
+            }
+            return result;
         }
         catch (const std::exception & e)
         {
@@ -162,31 +182,27 @@ namespace gladius
 
     bool ApplicationMCPAdapter::saveDocumentAs(const std::string & path)
     {
+        // Validate path first, regardless of application state
+        if (path.empty())
+        {
+            m_lastErrorMessage = "File path cannot be empty";
+            return false;
+        }
+
+        if (!path.ends_with(".3mf"))
+        {
+            m_lastErrorMessage = "File must have .3mf extension for " + path;
+            return false;
+        }
+
+        if (!m_application || !m_coroAdapter)
+        {
+            m_lastErrorMessage = "No application instance or coroutine adapter available";
+            return false;
+        }
+
         try
         {
-            std::filesystem::path filePath(path);
-
-            // Validate path first (this can be tested without application instance)
-            if (path.empty())
-            {
-                m_lastErrorMessage = "File path cannot be empty";
-                return false;
-            }
-
-            // Check file extension
-            if (!filePath.has_extension() || filePath.extension() != ".3mf")
-            {
-                m_lastErrorMessage = "File must have .3mf extension. Current path: " + path;
-                return false;
-            }
-
-            // Now check application instance
-            if (!m_application)
-            {
-                m_lastErrorMessage = "No application instance available";
-                return false;
-            }
-
             auto document = m_application->getCurrentDocument();
             if (!document)
             {
@@ -195,22 +211,18 @@ namespace gladius
                 return false;
             }
 
-            // Check if directory exists and create if necessary
-            auto parentDir = filePath.parent_path();
-            if (!parentDir.empty() && !std::filesystem::exists(parentDir))
+            // Use the async coroutine adapter for non-blocking save with thumbnail
+            bool result = m_coroAdapter->saveDocumentAs(path);
+            if (result)
             {
-                std::error_code ec;
-                if (!std::filesystem::create_directories(parentDir, ec))
-                {
-                    m_lastErrorMessage = "Failed to create directory: " + parentDir.string() +
-                                         " (error: " + ec.message() + ")";
-                    return false;
-                }
+                m_lastErrorMessage =
+                  "Document saved successfully to " + path + " (using async coroutines)";
             }
-
-            document->saveAs(filePath);
-            m_lastErrorMessage = "Document saved successfully to " + path;
-            return true;
+            else
+            {
+                m_lastErrorMessage = "Save failed: " + m_coroAdapter->getLastErrorMessage();
+            }
+            return result;
         }
         catch (const std::exception & e)
         {

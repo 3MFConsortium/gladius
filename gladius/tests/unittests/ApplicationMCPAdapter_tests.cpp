@@ -264,7 +264,8 @@ namespace gladius::tests
         // Assert
         EXPECT_FALSE(result);
         std::string errorMessage = m_adapter->getLastErrorMessage();
-        EXPECT_THAT(errorMessage, ::testing::HasSubstr("No application instance available"));
+        EXPECT_THAT(errorMessage,
+                    ::testing::HasSubstr("No application instance or coroutine adapter available"));
     }
 
     TEST_F(ApplicationMCPAdapterTest, SaveDocumentAs_NullApplication_ReturnsFalseWithErrorMessage)
@@ -275,7 +276,8 @@ namespace gladius::tests
         // Assert
         EXPECT_FALSE(result);
         std::string errorMessage = m_adapter->getLastErrorMessage();
-        EXPECT_THAT(errorMessage, ::testing::HasSubstr("No application instance available"));
+        EXPECT_THAT(errorMessage,
+                    ::testing::HasSubstr("No application instance or coroutine adapter available"));
     }
 
     TEST_F(ApplicationMCPAdapterTest, SaveDocumentAs_EmptyPath_ReturnsFalseWithErrorMessage)

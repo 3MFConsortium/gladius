@@ -13,6 +13,11 @@ namespace gladius
 {
     class Application; // Forward declaration
 
+    namespace mcp
+    {
+        class CoroMCPAdapter; // Forward declaration
+    }
+
     /**
      * @brief Adapter class to connect Application to MCP server
      * This allows the MCP server to use the minimal interface while still
@@ -23,10 +28,12 @@ namespace gladius
       private:
         Application * m_application;            // Raw pointer to avoid circular dependencies
         mutable std::string m_lastErrorMessage; // Store detailed error information
+        std::unique_ptr<mcp::CoroMCPAdapter> m_coroAdapter; // Coroutine-based async operations
 
       public:
         explicit ApplicationMCPAdapter(Application * app);
-        ~ApplicationMCPAdapter() override = default;
+        ~ApplicationMCPAdapter()
+          override; // Custom destructor needed for unique_ptr<CoroMCPAdapter>
 
         // Get the last error message for debugging
         std::string getLastErrorMessage() const override

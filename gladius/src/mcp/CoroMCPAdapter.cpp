@@ -1,8 +1,10 @@
 #include "CoroMCPAdapter.h"
 #include "../Application.h"
 #include "../Document.h"
+#include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <thread>
 
 namespace gladius::mcp
 {
