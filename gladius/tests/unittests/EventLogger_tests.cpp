@@ -82,7 +82,8 @@ namespace gladius::events::tests
         m_logger->logInfo(testMessage);
 
         // Assert - Check in-memory storage
-        EXPECT_EQ(m_logger->size(), 2); // 1 for initialization + 1 for our message
+        EXPECT_EQ(m_logger->size(),
+                  1); // Just our test message (no initialization message to avoid deadlock)
         EXPECT_EQ(m_logger->getErrorCount(), 0);
         EXPECT_EQ(m_logger->getWarningCount(), 0);
 
