@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -144,6 +145,11 @@ namespace gladius::events
         std::shared_ptr<coro::thread_pool> m_fileWritePool;
         std::chrono::steady_clock::time_point m_lastFlushTime{std::chrono::steady_clock::now()};
         static constexpr std::chrono::seconds FLUSH_INTERVAL{1};
+
+        /// Thread safety
+        mutable std::mutex m_eventsMutex; ///< Protects m_events, m_countErrors, m_countWarnings
+        mutable std::mutex m_fileMutex;   ///< Protects m_pendingFileEvents, m_lastFlushTime
+        mutable std::mutex m_initMutex;   ///< Protects initialization state
     };
 
     using SharedLogger = std::shared_ptr<Logger>;

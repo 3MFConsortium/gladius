@@ -55,9 +55,6 @@ namespace gladius::events
         }
 
         m_initialized = true;
-
-        // Write initial log entry
-        logInfo("Logger initialized - file logging enabled");
     }
 
     Logger::~Logger()
@@ -67,19 +64,32 @@ namespace gladius::events
         {
             try
             {
+                // Check if we have pending events (thread-safe)
+                bool hasEvents = false;
+                {
+                    std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                    hasEvents = !m_pendingFileEvents.empty();
+                }
+
                 // First, try to flush using the async mechanism if available
-                if (m_fileWritePool && !m_pendingFileEvents.empty())
+                if (m_fileWritePool && hasEvents)
                 {
                     // Use sync_wait to ensure async write completes before destruction
                     coro::sync_wait(writeEventsToFile());
                 }
-                else if (!m_pendingFileEvents.empty())
+                else if (hasEvents)
                 {
                     // Fallback: synchronous flush on destruction to ensure logs are written
+                    std::vector<Event> eventsToWrite;
+                    {
+                        std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                        eventsToWrite = m_pendingFileEvents; // Copy for safety
+                    }
+
                     std::ofstream logFile(m_logFilePath, std::ios::app);
                     if (logFile.is_open())
                     {
-                        for (Event const & event : m_pendingFileEvents)
+                        for (Event const & event : eventsToWrite)
                         {
                             logFile << formatEventForFile(event) << std::endl;
                         }
@@ -92,12 +102,21 @@ namespace gladius::events
                 // Ignore errors during destruction, but try synchronous fallback
                 try
                 {
-                    if (!m_pendingFileEvents.empty())
+                    std::vector<Event> eventsToWrite;
+                    {
+                        std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                        if (!m_pendingFileEvents.empty())
+                        {
+                            eventsToWrite = m_pendingFileEvents; // Copy for safety
+                        }
+                    }
+
+                    if (!eventsToWrite.empty())
                     {
                         std::ofstream logFile(m_logFilePath, std::ios::app);
                         if (logFile.is_open())
                         {
-                            for (Event const & event : m_pendingFileEvents)
+                            for (Event const & event : eventsToWrite)
                             {
                                 logFile << formatEventForFile(event) << std::endl;
                             }
@@ -122,20 +141,28 @@ namespace gladius::events
     void Logger::addEvent(Event const & event)
     {
         // Initialize on first use if file logging is enabled but not yet initialized
-        if (m_fileLoggingEnabled && !m_initialized)
         {
-            initialize();
+            std::lock_guard<std::mutex> initLock(m_initMutex);
+            if (m_fileLoggingEnabled && !m_initialized)
+            {
+                initialize();
+            }
         }
 
-        if (event.getSeverity() == Severity::Error || event.getSeverity() == Severity::FatalError)
+        // Update event statistics and add to events list (thread-safe)
         {
-            m_countErrors++;
+            std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
+            if (event.getSeverity() == Severity::Error ||
+                event.getSeverity() == Severity::FatalError)
+            {
+                m_countErrors++;
+            }
+            else if (event.getSeverity() == Severity::Warning)
+            {
+                m_countWarnings++;
+            }
+            m_events.push_back(event);
         }
-        else if (event.getSeverity() == Severity::Warning)
-        {
-            m_countWarnings++;
-        }
-        m_events.push_back(event);
 
         // Handle file logging
         if (m_fileLoggingEnabled && m_initialized)
@@ -151,8 +178,11 @@ namespace gladius::events
                         logFile << formatEventForFile(event) << std::endl;
                         logFile.flush();
 
-                        // Update last flush time after immediate write
-                        m_lastFlushTime = std::chrono::steady_clock::now();
+                        // Update last flush time after immediate write (thread-safe)
+                        {
+                            std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                            m_lastFlushTime = std::chrono::steady_clock::now();
+                        }
                     }
                 }
                 catch (...)
@@ -163,13 +193,19 @@ namespace gladius::events
             }
             else
             {
-                // Other events: add to batch for async writing
-                m_pendingFileEvents.push_back(event);
+                // Other events: add to batch for async writing (thread-safe)
+                bool shouldScheduleWrite = false;
+                {
+                    std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                    m_pendingFileEvents.push_back(event);
 
-                // Trigger async write if we have enough events, if this is an error, or if enough
-                // time has passed
-                if (m_pendingFileEvents.size() >= 10 || event.getSeverity() == Severity::Error ||
-                    shouldFlushByTime())
+                    // Check if we should trigger async write
+                    shouldScheduleWrite =
+                      (m_pendingFileEvents.size() >= 10 || event.getSeverity() == Severity::Error ||
+                       shouldFlushByTime());
+                }
+
+                if (shouldScheduleWrite)
                 {
                     scheduleAsyncWrite();
                 }
@@ -207,15 +243,31 @@ namespace gladius::events
     void Logger::clear()
     {
         flush();
-        m_events.clear();
-        m_countErrors = 0;
-        m_countWarnings = 0;
-        m_pendingFileEvents.clear();
+
+        // Clear events and counters (thread-safe)
+        {
+            std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
+            m_events.clear();
+            m_countErrors = 0;
+            m_countWarnings = 0;
+        }
+
+        // Clear pending file events (thread-safe)
+        {
+            std::lock_guard<std::mutex> fileLock(m_fileMutex);
+            m_pendingFileEvents.clear();
+        }
     }
 
     void Logger::flush()
     {
-        if (m_fileLoggingEnabled && !m_pendingFileEvents.empty())
+        bool hasEvents = false;
+        {
+            std::lock_guard<std::mutex> fileLock(m_fileMutex);
+            hasEvents = !m_pendingFileEvents.empty();
+        }
+
+        if (m_fileLoggingEnabled && hasEvents)
         {
             try
             {
@@ -240,36 +292,43 @@ namespace gladius::events
 
     Events::iterator Logger::begin()
     {
+        std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
         return m_events.begin();
     }
 
     Events::iterator Logger::end()
     {
+        std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
         return m_events.end();
     }
 
     Events::const_iterator Logger::cbegin() const
     {
+        std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
         return m_events.cbegin();
     }
 
     Events::const_iterator Logger::cend() const
     {
+        std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
         return m_events.cend();
     }
 
     size_t Logger::size() const
     {
+        std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
         return m_events.size();
     }
 
     size_t Logger::getErrorCount() const
     {
+        std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
         return m_countErrors;
     }
 
     size_t Logger::getWarningCount() const
     {
+        std::lock_guard<std::mutex> eventsLock(m_eventsMutex);
         return m_countWarnings;
     }
 
@@ -289,17 +348,22 @@ namespace gladius::events
 
     coro::task<void> Logger::flushToFile()
     {
-        if (m_pendingFileEvents.empty())
+        std::vector<Event> eventsToWrite;
+
+        // Extract pending events in a thread-safe manner
         {
-            co_return;
+            std::lock_guard<std::mutex> fileLock(m_fileMutex);
+            if (m_pendingFileEvents.empty())
+            {
+                co_return;
+            }
+
+            // Create a copy of pending events and clear the original
+            eventsToWrite.swap(m_pendingFileEvents);
         }
 
         try
         {
-            // Create a copy of pending events and clear the original
-            std::vector<Event> eventsToWrite;
-            eventsToWrite.swap(m_pendingFileEvents);
-
             // Write to file synchronously
             std::ofstream logFile(m_logFilePath, std::ios::app);
             if (logFile.is_open())
@@ -310,14 +374,20 @@ namespace gladius::events
                 }
                 logFile.flush();
 
-                // Update last flush time after successful write
-                m_lastFlushTime = std::chrono::steady_clock::now();
+                // Update last flush time after successful write (thread-safe)
+                {
+                    std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                    m_lastFlushTime = std::chrono::steady_clock::now();
+                }
             }
             else
             {
                 // If we can't open the file, put events back and disable file logging
-                m_pendingFileEvents = std::move(eventsToWrite);
-                m_fileLoggingEnabled = false;
+                {
+                    std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                    m_pendingFileEvents = std::move(eventsToWrite);
+                    m_fileLoggingEnabled = false;
+                }
             }
         }
         catch (std::exception const &)
@@ -397,19 +467,24 @@ namespace gladius::events
 
     coro::task<void> Logger::writeEventsToFile()
     {
-        if (m_pendingFileEvents.empty())
+        std::vector<Event> eventsToWrite;
+
+        // Extract pending events in a thread-safe manner
         {
-            co_return;
+            std::lock_guard<std::mutex> fileLock(m_fileMutex);
+            if (m_pendingFileEvents.empty())
+            {
+                co_return;
+            }
+
+            // Create a copy of pending events to avoid issues with concurrent access
+            eventsToWrite.swap(m_pendingFileEvents);
         }
 
         try
         {
             // Switch to the file writing thread pool
             co_await m_fileWritePool->schedule();
-
-            // Create a copy of pending events to avoid issues with concurrent access
-            std::vector<Event> eventsToWrite;
-            eventsToWrite.swap(m_pendingFileEvents);
 
             // Write to file
             std::ofstream logFile(m_logFilePath, std::ios::app);
@@ -421,8 +496,11 @@ namespace gladius::events
                 }
                 logFile.flush();
 
-                // Update last flush time after successful write
-                m_lastFlushTime = std::chrono::steady_clock::now();
+                // Update last flush time after successful write (thread-safe)
+                {
+                    std::lock_guard<std::mutex> fileLock(m_fileMutex);
+                    m_lastFlushTime = std::chrono::steady_clock::now();
+                }
             }
         }
         catch (std::exception const &)
