@@ -51,7 +51,8 @@
     "clipper2",
     "nlohmann-json",
     "muparser",
-    "cpp-httplib"
+    "cpp-httplib",
+    "libcoro"
   ],
   "overrides": [
     {

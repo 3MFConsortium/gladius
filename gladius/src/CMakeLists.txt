@@ -64,6 +64,7 @@ set(DEPENDENCIES
     muparser::muparser
     httplib::httplib
     nlohmann_json::nlohmann_json
+    PkgConfig::libcoro
 )
 
 if (WIN32)

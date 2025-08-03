@@ -144,6 +144,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(muparser CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
+pkg_check_modules(libcoro REQUIRED IMPORTED_TARGET libcoro)
 
 
 file(GLOB KERNEL_FILES
