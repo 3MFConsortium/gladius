@@ -78,5 +78,40 @@ namespace gladius
                                           const std::string & outputType,
                                           const std::vector<FunctionArgument> & arguments = {},
                                           const std::string & outputName = "") override;
+
+        // 3MF and implicit modeling operations
+        bool validateDocumentFor3MF() const override;
+        bool exportDocumentAs3MF(const std::string & path,
+                                 bool includeImplicitFunctions = true) const override;
+        bool createSDFFunction(const std::string & name,
+                               const std::string & sdfExpression) override;
+        bool createCSGOperation(const std::string & name,
+                                const std::string & operation,
+                                const std::vector<std::string> & operands,
+                                bool smooth = false,
+                                float blendRadius = 0.1f) override;
+        bool applyTransformToFunction(const std::string & functionName,
+                                      const std::array<float, 3> & translation,
+                                      const std::array<float, 3> & rotation,
+                                      const std::array<float, 3> & scale) override;
+        nlohmann::json analyzeFunctionProperties(const std::string & functionName) const override;
+        nlohmann::json generateMeshFromFunction(
+          const std::string & functionName,
+          int resolution = 64,
+          const std::array<float, 6> & bounds = {-10, -10, -10, 10, 10, 10}) const override;
+
+        // Scene and hierarchy operations
+        nlohmann::json getSceneHierarchy() const override;
+        nlohmann::json getDocumentInfo() const override;
+        std::vector<std::string> listAvailableFunctions() const override;
+
+        // Manufacturing validation
+        nlohmann::json
+        validateForManufacturing(const std::vector<std::string> & functionNames = {},
+                                 const nlohmann::json & constraints = {}) const override;
+
+        // Batch operations
+        bool executeBatchOperations(const nlohmann::json & operations,
+                                    bool rollbackOnError = true) override;
     };
 }

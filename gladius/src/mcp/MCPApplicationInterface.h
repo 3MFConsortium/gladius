@@ -66,6 +66,42 @@ namespace gladius
                                      const std::vector<FunctionArgument> & arguments = {},
                                      const std::string & outputName = "") = 0;
 
+        // 3MF and implicit modeling operations
+        virtual bool validateDocumentFor3MF() const = 0;
+        virtual bool exportDocumentAs3MF(const std::string & path,
+                                         bool includeImplicitFunctions = true) const = 0;
+        virtual bool createSDFFunction(const std::string & name,
+                                       const std::string & sdfExpression) = 0;
+        virtual bool createCSGOperation(const std::string & name,
+                                        const std::string & operation,
+                                        const std::vector<std::string> & operands,
+                                        bool smooth = false,
+                                        float blendRadius = 0.1f) = 0;
+        virtual bool applyTransformToFunction(const std::string & functionName,
+                                              const std::array<float, 3> & translation,
+                                              const std::array<float, 3> & rotation,
+                                              const std::array<float, 3> & scale) = 0;
+        virtual nlohmann::json
+        analyzeFunctionProperties(const std::string & functionName) const = 0;
+        virtual nlohmann::json generateMeshFromFunction(
+          const std::string & functionName,
+          int resolution = 64,
+          const std::array<float, 6> & bounds = {-10, -10, -10, 10, 10, 10}) const = 0;
+
+        // Scene and hierarchy operations
+        virtual nlohmann::json getSceneHierarchy() const = 0;
+        virtual nlohmann::json getDocumentInfo() const = 0;
+        virtual std::vector<std::string> listAvailableFunctions() const = 0;
+
+        // Manufacturing validation
+        virtual nlohmann::json
+        validateForManufacturing(const std::vector<std::string> & functionNames = {},
+                                 const nlohmann::json & constraints = {}) const = 0;
+
+        // Batch operations
+        virtual bool executeBatchOperations(const nlohmann::json & operations,
+                                            bool rollbackOnError = true) = 0;
+
         // Error handling
         virtual std::string getLastErrorMessage() const = 0;
     };
