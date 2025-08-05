@@ -93,6 +93,70 @@ namespace gladius::tests
         {
             return "";
         }
+
+        // New MCP interface methods
+        bool validateDocumentFor3MF() const override
+        {
+            return true;
+        }
+        bool exportDocumentAs3MF(const std::string & path,
+                                 bool includeImplicitFunctions = true) const override
+        {
+            return true;
+        }
+        bool createSDFFunction(const std::string & name, const std::string & sdfExpression) override
+        {
+            return true;
+        }
+        bool createCSGOperation(const std::string & name,
+                                const std::string & operation,
+                                const std::vector<std::string> & operands,
+                                bool smooth = false,
+                                float blendRadius = 0.1f) override
+        {
+            return true;
+        }
+        bool applyTransformToFunction(const std::string & functionName,
+                                      const std::array<float, 3> & translation,
+                                      const std::array<float, 3> & rotation,
+                                      const std::array<float, 3> & scale) override
+        {
+            return true;
+        }
+        nlohmann::json analyzeFunctionProperties(const std::string & functionName) const override
+        {
+            return nlohmann::json{{"status", "mock"}};
+        }
+        nlohmann::json generateMeshFromFunction(
+          const std::string & functionName,
+          int resolution = 64,
+          const std::array<float, 6> & bounds = {-10, -10, -10, 10, 10, 10}) const override
+        {
+            return nlohmann::json{{"vertices", 0}, {"faces", 0}};
+        }
+        nlohmann::json getSceneHierarchy() const override
+        {
+            return nlohmann::json{{"nodes", nlohmann::json::array()}};
+        }
+        nlohmann::json getDocumentInfo() const override
+        {
+            return nlohmann::json{{"name", "mock_document"}};
+        }
+        std::vector<std::string> listAvailableFunctions() const override
+        {
+            return {};
+        }
+        nlohmann::json
+        validateForManufacturing(const std::vector<std::string> & functionNames = {},
+                                 const nlohmann::json & constraints = {}) const override
+        {
+            return nlohmann::json{{"valid", true}};
+        }
+        bool executeBatchOperations(const nlohmann::json & operations,
+                                    bool rollbackOnError = true) override
+        {
+            return true;
+        }
     };
 
     class JSONRPCTest : public ::testing::Test

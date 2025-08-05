@@ -11,6 +11,10 @@ namespace gladius::tests
 {
     using json = nlohmann::json;
 
+    // Type aliases to avoid comma issues in MOCK_METHOD
+    using Float3Array = std::array<float, 3>;
+    using Float6Array = std::array<float, 6>;
+
     // Mock implementation of MCPApplicationInterface for testing
     class MockMCPApplication : public MCPApplicationInterface
     {
@@ -55,6 +59,40 @@ namespace gladius::tests
                     (override));
 
         MOCK_METHOD(std::string, getLastErrorMessage, (), (const, override));
+
+        // New MCP interface methods
+        MOCK_METHOD(bool, validateDocumentFor3MF, (), (const, override));
+        MOCK_METHOD(bool, exportDocumentAs3MF, (const std::string &, bool), (const, override));
+        MOCK_METHOD(bool,
+                    createSDFFunction,
+                    (const std::string &, const std::string &),
+                    (override));
+        MOCK_METHOD(
+          bool,
+          createCSGOperation,
+          (const std::string &, const std::string &, const std::vector<std::string> &, bool, float),
+          (override));
+        MOCK_METHOD(
+          bool,
+          applyTransformToFunction,
+          (const std::string &, const Float3Array &, const Float3Array &, const Float3Array &),
+          (override));
+        MOCK_METHOD(nlohmann::json,
+                    analyzeFunctionProperties,
+                    (const std::string &),
+                    (const, override));
+        MOCK_METHOD(nlohmann::json,
+                    generateMeshFromFunction,
+                    (const std::string &, int, const Float6Array &),
+                    (const, override));
+        MOCK_METHOD(nlohmann::json, getSceneHierarchy, (), (const, override));
+        MOCK_METHOD(nlohmann::json, getDocumentInfo, (), (const, override));
+        MOCK_METHOD(std::vector<std::string>, listAvailableFunctions, (), (const, override));
+        MOCK_METHOD(nlohmann::json,
+                    validateForManufacturing,
+                    (const std::vector<std::string> &, const nlohmann::json &),
+                    (const, override));
+        MOCK_METHOD(bool, executeBatchOperations, (const nlohmann::json &, bool), (override));
     };
 
     class MCPServerTest : public ::testing::Test
