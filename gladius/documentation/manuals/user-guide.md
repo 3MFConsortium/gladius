@@ -68,6 +68,52 @@ f(x, y, z) = sqrt(x² + y² + z²) - r
 
 Understanding the relationship between key elements in Gladius is crucial for mastering the workflow:
 
+![Gladius Project Structure](img/outlinebuilditemresources.png)
+*Figure: Overview of the project structure showing the relationship between build items, level sets, and resources*
+
+```mermaid
+graph TD
+    A[Build Item] --> B[Level Set]
+    A --> C[Mesh Object]
+    
+    B --> D[Function]
+    B --> E[Mesh - Evaluation Domain]
+    
+    C --> F[Mesh Resource]
+    C --> G[Volume Data]
+    
+    D --> H[FunctionFromImage3D]
+    D --> I[ImplicitFunction]
+    D --> J[SignedDistanceToMesh]
+    
+    H --> K[Image3D]
+    I --> L[Node Graph]
+    J --> F
+    
+    K --> M[ImageStack]
+    M --> N[ImageSheet - PNG files]
+    
+    L --> O[Math Nodes]
+    L --> P[Function Calls]
+    L --> Q[Constants]
+    
+    G --> R[Color Properties]
+    G --> S[Material Properties]
+    G --> T[Custom Properties]
+    
+    R --> D
+    S --> D
+    T --> D
+    
+    style A fill:#d1ecf1,stroke:#0c5460,color:#000
+    style B fill:#e2d3f3,stroke:#5a2d7a,color:#000
+    style C fill:#e2d3f3,stroke:#5a2d7a,color:#000
+    style D fill:#d4edda,stroke:#155724,color:#000
+    style L fill:#ffeaa7,stroke:#d63031,color:#000
+    style K fill:#fab1a0,stroke:#e17055,color:#000
+```
+*Figure: 3MF Element Relationships - Shows how build items reference geometries (level sets or meshes), how level sets use functions for shape definition, and how functions can be built from various sources including image data, node graphs, or mesh-based signed distance fields*
+
 1. **Functions**:
    - Define shapes using nodes or mathematical expressions.
    - Can be combined, modified, or reused.
