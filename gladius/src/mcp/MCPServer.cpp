@@ -358,22 +358,45 @@ namespace gladius::mcp
         // Tool: get_status - Get application status
         registerTool(
           "get_status",
-          "Get the current status of Gladius application",
+          "Get the current status of Gladius application and project state.\n\n"
+          "WORKFLOW CONTEXT: Use this anytime to check project status and available elements.\n"
+          "PREREQUISITES: None\n"
+          "NEXT STEPS: If no active document, use create_document to start workflow",
           {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
           [this](const json & params) -> json
           {
-              return {{"status", m_application->getStatus()},
-                      {"application", m_application->getApplicationName()},
-                      {"version", m_application->getVersion()},
-                      {"is_running", m_application->isRunning()},
-                      {"mcp_server_running", m_running.load()},
-                      {"available_tools", m_tools.size()},
-                      {"has_active_document", m_application->hasActiveDocument()},
-                      {"active_document_path", m_application->getActiveDocumentPath()},
-                      {"timestamp",
-                       std::chrono::duration_cast<std::chrono::milliseconds>(
-                         std::chrono::system_clock::now().time_since_epoch())
-                         .count()}};
+              json status = {{"status", m_application->getStatus()},
+                             {"application", m_application->getApplicationName()},
+                             {"version", m_application->getVersion()},
+                             {"is_running", m_application->isRunning()},
+                             {"mcp_server_running", m_running.load()},
+                             {"available_tools", m_tools.size()},
+                             {"has_active_document", m_application->hasActiveDocument()},
+                             {"active_document_path", m_application->getActiveDocumentPath()},
+                             {"timestamp",
+                              std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count()}};
+
+              // Add workflow guidance
+              if (!m_application->hasActiveDocument())
+              {
+                  status["workflow_guidance"] = {{"current_phase", "No project"},
+                                                 {"next_step", "create_document"},
+                                                 {"description",
+                                                  "Start by creating a new project (loads "
+                                                  "template.3mf with Level Set and Build Item)"}};
+              }
+              else
+              {
+                  status["workflow_guidance"] = {{"current_phase", "Project active"},
+                                                 {"next_step", "create_function_from_expression"},
+                                                 {"description",
+                                                  "Create functions to define shapes, template "
+                                                  "Level Set will use them automatically"}};
+              }
+
+              return status;
           });
 
         // Tool: ping - Simple ping tool
@@ -394,21 +417,96 @@ namespace gladius::mcp
                          .count()}};
           });
 
-        // Tool: list_tools - List available tools
+        // Tool: list_tools - List available tools with workflow organization
         registerTool(
           "list_tools",
-          "List all available MCP tools",
+          "List all available MCP tools organized by workflow phase.\n\n"
+          "GLADIUS WORKFLOW PHASES:\n"
+          "1. PROJECT: Create/manage documents\n"
+          "2. FUNCTIONS: Define shapes with mathematical expressions\n"
+          "3. BOOLEAN OPS: Combine shapes using union/intersection/difference\n"
+          "4. EXPORT: Generate 3MF files for 3D printing\n\n"
+          "TEMPLATE ADVANTAGE: New projects include pre-configured Level Set and Build Item!",
           {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
           [this](const json & params) -> json
           {
-              json tools = json::array();
+              // Organize tools by workflow phase
+              json workflow_phases = {{"phase_1_project", json::array()},
+                                      {"phase_2_functions", json::array()},
+                                      {"phase_3_boolean_operations", json::array()},
+                                      {"phase_4_export", json::array()},
+                                      {"utility_tools", json::array()},
+                                      {"advanced_tools", json::array()}};
+
+              // Core workflow tools
+              std::vector<std::string> phase1_tools = {
+                "create_document", "open_document", "save_document", "get_status"};
+              std::vector<std::string> phase2_tools = {"create_function_from_expression",
+                                                       "create_sphere_sdf",
+                                                       "create_box_sdf",
+                                                       "create_gyroid_sdf"};
+              std::vector<std::string> phase3_tools = {
+                "create_csg_union", "create_csg_intersection", "create_csg_difference"};
+              std::vector<std::string> phase4_tools = {"export_3mf_with_implicit",
+                                                       "generate_mesh_preview"};
+              std::vector<std::string> utility_tools = {"ping", "list_tools", "test_computation"};
+
+              // Categorize all tools
               for (const auto & [name, info] : m_toolInfo)
               {
-                  tools.push_back({{"name", info.name},
-                                   {"description", info.description},
-                                   {"schema", info.schema}});
+                  json tool_info = {{"name", info.name},
+                                    {"description", info.description},
+                                    {"schema", info.schema}};
+
+                  if (std::find(phase1_tools.begin(), phase1_tools.end(), name) !=
+                      phase1_tools.end())
+                  {
+                      workflow_phases["phase_1_project"].push_back(tool_info);
+                  }
+                  else if (std::find(phase2_tools.begin(), phase2_tools.end(), name) !=
+                           phase2_tools.end())
+                  {
+                      workflow_phases["phase_2_functions"].push_back(tool_info);
+                  }
+                  else if (std::find(phase3_tools.begin(), phase3_tools.end(), name) !=
+                           phase3_tools.end())
+                  {
+                      workflow_phases["phase_3_boolean_operations"].push_back(tool_info);
+                  }
+                  else if (std::find(phase4_tools.begin(), phase4_tools.end(), name) !=
+                           phase4_tools.end())
+                  {
+                      workflow_phases["phase_4_export"].push_back(tool_info);
+                  }
+                  else if (std::find(utility_tools.begin(), utility_tools.end(), name) !=
+                           utility_tools.end())
+                  {
+                      workflow_phases["utility_tools"].push_back(tool_info);
+                  }
+                  else
+                  {
+                      workflow_phases["advanced_tools"].push_back(tool_info);
+                  }
               }
-              return {{"tools", tools}, {"count", tools.size()}};
+
+              return {
+                {"tools_by_workflow_phase", workflow_phases},
+                {"total_tools", m_toolInfo.size()},
+                {"workflow_guide",
+                 {{"typical_sequence",
+                   json::array({"create_document",
+                                "create_function_from_expression",
+                                "create_csg_union",
+                                "export_3mf_with_implicit"})},
+                  {"description",
+                   "Template project includes Level Set and Build Item - just create functions and "
+                   "export!"},
+                  {"phase_descriptions",
+                   {{"phase_1", "Create or open a project (loads template.3mf automatically)"},
+                    {"phase_2", "Define shapes using mathematical expressions (SDF functions)"},
+                    {"phase_3",
+                     "Combine shapes using boolean operations (Min/Max with distance functions)"},
+                    {"phase_4", "Export 3MF file for 3D printing or sharing"}}}}}};
           });
 
         // Tool: test_computation - Test basic computation
@@ -464,10 +562,18 @@ namespace gladius::mcp
                          return {{"result", result}, {"operation", op}, {"operands", {a, b}}};
                      });
 
-        // Phase 1B: Document management tools
+        // Tool: create_document - Create new project (WORKFLOW STEP 1)
         registerTool(
           "create_document",
-          "Create a new empty document",
+          "Create a new empty document. This is STEP 1 in the Gladius workflow.\n\n"
+          "WORKFLOW CONTEXT: Start here for any new 3MF implicit modeling project.\n"
+          "TEMPLATE INCLUDED: The new project automatically loads template.3mf with:\n"
+          "  - Predefined functions ready for customization\n"
+          "  - Level Set that references the main function\n"
+          "  - Build Item that references the Level Set\n"
+          "  - Mesh defining evaluation domain\n\n"
+          "PREREQUISITES: None (starting point)\n"
+          "NEXT STEPS: Create or modify functions using create_function_from_expression",
           {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
           [this](const json & params) -> json
           {
@@ -784,10 +890,17 @@ namespace gladius::mcp
               return info;
           });
 
-        // Phase 2A: Expression-based function creation
+        // Tool: create_function_from_expression - Core function creation (WORKFLOW STEP 2)
         registerTool(
           "create_function_from_expression",
-          "Create a new function from a mathematical expression.\n\n"
+          "Create a new function from a mathematical expression. This is STEP 2 in the Gladius "
+          "workflow.\n\n"
+          "WORKFLOW CONTEXT: Core of implicit modeling - define shapes with mathematical "
+          "precision.\n"
+          "PREREQUISITES: Active document (use create_document first)\n"
+          "TEMPLATE INTEGRATION: The template's Level Set will automatically use your function.\n"
+          "NEXT STEPS: Create more functions and combine with boolean operations, or export "
+          "directly\n\n"
           "Function Arguments:\n"
           "- Define function inputs using the 'arguments' parameter\n"
           "- Each argument has a name and type ('float' for scalars, 'vec3' for 3D vectors)\n"
@@ -800,23 +913,12 @@ namespace gladius::mcp
           "- Constants: pi, e\n"
           "- Variables: Use defined argument names or component access (e.g., 'pos.x')\n"
           "- Custom functions: clamp()\n\n"
-          "Examples:\n"
-          "1. Auto-detected coordinates with custom output name:\n"
-          "   Expression: 'sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)'\n"
-          "   Output name: 'distance'\n"
-          "   (Creates 'pos' vec3 input, output named 'distance')\n\n"
-          "2. Custom scalar inputs:\n"
-          "   Arguments: [{\"name\": \"radius\", \"type\": \"float\"}, {\"name\": \"height\", "
-          "\"type\": \"float\"}]\n"
-          "   Expression: 'sqrt(radius*radius + height*height)'\n"
-          "   Output name: 'magnitude'\n\n"
-          "3. Custom vector input:\n"
-          "   Arguments: [{\"name\": \"point\", \"type\": \"vec3\"}]\n"
-          "   Expression: 'sin(point.x)*cos(point.y) + point.z'\n\n"
-          "4. Mixed inputs:\n"
-          "   Arguments: [{\"name\": \"center\", \"type\": \"vec3\"}, {\"name\": \"scale\", "
-          "\"type\": \"float\"}]\n"
-          "   Expression: 'sqrt(center.x*center.x + center.y*center.y) * scale'",
+          "COMMON EXAMPLES:\n"
+          "1. Box SDF: 'length(max(abs(pos - vec3(0,0,0)) - vec3(1,1,1), 0.0))'\n"
+          "2. Sphere SDF: 'length(pos) - 1.0'\n"
+          "3. Gyroid lattice: 'sin(pos.x)*cos(pos.y) + sin(pos.y)*cos(pos.z) + "
+          "sin(pos.z)*cos(pos.x)'\n"
+          "4. Combined: 'min(length(pos) - 1.0, length(max(abs(pos) - vec3(0.5,0.5,0.5), 0.0)))'",
           {{"type", "object"},
            {"properties",
             {{"name", {{"type", "string"}, {"description", "Function name"}}},
@@ -1389,9 +1491,20 @@ namespace gladius::mcp
 
         // Phase 1: CSG Boolean Operations
 
+        // Tool: create_csg_union - Boolean operations (WORKFLOW STEP 3)
         registerTool(
           "create_csg_union",
-          "Create CSG union operation combining multiple SDF functions",
+          "Create CSG union operation combining multiple SDF functions. This is STEP 3 in the "
+          "Gladius workflow for combining shapes.\n\n"
+          "WORKFLOW CONTEXT: Combine multiple functions into complex shapes using boolean "
+          "operations.\n"
+          "PREREQUISITES: Active document with at least 2 existing functions\n"
+          "BOOLEAN LOGIC: Uses Min() operation with signed distance functions - standard for SDF "
+          "union\n"
+          "NEXT STEPS: Create more boolean operations or export the final result\n\n"
+          "3MF COMPLIANCE: Uses only standard mathematical nodes (Min, Max) as per 3MF "
+          "specification.\n"
+          "SMOOTH BLENDING: Enable 'smooth' for organic transitions between shapes.",
           {{"type", "object"},
            {"properties",
             {{"name", {{"type", "string"}, {"description", "Function name for union result"}}},
@@ -1815,7 +1928,13 @@ namespace gladius::mcp
 
         registerTool(
           "export_3mf_with_implicit",
-          "Export current document as 3MF with volumetric/implicit extensions",
+          "Export current document as 3MF with volumetric/implicit extensions. This is the FINAL "
+          "STEP (STEP 4) in the Gladius workflow.\n\n"
+          "WORKFLOW CONTEXT: Export your completed implicit model for 3D printing or sharing.\n"
+          "PREREQUISITES: Active document with functions defined\n"
+          "3MF COMPLIANCE: Exports using official 3MF volumetric and implicit extensions\n"
+          "TEMPLATE INTEGRATION: Uses the existing Level Set and Build Item from template\n\n"
+          "OUTPUT: Standard 3MF file compatible with 3D printing software and manufacturing tools.",
           {{"type", "object"},
            {"properties",
             {{"file_path", {{"type", "string"}, {"description", "Output 3MF file path"}}},
