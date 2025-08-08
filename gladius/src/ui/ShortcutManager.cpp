@@ -30,7 +30,7 @@ namespace gladius::ui
         {"Up", ImGuiKey_UpArrow}, {"Down", ImGuiKey_DownArrow},
         {"+", ImGuiKey_KeypadAdd}, {"-", ImGuiKey_KeypadSubtract},
         {"*", ImGuiKey_KeypadMultiply}, {"/", ImGuiKey_KeypadDivide},
-        {"=", ImGuiKey_Equal}, {",", ImGuiKey_Comma}, {".", ImGuiKey_Period}
+    {"=", ImGuiKey_Equal}, {",", ImGuiKey_Comma}, {".", ImGuiKey_Period}
     };
 
     // Map from ImGuiKey to string representation
@@ -88,6 +88,14 @@ namespace gladius::ui
             {
                 combo.m_shift = true;
             }
+            else if (token == "WheelUp")
+            {
+                combo.m_wheelDirection = +1;
+            }
+            else if (token == "WheelDown")
+            {
+                combo.m_wheelDirection = -1;
+            }
             else if (s_keyNameToImGuiKey.contains(token))
             {
                 combo.m_key = s_keyNameToImGuiKey.at(token);
@@ -127,6 +135,10 @@ namespace gladius::ui
         {
             result += s_imGuiKeyToKeyName[m_key];
         }
+        else if (m_wheelDirection != 0)
+        {
+            result += (m_wheelDirection > 0 ? "WheelUp" : "WheelDown");
+        }
         
         return result;
     }
@@ -140,6 +152,16 @@ namespace gladius::ui
         
         ImGuiIO& io = ImGui::GetIO();
         
+        // Wheel-based combos are evaluated via mouse wheel delta in processInput
+        if (m_wheelDirection != 0)
+        {
+            bool ctrlMatches = (io.KeyCtrl == m_ctrl);
+            bool altMatches = (io.KeyAlt == m_alt);
+            bool shiftMatches = (io.KeyShift == m_shift);
+            int const dir = (io.MouseWheel > 0.f ? +1 : (io.MouseWheel < 0.f ? -1 : 0));
+            return ctrlMatches && altMatches && shiftMatches && (dir == m_wheelDirection);
+        }
+
         // Check if main key is pressed
         bool keyPressed = (m_key != ImGuiKey_None) && ImGui::IsKeyPressed(m_key, false);
         
@@ -153,7 +175,7 @@ namespace gladius::ui
 
     bool ShortcutCombo::isEmpty() const
     {
-        return m_key == ImGuiKey_None;
+    return m_key == ImGuiKey_None && m_wheelDirection == 0;
     }
 
     bool ShortcutCombo::operator==(ShortcutCombo const& other) const
@@ -246,7 +268,7 @@ namespace gladius::ui
 
     void ShortcutManager::processInput(ShortcutContext activeContext)
     {
-        for (auto const& action : m_actions)
+    for (auto const& action : m_actions)
         {
             // Only process actions that are in the global context or the active context
             if (action->getContext() != ShortcutContext::Global && 

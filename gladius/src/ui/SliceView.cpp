@@ -112,11 +112,7 @@ namespace gladius::ui
 
             const bool isActive = ImGui::IsItemActive();
 
-            if (ImGui::IsMouseHoveringRect(canvasStart, canvasEnd))
-            {
-                m_zoomTarget += m_zoom * 0.1f * io.MouseWheel;
-                m_zoomTarget = std::max(0.5f, m_zoomTarget);
-            }
+            // Wheel zoom is handled via ShortcutManager (sliceview.zoominWheel / sliceview.zoomoutWheel)
             if (fabs(m_zoom - m_zoomTarget) >= 0.01f)
             {
                 auto prevPos = screenToWorldPos(io.MousePos);

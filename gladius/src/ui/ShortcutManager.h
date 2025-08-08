@@ -82,6 +82,12 @@ namespace gladius::ui
          */
         bool getShift() const { return m_shift; }
 
+    /**
+     * @brief Returns wheel direction for wheel-based shortcuts
+     * @return +1 for WheelUp, -1 for WheelDown, 0 if not a wheel combo
+     */
+    int getWheelDirection() const { return m_wheelDirection; }
+
         /**
          * @brief Check if two shortcut combinations are equal
          * @param other The other shortcut to compare with
@@ -94,6 +100,8 @@ namespace gladius::ui
         bool m_ctrl = false;
         bool m_alt = false;
         bool m_shift = false;
+    // Wheel-based shortcut support: +1 = WheelUp, -1 = WheelDown, 0 = none
+    int m_wheelDirection = 0;
     };
 
     /**
