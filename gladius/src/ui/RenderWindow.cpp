@@ -310,13 +310,7 @@ namespace gladius::ui
                 m_camera.mouseInputHandler(ImGuiMouseButton_Middle, 0, mousePos.x, mousePos.y);
             }
 
-            if (fabs(io.MouseWheel) > 0. && ImGui::IsMouseHoveringRect(contentMin, contentMax))
-            {
-                m_camera.zoom(-io.MouseWheel * 0.1f);
-                m_renderWindowState.isMoving = true;
-                m_dirty = true;
-                m_renderWindowState.currentLine = 0;
-            }
+            // Wheel zoom is handled via ShortcutManager (camera.zoomInWheel / camera.zoomOutWheel)
         }
 
         ImGui::SameLine();

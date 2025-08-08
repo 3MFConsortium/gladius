@@ -916,6 +916,38 @@ namespace gladius::ui
                         ImGui::PopStyleColor();
                     }
 
+                    // Copy / Paste
+                    auto selectionForCopy = selectedNodes(m_editorContext);
+                    if (selectionForCopy.empty())
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                        ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_COPY "\tCopy"));
+                        ImGui::PopStyleColor();
+                    }
+                    else
+                    {
+                        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_COPY "\tCopy")))
+                        {
+                            copySelectionToClipboard();
+                        }
+                    }
+
+                    if (!hasClipboard())
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                        ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_PASTE "\tPaste"));
+                        ImGui::PopStyleColor();
+                    }
+                    else
+                    {
+                        if (ImGui::MenuItem(
+                              reinterpret_cast<const char *>(ICON_FA_PASTE "\tPaste")))
+                        {
+                            // Defer paste until editor is active
+                            m_pendingPasteRequest = true;
+                        }
+                    }
+
                     toggleButton(
                       {reinterpret_cast<const char *>(ICON_FA_ROBOT "\tCompile automatically")},
                       &m_autoCompile);
@@ -1040,6 +1072,13 @@ namespace gladius::ui
 
                 ed::Begin("Model Editor");
 
+                // Handle any deferred paste request once editor is active
+                if (m_pendingPasteRequest)
+                {
+                    m_pendingPasteRequest = false;
+                    pasteClipboardAtMouse();
+                }
+
                 m_nodeViewVisitor.setAssembly(m_assembly);
                 m_nodeViewVisitor.setModelEditor(this);
                 if (m_currentModel)
@@ -1052,6 +1091,20 @@ namespace gladius::ui
                 }
                 onCreateNode();
                 onDeleteNode();
+
+                // Keyboard copy/paste when editor is focused
+                if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
+                {
+                    ImGuiIO & io = ImGui::GetIO();
+                    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false))
+                    {
+                        copySelectionToClipboard();
+                    }
+                    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V, false))
+                    {
+                        m_pendingPasteRequest = true;
+                    }
+                }
 
                 // Handle group movement - detect when nodes are moved and move their group members
                 m_nodeViewVisitor.handleGroupMovement();
@@ -1884,5 +1937,192 @@ namespace gladius::ui
     {
         m_shouldFocusNode = false;
         m_nodeToFocus = 0;
+    }
+
+    bool ModelEditor::hasClipboard() const
+    {
+        return static_cast<bool>(m_clipboardModel);
+    }
+
+    void ModelEditor::copySelectionToClipboard()
+    {
+        if (!m_currentModel)
+        {
+            return;
+        }
+
+        auto selection = selectedNodes(m_editorContext);
+        if (selection.empty())
+        {
+            return;
+        }
+
+        std::set<nodes::NodeId> selectedIds;
+        for (auto const & n : selection)
+        {
+            selectedIds.insert(static_cast<nodes::NodeId>(n.Get()));
+        }
+
+        m_clipboardModel = std::make_unique<nodes::Model>();
+
+        std::unordered_map<nodes::NodeId, nodes::NodeBase *> cloneMap;
+
+        // Clone nodes
+        for (auto const & [id, nodePtr] : *m_currentModel)
+        {
+            if (!nodePtr || selectedIds.find(id) == selectedIds.end())
+                continue;
+            auto cloned = nodePtr->clone();
+            cloned->screenPos() = nodePtr->screenPos();
+            auto * inserted = m_clipboardModel->insert(std::move(cloned));
+            cloneMap[id] = inserted;
+        }
+
+        // Recreate intra-selection links
+        for (auto const & [origId, clonedNode] : cloneMap)
+        {
+            (void) clonedNode;
+            auto origOpt = m_currentModel->getNode(origId);
+            if (!origOpt.has_value())
+                continue;
+            nodes::NodeBase const * origNode = origOpt.value();
+            for (auto const & [paramName, param] : origNode->constParameter())
+            {
+                if (!param.getConstSource().has_value())
+                    continue;
+                auto const & src = param.getConstSource().value();
+                nodes::Port const * srcPort = m_currentModel->getPort(src.portId);
+                if (!srcPort)
+                    continue;
+                nodes::NodeId const srcNodeId = srcPort->getParentId();
+                if (cloneMap.find(srcNodeId) == cloneMap.end())
+                    continue;
+
+                nodes::Port * clonedSrcPort =
+                  cloneMap[srcNodeId]->findOutputPort(srcPort->getShortName());
+                nodes::VariantParameter * clonedTarget = cloneMap[origId]->getParameter(paramName);
+                if (clonedSrcPort && clonedTarget)
+                {
+                    m_clipboardModel->addLink(clonedSrcPort->getId(), clonedTarget->getId(), true);
+                }
+            }
+        }
+    }
+
+    void ModelEditor::pasteClipboardAtMouse()
+    {
+        if (!m_currentModel || !m_clipboardModel)
+        {
+            return;
+        }
+
+        // Make sure we only use NodeEditor API when an editor is active
+        ImVec2 mouse = ImGui::GetMousePos();
+        ImVec2 canvas = ed::ScreenToCanvas(mouse);
+        // If user pastes repeatedly, nudge new paste to avoid complete overlap
+        if (m_hadLastPastePos && std::abs(canvas.x - m_lastPasteCanvasPos.x) < 1.0f &&
+            std::abs(canvas.y - m_lastPasteCanvasPos.y) < 1.0f)
+        {
+            ++m_consecutivePasteCount;
+            canvas.x += m_pasteOffsetStep * (m_consecutivePasteCount % 5);
+            canvas.y += m_pasteOffsetStep * (m_consecutivePasteCount % 5);
+        }
+        else
+        {
+            m_consecutivePasteCount = 0;
+        }
+
+        bool first = true;
+        ImVec2 minPos{0, 0}, maxPos{0, 0};
+        for (auto const & [id, nodePtr] : *m_clipboardModel)
+        {
+            (void) id;
+            if (!nodePtr)
+                continue;
+            ImVec2 p{nodePtr->screenPos().x, nodePtr->screenPos().y};
+            if (first)
+            {
+                minPos = maxPos = p;
+                first = false;
+            }
+            else
+            {
+                minPos.x = std::min(minPos.x, p.x);
+                minPos.y = std::min(minPos.y, p.y);
+                maxPos.x = std::max(maxPos.x, p.x);
+                maxPos.y = std::max(maxPos.y, p.y);
+            }
+        }
+
+        ImVec2 const center{(minPos.x + maxPos.x) * 0.5f, (minPos.y + maxPos.y) * 0.5f};
+        ImVec2 const delta{canvas.x - center.x, canvas.y - center.y};
+
+        createUndoRestorePoint("Paste node(s)");
+
+        std::unordered_map<std::string, nodes::NodeBase *> pastedMap;
+        for (auto const & [id, nodePtr] : *m_clipboardModel)
+        {
+            (void) id;
+            if (!nodePtr)
+                continue;
+            auto cloned = nodePtr->clone();
+            cloned->screenPos().x = nodePtr->screenPos().x + delta.x;
+            cloned->screenPos().y = nodePtr->screenPos().y + delta.y;
+            nodes::NodeBase * inserted = m_currentModel->insert(std::move(cloned));
+            pastedMap[nodePtr->getUniqueName()] = inserted;
+            ed::SetNodePosition(inserted->getId(),
+                                ImVec2(inserted->screenPos().x, inserted->screenPos().y));
+        }
+
+        std::unordered_map<std::string, nodes::NodeBase const *> clipboardByName;
+        for (auto const & [id, nodePtr] : *m_clipboardModel)
+        {
+            (void) id;
+            if (nodePtr)
+                clipboardByName[nodePtr->getUniqueName()] = nodePtr.get();
+        }
+
+        for (auto const & [origName, newNode] : pastedMap)
+        {
+            auto it = clipboardByName.find(origName);
+            if (it == clipboardByName.end())
+                continue;
+            nodes::NodeBase const * origNode = it->second;
+            for (auto const & [paramName, param] : origNode->constParameter())
+            {
+                if (!param.getConstSource().has_value())
+                    continue;
+                auto const & src = param.getConstSource().value();
+                nodes::Port const * origSrcPort = m_clipboardModel->getPort(src.portId);
+                if (!origSrcPort)
+                    continue;
+                std::string const srcNodeUnique = origSrcPort->getParent()->getUniqueName();
+                auto pastedSrcIt = pastedMap.find(srcNodeUnique);
+                if (pastedSrcIt == pastedMap.end())
+                    continue;
+                nodes::Port * newSrcPort =
+                  pastedSrcIt->second->findOutputPort(origSrcPort->getShortName());
+                nodes::VariantParameter * newTarget = newNode->getParameter(paramName);
+                if (newSrcPort && newTarget)
+                {
+                    m_currentModel->addLink(newSrcPort->getId(), newTarget->getId(), true);
+                }
+            }
+        }
+
+        // Select newly pasted nodes and focus
+        ed::ClearSelection();
+        for (auto const & [_, node] : pastedMap)
+        {
+            (void) _;
+            ed::SelectNode(node->getId(), true);
+        }
+        ed::NavigateToSelection(true);
+
+        markModelAsModified();
+
+        // Track last paste canvas position
+        m_lastPasteCanvasPos = canvas;
+        m_hadLastPastePos = true;
     }
 } // namespace gladius::ui
