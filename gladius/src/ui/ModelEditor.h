@@ -104,6 +104,11 @@ namespace gladius::ui
         bool isHovered() const;
 
       private:
+        // Copy/Paste helpers
+        void copySelectionToClipboard();
+        void pasteClipboardAtMouse();
+        bool hasClipboard() const;
+
         void readBackNodePositions();
         void autoLayout();
         void applyNodePositions();
@@ -153,6 +158,12 @@ namespace gladius::ui
         bool m_parameterDirty{false};
         bool m_primitiveDataDirty{false};
         bool m_nodePositionsNeedUpdate{false};
+        bool m_pendingPasteRequest{false};
+        // Paste UX helpers
+        bool m_hadLastPastePos{false};
+        ImVec2 m_lastPasteCanvasPos{0.f, 0.f};
+        int m_consecutivePasteCount{0};
+        float m_pasteOffsetStep{20.f};
         float m_nodeDistance = 50.f;
         float m_scale = 0.5f;
         bool m_nodeWidthsInitialized = false;
@@ -174,7 +185,7 @@ namespace gladius::ui
         nodes::SharedAssembly m_assembly;
         nodes::SharedModel m_currentModel;
 
-        static void noOp(){};
+        static void noOp() {};
         PopupMenuFunction m_popupMenuFunction = noOp;
         NodeView m_nodeViewVisitor;
 
@@ -218,6 +229,9 @@ namespace gladius::ui
 
         /// Group assignment dialog state
         bool m_showGroupAssignmentDialog{false};
+
+        // Clipboard buffer for copy/paste of nodes
+        nodes::UniqueModel m_clipboardModel;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

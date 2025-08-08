@@ -1926,21 +1926,19 @@ namespace gladius::ui
                                           ShortcutCombo(ImGuiKey_K, true), // Ctrl+K
                                           [this]() { showShortcutSettings(); });
 
-        m_shortcutManager->registerAction(
-          "view.uiScaleIncrease",
-          "Increase UI Scale",
-          "Increase UI scaling (Ctrl +)",
-          ShortcutContext::Global,
-          ShortcutCombo(ImGuiKey_Equal, true), // Ctrl +/=
-          [this]() { m_mainView.adjustUserScale(1.10f); });
+        m_shortcutManager->registerAction("view.uiScaleIncrease",
+                                          "Increase UI Scale",
+                                          "Increase UI scaling (Ctrl +)",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_Equal, true), // Ctrl +/=
+                                          [this]() { m_mainView.adjustUserScale(1.10f); });
 
-        m_shortcutManager->registerAction(
-          "view.uiScaleDecrease",
-          "Decrease UI Scale",
-          "Decrease UI scaling (Ctrl -)",
-          ShortcutContext::Global,
-          ShortcutCombo(ImGuiKey_Minus, true), // Ctrl -
-          [this]() { m_mainView.adjustUserScale(1.0f / 1.10f); });
+        m_shortcutManager->registerAction("view.uiScaleDecrease",
+                                          "Decrease UI Scale",
+                                          "Decrease UI scaling (Ctrl -)",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_Minus, true), // Ctrl -
+                                          [this]() { m_mainView.adjustUserScale(1.0f / 1.10f); });
 
         m_shortcutManager->registerAction(
           "view.uiScaleReset",
@@ -1957,6 +1955,35 @@ namespace gladius::ui
                                           ShortcutContext::ModelEditor,
                                           ShortcutCombo(ImGuiKey_F7), // F7
                                           [this]() { m_modelEditor.requestManualCompile(); });
+
+        // Model editor: Copy / Paste
+        m_shortcutManager->registerAction("model.copy",
+                                          "Copy Nodes",
+                                          "Copy selected nodes to clipboard",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_C, true), // Ctrl+C
+                                          [this]()
+                                          {
+                                              if (m_modelEditor.isHovered())
+                                              {
+                                                  // Delegate to editor, which reads current
+                                                  // selection Note: copySelectionToClipboard is
+                                                  // private; use keyboard in editor
+                                              }
+                                          });
+        m_shortcutManager->registerAction("model.paste",
+                                          "Paste Nodes",
+                                          "Paste nodes from clipboard",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_V, true), // Ctrl+V
+                                          [this]()
+                                          {
+                                              if (m_modelEditor.isHovered())
+                                              {
+                                                  // Editor handles Ctrl+V; we keep registration for
+                                                  // UI visibility
+                                              }
+                                          });
 
         // Standard CAD view shortcuts for RenderWindow
         // Based on industry standards (Blender, 3ds Max, Maya, AutoCAD, SolidWorks)
@@ -2148,7 +2175,7 @@ namespace gladius::ui
           ShortcutCombo(ImGuiKey_Keypad2, false, true), // Shift+Numpad 2
           [this]() { m_renderWindow.rotateDown(); });
 
-    // Zoom shortcuts for RenderWindow (CAD standard)
+        // Zoom shortcuts for RenderWindow (CAD standard)
         m_shortcutManager->registerAction("camera.zoomIn",
                                           "Zoom In",
                                           "Zoom in the camera view",
@@ -2163,19 +2190,19 @@ namespace gladius::ui
                                           ShortcutCombo(ImGuiKey_KeypadSubtract), // Numpad -
                                           [this]() { m_renderWindow.zoomOut(); });
 
-    m_shortcutManager->registerAction("camera.zoomInAlt",
-                      "Zoom In (Alt)",
-                      "Zoom in the camera view",
-                      ShortcutContext::RenderWindow,
-                      ShortcutCombo(ImGuiKey_Equal, false, true), // Alt+=
-                      [this]() { m_renderWindow.zoomIn(); });
+        m_shortcutManager->registerAction("camera.zoomInAlt",
+                                          "Zoom In (Alt)",
+                                          "Zoom in the camera view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Equal, false, true), // Alt+=
+                                          [this]() { m_renderWindow.zoomIn(); });
 
-    m_shortcutManager->registerAction("camera.zoomOutAlt",
-                      "Zoom Out (Alt)",
-                      "Zoom out the camera view",
-                      ShortcutContext::RenderWindow,
-                      ShortcutCombo(ImGuiKey_Minus, false, true), // Alt-
-                      [this]() { m_renderWindow.zoomOut(); });
+        m_shortcutManager->registerAction("camera.zoomOutAlt",
+                                          "Zoom Out (Alt)",
+                                          "Zoom out the camera view",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo(ImGuiKey_Minus, false, true), // Alt-
+                                          [this]() { m_renderWindow.zoomOut(); });
 
         m_shortcutManager->registerAction("camera.zoomExtents",
                                           "Zoom Extents",
@@ -2230,22 +2257,20 @@ namespace gladius::ui
           ShortcutCombo(ImGuiKey_V, true, false, true), // Ctrl+Shift+V
           [this]() { m_renderWindow.restoreSavedView(); });
 
-                // Mouse wheel zoom (handled via shortcut manager)
-                m_shortcutManager->registerAction(
-                    "camera.zoomInWheel",
-                    "Zoom In (Wheel)",
-                    "Zoom in using mouse wheel",
-                    ShortcutContext::RenderWindow,
-                    ShortcutCombo::fromString("WheelUp"),
-                    [this]() { m_renderWindow.zoomIn(); });
+        // Mouse wheel zoom (handled via shortcut manager)
+        m_shortcutManager->registerAction("camera.zoomInWheel",
+                                          "Zoom In (Wheel)",
+                                          "Zoom in using mouse wheel",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo::fromString("WheelUp"),
+                                          [this]() { m_renderWindow.zoomIn(); });
 
-                m_shortcutManager->registerAction(
-                    "camera.zoomOutWheel",
-                    "Zoom Out (Wheel)",
-                    "Zoom out using mouse wheel",
-                    ShortcutContext::RenderWindow,
-                    ShortcutCombo::fromString("WheelDown"),
-                    [this]() { m_renderWindow.zoomOut(); });
+        m_shortcutManager->registerAction("camera.zoomOutWheel",
+                                          "Zoom Out (Wheel)",
+                                          "Zoom out using mouse wheel",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo::fromString("WheelDown"),
+                                          [this]() { m_renderWindow.zoomOut(); });
 
         // Fly/Walk mode shortcuts
         m_shortcutManager->registerAction("camera.flyMode",
@@ -2304,11 +2329,11 @@ namespace gladius::ui
                                           [this]() { m_modelEditor.showCreateNodePopup(); });
 
         // Slice preview shortcuts
-    m_shortcutManager->registerAction("sliceview.zoomin",
-                      "Zoom In",
-                      "Zoom in slice view",
-                      ShortcutContext::SlicePreview,
-                      ShortcutCombo(ImGuiKey_Equal, false, true), // Alt+=
+        m_shortcutManager->registerAction("sliceview.zoomin",
+                                          "Zoom In",
+                                          "Zoom in slice view",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo(ImGuiKey_Equal, false, true), // Alt+=
                                           [this]()
                                           {
                                               if (m_isSlicePreviewVisible)
@@ -2318,10 +2343,10 @@ namespace gladius::ui
                                           });
 
         m_shortcutManager->registerAction("sliceview.zoomout",
-                      "Zoom Out",
-                      "Zoom out slice view",
-                      ShortcutContext::SlicePreview,
-                      ShortcutCombo(ImGuiKey_Minus, false, true), // Alt-
+                                          "Zoom Out",
+                                          "Zoom out slice view",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo(ImGuiKey_Minus, false, true), // Alt-
                                           [this]()
                                           {
                                               if (m_isSlicePreviewVisible)
@@ -2330,51 +2355,47 @@ namespace gladius::ui
                                               }
                                           });
 
-                // Slice preview wheel zoom
-                m_shortcutManager->registerAction(
-                    "sliceview.zoominWheel",
-                    "Zoom In (Wheel)",
-                    "Zoom in slice view using mouse wheel",
-                    ShortcutContext::SlicePreview,
-                    ShortcutCombo::fromString("WheelUp"),
-                    [this]()
-                    {
-                            if (m_isSlicePreviewVisible)
-                            {
-                                    m_sliceView.zoomIn();
-                            }
-                    });
+        // Slice preview wheel zoom
+        m_shortcutManager->registerAction("sliceview.zoominWheel",
+                                          "Zoom In (Wheel)",
+                                          "Zoom in slice view using mouse wheel",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo::fromString("WheelUp"),
+                                          [this]()
+                                          {
+                                              if (m_isSlicePreviewVisible)
+                                              {
+                                                  m_sliceView.zoomIn();
+                                              }
+                                          });
 
-                m_shortcutManager->registerAction(
-                    "sliceview.zoomoutWheel",
-                    "Zoom Out (Wheel)",
-                    "Zoom out slice view using mouse wheel",
-                    ShortcutContext::SlicePreview,
-                    ShortcutCombo::fromString("WheelDown"),
-                    [this]()
-                    {
-                            if (m_isSlicePreviewVisible)
-                            {
-                                    m_sliceView.zoomOut();
-                            }
-                    });
+        m_shortcutManager->registerAction("sliceview.zoomoutWheel",
+                                          "Zoom Out (Wheel)",
+                                          "Zoom out slice view using mouse wheel",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo::fromString("WheelDown"),
+                                          [this]()
+                                          {
+                                              if (m_isSlicePreviewVisible)
+                                              {
+                                                  m_sliceView.zoomOut();
+                                              }
+                                          });
 
-                // Global UI scaling via Ctrl + Mouse Wheel
-                m_shortcutManager->registerAction(
-                    "view.uiScaleIncreaseWheel",
-                    "Increase UI Scale (Ctrl+Wheel)",
-                    "Increase UI scale using Ctrl+Mouse Wheel",
-                    ShortcutContext::Global,
-                    ShortcutCombo::fromString("Ctrl+WheelUp"),
-                    [this]() { m_mainView.adjustUserScale(1.10f); });
+        // Global UI scaling via Ctrl + Mouse Wheel
+        m_shortcutManager->registerAction("view.uiScaleIncreaseWheel",
+                                          "Increase UI Scale (Ctrl+Wheel)",
+                                          "Increase UI scale using Ctrl+Mouse Wheel",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo::fromString("Ctrl+WheelUp"),
+                                          [this]() { m_mainView.adjustUserScale(1.10f); });
 
-                m_shortcutManager->registerAction(
-                    "view.uiScaleDecreaseWheel",
-                    "Decrease UI Scale (Ctrl+Wheel)",
-                    "Decrease UI scale using Ctrl+Mouse Wheel",
-                    ShortcutContext::Global,
-                    ShortcutCombo::fromString("Ctrl+WheelDown"),
-                    [this]() { m_mainView.adjustUserScale(1.0f / 1.10f); });
+        m_shortcutManager->registerAction("view.uiScaleDecreaseWheel",
+                                          "Decrease UI Scale (Ctrl+Wheel)",
+                                          "Decrease UI scale using Ctrl+Mouse Wheel",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo::fromString("Ctrl+WheelDown"),
+                                          [this]() { m_mainView.adjustUserScale(1.0f / 1.10f); });
 
         m_shortcutManager->registerAction("sliceview.reset",
                                           "Reset View",
@@ -2428,8 +2449,8 @@ namespace gladius::ui
         // Save to config
         m_configManager->setValue("rendering", "settings", renderJson);
 
-    // Save UI settings (user scale factor)
-    m_configManager->setValue("ui", "userScale", m_mainView.getUserScale());
+        // Save UI settings (user scale factor)
+        m_configManager->setValue("ui", "userScale", m_mainView.getUserScale());
 
         // Save shortcuts too
         if (m_shortcutManager)
@@ -2478,9 +2499,9 @@ namespace gladius::ui
 
         // Load shortcuts too (this happens automatically when m_shortcutManager is created)
 
-    // Load UI settings (user scale factor)
-    float const userScale = m_configManager->getValue<float>("ui", "userScale", 1.0f);
-    m_mainView.setUserScale(userScale);
+        // Load UI settings (user scale factor)
+        float const userScale = m_configManager->getValue<float>("ui", "userScale", 1.0f);
+        m_mainView.setUserScale(userScale);
 
         // Log success
         m_logger->addEvent({"Rendering settings loaded", events::Severity::Info});
