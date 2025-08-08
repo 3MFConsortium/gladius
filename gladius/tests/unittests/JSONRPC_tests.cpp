@@ -80,13 +80,14 @@ namespace gladius::tests
             return "";
         }
 
-        bool createFunctionFromExpression(const std::string &,
-                                          const std::string &,
-                                          const std::string &,
-                                          const std::vector<FunctionArgument> & = {},
-                                          const std::string & = "") override
+        std::pair<bool, uint32_t>
+        createFunctionFromExpression(const std::string &,
+                                     const std::string &,
+                                     const std::string &,
+                                     const std::vector<FunctionArgument> & = {},
+                                     const std::string & = "") override
         {
-            return true;
+            return {true, 123}; // Mock resource ID
         }
 
         std::string getLastErrorMessage() const override
@@ -104,17 +105,43 @@ namespace gladius::tests
         {
             return true;
         }
-        bool createSDFFunction(const std::string & name, const std::string & sdfExpression) override
+        std::pair<bool, uint32_t> createSDFFunction(const std::string & name,
+                                                    const std::string & sdfExpression) override
         {
-            return true;
+            return {true, 456}; // Mock resource ID
         }
-        bool createCSGOperation(const std::string & name,
-                                const std::string & operation,
-                                const std::vector<std::string> & operands,
-                                bool smooth = false,
-                                float blendRadius = 0.1f) override
+        std::pair<bool, uint32_t> createCSGOperation(const std::string & name,
+                                                     const std::string & operation,
+                                                     const std::vector<std::string> & operands,
+                                                     bool smooth = false,
+                                                     float blendRadius = 0.1f) override
         {
-            return true;
+            return {true, 789}; // Mock resource ID
+        }
+
+        // New 3MF Resource creation methods
+        std::pair<bool, uint32_t> createLevelSet(uint32_t functionId,
+                                                 int meshResolution = 64) override
+        {
+            return {true, functionId + 1000}; // Mock level set ID
+        }
+        std::pair<bool, uint32_t> createImage3DFunction(const std::string & name,
+                                                        const std::string & imagePath,
+                                                        float valueScale = 1.0f,
+                                                        float valueOffset = 0.0f) override
+        {
+            return {true, 555}; // Mock image3D function ID
+        }
+        std::pair<bool, uint32_t> createVolumetricColor(uint32_t functionId,
+                                                        const std::string & channel) override
+        {
+            return {true, functionId + 2000}; // Mock color data ID
+        }
+        std::pair<bool, uint32_t> createVolumetricProperty(const std::string & propertyName,
+                                                           uint32_t functionId,
+                                                           const std::string & channel) override
+        {
+            return {true, functionId + 3000}; // Mock property data ID
         }
         bool applyTransformToFunction(const std::string & functionName,
                                       const std::array<float, 3> & translation,

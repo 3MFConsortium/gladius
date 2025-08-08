@@ -59,7 +59,7 @@ namespace gladius
                                                const std::string & parameterName) = 0;
 
         // Expression and function operations
-        virtual bool
+        virtual std::pair<bool, uint32_t>
         createFunctionFromExpression(const std::string & name,
                                      const std::string & expression,
                                      const std::string & outputType,
@@ -70,13 +70,27 @@ namespace gladius
         virtual bool validateDocumentFor3MF() const = 0;
         virtual bool exportDocumentAs3MF(const std::string & path,
                                          bool includeImplicitFunctions = true) const = 0;
-        virtual bool createSDFFunction(const std::string & name,
-                                       const std::string & sdfExpression) = 0;
-        virtual bool createCSGOperation(const std::string & name,
-                                        const std::string & operation,
-                                        const std::vector<std::string> & operands,
-                                        bool smooth = false,
-                                        float blendRadius = 0.1f) = 0;
+        virtual std::pair<bool, uint32_t> createSDFFunction(const std::string & name,
+                                                            const std::string & sdfExpression) = 0;
+        virtual std::pair<bool, uint32_t>
+        createCSGOperation(const std::string & name,
+                           const std::string & operation,
+                           const std::vector<std::string> & operands,
+                           bool smooth = false,
+                           float blendRadius = 0.1f) = 0;
+
+        // 3MF Resource creation methods (return success flag and resource ID)
+        virtual std::pair<bool, uint32_t> createLevelSet(uint32_t functionId,
+                                                         int meshResolution = 64) = 0;
+        virtual std::pair<bool, uint32_t> createImage3DFunction(const std::string & name,
+                                                                const std::string & imagePath,
+                                                                float valueScale = 1.0f,
+                                                                float valueOffset = 0.0f) = 0;
+        virtual std::pair<bool, uint32_t> createVolumetricColor(uint32_t functionId,
+                                                                const std::string & channel) = 0;
+        virtual std::pair<bool, uint32_t> createVolumetricProperty(const std::string & propertyName,
+                                                                   uint32_t functionId,
+                                                                   const std::string & channel) = 0;
         virtual bool applyTransformToFunction(const std::string & functionName,
                                               const std::array<float, 3> & translation,
                                               const std::array<float, 3> & rotation,

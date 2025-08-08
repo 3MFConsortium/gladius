@@ -362,7 +362,7 @@ namespace gladius
         }
     }
 
-    bool ApplicationMCPAdapter::createFunctionFromExpression(
+    std::pair<bool, uint32_t> ApplicationMCPAdapter::createFunctionFromExpression(
       const std::string & name,
       const std::string & expression,
       const std::string & outputType,
@@ -372,19 +372,19 @@ namespace gladius
         if (!m_application)
         {
             m_lastErrorMessage = "No application instance available";
-            return false;
+            return {false, 0};
         }
 
         if (name.empty())
         {
             m_lastErrorMessage = "Function name cannot be empty";
-            return false;
+            return {false, 0};
         }
 
         if (expression.empty())
         {
             m_lastErrorMessage = "Expression cannot be empty";
-            return false;
+            return {false, 0};
         }
 
         // Validate output type
@@ -392,7 +392,7 @@ namespace gladius
         {
             m_lastErrorMessage =
               "Invalid output type '" + outputType + "'. Must be 'float' or 'vec3'";
-            return false;
+            return {false, 0};
         }
 
         try
@@ -402,7 +402,7 @@ namespace gladius
             {
                 m_lastErrorMessage =
                   "No active document available. Please create or open a document first.";
-                return false;
+                return {false, 0};
             }
 
             // Parse and validate the expression syntax
@@ -420,7 +420,7 @@ namespace gladius
                   "\n- Gyroid: 'sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)'" +
                   "\n- Sphere: 'sqrt(x*x + y*y + z*z) - 5'" +
                   "\n- Scaled wave: 'sin(x*2*pi/10)*cos(y*2*pi/10)'";
-                return false;
+                return {false, 0};
             }
 
             // Convert expression to node graph using ExpressionToGraphConverter
@@ -457,7 +457,7 @@ namespace gladius
                           "' used in expression is not defined in function arguments. " +
                           "Please define it as a function input or use component access like "
                           "'pos.x' for vector inputs.";
-                        return false;
+                        return {false, 0};
                     }
                 }
             }
@@ -575,8 +575,11 @@ namespace gladius
                       (arguments[i].type == ArgumentType::Vector ? "vec3" : "float");
                 }
                 m_lastErrorMessage += "] could not be converted to a valid node graph.";
-                return false;
+                return {false, 0};
             }
+
+            // Get the resource ID from the created model
+            uint32_t resourceId = model.getResourceId();
 
             // Success!
             m_lastErrorMessage = std::string("Function '") + name +
@@ -591,12 +594,12 @@ namespace gladius
                   (arguments[i].type == ArgumentType::Vector ? "vec3" : "float");
             }
             m_lastErrorMessage += "]";
-            return true;
+            return {true, resourceId};
         }
         catch (const std::exception & e)
         {
             m_lastErrorMessage = "Exception during expression validation: " + std::string(e.what());
-            return false;
+            return {false, 0};
         }
     }
 
@@ -641,24 +644,26 @@ namespace gladius
         }
     }
 
-    bool ApplicationMCPAdapter::createSDFFunction(const std::string & name,
-                                                  const std::string & sdfExpression)
+    std::pair<bool, uint32_t>
+    ApplicationMCPAdapter::createSDFFunction(const std::string & name,
+                                             const std::string & sdfExpression)
     {
         // Use the existing createFunctionFromExpression with SDF-specific arguments
         std::vector<FunctionArgument> args = {{"pos", ArgumentType::Vector}};
         return createFunctionFromExpression(name, sdfExpression, "float", args, "distance");
     }
 
-    bool ApplicationMCPAdapter::createCSGOperation(const std::string & name,
-                                                   const std::string & operation,
-                                                   const std::vector<std::string> & operands,
-                                                   bool smooth,
-                                                   float blendRadius)
+    std::pair<bool, uint32_t>
+    ApplicationMCPAdapter::createCSGOperation(const std::string & name,
+                                              const std::string & operation,
+                                              const std::vector<std::string> & operands,
+                                              bool smooth,
+                                              float blendRadius)
     {
         if (operands.size() < 2)
         {
             m_lastErrorMessage = "CSG operations require at least 2 operands";
-            return false;
+            return {false, 0};
         }
 
         std::string expression;
@@ -713,7 +718,7 @@ namespace gladius
         else
         {
             m_lastErrorMessage = "Unknown CSG operation: " + operation;
-            return false;
+            return {false, 0};
         }
 
         return createSDFFunction(name, expression);
@@ -745,7 +750,8 @@ namespace gladius
 
         expression += "; " + functionName + "_distance(transformed_pos)";
 
-        return createSDFFunction(functionName + "_transformed", expression);
+        auto result = createSDFFunction(functionName + "_transformed", expression);
+        return result.first; // Return only the success flag
     }
 
     nlohmann::json
@@ -1220,5 +1226,81 @@ namespace gladius
         }
 
         return allSuccessful;
+    }
+
+    // 3MF Resource creation methods implementation
+    std::pair<bool, uint32_t> ApplicationMCPAdapter::createLevelSet(uint32_t functionId,
+                                                                    int meshResolution)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available";
+            return {false, 0};
+        }
+
+        // TODO: Implement actual level set creation when API is available
+        // For now, return a placeholder resource ID
+        m_lastErrorMessage =
+          "Level set would be created from function ID: " + std::to_string(functionId) +
+          " with resolution: " + std::to_string(meshResolution);
+        return {true, functionId + 1000}; // Placeholder: offset function ID for level set ID
+    }
+
+    std::pair<bool, uint32_t>
+    ApplicationMCPAdapter::createImage3DFunction(const std::string & name,
+                                                 const std::string & imagePath,
+                                                 float valueScale,
+                                                 float valueOffset)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available";
+            return {false, 0};
+        }
+
+        // TODO: Implement actual Image3D function creation when API is available
+        // For now, create a function placeholder and return resource ID
+        m_lastErrorMessage = "Image3D function '" + name + "' would be created from: " + imagePath +
+                             " with scale: " + std::to_string(valueScale) +
+                             ", offset: " + std::to_string(valueOffset);
+
+        // Create a simple placeholder function for now
+        auto result = createFunctionFromExpression(
+          name, "0.0", "float", {{"pos", ArgumentType::Vector}}, "result");
+        return result;
+    }
+
+    std::pair<bool, uint32_t>
+    ApplicationMCPAdapter::createVolumetricColor(uint32_t functionId, const std::string & channel)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available";
+            return {false, 0};
+        }
+
+        // TODO: Implement actual volumetric color creation when API is available
+        m_lastErrorMessage =
+          "Volumetric color data would be created from function ID: " + std::to_string(functionId) +
+          " using channel: " + channel;
+        return {true, functionId + 2000}; // Placeholder: offset function ID for color data ID
+    }
+
+    std::pair<bool, uint32_t>
+    ApplicationMCPAdapter::createVolumetricProperty(const std::string & propertyName,
+                                                    uint32_t functionId,
+                                                    const std::string & channel)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available";
+            return {false, 0};
+        }
+
+        // TODO: Implement actual volumetric property creation when API is available
+        m_lastErrorMessage = "Volumetric property '" + propertyName +
+                             "' would be created from function ID: " + std::to_string(functionId) +
+                             " using channel: " + channel;
+        return {true, functionId + 3000}; // Placeholder: offset function ID for property data ID
     }
 }

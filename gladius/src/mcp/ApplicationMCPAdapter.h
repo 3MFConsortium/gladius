@@ -73,23 +73,37 @@ namespace gladius
                                        const std::string & parameterName) override;
 
         // Expression and function operations
-        bool createFunctionFromExpression(const std::string & name,
-                                          const std::string & expression,
-                                          const std::string & outputType,
-                                          const std::vector<FunctionArgument> & arguments = {},
-                                          const std::string & outputName = "") override;
+        std::pair<bool, uint32_t>
+        createFunctionFromExpression(const std::string & name,
+                                     const std::string & expression,
+                                     const std::string & outputType,
+                                     const std::vector<FunctionArgument> & arguments = {},
+                                     const std::string & outputName = "") override;
 
         // 3MF and implicit modeling operations
         bool validateDocumentFor3MF() const override;
         bool exportDocumentAs3MF(const std::string & path,
                                  bool includeImplicitFunctions = true) const override;
-        bool createSDFFunction(const std::string & name,
-                               const std::string & sdfExpression) override;
-        bool createCSGOperation(const std::string & name,
-                                const std::string & operation,
-                                const std::vector<std::string> & operands,
-                                bool smooth = false,
-                                float blendRadius = 0.1f) override;
+        std::pair<bool, uint32_t> createSDFFunction(const std::string & name,
+                                                    const std::string & sdfExpression) override;
+        std::pair<bool, uint32_t> createCSGOperation(const std::string & name,
+                                                     const std::string & operation,
+                                                     const std::vector<std::string> & operands,
+                                                     bool smooth = false,
+                                                     float blendRadius = 0.1f) override;
+
+        // 3MF Resource creation methods (return success flag and resource ID)
+        std::pair<bool, uint32_t> createLevelSet(uint32_t functionId,
+                                                 int meshResolution = 64) override;
+        std::pair<bool, uint32_t> createImage3DFunction(const std::string & name,
+                                                        const std::string & imagePath,
+                                                        float valueScale = 1.0f,
+                                                        float valueOffset = 0.0f) override;
+        std::pair<bool, uint32_t> createVolumetricColor(uint32_t functionId,
+                                                        const std::string & channel) override;
+        std::pair<bool, uint32_t> createVolumetricProperty(const std::string & propertyName,
+                                                           uint32_t functionId,
+                                                           const std::string & channel) override;
         bool applyTransformToFunction(const std::string & functionName,
                                       const std::array<float, 3> & translation,
                                       const std::array<float, 3> & rotation,

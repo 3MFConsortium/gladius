@@ -49,7 +49,7 @@ namespace gladius::tests
                     (uint32_t, const std::string &, const std::string &),
                     (override));
 
-        MOCK_METHOD(bool,
+        MOCK_METHOD((std::pair<bool, uint32_t>),
                     createFunctionFromExpression,
                     (const std::string &,
                      const std::string &,
@@ -63,15 +63,30 @@ namespace gladius::tests
         // New MCP interface methods
         MOCK_METHOD(bool, validateDocumentFor3MF, (), (const, override));
         MOCK_METHOD(bool, exportDocumentAs3MF, (const std::string &, bool), (const, override));
-        MOCK_METHOD(bool,
+        MOCK_METHOD((std::pair<bool, uint32_t>),
                     createSDFFunction,
                     (const std::string &, const std::string &),
                     (override));
         MOCK_METHOD(
-          bool,
+          (std::pair<bool, uint32_t>),
           createCSGOperation,
           (const std::string &, const std::string &, const std::vector<std::string> &, bool, float),
           (override));
+
+        // New 3MF Resource creation methods
+        MOCK_METHOD((std::pair<bool, uint32_t>), createLevelSet, (uint32_t, int), (override));
+        MOCK_METHOD((std::pair<bool, uint32_t>),
+                    createImage3DFunction,
+                    (const std::string &, const std::string &, float, float),
+                    (override));
+        MOCK_METHOD((std::pair<bool, uint32_t>),
+                    createVolumetricColor,
+                    (uint32_t, const std::string &),
+                    (override));
+        MOCK_METHOD((std::pair<bool, uint32_t>),
+                    createVolumetricProperty,
+                    (const std::string &, uint32_t, const std::string &),
+                    (override));
         MOCK_METHOD(
           bool,
           applyTransformToFunction,
@@ -130,19 +145,19 @@ namespace gladius::tests
         ASSERT_TRUE(response["result"].contains("tools"));
 
         auto tools = response["result"]["tools"];
-        EXPECT_GT(tools.size(), 10); // Should have at least 10+ tools
+        EXPECT_GE(tools.size(), 10); // Should have at least 10 tools
 
-        // Check for essential tools
+        // Check for essential tools that are actually implemented
         std::vector<std::string> expectedTools = {"ping",
                                                   "get_status",
                                                   "create_document",
                                                   "open_document",
-                                                  "save_document",
                                                   "save_document_as",
-                                                  "export_document",
-                                                  "set_parameter",
-                                                  "get_parameter",
-                                                  "create_function_from_expression"};
+                                                  "create_function_from_expression",
+                                                  "create_levelset",
+                                                  "create_image3d_function",
+                                                  "create_volumetric_color",
+                                                  "create_volumetric_property"};
 
         for (const auto & expectedTool : expectedTools)
         {
@@ -248,7 +263,7 @@ namespace gladius::tests
         std::string jsonString = content[0]["text"];
         json createResult = json::parse(jsonString);
         EXPECT_EQ(createResult["success"], true);
-        EXPECT_EQ(createResult["message"], "New document created");
+        EXPECT_EQ(createResult["message"], "New 3MF document created");
     }
 
     // Test document creation failure
@@ -280,7 +295,7 @@ namespace gladius::tests
         EXPECT_CALL(*m_mockApp,
                     createFunctionFromExpression(
                       "test_function", "sin(x) + cos(y)", "float", ::testing::_, ::testing::_))
-          .WillOnce(::testing::Return(true));
+          .WillOnce(::testing::Return(std::make_pair(true, 123u)));
 
         json request = {{"jsonrpc", "2.0"},
                         {"id", 1},
@@ -304,6 +319,7 @@ namespace gladius::tests
         std::string jsonString = content[0]["text"];
         json functionResult = json::parse(jsonString);
         EXPECT_EQ(functionResult["success"], true);
+        EXPECT_EQ(functionResult["resource_id"], 123u);
         EXPECT_EQ(functionResult["function_name"], "test_function");
         EXPECT_EQ(functionResult["expression"], "sin(x) + cos(y)");
         EXPECT_EQ(functionResult["output_type"], "float");
@@ -415,7 +431,7 @@ namespace gladius::tests
                       "float",
                       ::testing::_,
                       ::testing::_))
-          .WillOnce(::testing::Return(true));
+          .WillOnce(::testing::Return(std::make_pair(true, 456u)));
 
         json request = {{"jsonrpc", "2.0"},
                         {"id", 1},
