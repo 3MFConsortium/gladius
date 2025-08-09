@@ -18,6 +18,7 @@ namespace gladius
         m_mainWindow.setConfigManager(m_configManager);
         if (!m_headlessMode)
         {
+            // Let MainWindow perform compute initialization and gracefully fall back on failure
             m_mainWindow.setup();
         }
     }

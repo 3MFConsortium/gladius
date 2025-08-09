@@ -150,33 +150,48 @@ namespace gladius::ui
 
         if (ImGui::CollapsingHeader("Rendering"))
         {
-            // Add save/load buttons for settings if ConfigManager is available
-            if (m_configManager)
+            if (!m_computeAvailable)
             {
-                if (ImGui::Button("Save Settings"))
+                ImGui::TextWrapped("Rendering and compute settings are unavailable because "
+                                   "OpenCL/compute initialization failed.\nThe UI remains usable, "
+                                   "but 3D preview and slicing are disabled.");
+                ImGui::Separator();
+                if (ImGui::Button("Close"))
                 {
-                    saveRenderSettings();
+                    // Nothing else to do when compute is disabled
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Load Settings"))
+            }
+            else
+            {
+                // Add save/load buttons for settings if ConfigManager is available
+                if (m_configManager)
                 {
-                    loadRenderSettings();
+                    if (ImGui::Button("Save Settings"))
+                    {
+                        saveRenderSettings();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Load Settings"))
+                    {
+                        loadRenderSettings();
+                        refreshModel();
+                    }
+                    ImGui::Separator();
+                }
+
+                ImGui::SliderFloat("Ray marching tolerance",
+                                   &m_core->getResourceContext()->getRenderingSettings().quality,
+                                   0.1f,
+                                   20.0f);
+
+                bool enableSdfRendering =
+                  m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
+                if (ImGui::Checkbox("Show Distance field", &enableSdfRendering))
+                {
+                    m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(
+                      enableSdfRendering);
                     refreshModel();
                 }
-                ImGui::Separator();
-            }
-
-            ImGui::SliderFloat("Ray marching tolerance",
-                               &m_core->getResourceContext()->getRenderingSettings().quality,
-                               0.1f,
-                               20.0f);
-
-            bool enableSdfRendering =
-              m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
-            if (ImGui::Checkbox("Show Distance field", &enableSdfRendering))
-            {
-                m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(enableSdfRendering);
-                refreshModel();
             }
         }
 
@@ -233,25 +248,68 @@ namespace gladius::ui
         ProfileFunction;
         m_initialized = true;
 
-        auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
-
-        if (!context->isValid())
+        // Try to initialize compute stack; if it fails, keep UI running in limited mode.
+        try
         {
-            throw std::runtime_error(
-              "Failed to create OpenCL Context. Did you install proper GPU drivers?");
+            auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+            if (!context->isValid())
+            {
+                throw OpenCLContextCreationError("Context invalid after initialization");
+            }
+
+            m_core =
+              std::make_shared<ComputeCore>(context, RequiredCapabilities::OpenGLInterop, m_logger);
+            m_doc = std::make_shared<Document>(m_core);
+            m_computeAvailable = true;
+            m_computeErrorMessage.clear();
+        }
+        catch (const GladiusException & e)
+        {
+            // Handle any OpenCL-related errors gracefully
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {std::string("Compute disabled: ") + e.what(), events::Severity::Warning});
+            }
+        }
+        catch (const std::exception & e)
+        {
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {std::string("Compute disabled: ") + e.what(), events::Severity::Warning});
+            }
         }
 
-        m_core =
-          std::make_shared<ComputeCore>(context, RequiredCapabilities::OpenGLInterop, m_logger);
-        m_doc = std::make_shared<Document>(m_core);
-
-        // Load render settings if ConfigManager is available
-        if (m_configManager)
+        // Load render settings only when compute is available
+        if (m_configManager && m_computeAvailable)
         {
             loadRenderSettings();
         }
 
-        setup(m_core, m_doc, m_logger);
+        // Hook up the basic UI rendering callbacks regardless of compute availability
+        m_mainView.clearViewCallback();
+        m_renderCallback =
+          [&]() { /* no-op when compute disabled; updateModel() set in full setup */ };
+        m_mainView.setRenderCallback(m_renderCallback);
+        m_mainView.addViewCallBack([&]() { render(); });
+        m_mainView.setFileDropCallback([&](std::filesystem::path const & path) { open(path); });
+
+        // If compute is available, continue normal setup. Otherwise, keep UI minimal.
+        if (m_computeAvailable)
+        {
+            setup(m_core, m_doc, m_logger);
+        }
+        else
+        {
+            // Minimal UI: welcome screen, menus, status bar
+            m_welcomeScreen.setLogger(m_logger);
+            m_welcomeScreen.setRecentFiles(getRecentFiles(100));
+        }
     }
 
     void MainWindow::render()
@@ -274,26 +332,37 @@ namespace gladius::ui
         ImGuiIO & io = ImGui::GetIO();
         processShortcuts(ShortcutContext::Global);
 
-        // try to get the compute token
-        auto computeToken = m_core->requestComputeToken();
-        if (computeToken)
+        // If compute is available, validate context
+        if (m_computeAvailable && m_core)
         {
-            if (!m_core->getComputeContext()->isValid())
+            // try to get the compute token
+            auto computeToken = m_core->requestComputeToken();
+            if (computeToken)
             {
-                m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
-
-                const auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
-
-                if (!context->isValid())
+                if (!m_core->getComputeContext()->isValid())
                 {
-                    m_logger->addEvent(
-                      {"Failed to create OpenCL Context. Did you install proper GPU drivers?",
-                       events::Severity::FatalError});
-                    throw std::runtime_error(
-                      "Failed to create OpenCL Context. Did you install proper GPU drivers?");
-                }
+                    m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
 
-                m_core->setComputeContext(context);
+                    try
+                    {
+                        const auto context =
+                          std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+                        if (!context->isValid())
+                        {
+                            throw OpenCLContextCreationError("Context invalid after reinit");
+                        }
+                        m_core->setComputeContext(context);
+                    }
+                    catch (const std::exception & e)
+                    {
+                        // Switch to compute-disabled mode
+                        m_computeAvailable = false;
+                        m_computeErrorMessage = e.what();
+                        m_logger->addEvent(
+                          {std::string("Compute disabled after failure: ") + e.what(),
+                           events::Severity::Error});
+                    }
+                }
             }
         }
 
@@ -355,6 +424,7 @@ namespace gladius::ui
             // Only render the normal UI if welcome screen is not visible and fadeout is complete
             if (!welcomeScreenVisible)
             {
+                // If compute is not available, show a non-blocking banner in status areas
 
                 if (m_showStyleEditor)
                 {
@@ -470,11 +540,14 @@ namespace gladius::ui
                 ImGui::PopStyleVar();
 
                 mainWindowDockingArea();
-                sliceWindow();
-                renderWindow();
-                meshExportDialog();
-                meshExportDialog3mf();
-                cliExportDialog();
+                if (m_computeAvailable)
+                {
+                    sliceWindow();
+                    renderWindow();
+                    meshExportDialog();
+                    meshExportDialog3mf();
+                    cliExportDialog();
+                }
                 mainMenu();
                 showExitPopUp();
                 showSaveBeforeFileOperationPopUp();
@@ -620,6 +693,15 @@ namespace gladius::ui
 
     void MainWindow::newModel()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent({"New model is unavailable: compute/renderer disabled",
+                                    events::Severity::Warning});
+            }
+            return;
+        }
         if (m_fileChanged)
         {
             m_pendingFileOperation = PendingFileOperation::NewModel;
@@ -635,6 +717,10 @@ namespace gladius::ui
 
     void MainWindow::renderWindow()
     {
+        if (!m_computeAvailable)
+        {
+            return; // skip rendering UI when compute is disabled
+        }
         // Process render window shortcuts
         if (m_renderWindow.isVisible() && m_renderWindow.isHovered() && m_renderWindow.isFocused())
         {
@@ -733,6 +819,7 @@ namespace gladius::ui
 
         ImGui::Separator();
         ImGui::TextUnformatted("Export");
+        if (m_computeAvailable)
         {
             if (ImGui::MenuItem(reinterpret_cast<const char *>("\t" ICON_FA_MINUS
                                                                "\tExport current layer as CLI")))
@@ -860,6 +947,12 @@ namespace gladius::ui
                     m_meshExporterDialog3mf.beginExport(filename.value(), *m_core, m_doc.get());
                 }
             }
+        }
+        else
+        {
+            ImGui::BeginDisabled();
+            ImGui::TextDisabled("Compute is disabled: export functions are unavailable.");
+            ImGui::EndDisabled();
         }
 
         ImGui::Separator();
@@ -1000,6 +1093,15 @@ namespace gladius::ui
 
     void MainWindow::open()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Open is unavailable: compute/renderer disabled", events::Severity::Warning});
+            }
+            return;
+        }
         if (m_fileChanged)
         {
             m_pendingFileOperation = PendingFileOperation::OpenFile;
@@ -1017,6 +1119,15 @@ namespace gladius::ui
 
     void MainWindow::merge()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Merge is unavailable: compute/renderer disabled", events::Severity::Warning});
+            }
+            return;
+        }
         const auto filename = queryLoadFilename({{"*.3mf"}});
         if (filename.has_value())
         {
@@ -1039,6 +1150,15 @@ namespace gladius::ui
 
     void MainWindow::open(const std::filesystem::path & filename)
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Open is unavailable: compute/renderer disabled", events::Severity::Warning});
+            }
+            return;
+        }
         if (m_fileChanged)
         {
             m_pendingFileOperation = PendingFileOperation::OpenFile;
@@ -1064,12 +1184,21 @@ namespace gladius::ui
 
     void MainWindow::save()
     {
+        // Allow saving even if compute is disabled; just skip thumbnail generation.
+        if (!m_doc)
+        {
+            return;
+        }
         if (m_currentAssemblyFileName->empty())
         {
             saveAs();
             return;
         }
-        bool writeThumbnail = m_core->isRendererReady();
+        bool writeThumbnail = false;
+        if (m_computeAvailable && m_core)
+        {
+            writeThumbnail = m_core->isRendererReady();
+        }
         m_doc->saveAs(m_currentAssemblyFileName.value(), writeThumbnail);
         m_renderWindow.invalidateViewDuetoModelUpdate();
         m_fileChanged = false;
@@ -1080,12 +1209,22 @@ namespace gladius::ui
 
     void MainWindow::saveAs()
     {
+        // Allow saving even if compute is disabled; just skip thumbnail generation.
+        if (!m_doc)
+        {
+            return;
+        }
         auto filename = querySaveFilename(
           {"*.implicit.3mf"}, m_currentAssemblyFileName.value_or(std::filesystem::path{}));
         if (filename.has_value())
         {
             filename->replace_extension(".3mf");
-            m_doc->saveAs(filename.value());
+            bool writeThumbnail = false;
+            if (m_computeAvailable && m_core)
+            {
+                writeThumbnail = m_core->isRendererReady();
+            }
+            m_doc->saveAs(filename.value(), writeThumbnail);
             m_renderWindow.invalidateViewDuetoModelUpdate();
             m_fileChanged = false;
             m_currentAssemblyFileName = filename;
@@ -1097,6 +1236,16 @@ namespace gladius::ui
 
     void MainWindow::saveCurrentFunction()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Save Current Function is unavailable: compute/renderer disabled",
+                   events::Severity::Warning});
+            }
+            return;
+        }
         auto function = m_modelEditor.currentModel();
         if (!function)
         {
@@ -1115,6 +1264,15 @@ namespace gladius::ui
 
     void MainWindow::importImageStack()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent({"Import Image Stack is unavailable: compute/renderer disabled",
+                                    events::Severity::Warning});
+            }
+            return;
+        }
         // query directory
         const auto directory = queryDirectory();
         if (!directory.has_value())
@@ -1330,13 +1488,19 @@ namespace gladius::ui
             }
             ImGui::PopStyleColor(4);
 
-            // Show UI scale info on the right
+            // Show UI scale and compute status on the right
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 220.0f);
             ImGui::Text("UI %.2f (%.2f x %.2f)",
                         m_mainView.getUiScale(),
                         m_mainView.getBaseScale(),
                         m_mainView.getUserScale());
+
+            if (!m_computeAvailable)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.2f, 1.0f), "%s", "Compute: disabled");
+            }
         }
         ImGui::End();
 
@@ -2429,7 +2593,7 @@ namespace gladius::ui
 
     void MainWindow::saveRenderSettings()
     {
-        if (!m_configManager)
+        if (!m_configManager || !m_computeAvailable || !m_core)
         {
             return;
         }
@@ -2464,7 +2628,7 @@ namespace gladius::ui
 
     void MainWindow::loadRenderSettings()
     {
-        if (!m_configManager)
+        if (!m_configManager || !m_computeAvailable || !m_core)
         {
             return;
         }

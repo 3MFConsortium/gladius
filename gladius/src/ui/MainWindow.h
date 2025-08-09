@@ -60,6 +60,14 @@ namespace gladius::ui
         void setup();
 
         /**
+         * @brief Returns whether compute/rendering is available.
+         */
+        bool isComputeAvailable() const
+        {
+            return m_computeAvailable;
+        }
+
+        /**
          * @brief Initialize the shortcut system
          * Registers standard keyboard shortcuts for the application
          */
@@ -229,5 +237,10 @@ namespace gladius::ui
         // Shortcut system
         std::shared_ptr<ShortcutManager> m_shortcutManager;
         ShortcutSettingsDialog m_shortcutSettingsDialog;
+
+        // Compute availability flag. If false, UI runs in a limited mode without rendering.
+        bool m_computeAvailable{true};
+        // Optional message why compute is disabled.
+        std::string m_computeErrorMessage;
     };
 }

@@ -539,7 +539,12 @@ namespace gladius
     {
         if (filename.extension() == ".3mf")
         {
-            auto computeToken = m_core->waitForComputeToken();
+            // Only acquire a compute token if we need to render a thumbnail.
+            if (writeThumbnail)
+            {
+                auto computeToken = m_core->waitForComputeToken();
+                (void) computeToken; // suppress unused warning in Release
+            }
             io::saveTo3mfFile(filename, *this, writeThumbnail);
         }
 
