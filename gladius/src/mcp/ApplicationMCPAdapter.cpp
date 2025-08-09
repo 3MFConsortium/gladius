@@ -581,7 +581,11 @@ namespace gladius
                 return {false, 0};
             }
 
-            // Get the resource ID from the created model
+            // Persist to 3MF immediately to ensure the function gets a stable ModelResourceID
+            // and Gladius model resourceId is synchronized with the 3MF resource id
+            document->update3mfModel();
+
+            // Get the resource ID from the created model (now synchronized to ModelResourceID)
             uint32_t resourceId = model.getResourceId();
 
             // Success!
@@ -1264,7 +1268,18 @@ namespace gladius
             }
 
             // Get the function resource by ID
-            auto resource = model3mf->GetResourceByID(functionId);
+            // Note: Gladius uses lib3mf ModelResourceID as its ResourceId. lib3mf::GetResourceByID
+            // expects the UniqueResourceID. Convert before lookup to avoid mixing IDs.
+            Lib3MF_uint32 uniqueFunctionId = io::resourceIdToUniqueResourceId(
+              model3mf, static_cast<gladius::ResourceId>(functionId));
+            if (uniqueFunctionId == 0)
+            {
+                m_lastErrorMessage = "Could not resolve unique resource id for function id " +
+                                     std::to_string(functionId);
+                return {false, 0};
+            }
+
+            auto resource = model3mf->GetResourceByID(uniqueFunctionId);
             auto functionResource = dynamic_cast<Lib3MF::CFunction *>(resource.get());
             if (!functionResource)
             {
@@ -1299,8 +1314,9 @@ namespace gladius
             mesh->AddTriangle({v3, v6, v2});
             mesh->SetName("Bounding Box");
 
-            // Get the mesh resource ID before creating the levelset
-            uint32_t meshId = mesh->GetResourceID();
+            // Get the mesh ModelResourceID before creating the levelset (consistent with Gladius
+            // IDs)
+            uint32_t meshId = mesh->GetModelResourceID();
 
             // Create the levelset
             auto levelSet = model3mf->AddLevelSet();
@@ -1324,8 +1340,8 @@ namespace gladius
                 levelSet->SetChannelName(channelName);
             }
 
-            // Get the resource ID of the created levelset
-            uint32_t levelSetId = levelSet->GetResourceID();
+            // Get the ModelResourceID of the created levelset for returning to callers
+            uint32_t levelSetId = levelSet->GetModelResourceID();
 
             // Create an identity transform for the build item
             Lib3MF::sTransform identityTransform;
