@@ -10,24 +10,27 @@ namespace gladius
 {
     class ProgramBase
     {
-    public:
+      public:
         explicit ProgramBase(SharedComputeContext context, const SharedResources resources);
         void recompileNonBlocking();
         void recompileBlocking();
         void buildKernelLib() const;
 
-        void setOnProgramSwapCallBack(const std::function<void()>& callBack);
+        void setOnProgramSwapCallBack(const std::function<void()> & callBack);
         bool isCompilationInProgress() const;
         bool isValid() const;
 
-        void setModelKernel(const std::string& newModelKernelSource);
+        void setModelKernel(const std::string & newModelKernelSource);
         void setEnableVdb(bool enableVdb);
+
+        /// Set a shared logger that will be propagated to the underlying CLProgram
+        void setLogger(events::SharedLogger logger);
 
         void waitForCompilation() const;
 
         void dumpSource(std::filesystem::path const & path) const;
 
-    protected:
+      protected:
         void swapProgramsIfNeeded();
         static void noOp()
         {
@@ -47,5 +50,7 @@ namespace gladius
 
         FileNames m_sourceFilesProgram;
         FileNames m_sourceFilesLib;
+
+        events::SharedLogger m_logger{};
     };
 }

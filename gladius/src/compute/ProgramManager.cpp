@@ -50,6 +50,13 @@ namespace gladius
         m_slicerProgram = std::make_unique<SlicerProgram>(m_ComputeContext, m_resources);
         m_optimizedRenderProgram = std::make_unique<RenderProgram>(m_ComputeContext, m_resources);
 
+        // Propagate logger to programs so that CL diagnostics go to the event logger
+        if (m_eventLogger)
+        {
+            m_slicerProgram->setLogger(m_eventLogger);
+            m_optimizedRenderProgram->setLogger(m_eventLogger);
+        }
+
         m_optimizedRenderProgram->buildKernelLib();
         recompileIfRequired();
         LOG_LOCATION
@@ -193,12 +200,14 @@ namespace gladius
 
     void ProgramManager::logMsg(std::string msg) const
     {
-        if (!m_eventLogger)
+        if (m_eventLogger)
+        {
+            getLogger().addEvent({msg, events::Severity::Info});
+        }
+        else
         {
             std::cerr << msg << "\n";
-            return;
         }
-        getLogger().addEvent({std::move(msg), events::Severity::Info});
     }
 
     events::Logger & ProgramManager::getLogger() const

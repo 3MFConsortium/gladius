@@ -362,10 +362,10 @@ namespace gladius::ui
             auto const isAssembly =
               model.second->getResourceId() == m_assembly->assemblyModel()->getResourceId();
 
-            if (isAssembly)
-            {
-                continue;
-            }
+            // if (isAssembly)
+            // {
+            //     continue;
+            // }
 
             auto & modelName = model.first;
             auto uid = &modelName;

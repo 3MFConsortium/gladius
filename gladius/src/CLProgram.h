@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ComputeContext.h"
+#include "EventLogger.h"
 #include "gpgpu.h"
 
 #include <future>
@@ -57,6 +58,18 @@ namespace gladius
       public:
         CLProgram(SharedComputeContext context);
 
+        /// Set the shared event logger used for diagnostics
+        void setLogger(events::SharedLogger logger)
+        {
+            m_logger = std::move(logger);
+        }
+
+        /// Get the shared event logger
+        [[nodiscard]] events::SharedLogger getSharedLogger() const
+        {
+            return m_logger;
+        }
+
         void loadSourceFromFile(const FileNames & filenames);
 
         void addSource(const std::string & source);
@@ -92,7 +105,59 @@ namespace gladius
                 if (err != CL_SUCCESS)
                 {
                     m_ComputeContext->invalidate();
-                    std::cout << "Creating kernel for " << methodName << "(..) failed\n";
+                    if (m_logger)
+                    {
+                        m_logger->logError("OpenCL: Creating kernel '" + methodName +
+                                           "' failed (error: " + std::to_string(err) + ")");
+                    }
+                    else
+                    {
+                        std::cerr << "OpenCL: Creating kernel '" << methodName
+                                  << "' failed (error: " << err << ")\n";
+                    }
+                    try
+                    {
+                        // Provide diagnostics about the program and attempted kernel
+                        auto const & device = m_ComputeContext->GetDevice();
+                        auto const devName = device.getInfo<CL_DEVICE_NAME>();
+                        if (m_logger)
+                        {
+                            m_logger->logError(std::string("  Device      : ") + devName);
+                        }
+                        else
+                        {
+                            std::cerr << "  Device      : " << devName << "\n";
+                        }
+                        if (m_program)
+                        {
+                            // Best effort: show available kernel names
+                            try
+                            {
+                                auto const kernelNames =
+                                  m_program->getInfo<CL_PROGRAM_KERNEL_NAMES>();
+                                if (!kernelNames.empty())
+                                {
+                                    if (m_logger)
+                                    {
+                                        m_logger->logError(std::string("  Program kernels: ") +
+                                                           kernelNames);
+                                    }
+                                    else
+                                    {
+                                        std::cerr << "  Program kernels: " << kernelNames << "\n";
+                                    }
+                                }
+                            }
+                            catch (...)
+                            {
+                                // ignore
+                            }
+                        }
+                    }
+                    catch (...)
+                    {
+                        // swallow diagnostics exceptions
+                    }
                 }
                 CL_ERROR(err);
             }
@@ -179,6 +244,7 @@ namespace gladius
         std::unique_ptr<cl::Program> m_lib;
         cl::Program::Sources m_sources;
         SharedComputeContext m_ComputeContext;
+        events::SharedLogger m_logger{};
 
         std::map<std::string, cl::Kernel> m_kernels;
         std::atomic<bool> m_valid{false};

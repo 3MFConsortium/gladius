@@ -1,7 +1,7 @@
 #include "RenderProgram.h"
-#include "gpgpu.h"
-#include "ProgramBase.h"
 #include "Profiling.h"
+#include "ProgramBase.h"
+#include "gpgpu.h"
 
 #include <CL/cl_platform.h>
 #include <algorithm>
@@ -38,7 +38,7 @@ namespace gladius
             return;
         }
         swapProgramsIfNeeded();
-        
+
         if (startHeight >= endHeight)
         {
             return;
@@ -90,7 +90,14 @@ namespace gladius
         }
         catch (std::exception const & e)
         {
-            std::cerr << (e.what());
+            if (m_logger)
+            {
+                m_logger->logError(std::string("RenderProgram error: ") + e.what());
+            }
+            else
+            {
+                std::cerr << e.what();
+            }
         }
     }
 

@@ -1,8 +1,8 @@
 #include "ProgramBase.h"
 
+#include "Profiling.h"
 #include <fmt/format.h>
 #include <string>
-#include "Profiling.h"
 
 #include "exceptions.h"
 
@@ -13,6 +13,10 @@ namespace gladius
         , m_programFront(std::make_unique<CLProgram>(context))
         , m_resoures(resources)
     {
+        if (m_logger)
+        {
+            m_programFront->setLogger(m_logger);
+        }
         m_sourceFilesProgram = {"arguments.h",
                                 "types.h",
                                 "sdf.h",
@@ -46,8 +50,7 @@ namespace gladius
 
     void ProgramBase::waitForCompilation() const
     {
-        ProfileFunction
-        if (!m_ComputeContext->isValid())
+        ProfileFunction if (!m_ComputeContext->isValid())
         {
             return;
         }
@@ -56,8 +59,7 @@ namespace gladius
 
     void ProgramBase::dumpSource(std::filesystem::path const & path) const
     {
-        ProfileFunction
-        m_programFront->dumpSource(path);
+        ProfileFunction m_programFront->dumpSource(path);
     }
 
     void ProgramBase::recompileNonBlocking()
@@ -67,7 +69,14 @@ namespace gladius
         {
             if (m_modelKernel.empty())
             {
-                std::cerr << "aborting compilation: No model source set\n";
+                if (m_logger)
+                {
+                    m_logger->logWarning("Aborting compilation: No model source set");
+                }
+                else
+                {
+                    std::cerr << "aborting compilation: No model source set\n";
+                }
                 return;
             }
 
@@ -82,7 +91,7 @@ namespace gladius
 
             m_buildFinishedCallBack = [&]() { m_programSwapRequired = true; };
             m_programFront->clearSources();
-            
+
             if (m_isFirstBuild)
             {
                 m_isFirstBuild = false;
@@ -109,10 +118,16 @@ namespace gladius
 
     void ProgramBase::recompileBlocking()
     {
-        ProfileFunction
-        if (m_modelKernel.empty())
+        ProfileFunction if (m_modelKernel.empty())
         {
-            std::cerr << "aborting compilation: No model source set\n";
+            if (m_logger)
+            {
+                m_logger->logWarning("Aborting compilation: No model source set");
+            }
+            else
+            {
+                std::cerr << "aborting compilation: No model source set\n";
+            }
             return;
         }
 
@@ -127,7 +142,7 @@ namespace gladius
 
         m_programFront->clearSources();
         m_programFront->buildFromSourceAndLinkWithLib(
-                m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
+          m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
         m_programSwapRequired = true;
         swapProgramsIfNeeded();
         m_isFirstBuild = false;
@@ -135,8 +150,7 @@ namespace gladius
 
     void ProgramBase::buildKernelLib() const
     {
-        ProfileFunction
-        m_programFront->clearSources();
+        ProfileFunction m_programFront->clearSources();
 
         m_programFront->loadAndCompileLib(m_sourceFilesLib);
     }
@@ -169,5 +183,14 @@ namespace gladius
     void ProgramBase::setEnableVdb(bool enableVdb)
     {
         m_enableVdb = enableVdb;
+    }
+
+    void ProgramBase::setLogger(events::SharedLogger logger)
+    {
+        m_logger = std::move(logger);
+        if (m_programFront)
+        {
+            m_programFront->setLogger(m_logger);
+        }
     }
 }

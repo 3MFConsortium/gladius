@@ -14,16 +14,128 @@ CMRC_DECLARE(gladius_resources);
 
 namespace gladius
 {
-    void printBuildStatus(const cl::Program & program, const cl::Device & device)
+    namespace
     {
-        cl_int buildStatus = 0;
-        program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device, &buildStatus);
-        const bool buildWasSuccessful = buildStatus == CL_SUCCESS;
-        if (!buildWasSuccessful)
+        // Print detailed program diagnostics for the current device
+        std::string makeProgramDiagnostics(const cl::Program & program,
+                                           const cl::Device & device,
+                                           std::string const & buildOptions,
+                                           std::string const & contextHint = {})
         {
-            std::cerr << "Build failed\n";
-            std::cerr << "\n\n Kernel build info: \n"
-                      << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+            std::ostringstream out;
+            try
+            {
+                auto const devName = device.getInfo<CL_DEVICE_NAME>();
+                auto const vendor = device.getInfo<CL_DEVICE_VENDOR>();
+                auto const version = device.getInfo<CL_DEVICE_VERSION>();
+                out << "[OpenCL Diagnostics]";
+                if (!contextHint.empty())
+                    out << " (" << contextHint << ")";
+                out << "\n  Device      : " << devName << "\n  Vendor      : " << vendor
+                    << "\n  Version     : " << version << "\n  Build opts  : "
+                    << (buildOptions.empty() ? std::string("<none>") : buildOptions) << "\n";
+
+                // Kernel metadata
+                try
+                {
+                    auto const numKernels = program.getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    out << "  Num kernels : " << numKernels << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+                try
+                {
+                    auto const kernelNames = program.getInfo<CL_PROGRAM_KERNEL_NAMES>();
+                    if (!kernelNames.empty())
+                        out << "  Kernels     : " << kernelNames << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+
+                // Binary type and build status/log
+                try
+                {
+                    cl_program_binary_type binType{};
+                    program.getBuildInfo(device, CL_PROGRAM_BINARY_TYPE, &binType);
+                    std::string binTypeStr =
+                      (binType == CL_PROGRAM_BINARY_TYPE_NONE)              ? "NONE"
+                      : (binType == CL_PROGRAM_BINARY_TYPE_COMPILED_OBJECT) ? "COMPILED_OBJECT"
+                      : (binType == CL_PROGRAM_BINARY_TYPE_LIBRARY)         ? "LIBRARY"
+                      : (binType == CL_PROGRAM_BINARY_TYPE_EXECUTABLE)      ? "EXECUTABLE"
+                                                                            : "UNKNOWN";
+                    out << "  Binary type : " << binTypeStr << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+
+                try
+                {
+                    auto const status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+                    std::string statusStr = (status == CL_BUILD_NONE)          ? "NONE"
+                                            : (status == CL_BUILD_ERROR)       ? "ERROR"
+                                            : (status == CL_BUILD_SUCCESS)     ? "SUCCESS"
+                                            : (status == CL_BUILD_IN_PROGRESS) ? "IN_PROGRESS"
+                                                                               : "UNKNOWN";
+                    out << "  Build status: " << statusStr << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+
+                try
+                {
+                    out << "\n  Build log  :\n"
+                        << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+            }
+            catch (...)
+            {
+                // best-effort diagnostics only
+            }
+            return out.str();
+        }
+
+        // Log build status and log output if the build failed
+        void logBuildStatusIfFailed(const cl::Program & program,
+                                    const cl::Device & device,
+                                    events::SharedLogger const & logger)
+        {
+            try
+            {
+                auto const status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+                if (status != CL_BUILD_SUCCESS)
+                {
+                    std::string const buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+                    if (logger)
+                    {
+                        logger->logError("OpenCL: Build failed");
+                        if (!buildLog.empty())
+                        {
+                            logger->logError(std::string("Build log:\n") + buildLog);
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "Build failed\n";
+                        std::cerr << "\n\n Kernel build info: \n" << buildLog << std::endl;
+                    }
+                }
+            }
+            catch (...)
+            {
+                // best-effort
+            }
         }
     }
 
@@ -36,12 +148,11 @@ namespace gladius
 
         const auto data = reinterpret_cast<CallBackUserData *>(userData);
         bool buildWasSuccessful = false;
-        cl_int buildStatus = 0;
         if ((data->program != nullptr) && (data->computeContext != nullptr))
         {
-            printBuildStatus(*data->program, data->computeContext->GetDevice());
-            data->program->getBuildInfo<CL_PROGRAM_BUILD_STATUS>(&buildStatus);
-            buildWasSuccessful = buildStatus == CL_SUCCESS;
+            auto const status = data->program->getBuildInfo<CL_PROGRAM_BUILD_STATUS>(
+              data->computeContext->GetDevice());
+            buildWasSuccessful = (status == CL_BUILD_SUCCESS);
         }
 
         if ((data->callBack != nullptr) && data->callBack->has_value())
@@ -74,7 +185,15 @@ namespace gladius
             const auto resourceFilename = std::string("src/kernel/" + filename);
             if (!fs.exists(resourceFilename) || !fs.is_file(resourceFilename))
             {
-                std::cerr << "missing file in resources: " << resourceFilename << "\n";
+                if (m_logger)
+                {
+                    m_logger->logError(std::string("Missing file in resources: ") +
+                                       resourceFilename);
+                }
+                else
+                {
+                    std::cerr << "missing file in resources: " << resourceFilename << "\n";
+                }
                 throw std::runtime_error("missing file in resources: " + resourceFilename);
             }
 
@@ -131,19 +250,29 @@ namespace gladius
         for (auto & prog : progsToLink)
         {
             prog.compile(arguments.c_str());
-            printBuildStatus(prog, m_ComputeContext->GetDevice());
+            logBuildStatusIfFailed(prog, m_ComputeContext->GetDevice(), m_logger);
         }
         m_lib = std::make_unique<cl::Program>(
           linkProgram(progsToLink, "-create-library -enable-link-options"));
-        printBuildStatus(*m_lib, m_ComputeContext->GetDevice());
+        logBuildStatusIfFailed(*m_lib, m_ComputeContext->GetDevice(), m_logger);
     }
 
     std::string CLProgram::generateDefineSymbol() const
     {
         ProfileFunction std::stringstream args;
-        if (m_useFastRelaxedMath)
+
+        // Allow overriding build flags for debugging via environment variable
+        const char * debugFlags = std::getenv("GLADIUS_OPENCL_BUILD_FLAGS");
+        if (debugFlags && std::string(debugFlags).size() > 0)
         {
-            args << " -cl-fast-relaxed-math";
+            args << ' ' << debugFlags;
+        }
+        else
+        {
+            if (m_useFastRelaxedMath)
+            {
+                args << " -cl-fast-relaxed-math";
+            }
         }
 
         for (const auto & symbol : m_symbols)
@@ -230,7 +359,11 @@ namespace gladius
 
         const auto arguments = generateDefineSymbol();
 
-        std::cerr << "Compiling program with " << numberOfLines(m_sources) << " lines\n";
+        if (m_logger)
+        {
+            m_logger->logInfo("OpenCL: Compiling program (" +
+                              std::to_string(numberOfLines(m_sources)) + " lines)");
+        }
 
         m_callBackUserData.computeContext = m_ComputeContext.get();
         m_callBackUserData.callBack = &callBack;
@@ -242,11 +375,24 @@ namespace gladius
             // dumpSource("debug.cl");
             m_program->build({m_ComputeContext->GetDevice()}, arguments.c_str(), nullptr, nullptr);
             m_hashLastSuccessfulCompilation = computeHash();
+
+            // Always print build status (and logs on failure)
+            logBuildStatusIfFailed(*m_program, m_ComputeContext->GetDevice(), m_logger);
         }
         catch (const std::exception & e)
         {
             m_ComputeContext->invalidate();
-            std::cerr << e.what() << '\n';
+            const auto diag = makeProgramDiagnostics(
+              *m_program, m_ComputeContext->GetDevice(), arguments, "compile(build)");
+            if (m_logger)
+            {
+                m_logger->logError(std::string("OpenCL build failed: ") + e.what());
+                m_logger->logError(diag);
+            }
+            else
+            {
+                std::cerr << e.what() << '\n' << diag << '\n';
+            }
         }
 
         m_isCompilationInProgress = false;
@@ -289,15 +435,25 @@ namespace gladius
             catch (const std::exception & e)
             {
                 m_ComputeContext->invalidate();
-                std::cerr << e.what() << '\n';
+                if (m_logger)
+                {
+                    m_logger->logError(std::string("OpenCL compile failed: ") + e.what());
+                    const auto diag = makeProgramDiagnostics(
+                      prog, m_ComputeContext->GetDevice(), arguments, "compile(lib)");
+                    m_logger->logError(diag);
+                }
+                else
+                {
+                    std::cerr << e.what() << '\n';
+                }
             }
 
-            printBuildStatus(prog, m_ComputeContext->GetDevice());
+            logBuildStatusIfFailed(prog, m_ComputeContext->GetDevice(), m_logger);
         }
         progsToLink.push_back(*m_lib);
 
         m_program = std::make_unique<cl::Program>(linkProgram(progsToLink));
-        printBuildStatus(*m_program, m_ComputeContext->GetDevice());
+        logBuildStatusIfFailed(*m_program, m_ComputeContext->GetDevice(), m_logger);
 
         m_callBackUserData.computeContext = m_ComputeContext.get();
         m_callBackUserData.callBack = &callBack;

@@ -268,6 +268,7 @@ namespace gladius::ui
             // Handle any OpenCL-related errors gracefully
             m_computeAvailable = false;
             m_computeErrorMessage = e.what();
+            m_showComputeErrorModal = true;
             if (m_logger)
             {
                 m_logger->addEvent(
@@ -278,6 +279,7 @@ namespace gladius::ui
         {
             m_computeAvailable = false;
             m_computeErrorMessage = e.what();
+            m_showComputeErrorModal = true;
             if (m_logger)
             {
                 m_logger->addEvent(
@@ -1499,12 +1501,104 @@ namespace gladius::ui
             if (!m_computeAvailable)
             {
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.2f, 1.0f), "%s", "Compute: disabled");
+                if (ImGui::SmallButton("Compute: disabled"))
+                {
+                    m_showComputeErrorModal = true;
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::TextUnformatted("OpenCL/compute unavailable. Click for details.");
+                    if (!m_computeErrorMessage.empty())
+                    {
+                        ImGui::Separator();
+                        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 50.0f);
+                        ImGui::TextWrapped("%s", m_computeErrorMessage.c_str());
+                        ImGui::PopTextWrapPos();
+                    }
+                    ImGui::EndTooltip();
+                }
             }
         }
         ImGui::End();
 
         ImGui::PopStyleVar(3);
+
+        // Compute error details modal
+        if (m_showComputeErrorModal)
+        {
+            if (!ImGui::IsPopupOpen("OpenCL/Compute Unavailable"))
+            {
+                ImGui::OpenPopup("OpenCL/Compute Unavailable");
+            }
+            if (ImGui::BeginPopupModal("OpenCL/Compute Unavailable",
+                                       &m_showComputeErrorModal,
+                                       ImGuiWindowFlags_AlwaysAutoResize |
+                                         ImGuiWindowFlags_NoSavedSettings))
+            {
+                ImGui::TextWrapped("Gladius couldn't initialize OpenCL. The UI stays usable, but "
+                                   "rendering and slicing are disabled.");
+                ImGui::Separator();
+                if (!m_computeErrorMessage.empty())
+                {
+                    ImGui::TextUnformatted("Details:");
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+                    ImGui::BeginChild("##oclErrDetails", ImVec2(600, 160), true);
+                    ImGui::PushTextWrapPos();
+                    ImGui::TextWrapped("%s", m_computeErrorMessage.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndChild();
+                    ImGui::PopStyleColor(2);
+                }
+                ImGui::Spacing();
+                if (ImGui::Button("Retry Initialization"))
+                {
+                    try
+                    {
+                        const auto context =
+                          std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+                        if (!context->isValid())
+                        {
+                            throw OpenCLContextCreationError("Context invalid after retry");
+                        }
+                        if (!m_core)
+                        {
+                            m_core = std::make_shared<ComputeCore>(
+                              context, RequiredCapabilities::OpenGLInterop, m_logger);
+                            m_doc = std::make_shared<Document>(m_core);
+                        }
+                        else
+                        {
+                            m_core->setComputeContext(context);
+                        }
+                        m_computeAvailable = true;
+                        m_computeErrorMessage.clear();
+                        m_showComputeErrorModal = false;
+                        loadRenderSettings();
+                    }
+                    catch (const std::exception & e)
+                    {
+                        m_computeAvailable = false;
+                        m_computeErrorMessage = e.what();
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Copy Details"))
+                {
+                    std::string details = m_computeErrorMessage.empty()
+                                            ? std::string("No details available")
+                                            : m_computeErrorMessage;
+                    ImGui::SetClipboardText(details.c_str());
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Close"))
+                {
+                    m_showComputeErrorModal = false;
+                }
+                ImGui::EndPopup();
+            }
+        }
     }
 
     void MainWindow::showSaveBeforeFileOperationPopUp()

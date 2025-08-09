@@ -242,5 +242,7 @@ namespace gladius::ui
         bool m_computeAvailable{true};
         // Optional message why compute is disabled.
         std::string m_computeErrorMessage;
+        // Controls visibility of the compute error details modal
+        bool m_showComputeErrorModal{false};
     };
 }
