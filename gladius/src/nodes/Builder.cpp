@@ -60,9 +60,12 @@ namespace gladius::nodes
         maxVecNode->parameter().at(FieldNames::Y) = VariantParameter(boundingBox.max.y);
         maxVecNode->parameter().at(FieldNames::Z) = VariantParameter(boundingBox.max.z);
 
-
-        boxNode->parameter().at(FieldNames::Min).setInputFromPort(minVecNode->getOutputs().at(FieldNames::Vector));
-        boxNode->parameter().at(FieldNames::Max).setInputFromPort(maxVecNode->getOutputs().at(FieldNames::Vector));
+        boxNode->parameter()
+          .at(FieldNames::Min)
+          .setInputFromPort(minVecNode->getOutputs().at(FieldNames::Vector));
+        boxNode->parameter()
+          .at(FieldNames::Max)
+          .setInputFromPort(maxVecNode->getOutputs().at(FieldNames::Vector));
 
         auto lastShapePort = getLastShape(target);
         auto shapeSink = target.getEndNode()->getParameter(FieldNames::Shape);
@@ -128,7 +131,7 @@ namespace gladius::nodes
     void Builder::appendIntersectionWithFunction(Model & target,
                                                  Model & referencedModel,
                                                  nodes::Port & coordinateSystemPort,
-                                                 std::string const& sdfChannelName)
+                                                 std::string const & sdfChannelName)
     {
         nodes::Resource resourceNodeType;
         auto resourceNode = target.create(resourceNodeType);
@@ -159,7 +162,8 @@ namespace gladius::nodes
         auto iterShapeOutput = functionCallNode->getOutputs().find(sdfChannelName);
         if (iterShapeOutput == std::end(functionCallNode->getOutputs()))
         {
-            throw std::runtime_error(fmt::format("Entry function has no output with the name", sdfChannelName));
+            throw std::runtime_error(
+              fmt::format("Entry function has no output with the name {}", sdfChannelName));
         }
 
         if (iterShapeOutput->second.getTypeIndex() != nodes::ParameterTypeIndex::Float)

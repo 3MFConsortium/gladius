@@ -551,11 +551,14 @@ namespace gladius
 
             // Create function output specification
             FunctionOutput output;
-            output.name = outputName.empty() ? "result" : outputName;
+            output.name = outputName.empty() ? "shape" : outputName;
             output.type = (outputType == "vec3") ? ArgumentType::Vector : ArgumentType::Scalar;
 
             // Create a new function model and get reference to it
             auto & model = document->createNewFunction();
+
+            // Set the display name for the function
+            model.setDisplayName(name);
 
             // Convert expression to node graph
             auto resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
@@ -1238,12 +1241,119 @@ namespace gladius
             return {false, 0};
         }
 
-        // TODO: Implement actual level set creation when API is available
-        // For now, return a placeholder resource ID
-        m_lastErrorMessage =
-          "Level set would be created from function ID: " + std::to_string(functionId) +
-          " with resolution: " + std::to_string(meshResolution);
-        return {true, functionId + 1000}; // Placeholder: offset function ID for level set ID
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                m_lastErrorMessage = "No active document available";
+                return {false, 0};
+            }
+
+            // Update the 3MF model to ensure all resources are up to date
+            document->update3mfModel();
+
+            // Update the assembly to process function graphs and outputs
+            document->getAssembly()->updateInputsAndOutputs();
+
+            auto model3mf = document->get3mfModel();
+            if (!model3mf)
+            {
+                m_lastErrorMessage = "No 3MF model available";
+                return {false, 0};
+            }
+
+            // Get the function resource by ID
+            auto resource = model3mf->GetResourceByID(functionId);
+            auto functionResource = dynamic_cast<Lib3MF::CFunction *>(resource.get());
+            if (!functionResource)
+            {
+                m_lastErrorMessage = "Function with ID " + std::to_string(functionId) +
+                                     " not found or is not a function";
+                return {false, 0};
+            }
+
+            // Create a bounding box mesh for the levelset
+            auto mesh = model3mf->AddMeshObject();
+            // Create a simple bounding box from -10 to 10 in all dimensions
+            auto v0 = mesh->AddVertex({-10.0f, -10.0f, -10.0f});
+            auto v1 = mesh->AddVertex({10.0f, -10.0f, -10.0f});
+            auto v2 = mesh->AddVertex({10.0f, 10.0f, -10.0f});
+            auto v3 = mesh->AddVertex({-10.0f, 10.0f, -10.0f});
+            auto v4 = mesh->AddVertex({-10.0f, -10.0f, 10.0f});
+            auto v5 = mesh->AddVertex({10.0f, -10.0f, 10.0f});
+            auto v6 = mesh->AddVertex({10.0f, 10.0f, 10.0f});
+            auto v7 = mesh->AddVertex({-10.0f, 10.0f, 10.0f});
+
+            mesh->AddTriangle({v0, v1, v2});
+            mesh->AddTriangle({v0, v2, v3});
+            mesh->AddTriangle({v4, v5, v6});
+            mesh->AddTriangle({v4, v6, v7});
+            mesh->AddTriangle({v0, v4, v7});
+            mesh->AddTriangle({v0, v7, v3});
+            mesh->AddTriangle({v1, v5, v6});
+            mesh->AddTriangle({v1, v6, v2});
+            mesh->AddTriangle({v0, v1, v5});
+            mesh->AddTriangle({v0, v5, v4});
+            mesh->AddTriangle({v3, v7, v6});
+            mesh->AddTriangle({v3, v6, v2});
+            mesh->SetName("Bounding Box");
+
+            // Get the mesh resource ID before creating the levelset
+            uint32_t meshId = mesh->GetResourceID();
+
+            // Create the levelset
+            auto levelSet = model3mf->AddLevelSet();
+            levelSet->SetFunction(functionResource);
+            levelSet->SetMesh(mesh.get());
+            levelSet->SetMeshBBoxOnly(true);
+            levelSet->SetMinFeatureSize(0.1f);
+            levelSet->SetFallBackValue(0.0f);
+
+            // Try to determine the correct channel name
+            // First try "shape", then fall back to "result" if that fails
+            std::string channelName = "shape";
+            try
+            {
+                levelSet->SetChannelName(channelName);
+            }
+            catch (...)
+            {
+                // If "shape" fails, try "result"
+                channelName = "result";
+                levelSet->SetChannelName(channelName);
+            }
+
+            // Get the resource ID of the created levelset
+            uint32_t levelSetId = levelSet->GetResourceID();
+
+            // Create an identity transform for the build item
+            Lib3MF::sTransform identityTransform;
+            for (int i = 0; i < 4; i++)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    identityTransform.m_Fields[i][j] = (i == j) ? 1.0f : 0.0f;
+                }
+            }
+
+            // Add a build item that references the levelset
+            auto buildItem = model3mf->AddBuildItem(levelSet.get(), identityTransform);
+
+            // Update the document from the 3MF model
+            document->updateDocumenFrom3mfModel();
+
+            m_lastErrorMessage =
+              "Level set created successfully from function ID: " + std::to_string(functionId) +
+              " with resolution: " + std::to_string(meshResolution) +
+              " using mesh ID: " + std::to_string(meshId);
+            return {true, levelSetId};
+        }
+        catch (const std::exception & e)
+        {
+            m_lastErrorMessage = "Exception during level set creation: " + std::string(e.what());
+            return {false, 0};
+        }
     }
 
     std::pair<bool, uint32_t>
