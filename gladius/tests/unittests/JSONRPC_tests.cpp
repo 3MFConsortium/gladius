@@ -169,6 +169,13 @@ namespace gladius::tests
         {
             return nlohmann::json{{"name", "mock_document"}};
         }
+        nlohmann::json get3MFStructure() const override
+        {
+            return nlohmann::json{{"has_document", false},
+                                  {"build_items", nlohmann::json::array()},
+                                  {"resources", nlohmann::json::array()},
+                                  {"counts", {}}};
+        }
         std::vector<std::string> listAvailableFunctions() const override
         {
             return {};
