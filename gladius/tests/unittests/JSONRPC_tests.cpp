@@ -176,6 +176,14 @@ namespace gladius::tests
                                   {"resources", nlohmann::json::array()},
                                   {"counts", {}}};
         }
+        nlohmann::json getFunctionGraph(uint32_t functionId) const override
+        {
+            // Minimal mock: return an empty graph with the given id
+            return nlohmann::json{{"model", {{"resource_id", functionId}}},
+                                  {"nodes", nlohmann::json::array()},
+                                  {"links", nlohmann::json::array()},
+                                  {"counts", {{"nodes", 0}, {"links", 0}}}};
+        }
         std::vector<std::string> listAvailableFunctions() const override
         {
             return {};

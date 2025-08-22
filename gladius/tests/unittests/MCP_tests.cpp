@@ -103,6 +103,7 @@ namespace gladius::tests
         MOCK_METHOD(nlohmann::json, getSceneHierarchy, (), (const, override));
         MOCK_METHOD(nlohmann::json, getDocumentInfo, (), (const, override));
         MOCK_METHOD(nlohmann::json, get3MFStructure, (), (const, override));
+        MOCK_METHOD(nlohmann::json, getFunctionGraph, (uint32_t), (const, override));
         MOCK_METHOD(std::vector<std::string>, listAvailableFunctions, (), (const, override));
         MOCK_METHOD(nlohmann::json,
                     validateForManufacturing,

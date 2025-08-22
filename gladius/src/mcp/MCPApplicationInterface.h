@@ -125,6 +125,18 @@ namespace gladius
          */
         virtual nlohmann::json get3MFStructure() const = 0;
 
+        /**
+         * @brief Serialize and return the node graph of a function (model) as JSON.
+         *
+         * The function can be addressed by its ModelResourceID (resource id in 3MF), which
+         * corresponds to the model id used throughout Gladius. Returns an error if the
+         * model does not exist.
+         *
+         * @param functionId ModelResourceID of the function (model) to serialize.
+         * @return JSON with nodes, parameters, outputs and links.
+         */
+        virtual nlohmann::json getFunctionGraph(uint32_t functionId) const = 0;
+
         // Manufacturing validation
         virtual nlohmann::json
         validateForManufacturing(const std::vector<std::string> & functionNames = {},

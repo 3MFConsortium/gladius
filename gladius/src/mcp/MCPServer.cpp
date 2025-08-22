@@ -391,6 +391,32 @@ namespace gladius::mcp
               return result;
           });
 
+        // FUNCTION GRAPH INTROSPECTION
+        registerTool(
+          "get_function_graph",
+          "Get the node graph of a function (model) as JSON for introspection/visualization",
+          {{"type", "object"},
+           {"properties",
+            {{"function_id",
+              {{"type", "integer"},
+               {"description",
+                "ModelResourceID of the function (model) to serialize (from "
+                "get_3mf_structure)"}}}}},
+           {"required", {"function_id"}}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              if (!params.contains("function_id"))
+              {
+                  return {{"success", false}, {"error", "Missing required parameter: function_id"}};
+              }
+              uint32_t function_id = params["function_id"];
+              return m_application->getFunctionGraph(function_id);
+          });
+
         registerTool(
           "ping",
           "Simple ping tool to test connectivity",

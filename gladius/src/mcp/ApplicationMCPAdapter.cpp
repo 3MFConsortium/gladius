@@ -10,6 +10,7 @@
 #include "../ExpressionToGraphConverter.h"
 #include "../io/3mf/ResourceIdUtil.h"
 #include "CoroMCPAdapter.h"
+#include "FunctionGraphSerializer.h"
 #include <array>
 #include <filesystem> // Only include here, not in header
 #include <nlohmann/json.hpp>
@@ -1551,6 +1552,59 @@ namespace gladius
         }
 
         return out;
+    }
+
+    nlohmann::json ApplicationMCPAdapter::getFunctionGraph(uint32_t functionId) const
+    {
+        nlohmann::json out;
+        out["requested_function_id"] = functionId;
+
+        if (!m_application)
+        {
+            out["success"] = false;
+            out["error"] = "No application instance available";
+            return out;
+        }
+
+        auto document = m_application->getCurrentDocument();
+        if (!document)
+        {
+            out["success"] = false;
+            out["error"] = "No active document available";
+            return out;
+        }
+
+        try
+        {
+            auto assembly = document->getAssembly();
+            if (!assembly)
+            {
+                out["success"] = false;
+                out["error"] = "No assembly available";
+                return out;
+            }
+
+            auto model = assembly->findModel(functionId);
+            if (!model)
+            {
+                out["success"] = false;
+                out["error"] = "Function (model) not found for id";
+                return out;
+            }
+
+            // Ensure parameters and graph are up-to-date
+            const_cast<nodes::Model &>(*model).updateGraphAndOrderIfNeeded();
+
+            auto j = FunctionGraphSerializer::serialize(*model);
+            j["success"] = true;
+            return j;
+        }
+        catch (const std::exception & e)
+        {
+            out["success"] = false;
+            out["error"] = std::string("Exception while serializing function graph: ") + e.what();
+            return out;
+        }
     }
 
     nlohmann::json

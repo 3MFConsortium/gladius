@@ -119,6 +119,7 @@ namespace gladius
         nlohmann::json getDocumentInfo() const override;
         std::vector<std::string> listAvailableFunctions() const override;
         nlohmann::json get3MFStructure() const override;
+        nlohmann::json getFunctionGraph(uint32_t functionId) const override;
 
         // Manufacturing validation
         nlohmann::json
