@@ -313,11 +313,25 @@ namespace gladius
             }
         }
 
-        // Handle unary minus operator
+        // If the entire expression is a number (including a leading negative sign),
+        // create a constant node directly. This must happen BEFORE generic unary minus handling
+        // so that "-3" becomes a single ConstantScalar with value -3 rather than (-1 * 3).
+        try
+        {
+            // std::stod throws if the whole string is not a valid number
+            double value = std::stod(cleanExpr);
+            return createConstantNode(value, model);
+        }
+        catch (...)
+        {
+            // Not a pure number; continue parsing
+        }
+
+        // Handle unary minus operator as a fallback (e.g., "-x", "-(x+y)")
         if (cleanExpr.length() > 1 && cleanExpr[0] == '-')
         {
-            // Check if this is a unary minus (not a subtraction)
-            // It's unary if it's at the start or follows an operator or opening parenthesis
+            // Only treat as unary minus if it is not immediately followed by an operator
+            // (numeric literals like "-3" were already handled above).
             std::string innerExpr = cleanExpr.substr(1);
             nodes::NodeId innerNode = parseAndBuildGraph(innerExpr, model, variableNodes);
             if (innerNode == 0)
@@ -380,16 +394,7 @@ namespace gladius
             return varIt->second;
         }
 
-        // Check if it's a number
-        try
-        {
-            double value = std::stod(cleanExpr);
-            return createConstantNode(value, model);
-        }
-        catch (...)
-        {
-            // Not a number, continue parsing
-        }
+        // Note: numeric literal case already handled earlier
 
         // Find the main operator
         auto [operatorPos, operatorChar] = findMainOperator(cleanExpr);
@@ -722,6 +727,20 @@ namespace gladius
                 depth--;
             else if (depth == 0 && isOperator(c))
             {
+                // Skip unary minus occurrences (e.g., at the beginning or after another
+                // operator/paren)
+                if (c == '-')
+                {
+                    if (i == 0)
+                    {
+                        continue; // leading '-' is unary
+                    }
+                    char prev = expr[i - 1];
+                    if (prev == '(' || isOperator(prev))
+                    {
+                        continue; // unary minus; not a binary operator to split on
+                    }
+                }
                 int precedence = getOperatorPrecedence(c);
                 if (precedence <= minPrecedence)
                 {
