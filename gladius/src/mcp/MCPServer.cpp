@@ -571,25 +571,17 @@ namespace gladius::mcp
           {{"type", "object"},
            {"properties",
             {{"function_id",
-              {{"type", "integer"}, {"description", "Resource ID of the volumetric function"}}},
-             {"mesh_resolution",
-              {{"type", "integer"},
-               {"minimum", 16},
-               {"maximum", 512},
-               {"description", "Resolution for the evaluation domain"}}}}},
+              {{"type", "integer"}, {"description", "Resource ID of the volumetric function"}}}}},
            {"required", {"function_id"}}},
           [this](const json & params) -> json
           {
               uint32_t function_id = params["function_id"];
-              int resolution = params.value("mesh_resolution", 64);
-
-              auto result = m_application->createLevelSet(function_id, resolution);
+              auto result = m_application->createLevelSet(function_id);
 
               if (result.first)
               {
                   return {{"success", true},
                           {"function_id", function_id},
-                          {"resolution", resolution},
                           {"resource_id", result.second}};
               }
               else

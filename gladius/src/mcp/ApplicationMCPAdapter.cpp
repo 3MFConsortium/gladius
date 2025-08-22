@@ -1672,8 +1672,7 @@ namespace gladius
     }
 
     // 3MF Resource creation methods implementation
-    std::pair<bool, uint32_t> ApplicationMCPAdapter::createLevelSet(uint32_t functionId,
-                                                                    int meshResolution)
+    std::pair<bool, uint32_t> ApplicationMCPAdapter::createLevelSet(uint32_t functionId)
     {
         if (!m_application || !hasActiveDocument())
         {
@@ -1797,7 +1796,6 @@ namespace gladius
 
             m_lastErrorMessage =
               "Level set created successfully from function ID: " + std::to_string(functionId) +
-              " with resolution: " + std::to_string(meshResolution) +
               " using mesh ID: " + std::to_string(meshId);
             return {true, levelSetId};
         }

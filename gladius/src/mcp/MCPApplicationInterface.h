@@ -80,8 +80,7 @@ namespace gladius
                            float blendRadius = 0.1f) = 0;
 
         // 3MF Resource creation methods (return success flag and resource ID)
-        virtual std::pair<bool, uint32_t> createLevelSet(uint32_t functionId,
-                                                         int meshResolution = 64) = 0;
+        virtual std::pair<bool, uint32_t> createLevelSet(uint32_t functionId) = 0;
         virtual std::pair<bool, uint32_t> createImage3DFunction(const std::string & name,
                                                                 const std::string & imagePath,
                                                                 float valueScale = 1.0f,
