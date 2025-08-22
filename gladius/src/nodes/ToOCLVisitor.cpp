@@ -310,7 +310,7 @@ namespace gladius::nodes
           "{1}.x, {2}.x, {3}.x, {4}.x,"
           "{1}.y, {2}.y, {3}.y, {4}.y,"
           "{1}.z, {2}.z, {3}.z, {4}.z,"
-          "0.f, 0.f, 0.f, 1.f,"
+          "0.f, 0.f, 0.f, 1.f"
           ");\n",
           composeMatrixFromColumns.getOutputs()["matrix"].getUniqueName(),
           composeMatrixFromColumns.parameter()[FieldNames::Col0].toString(),
@@ -330,7 +330,7 @@ namespace gladius::nodes
                                     "{1}.x, {1}.y, {1}.z, 0.f,"
                                     "{2}.x, {2}.y, {2}.z, 0.f,"
                                     "{3}.x, {3}.y, {3}.z, 0.f,"
-                                    "{4}.x, {4}.y, {4}.z, 1.f,"
+                                    "{4}.x, {4}.y, {4}.z, 1.f"
                                     ");\n",
                                     composeMatrixFromRows.getOutputs()["matrix"].getUniqueName(),
                                     composeMatrixFromRows.parameter()[FieldNames::Row0].toString(),
@@ -697,7 +697,7 @@ namespace gladius::nodes
         }
 
         m_definition << fmt::format(
-          "{0} const {1} = pow({0})({2}), {0})({3}));\n",
+          "{0} const {1} = pow(({0})({2}), ({0})({3}));\n",
           typeIndexToOpenCl(power.getOutputs().at(FieldNames::Result).getTypeIndex()),
           power.getOutputs().at(FieldNames::Result).getUniqueName(),
           power.parameter().at(FieldNames::A).toString(),
@@ -712,9 +712,9 @@ namespace gladius::nodes
         }
 
         m_definition << fmt::format(
-          "{0} const {1} = sqrt({0})({2}));\n",
-          typeIndexToOpenCl(sqrtNode.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          sqrtNode.getOutputs().at(FieldNames::Result).getUniqueName(),
+          "{0} const {1} = sqrt(({0})({2}));\n",
+          typeIndexToOpenCl(sqrtNode.getResultOutputPort().getTypeIndex()),
+          sqrtNode.getResultOutputPort().getUniqueName(),
           sqrtNode.parameter().at(FieldNames::A).toString());
     }
 
@@ -725,15 +725,12 @@ namespace gladius::nodes
             return;
         }
 
-        auto const numCopmonents = modulus.parameter().at(FieldNames::A).getSize();
-
         m_definition << fmt::format(
           "{0} const {1} = fmod(({0})({2}), ({0})({3}));\n",
           typeIndexToOpenCl(modulus.getOutputs().at(FieldNames::Result).getTypeIndex()),
           modulus.getOutputs().at(FieldNames::Result).getUniqueName(),
           modulus.parameter().at(FieldNames::A).toString(),
-          modulus.parameter().at(FieldNames::B).toString(),
-          numCopmonents);
+          modulus.parameter().at(FieldNames::B).toString());
     }
 
     void ToOclVisitor::visit(Mod & modulus)
