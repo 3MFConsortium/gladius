@@ -223,9 +223,14 @@ namespace gladius
         nodes::NodeBase * node = nodes::createNodeFromName("ConstantScalar", model);
         if (node)
         {
-            // TODO: Set the constant value
-            // This would require setting the node's parameter value
-            node->setDisplayName(std::to_string(value));
+            // Set the constant's numeric value on its parameter rather than abusing the display
+            // name
+            if (auto * param = node->getParameter(nodes::FieldNames::Value))
+            {
+                // ConstantScalar expects a float value
+                param->setValue(static_cast<float>(value));
+            }
+            // Keep the default display name (e.g., unique node name) for clarity
             return node->getId();
         }
         return 0;

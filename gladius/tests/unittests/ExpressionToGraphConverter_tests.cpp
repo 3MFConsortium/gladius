@@ -1375,4 +1375,104 @@ namespace gladius::tests
         EXPECT_LE(cosineCount, 2) << "Cosine nodes should be optimized";
     }
 
+    // =====================================================================================
+    // Constant handling regression tests
+    // =====================================================================================
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConstantLiteral_InExpression_ValueStoredInParameter_NotInDisplayName)
+    {
+        // Arrange
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("x", ArgumentType::Scalar);
+        std::string const expression = "x + 2.5";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
+
+        // Assert basic success
+        EXPECT_NE(resultNodeId, 0);
+
+        // Find ConstantScalar node and verify its parameter value
+        nodes::ConstantScalar * constantNode = nullptr;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNode = n;
+                break;
+            }
+        }
+        ASSERT_NE(constantNode, nullptr) << "Expected a ConstantScalar node for literal 2.5";
+
+        auto valueVariant = constantNode->parameter().at(nodes::FieldNames::Value).getValue();
+        ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
+        EXPECT_NEAR(std::get<float>(valueVariant), 2.5f, 1e-5f);
+
+        // Display name should not be the numeric literal itself
+        EXPECT_NE(constantNode->getDisplayName(), std::string("2.5"));
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConstantLiteral_UnaryMinus_ValueStoredAsNegativeParameter)
+    {
+        // Arrange
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("x", ArgumentType::Scalar);
+        std::string const expression = "-3 * x";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
+
+        // Assert basic success
+        EXPECT_NE(resultNodeId, 0);
+
+        // Find ConstantScalar node and verify its parameter value is -3
+        nodes::ConstantScalar * constantNode = nullptr;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNode = n;
+                break;
+            }
+        }
+        ASSERT_NE(constantNode, nullptr) << "Expected a ConstantScalar node for literal -3";
+
+        auto valueVariant = constantNode->parameter().at(nodes::FieldNames::Value).getValue();
+        ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
+        EXPECT_NEAR(std::get<float>(valueVariant), -3.0f, 1e-5f);
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConstantLiteral_Alone_NumberOnly_CreatesConstantWithCorrectValue)
+    {
+        // Arrange
+        std::string const expression = "42";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        nodes::ConstantScalar * constantNode = nullptr;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNode = n;
+                break;
+            }
+        }
+        ASSERT_NE(constantNode, nullptr) << "Expected a ConstantScalar node for literal 42";
+
+        auto valueVariant = constantNode->parameter().at(nodes::FieldNames::Value).getValue();
+        ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
+        EXPECT_NEAR(std::get<float>(valueVariant), 42.0f, 1e-5f);
+    }
+
 } // namespace gladius::tests
