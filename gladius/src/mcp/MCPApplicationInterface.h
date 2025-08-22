@@ -107,6 +107,24 @@ namespace gladius
         virtual nlohmann::json getDocumentInfo() const = 0;
         virtual std::vector<std::string> listAvailableFunctions() const = 0;
 
+        /**
+         * @brief Get a comprehensive structure of the current 3MF model
+         *
+         * Returns a JSON object listing build items and resources (meshes, level sets,
+         * functions, images, materials, etc.) to allow assistants to inspect
+         * what is contained in the document.
+         *
+         * Expected JSON shape (fields may vary if information is unavailable):
+         * {
+         *   "has_document": bool,
+         *   "document_path": string,
+         *   "build_items": [ { ... } ],
+         *   "resources": [ { ... } ],
+         *   "counts": { "build_items": n, "resources": n, "meshes": n, ... }
+         * }
+         */
+        virtual nlohmann::json get3MFStructure() const = 0;
+
         // Manufacturing validation
         virtual nlohmann::json
         validateForManufacturing(const std::vector<std::string> & functionNames = {},

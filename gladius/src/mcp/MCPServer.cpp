@@ -375,6 +375,22 @@ namespace gladius::mcp
                       {"active_document_path", m_application->getActiveDocumentPath()}};
           });
 
+        // MODEL STRUCTURE INSPECTION
+        registerTool(
+          "get_3mf_structure",
+          "Get a comprehensive listing of the current 3MF model structure (build items and "
+          "resources)",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              auto result = m_application->get3MFStructure();
+              return result;
+          });
+
         registerTool(
           "ping",
           "Simple ping tool to test connectivity",

@@ -118,6 +118,7 @@ namespace gladius
         nlohmann::json getSceneHierarchy() const override;
         nlohmann::json getDocumentInfo() const override;
         std::vector<std::string> listAvailableFunctions() const override;
+        nlohmann::json get3MFStructure() const override;
 
         // Manufacturing validation
         nlohmann::json

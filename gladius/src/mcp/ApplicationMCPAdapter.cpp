@@ -1171,6 +1171,388 @@ namespace gladius
         return functions;
     }
 
+    nlohmann::json ApplicationMCPAdapter::get3MFStructure() const
+    {
+        nlohmann::json out;
+        out["has_document"] = hasActiveDocument();
+        out["document_path"] = getActiveDocumentPath();
+
+        if (!hasActiveDocument())
+        {
+            out["error"] = "No active document";
+            return out;
+        }
+
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                out["error"] = "No active document available";
+                return out;
+            }
+
+            auto model = document->get3mfModel();
+            if (!model)
+            {
+                out["error"] = "No 3MF model available";
+                return out;
+            }
+
+            // Build items
+            nlohmann::json buildItems = nlohmann::json::array();
+            try
+            {
+                auto buildIt = model->GetBuildItems();
+                while (buildIt->MoveNext())
+                {
+                    auto item = buildIt->GetCurrent();
+                    nlohmann::json bi;
+                    bi["part_number"] = item->GetPartNumber();
+                    bool hasUUID = false;
+                    try
+                    {
+                        auto uuid = item->GetUUID(hasUUID);
+                        if (hasUUID)
+                        {
+                            bi["uuid"] = uuid;
+                        }
+                        else
+                        {
+                            bi["uuid"] = nullptr;
+                        }
+                    }
+                    catch (...)
+                    {
+                        bi["uuid"] = nullptr;
+                    }
+                    bi["transform"] = nlohmann::json::array();
+                    {
+                        auto t = item->GetObjectTransform();
+                        // 4x3 matrix fields
+                        for (int r = 0; r < 4; ++r)
+                        {
+                            nlohmann::json row = nlohmann::json::array();
+                            for (int c = 0; c < 3; ++c)
+                            {
+                                row.push_back(t.m_Fields[r][c]);
+                            }
+                            bi["transform"].push_back(row);
+                        }
+                    }
+                    try
+                    {
+                        auto obj = item->GetObjectResource();
+                        if (obj)
+                        {
+                            bi["object_id"] = obj->GetModelResourceID();
+                            // Derive a friendly type name via dynamic cast
+                            std::string otype = "object";
+                            if (dynamic_cast<Lib3MF::CMeshObject *>(obj.get()))
+                                otype = "mesh";
+                            else if (dynamic_cast<Lib3MF::CComponentsObject *>(obj.get()))
+                                otype = "components";
+                            else if (dynamic_cast<Lib3MF::CLevelSet *>(obj.get()))
+                                otype = "levelset";
+                            bi["object_type"] = otype;
+                        }
+                        else
+                        {
+                            bi["object_id"] = 0;
+                            bi["object_type"] = "unknown";
+                        }
+                    }
+                    catch (...)
+                    {
+                        bi["object_id"] = 0;
+                        bi["object_type"] = "unknown";
+                    }
+                    buildItems.push_back(bi);
+                }
+            }
+            catch (...)
+            {
+                // ignore build item enumeration errors
+            }
+
+            // Resources
+            nlohmann::json resources = nlohmann::json::array();
+            std::size_t meshCount = 0, levelSetCount = 0, functionCount = 0, image3dCount = 0,
+                        materialCount = 0, otherCount = 0;
+            try
+            {
+                auto resIt = model->GetResources();
+                while (resIt->MoveNext())
+                {
+                    auto res = resIt->GetCurrent();
+                    nlohmann::json r;
+                    r["id"] = res->GetModelResourceID();
+                    // Derive a readable type/kind via subclass inspection
+                    // Note: lib3mf dynamic bindings don't expose a generic GetResourceType or name
+                    // on CResource
+
+                    // Try specific casts for richer info
+                    if (auto meshObj = dynamic_cast<Lib3MF::CMeshObject *>(res.get()))
+                    {
+                        meshCount++;
+                        r["kind"] = "mesh";
+                        r["vertices"] = meshObj->GetVertexCount();
+                        r["triangles"] = meshObj->GetTriangleCount();
+                        try
+                        {
+                            r["name"] = meshObj->GetName();
+                        }
+                        catch (...)
+                        {
+                            r["name"] = nullptr;
+                        }
+                    }
+                    else if (auto levelSet = dynamic_cast<Lib3MF::CLevelSet *>(res.get()))
+                    {
+                        levelSetCount++;
+                        r["kind"] = "levelset";
+                        try
+                        {
+                            auto fn = levelSet->GetFunction();
+                            r["function_id"] = fn ? fn->GetModelResourceID() : 0;
+                            r["channel"] = levelSet->GetChannelName();
+                        }
+                        catch (...)
+                        {
+                        }
+                        try
+                        {
+                            auto mesh = levelSet->GetMesh();
+                            r["mesh_id"] = mesh ? mesh->GetModelResourceID() : 0;
+                            r["meshBBoxOnly"] = levelSet->GetMeshBBoxOnly();
+                        }
+                        catch (...)
+                        {
+                        }
+                        try
+                        {
+                            r["name"] = levelSet->GetName();
+                        }
+                        catch (...)
+                        {
+                            r["name"] = nullptr;
+                        }
+                    }
+                    else if (auto func = dynamic_cast<Lib3MF::CFunction *>(res.get()))
+                    {
+                        functionCount++;
+                        r["kind"] = "function";
+                        // Function subtype
+                        if (dynamic_cast<Lib3MF::CImplicitFunction *>(res.get()))
+                            r["function_type"] = "implicit";
+                        else if (dynamic_cast<Lib3MF::CFunctionFromImage3D *>(res.get()))
+                            r["function_type"] = "function_from_image3d";
+                        else
+                            r["function_type"] = "unknown";
+
+                        // Display name
+                        try
+                        {
+                            auto dn = func->GetDisplayName();
+                            r["display_name"] = dn;
+                            // Back-compat with earlier key
+                            r["displayname"] = dn;
+                        }
+                        catch (...)
+                        {
+                            r["display_name"] = nullptr;
+                            r["displayname"] = nullptr;
+                        }
+
+                        // Helper to stringify port type
+                        auto portTypeToString = [](Lib3MF::eImplicitPortType t) -> const char *
+                        {
+                            switch (t)
+                            {
+                            case Lib3MF::eImplicitPortType::Scalar:
+                                return "scalar";
+                            case Lib3MF::eImplicitPortType::Vector:
+                                return "vector";
+                            case Lib3MF::eImplicitPortType::Matrix:
+                                return "matrix";
+                            default:
+                                return "unknown";
+                            }
+                        };
+
+                        // Inputs
+                        try
+                        {
+                            nlohmann::json inputs = nlohmann::json::array();
+                            auto inIt = func->GetInputs();
+                            while (inIt->MoveNext())
+                            {
+                                auto p = inIt->GetCurrent();
+                                nlohmann::json pj;
+                                try
+                                {
+                                    pj["identifier"] = p->GetIdentifier();
+                                }
+                                catch (...)
+                                {
+                                    pj["identifier"] = nullptr;
+                                }
+                                try
+                                {
+                                    pj["display_name"] = p->GetDisplayName();
+                                }
+                                catch (...)
+                                {
+                                    pj["display_name"] = nullptr;
+                                }
+                                try
+                                {
+                                    pj["type"] = portTypeToString(p->GetType());
+                                }
+                                catch (...)
+                                {
+                                    pj["type"] = "unknown";
+                                }
+                                inputs.push_back(pj);
+                            }
+                            r["inputs"] = inputs;
+                        }
+                        catch (...)
+                        {
+                            r["inputs"] = nlohmann::json::array();
+                        }
+
+                        // Outputs
+                        try
+                        {
+                            nlohmann::json outputs = nlohmann::json::array();
+                            auto outIt = func->GetOutputs();
+                            while (outIt->MoveNext())
+                            {
+                                auto p = outIt->GetCurrent();
+                                nlohmann::json pj;
+                                try
+                                {
+                                    pj["identifier"] = p->GetIdentifier();
+                                }
+                                catch (...)
+                                {
+                                    pj["identifier"] = nullptr;
+                                }
+                                try
+                                {
+                                    pj["display_name"] = p->GetDisplayName();
+                                }
+                                catch (...)
+                                {
+                                    pj["display_name"] = nullptr;
+                                }
+                                try
+                                {
+                                    pj["type"] = portTypeToString(p->GetType());
+                                }
+                                catch (...)
+                                {
+                                    pj["type"] = "unknown";
+                                }
+                                outputs.push_back(pj);
+                            }
+                            r["outputs"] = outputs;
+                        }
+                        catch (...)
+                        {
+                            r["outputs"] = nlohmann::json::array();
+                        }
+                    }
+                    else if (auto img3d = dynamic_cast<Lib3MF::CImage3D *>(res.get()))
+                    {
+                        image3dCount++;
+                        r["kind"] = "image3d";
+                        try
+                        {
+                            auto nm = img3d->GetName();
+                            r["name"] = nm;
+                            r["display_name"] = nm;
+                        }
+                        catch (...)
+                        {
+                        }
+                        // If this image is actually a stack, query its dimensions
+                        if (auto stack = dynamic_cast<Lib3MF::CImageStack *>(res.get()))
+                        {
+                            nlohmann::json s;
+                            try
+                            {
+                                s["rows"] = stack->GetRowCount();
+                            }
+                            catch (...)
+                            {
+                            }
+                            try
+                            {
+                                s["columns"] = stack->GetColumnCount();
+                            }
+                            catch (...)
+                            {
+                            }
+                            try
+                            {
+                                s["sheets"] = stack->GetSheetCount();
+                            }
+                            catch (...)
+                            {
+                            }
+                            r["imagestack"] = s;
+                            r["kind"] = "imagestack"; // refine kind if applicable
+                        }
+                    }
+                    else if (auto baseMat = dynamic_cast<Lib3MF::CBaseMaterialGroup *>(res.get()))
+                    {
+                        materialCount++;
+                        r["kind"] = "base_material_group";
+                        r["count"] = baseMat->GetCount();
+                        // BaseMaterialGroup may not have a name
+                        r["name"] = nullptr;
+                        r["display_name"] = nullptr;
+                    }
+                    else
+                    {
+                        otherCount++;
+                        r["kind"] = "other";
+                        r["name"] = nullptr;
+                        r["display_name"] = nullptr;
+                    }
+
+                    resources.push_back(r);
+                }
+            }
+            catch (...)
+            {
+                // ignore resource enumeration errors
+            }
+
+            out["build_items"] = buildItems;
+            out["resources"] = resources;
+            out["counts"] = {{"build_items", buildItems.size()},
+                             {"resources", resources.size()},
+                             {"meshes", meshCount},
+                             {"levelsets", levelSetCount},
+                             {"functions", functionCount},
+                             {"images3d", image3dCount},
+                             {"materials", materialCount},
+                             {"others", otherCount}};
+
+            out["success"] = true;
+        }
+        catch (const std::exception & e)
+        {
+            out["success"] = false;
+            out["error"] = std::string("Exception while collecting 3MF structure: ") + e.what();
+        }
+
+        return out;
+    }
+
     nlohmann::json
     ApplicationMCPAdapter::validateForManufacturing(const std::vector<std::string> & functionNames,
                                                     const nlohmann::json & constraints) const
