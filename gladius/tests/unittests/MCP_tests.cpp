@@ -74,7 +74,7 @@ namespace gladius::tests
           (override));
 
         // New 3MF Resource creation methods
-        MOCK_METHOD((std::pair<bool, uint32_t>), createLevelSet, (uint32_t, int), (override));
+        MOCK_METHOD((std::pair<bool, uint32_t>), createLevelSet, (uint32_t), (override));
         MOCK_METHOD((std::pair<bool, uint32_t>),
                     createImage3DFunction,
                     (const std::string &, const std::string &, float, float),

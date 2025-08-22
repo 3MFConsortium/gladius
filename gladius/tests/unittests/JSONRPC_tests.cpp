@@ -120,8 +120,7 @@ namespace gladius::tests
         }
 
         // New 3MF Resource creation methods
-        std::pair<bool, uint32_t> createLevelSet(uint32_t functionId,
-                                                 int meshResolution = 64) override
+        std::pair<bool, uint32_t> createLevelSet(uint32_t functionId) override
         {
             return {true, functionId + 1000}; // Mock level set ID
         }
