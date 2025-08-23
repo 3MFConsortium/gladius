@@ -23,6 +23,26 @@ namespace gladius
         }
     }
 
+    Application::Application(bool headlessMode)
+        : m_configManager()
+        , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
+        , m_mcpServer(nullptr)
+        , m_mcpAdapter(nullptr)
+    {
+        m_headlessMode = headlessMode;
+        m_mainWindow.setConfigManager(m_configManager);
+        if (!m_headlessMode)
+        {
+            m_mainWindow.setup();
+        }
+        else
+        {
+            // Prepare minimal compute/document so MCP document ops work in headless mode
+            m_mainWindow.setupHeadless(m_globalLogger);
+        }
+    }
+
     Application::Application(int argc, char ** argv)
         : m_configManager()
         , m_mainWindow()
@@ -77,6 +97,11 @@ namespace gladius
 
     void Application::startMainLoop()
     {
+        if (m_headlessMode)
+        {
+            // In headless mode we do not block on the UI loop.
+            return;
+        }
         m_mainWindow.startMainLoop();
     }
 
@@ -85,6 +110,10 @@ namespace gladius
         // Default destructor implementation
         // The unique_ptr<MCPServer> will be properly destroyed here
         // since we have the complete MCPServer definition included
+        if (m_uiThread.joinable())
+        {
+            m_uiThread.join();
+        }
     }
 
     bool Application::enableMCPServer(int port)
@@ -190,7 +219,13 @@ namespace gladius
 
     void Application::setHeadlessMode(bool headless)
     {
+        bool const wasHeadless = m_headlessMode;
         m_headlessMode = headless;
+        if (m_headlessMode && !wasHeadless)
+        {
+            // Transitioning to headless: ensure compute/doc exist without UI
+            m_mainWindow.setupHeadless(m_globalLogger);
+        }
     }
 
     bool Application::isHeadlessMode() const
@@ -201,5 +236,47 @@ namespace gladius
     std::shared_ptr<Document> Application::getCurrentDocument() const
     {
         return m_mainWindow.getCurrentDocument();
+    }
+
+    bool Application::showUI()
+    {
+        if (!m_headlessMode)
+        {
+            // UI mode already; if UI loop not running yet, start it on a background thread.
+            if (!m_uiRunning.load())
+            {
+                m_uiThread = std::thread(
+                  [this]()
+                  {
+                      m_uiRunning = true;
+                      m_mainWindow.startMainLoop();
+                      m_uiRunning = false;
+                  });
+            }
+            return true;
+        }
+
+        try
+        {
+            m_headlessMode = false;
+            // If headless was previously initialized, setup() will complete full UI wiring
+            m_mainWindow.setup();
+            m_uiThread = std::thread(
+              [this]()
+              {
+                  m_uiRunning = true;
+                  m_mainWindow.startMainLoop();
+                  m_uiRunning = false;
+              });
+            return true;
+        }
+        catch (const std::exception & e)
+        {
+            if (m_globalLogger)
+            {
+                m_globalLogger->logError(std::string("Failed to show UI: ") + e.what());
+            }
+            return false;
+        }
     }
 }

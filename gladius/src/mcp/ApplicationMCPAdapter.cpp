@@ -65,6 +65,29 @@ namespace gladius
         return "running";
     }
 
+    void ApplicationMCPAdapter::setHeadlessMode(bool headless)
+    {
+        if (m_application)
+        {
+            m_application->setHeadlessMode(headless);
+        }
+    }
+
+    bool ApplicationMCPAdapter::isHeadlessMode() const
+    {
+        return m_application ? m_application->isHeadlessMode() : true;
+    }
+
+    bool ApplicationMCPAdapter::showUI()
+    {
+        return m_application ? m_application->showUI() : false;
+    }
+
+    bool ApplicationMCPAdapter::isUIRunning() const
+    {
+        return m_application ? m_application->isUIRunning() : false;
+    }
+
     bool ApplicationMCPAdapter::hasActiveDocument() const
     {
         if (!m_application)
@@ -108,6 +131,12 @@ namespace gladius
 
         try
         {
+            // Ensure headless has a valid core/document if UI wasn't started
+            if (m_application->isHeadlessMode() &&
+                !m_application->getMainWindow().getCurrentDocument())
+            {
+                m_application->getMainWindow().setupHeadless(m_application->getGlobalLogger());
+            }
             // Use MainWindow's newModel method and hide welcome screen like the UI callback does
             m_application->getMainWindow().newModel();
             m_application->getMainWindow().hideWelcomeScreen();
@@ -128,6 +157,12 @@ namespace gladius
 
         try
         {
+            // Ensure headless has a valid core/document if UI wasn't started
+            if (m_application->isHeadlessMode() &&
+                !m_application->getMainWindow().getCurrentDocument())
+            {
+                m_application->getMainWindow().setupHeadless(m_application->getGlobalLogger());
+            }
             // Use MainWindow's open method to properly hide welcome screen and handle UI updates
             m_application->getMainWindow().open(std::filesystem::path(path));
             return true;

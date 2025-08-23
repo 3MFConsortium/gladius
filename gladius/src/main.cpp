@@ -1,4 +1,6 @@
 #include "Application.h"
+#include <atomic>
+#include <csignal>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -12,6 +14,7 @@ void printUsage()
     std::cout
       << "  --mcp-server [port]  Enable MCP server with HTTP transport (default port: 8080)\n";
     std::cout << "  --mcp-stdio          Enable MCP server with stdio transport (for VS Code)\n";
+    std::cout << "  --headless          Run without starting the UI (headless mode)\n";
     std::cout << "  --help              Show this help message\n";
     std::cout << "Examples:\n";
     std::cout << "  gladius                           # Start with welcome screen\n";
@@ -27,7 +30,14 @@ int main(int argc, char ** argv)
     bool enableMCP = false;
     bool mcpStdio = false;
     int mcpPort = 8080;
+    bool headless = false;
     std::optional<std::filesystem::path> filename;
+
+    // Graceful termination flag for headless MCP mode
+    static std::atomic<bool> terminateRequested{false};
+    auto signalHandler = [](int) { terminateRequested.store(true); };
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i)
@@ -62,6 +72,10 @@ int main(int argc, char ** argv)
             enableMCP = true;
             mcpStdio = true;
         }
+        else if (arg == "--headless")
+        {
+            headless = true;
+        }
         else if (arg == "--help")
         {
             printUsage();
@@ -83,7 +97,7 @@ int main(int argc, char ** argv)
     std::filesystem::current_path(std::filesystem::path(argv[0]).parent_path());
 
     // Create application based on arguments
-    gladius::Application app;
+    gladius::Application app(headless);
 
     // Enable MCP server if requested (before starting main loop)
     if (enableMCP)
@@ -159,13 +173,42 @@ int main(int argc, char ** argv)
         }
     }
 
-    // Start the main loop (this will block until the application exits)
-    app.startMainLoop();
-
-    // Clean up MCP server before exit
-    if (enableMCP)
+    // UI/main loop and headless behavior
+    if (!headless)
     {
-        app.disableMCPServer();
+        // Normal mode: run UI loop (blocks until exit)
+        app.startMainLoop();
+
+        // Clean up MCP server before exit
+        if (enableMCP)
+        {
+            app.disableMCPServer();
+        }
+    }
+    else
+    {
+        // Headless mode: keep process alive while MCP server is running.
+        // For stdio transport, do not print to stdout (reserved for protocol).
+        while (!terminateRequested.load())
+        {
+            // If MCP was not enabled, nothing to serve – break immediately
+            if (!enableMCP)
+            {
+                break;
+            }
+            // If server has stopped externally, exit the loop
+            if (!app.isMCPServerEnabled())
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+
+        // Clean up MCP server before exit (HTTP or stdio)
+        if (enableMCP && app.isMCPServerEnabled())
+        {
+            app.disableMCPServer();
+        }
     }
 
     return 0;

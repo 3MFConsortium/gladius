@@ -31,6 +31,12 @@ namespace gladius
         // Status information
         virtual std::string getStatus() const = 0;
 
+        // UI / Headless control
+        virtual void setHeadlessMode(bool headless) = 0;
+        virtual bool isHeadlessMode() const = 0;
+        virtual bool showUI() = 0;
+        virtual bool isUIRunning() const = 0;
+
         // Document operations
         virtual bool hasActiveDocument() const = 0;
         virtual std::string getActiveDocumentPath() const = 0;

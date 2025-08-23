@@ -60,6 +60,13 @@ namespace gladius::ui
         void setup();
 
         /**
+         * @brief Minimal setup for headless operation (no UI/GL windows).
+         * Initializes ComputeCore and Document so document operations work in headless mode.
+         * Does not register any UI callbacks and keeps Document in non-UI mode to avoid backups.
+         */
+        void setupHeadless(events::SharedLogger logger);
+
+        /**
          * @brief Returns whether compute/rendering is available.
          */
         bool isComputeAvailable() const

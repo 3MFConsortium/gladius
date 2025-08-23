@@ -46,6 +46,10 @@ namespace gladius
         bool isRunning() const override;
         std::string getApplicationName() const override;
         std::string getStatus() const override;
+        void setHeadlessMode(bool headless) override;
+        bool isHeadlessMode() const override;
+        bool showUI() override;
+        bool isUIRunning() const override;
         bool hasActiveDocument() const override;
         std::string getActiveDocumentPath() const override;
 

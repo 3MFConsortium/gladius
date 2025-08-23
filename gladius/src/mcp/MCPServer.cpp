@@ -372,8 +372,38 @@ namespace gladius::mcp
                       {"status", m_application->getStatus()},
                       {"is_running", m_application->isRunning()},
                       {"has_active_document", m_application->hasActiveDocument()},
+                      {"headless", m_application->isHeadlessMode()},
+                      {"ui_running", m_application->isUIRunning()},
                       {"active_document_path", m_application->getActiveDocumentPath()}};
           });
+
+        // UI CONTROL
+        registerTool(
+          "show_ui",
+          "Ensure the UI is visible and running (useful in headless mode to display results)",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              bool ok = m_application->showUI();
+              return {{"success", ok},
+                      {"headless", m_application->isHeadlessMode()},
+                      {"ui_running", m_application->isUIRunning()}};
+          });
+
+        registerTool("set_headless_mode",
+                     "Set application to headless (no UI) or UI mode",
+                     {{"type", "object"},
+                      {"properties",
+                       {{"headless",
+                         {{"type", "boolean"},
+                          {"description", "If true, run without UI; false keeps/enables UI"}}}}},
+                      {"required", {"headless"}}},
+                     [this](const json & params) -> json
+                     {
+                         bool headless = params.value("headless", true);
+                         m_application->setHeadlessMode(headless);
+                         return {{"success", true}, {"headless", m_application->isHeadlessMode()}};
+                     });
 
         // MODEL STRUCTURE INSPECTION
         registerTool(

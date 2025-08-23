@@ -314,6 +314,59 @@ namespace gladius::ui
         }
     }
 
+    void MainWindow::setupHeadless(events::SharedLogger logger)
+    {
+        ProfileFunction;
+        // Only run once
+        if (m_initialized && m_doc && m_core)
+        {
+            return;
+        }
+
+        m_logger = std::move(logger);
+        m_initialized = true;
+
+        // Initialize compute stack without OpenGL interop for headless safety
+        try
+        {
+            auto context = std::make_shared<ComputeContext>(EnableGLOutput::disabled);
+            if (!context->isValid())
+            {
+                throw OpenCLContextCreationError("Context invalid after initialization (headless)");
+            }
+
+            m_core =
+              std::make_shared<ComputeCore>(context, RequiredCapabilities::ComputeOnly, m_logger);
+            m_doc = std::make_shared<Document>(m_core);
+
+            // Explicitly mark document as non-UI mode to disable backups and UI-only behaviors
+            m_doc->setUiMode(false);
+
+            m_computeAvailable = true;
+            m_computeErrorMessage.clear();
+        }
+        catch (const GladiusException & e)
+        {
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            if (m_logger)
+            {
+                m_logger->addEvent({std::string("Headless compute disabled: ") + e.what(),
+                                    events::Severity::Warning});
+            }
+        }
+        catch (const std::exception & e)
+        {
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            if (m_logger)
+            {
+                m_logger->addEvent({std::string("Headless compute disabled: ") + e.what(),
+                                    events::Severity::Warning});
+            }
+        }
+    }
+
     void MainWindow::render()
     {
         ProfileFunction;

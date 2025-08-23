@@ -3,7 +3,9 @@
 #include "ConfigManager.h"
 #include "EventLogger.h"
 #include "ui/MainWindow.h"
+#include <atomic>
 #include <memory>
+#include <thread>
 
 namespace gladius
 {
@@ -26,6 +28,8 @@ namespace gladius
     {
       public:
         Application();
+        /// Construct application with explicit headless mode (pre-setup)
+        explicit Application(bool headlessMode);
         Application(int argc, char ** argv);
         Application(std::filesystem ::path const & filename);
 
@@ -104,6 +108,22 @@ namespace gladius
         void startMainLoop();
 
         /**
+         * @brief Ensure the UI is visible and running. If currently in headless mode,
+         * initialize UI and start its main loop on a background thread so the MCP server can
+         * continue to operate.
+         * @return true if the UI is running (either already running or started successfully)
+         */
+        bool showUI();
+
+        /**
+         * @brief Returns whether the UI loop is currently running.
+         */
+        bool isUIRunning() const
+        {
+            return m_uiRunning.load();
+        }
+
+        /**
          * @brief Get the main window reference
          * @return Reference to the main window
          */
@@ -125,5 +145,7 @@ namespace gladius
         std::unique_ptr<mcp::MCPServer> m_mcpServer;
         std::unique_ptr<ApplicationMCPAdapter> m_mcpAdapter;
         bool m_headlessMode{false};
+        std::atomic<bool> m_uiRunning{false};
+        std::thread m_uiThread;
     };
 }
