@@ -23,6 +23,10 @@ namespace gladius::tests
         MOCK_METHOD(bool, isRunning, (), (const, override));
         MOCK_METHOD(std::string, getApplicationName, (), (const, override));
         MOCK_METHOD(std::string, getStatus, (), (const, override));
+        MOCK_METHOD(void, setHeadlessMode, (bool), (override));
+        MOCK_METHOD(bool, isHeadlessMode, (), (const, override));
+        MOCK_METHOD(bool, showUI, (), (override));
+        MOCK_METHOD(bool, isUIRunning, (), (const, override));
         MOCK_METHOD(bool, hasActiveDocument, (), (const, override));
         MOCK_METHOD(std::string, getActiveDocumentPath, (), (const, override));
 

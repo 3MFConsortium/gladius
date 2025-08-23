@@ -95,6 +95,23 @@ namespace gladius::tests
             return "";
         }
 
+        // Headless/UI control additions
+        void setHeadlessMode(bool) override
+        {
+        }
+        bool isHeadlessMode() const override
+        {
+            return true;
+        }
+        bool showUI() override
+        {
+            return true;
+        }
+        bool isUIRunning() const override
+        {
+            return false;
+        }
+
         // New MCP interface methods
         bool validateDocumentFor3MF() const override
         {
