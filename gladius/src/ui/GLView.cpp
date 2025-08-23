@@ -25,10 +25,7 @@
 namespace gladius
 {
 
-    GLView::GLView()
-    {
-        init();
-    }
+    GLView::GLView() = default;
 
     void errorCallback(int error, const char * description)
     {
@@ -45,31 +42,48 @@ namespace gladius
 
     GLView::~GLView()
     {
-        // Explicitly save ImGui settings before destroying context
-        if (!m_iniFileNameStorage.empty())
+        // Only tear down if we actually initialized a window/context
+        if (m_initialized)
         {
-            try
+            // Explicitly save ImGui settings before destroying context
+            if (!m_iniFileNameStorage.empty())
             {
-                ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+                try
+                {
+                    ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+                }
+                catch (...)
+                {
+                    // Ignore save errors during destruction to prevent exceptions
+                    std::cerr << "Warning: Failed to save ImGui settings during destruction\n";
+                }
             }
-            catch (...)
+
+            // Clear window user pointer to prevent dangling references
+            if (m_window)
             {
-                // Ignore save errors during destruction to prevent exceptions
-                std::cerr << "Warning: Failed to save ImGui settings during destruction\n";
+                glfwSetWindowUserPointer(m_window, nullptr);
+            }
+
+            ImGui_ImplOpenGL2_Shutdown();
+            ImGui_ImplGlfw_Shutdown();
+
+            ImGui::DestroyContext();
+            if (glfwGetCurrentContext())
+            {
+                // Terminate GLFW only if it was initialized in this process
+                glfwTerminate();
             }
         }
+    }
 
-        // Clear window user pointer to prevent dangling references
-        if (m_window)
+    void GLView::ensureInitialized()
+    {
+        // Lazily create the window and GL context if not already done
+        if (!m_initialized)
         {
-            glfwSetWindowUserPointer(m_window, nullptr);
+            init();
         }
-
-        ImGui_ImplOpenGL2_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-
-        ImGui::DestroyContext();
-        glfwTerminate();
     }
 
     void GLView::storeWindowSettings()
@@ -111,6 +125,10 @@ namespace gladius
 
     void GLView::init()
     {
+        if (m_initialized)
+        {
+            return;
+        }
         if (!glfwInit())
         {
             std::cerr << "Initialization of OpenGL context failed\n";
@@ -183,6 +201,7 @@ namespace gladius
         glfwSetWindowContentScaleCallback(m_window, staticContentScaleCallback);
 
         applyFullscreenMode();
+        m_initialized = true;
     }
 
     void GLView::setGladiusTheme(ImGuiIO & io)
@@ -580,7 +599,7 @@ namespace gladius
 
     void GLView::applyFullscreenMode()
     {
-        if (!m_window)
+        if (!m_window || !m_initialized)
         {
             return;
         }
@@ -674,6 +693,12 @@ namespace gladius
 
     void GLView::startMainLoop()
     {
+        // Lazy init of window and ImGui when UI actually starts
+        if (!m_initialized)
+        {
+            init();
+        }
+
         auto lastAnimationTimePoint_ms = getTimeStamp_ms();
         auto lastFrame_ms = getTimeStamp_ms();
         auto constexpr minFrameDurationAnimation =

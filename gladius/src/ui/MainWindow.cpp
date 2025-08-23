@@ -248,6 +248,9 @@ namespace gladius::ui
         ProfileFunction;
         m_initialized = true;
 
+        // Create the GL context up-front so any GL-backed resources can be created safely
+        m_mainView.ensureInitialized();
+
         // Try to initialize compute stack; if it fails, keep UI running in limited mode.
         try
         {

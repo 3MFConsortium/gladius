@@ -30,6 +30,9 @@ namespace gladius
 
         ~GLView();
 
+        // Ensure a GL context and ImGui are initialized without entering the main loop
+        void ensureInitialized();
+
         void startMainLoop();
 
         void render();
@@ -147,6 +150,7 @@ namespace gladius
         GLFWwindow * m_window{nullptr};
         bool m_isAnimationRunning = false;
         bool m_stateCloseRequested = false;
+        bool m_initialized = false; // true once a window and ImGui context have been created
 
         ImGuiStyle m_originalStyle;
         float m_uiScale = 1.0f;   // total = base * user
