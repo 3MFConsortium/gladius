@@ -1937,6 +1937,249 @@ namespace gladius
         return out;
     }
 
+    bool ApplicationMCPAdapter::setBuildItemObjectByIndex(uint32_t buildItemIndex,
+                                                          uint32_t objectModelResourceId)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available";
+            return false;
+        }
+
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                m_lastErrorMessage = "No active document available";
+                return false;
+            }
+
+            // Ensure 3MF model is up to date before modifying
+            document->update3mfModel();
+            auto model = document->get3mfModel();
+            if (!model)
+            {
+                m_lastErrorMessage = "No 3MF model available";
+                return false;
+            }
+
+            // Resolve object resource by ModelResourceID -> UniqueResourceID -> Resource
+            Lib3MF_uint32 uniqueId = io::resourceIdToUniqueResourceId(
+              model, static_cast<gladius::ResourceId>(objectModelResourceId));
+            if (uniqueId == 0)
+            {
+                m_lastErrorMessage = "Could not resolve unique resource id for object id " +
+                                     std::to_string(objectModelResourceId);
+                return false;
+            }
+            auto resource = model->GetResourceByID(uniqueId);
+            Lib3MF::PObject object = std::dynamic_pointer_cast<Lib3MF::CObject>(resource);
+            if (!object)
+            {
+                m_lastErrorMessage =
+                  "Target resource id is not an object (mesh/components/levelset)";
+                return false;
+            }
+
+            // Find the build item by index
+            auto buildIt = model->GetBuildItems();
+            uint32_t idx = 0;
+            bool found = false;
+            Lib3MF::PBuildItem target;
+            while (buildIt->MoveNext())
+            {
+                if (idx == buildItemIndex)
+                {
+                    target = buildIt->GetCurrent();
+                    found = true;
+                    break;
+                }
+                ++idx;
+            }
+            if (!found || !target)
+            {
+                m_lastErrorMessage = "Build item index out of range";
+                return false;
+            }
+
+            // Preserve the current transform and part number when swapping the object
+            Lib3MF::sTransform t = target->GetObjectTransform();
+            std::string partNumber;
+            try
+            {
+                partNumber = target->GetPartNumber();
+            }
+            catch (...)
+            {
+                partNumber.clear();
+            }
+
+            // Remove and re-add the build item with the new object
+            model->RemoveBuildItem(target);
+            auto newBuildItem = model->AddBuildItem(object, t);
+            if (!partNumber.empty())
+            {
+                try
+                {
+                    newBuildItem->SetPartNumber(partNumber);
+                }
+                catch (...)
+                {
+                    // ignore failures setting part number
+                }
+            }
+
+            // Sync document state
+            document->updateDocumenFrom3mfModel();
+            m_lastErrorMessage =
+              "Build item updated to reference object id " + std::to_string(objectModelResourceId);
+            return true;
+        }
+        catch (const std::exception & e)
+        {
+            m_lastErrorMessage =
+              "Exception while setting build item object: " + std::string(e.what());
+            return false;
+        }
+    }
+
+    bool ApplicationMCPAdapter::setBuildItemTransformByIndex(
+      uint32_t buildItemIndex,
+      const std::array<float, 12> & transform4x3RowMajor)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available";
+            return false;
+        }
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            auto model = document->get3mfModel();
+            if (!model)
+            {
+                m_lastErrorMessage = "No 3MF model available";
+                return false;
+            }
+
+            // Find the build item by index
+            auto buildIt = model->GetBuildItems();
+            uint32_t idx = 0;
+            bool found = false;
+            Lib3MF::PBuildItem target;
+            while (buildIt->MoveNext())
+            {
+                if (idx == buildItemIndex)
+                {
+                    target = buildIt->GetCurrent();
+                    found = true;
+                    break;
+                }
+                ++idx;
+            }
+            if (!found || !target)
+            {
+                m_lastErrorMessage = "Build item index out of range";
+                return false;
+            }
+
+            // Map 12 floats (row-major 4x3) into sTransform
+            Lib3MF::sTransform tr{};
+            for (int r = 0; r < 4; ++r)
+            {
+                for (int c = 0; c < 3; ++c)
+                {
+                    tr.m_Fields[r][c] = transform4x3RowMajor[r * 3 + c];
+                }
+            }
+            target->SetObjectTransform(tr);
+
+            document->updateDocumenFrom3mfModel();
+            m_lastErrorMessage = "Build item transform updated";
+            return true;
+        }
+        catch (const std::exception & e)
+        {
+            m_lastErrorMessage =
+              "Exception while setting build item transform: " + std::string(e.what());
+            return false;
+        }
+    }
+
+    bool ApplicationMCPAdapter::modifyLevelSet(uint32_t levelSetModelResourceId,
+                                               std::optional<uint32_t> functionModelResourceId,
+                                               std::optional<std::string> channel)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available";
+            return false;
+        }
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            auto model = document->get3mfModel();
+            if (!model)
+            {
+                m_lastErrorMessage = "No 3MF model available";
+                return false;
+            }
+
+            // Resolve level set by ModelResourceID
+            Lib3MF_uint32 uniqueLevelSetId = io::resourceIdToUniqueResourceId(
+              model, static_cast<gladius::ResourceId>(levelSetModelResourceId));
+            if (uniqueLevelSetId == 0)
+            {
+                m_lastErrorMessage = "Could not resolve levelset unique id";
+                return false;
+            }
+            auto lsRes = model->GetResourceByID(uniqueLevelSetId);
+            auto levelSet = dynamic_cast<Lib3MF::CLevelSet *>(lsRes.get());
+            if (!levelSet)
+            {
+                m_lastErrorMessage = "Resource is not a levelset";
+                return false;
+            }
+
+            // Optionally update the function reference
+            if (functionModelResourceId.has_value())
+            {
+                Lib3MF_uint32 uniqueFnId = io::resourceIdToUniqueResourceId(
+                  model, static_cast<gladius::ResourceId>(functionModelResourceId.value()));
+                if (uniqueFnId == 0)
+                {
+                    m_lastErrorMessage = "Could not resolve function unique id";
+                    return false;
+                }
+                auto fnRes = model->GetResourceByID(uniqueFnId);
+                auto fn = dynamic_cast<Lib3MF::CFunction *>(fnRes.get());
+                if (!fn)
+                {
+                    m_lastErrorMessage = "Target resource is not a function";
+                    return false;
+                }
+                levelSet->SetFunction(fn);
+            }
+
+            // Optionally update the channel name
+            if (channel.has_value())
+            {
+                levelSet->SetChannelName(channel.value());
+            }
+
+            // Update document/assembly links post-change
+            document->updateDocumenFrom3mfModel();
+            m_lastErrorMessage = "Level set modified successfully";
+            return true;
+        }
+        catch (const std::exception & e)
+        {
+            m_lastErrorMessage = "Exception while modifying level set: " + std::string(e.what());
+            return false;
+        }
+    }
+
     // 3MF Resource creation methods implementation
     std::pair<bool, uint32_t> ApplicationMCPAdapter::createLevelSet(uint32_t functionId)
     {

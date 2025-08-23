@@ -800,6 +800,82 @@ namespace gladius::mcp
                          }
                          return m_application->validateModel(params);
                      });
+
+        // BUILD ITEM MODIFICATION
+        registerTool(
+          "set_build_item_object",
+          "Modify an existing build item to reference a different object (by ModelResourceID)",
+          {{"type", "object"},
+           {"properties",
+            {{"build_item_index",
+              {{"type", "integer"}, {"description", "Zero-based index in build list"}}},
+             {"object_id",
+              {{"type", "integer"},
+               {"description", "ModelResourceID of target object (mesh/components/levelset)"}}}}},
+           {"required", {"build_item_index", "object_id"}}},
+          [this](const json & params) -> json
+          {
+              uint32_t idx = params.value("build_item_index", 0);
+              uint32_t objId = params.value("object_id", 0);
+              bool ok = m_application->setBuildItemObjectByIndex(idx, objId);
+              return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
+          });
+
+        registerTool(
+          "set_build_item_transform",
+          "Set the transform (4x3 row-major) of an existing build item by index",
+          {{"type", "object"},
+           {"properties",
+            {{"build_item_index",
+              {{"type", "integer"}, {"description", "Zero-based index in build list"}}},
+             {"transform",
+              {{"type", "array"},
+               {"minItems", 12},
+               {"maxItems", 12},
+               {"items", {{"type", "number"}}},
+               {"description", "4x3 matrix row-major: r0c0,r0c1,r0c2,r1c0,...,r3c2"}}}}},
+           {"required", {"build_item_index", "transform"}}},
+          [this](const json & params) -> json
+          {
+              uint32_t idx = params.value("build_item_index", 0);
+              std::array<float, 12> tr{};
+              auto arr = params["transform"];
+              for (size_t i = 0; i < 12 && i < arr.size(); ++i)
+              {
+                  tr[i] = static_cast<float>(arr[i]);
+              }
+              bool ok = m_application->setBuildItemTransformByIndex(idx, tr);
+              return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
+          });
+
+        // LEVELSET MODIFICATION
+        registerTool(
+          "modify_levelset",
+          "Modify a level set's referenced function and/or output channel",
+          {{"type", "object"},
+           {"properties",
+            {{"levelset_id",
+              {{"type", "integer"}, {"description", "ModelResourceID of the level set"}}},
+             {"function_id",
+              {{"type", "integer"}, {"description", "Optional function ModelResourceID"}}},
+             {"channel", {{"type", "string"}, {"description", "Optional output channel name"}}}}},
+           {"required", {"levelset_id"}}},
+          [this](const json & params) -> json
+          {
+              uint32_t lsId = params.value("levelset_id", 0);
+              std::optional<uint32_t> fnId;
+              if (params.contains("function_id") && !params["function_id"].is_null())
+              {
+                  fnId = params["function_id"].get<uint32_t>();
+              }
+              std::optional<std::string> channel;
+              if (params.contains("channel") && !params["channel"].is_null())
+              {
+                  channel = params["channel"].get<std::string>();
+              }
+              bool ok = m_application->modifyLevelSet(lsId, fnId, channel);
+              return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
+          });
     }
 
     void MCPServer::runStdioLoop()

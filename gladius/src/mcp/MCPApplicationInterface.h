@@ -147,6 +147,39 @@ namespace gladius
         validateForManufacturing(const std::vector<std::string> & functionNames = {},
                                  const nlohmann::json & constraints = {}) const = 0;
 
+        // Build item and level set modification (authoring helpers)
+        /**
+         * @brief Set the referenced object (by ModelResourceID) on an existing build item.
+         * @param buildItemIndex Zero-based index of the build item in the model's build list.
+         * @param objectModelResourceId ModelResourceID of the object to reference (mesh,
+         * components, levelset, ...).
+         * @return true on success, false otherwise (check getLastErrorMessage()).
+         */
+        virtual bool setBuildItemObjectByIndex(uint32_t buildItemIndex,
+                                               uint32_t objectModelResourceId) = 0;
+
+        /**
+         * @brief Set the transform of an existing build item.
+         * @param buildItemIndex Zero-based index of the build item in the model's build list.
+         * @param transform4x3RowMajor 12 floats (row-major 4x3 matrix) matching Lib3MF::sTransform
+         * fields.
+         * @return true on success, false otherwise (check getLastErrorMessage()).
+         */
+        virtual bool
+        setBuildItemTransformByIndex(uint32_t buildItemIndex,
+                                     const std::array<float, 12> & transform4x3RowMajor) = 0;
+
+        /**
+         * @brief Modify a level set's referenced function and/or output channel.
+         * @param levelSetModelResourceId ModelResourceID of the level set to modify.
+         * @param functionModelResourceId Optional ModelResourceID of the function to reference.
+         * @param channel Optional channel/output name to set (e.g., "shape" or "result").
+         * @return true on success, false otherwise (check getLastErrorMessage()).
+         */
+        virtual bool modifyLevelSet(uint32_t levelSetModelResourceId,
+                                    std::optional<uint32_t> functionModelResourceId,
+                                    std::optional<std::string> channel) = 0;
+
         /**
          * @brief Validate the current model in two phases and return diagnostics.
          *

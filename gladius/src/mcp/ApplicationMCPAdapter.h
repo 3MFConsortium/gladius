@@ -135,5 +135,15 @@ namespace gladius
 
         // Two-phase validation (graph sync + OpenCL compile)
         nlohmann::json validateModel(const nlohmann::json & options = {}) override;
+
+        // Build item and level set modification
+        bool setBuildItemObjectByIndex(uint32_t buildItemIndex,
+                                       uint32_t objectModelResourceId) override;
+        bool
+        setBuildItemTransformByIndex(uint32_t buildItemIndex,
+                                     const std::array<float, 12> & transform4x3RowMajor) override;
+        bool modifyLevelSet(uint32_t levelSetModelResourceId,
+                            std::optional<uint32_t> functionModelResourceId,
+                            std::optional<std::string> channel) override;
     };
 }
