@@ -26,7 +26,7 @@ if(MSVC)
  target_compile_options(${BINARY} PRIVATE  /W3 /WX /D_USE_MATH_DEFINES)
  set_property(TARGET ${BINARY} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
-target_include_directories(${BINARY} PUBLIC ../../src ../../components/nanovdb)
+target_include_directories(${BINARY} PUBLIC ../../src ../../src/io ../../components/nanovdb)
 
 set(DEPENDENCIES ${CMAKE_PROJECT_NAME}_lib GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main ${FMT_LIBRARY} ${OPENMESH_LIBRARIES} Eigen3::Eigen lodepng Boost::boost unofficial::minizip::minizip)
 
@@ -49,6 +49,13 @@ file(GLOB FONT_FILES
   "../../components/imgui/misc/fonts/*.*"
 )
 file(COPY ${FONT_FILES}  DESTINATION "misc/fonts/")
+
+# Ensure licenses are available for dialogs or setup code that scans getAppDir()/licenses
+file(COPY "../../components/licenses" DESTINATION ".")
+
+# Provide example template used by Document::newFromTemplate()
+file(MAKE_DIRECTORY "examples")
+file(COPY "../../examples/template.3mf" DESTINATION "examples/")
 
 # Use gtest_discover_tests for automatic test discovery
 gtest_discover_tests(${BINARY})

@@ -215,6 +215,25 @@ namespace gladius::tests
         {
             return true;
         }
+
+        // New methods added to the interface - provide simple mocks
+        bool setBuildItemObjectByIndex(uint32_t /*buildItemIndex*/,
+                                       uint32_t /*objectModelResourceId*/) override
+        {
+            return true;
+        }
+        bool setBuildItemTransformByIndex(
+          uint32_t /*buildItemIndex*/,
+          const std::array<float, 12> & /*transform4x3RowMajor*/) override
+        {
+            return true;
+        }
+        bool modifyLevelSet(uint32_t /*levelSetModelResourceId*/,
+                            std::optional<uint32_t> /*functionModelResourceId*/,
+                            std::optional<std::string> /*channel*/) override
+        {
+            return true;
+        }
     };
 
     class JSONRPCTest : public ::testing::Test
@@ -394,8 +413,7 @@ namespace gladius::tests
     {
         // Arrange
         json request = {
-          {"jsonrpc", "2.0"}, {"method", "tools/list"}
-          // No id field - this is a notification
+          {"jsonrpc", "2.0"}, {"method", "tools/list"} // No id field - this is a notification
         };
 
         // Act

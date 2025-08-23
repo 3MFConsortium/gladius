@@ -14,6 +14,7 @@ namespace gladius::tests
     // Type aliases to avoid comma issues in MOCK_METHOD
     using Float3Array = std::array<float, 3>;
     using Float6Array = std::array<float, 6>;
+    using Float12Array = std::array<float, 12>;
 
     // Mock implementation of MCPApplicationInterface for testing
     class MockMCPApplication : public MCPApplicationInterface
@@ -114,6 +115,17 @@ namespace gladius::tests
                     (const std::vector<std::string> &, const nlohmann::json &),
                     (const, override));
         MOCK_METHOD(bool, executeBatchOperations, (const nlohmann::json &, bool), (override));
+
+        // Newly added MCP interface methods for build item and level set modifications
+        MOCK_METHOD(bool, setBuildItemObjectByIndex, (uint32_t, uint32_t), (override));
+        MOCK_METHOD(bool,
+                    setBuildItemTransformByIndex,
+                    (uint32_t, const Float12Array &),
+                    (override));
+        MOCK_METHOD(bool,
+                    modifyLevelSet,
+                    (uint32_t, std::optional<uint32_t>, std::optional<std::string>),
+                    (override));
     };
 
     class MCPServerTest : public ::testing::Test
