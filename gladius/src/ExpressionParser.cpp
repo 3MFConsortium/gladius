@@ -118,6 +118,18 @@ namespace gladius
             m_parser.DefineFun("clamp",
                                [](double x, double minVal, double maxVal) -> double
                                { return std::min(std::max(x, minVal), maxVal); });
+
+            // Define common mathematical constants
+            // Ensure tokens like 'pi' and 'e' are recognized as constants by muParser
+            try
+            {
+                m_parser.DefineConst("pi", 3.141592653589793238462643383279502884L);
+                m_parser.DefineConst("e", 2.718281828459045235360287471352662497L);
+            }
+            catch (...)
+            {
+                // Defining constants should not throw, but ignore if it does
+            }
         }
 
         std::string preprocessComponentAccess(std::string const & expression) const
