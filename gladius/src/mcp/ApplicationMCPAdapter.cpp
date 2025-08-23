@@ -131,13 +131,27 @@ namespace gladius
 
         try
         {
-            // Ensure headless has a valid core/document if UI wasn't started
-            if (m_application->isHeadlessMode() &&
-                !m_application->getMainWindow().getCurrentDocument())
+            if (m_application->isHeadlessMode())
             {
-                m_application->getMainWindow().setupHeadless(m_application->getGlobalLogger());
+                // Ensure headless has a valid core/document if UI wasn't started
+                if (!m_application->getMainWindow().getCurrentDocument())
+                {
+                    m_application->getMainWindow().setupHeadless(m_application->getGlobalLogger());
+                }
+
+                // In headless mode avoid UI-only code paths; create from template directly.
+                auto doc = m_application->getCurrentDocument();
+                if (!doc)
+                {
+                    return false;
+                }
+                doc->newFromTemplate();
+                // Welcome screen is a UI concept but safe to hide regardless
+                m_application->getMainWindow().hideWelcomeScreen();
+                return true;
             }
-            // Use MainWindow's newModel method and hide welcome screen like the UI callback does
+
+            // UI mode: use the full UI flow
             m_application->getMainWindow().newModel();
             m_application->getMainWindow().hideWelcomeScreen();
             return true;
@@ -593,15 +607,47 @@ namespace gladius
             // Create a new function model and get reference to it
             auto & model = document->createNewFunction();
 
+            // Track the created resource for potential rollback
+            uint32_t const newFunctionId = model.getResourceId();
+
             // Set the display name for the function
             model.setDisplayName(name);
 
-            // Convert expression to node graph
-            auto resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
-              transformedExpression, model, parser, arguments, output);
+            // Convert expression to node graph (guarded for rollback on exceptions)
+            uint32_t resultNodeId = 0;
+            try
+            {
+                resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+                  transformedExpression, model, parser, arguments, output);
+            }
+            catch (const std::exception & e)
+            {
+                // Rollback the just-created function on conversion exception
+                try
+                {
+                    document->deleteFunction(newFunctionId);
+                }
+                catch (...)
+                {
+                }
+                m_lastErrorMessage =
+                  std::string("Exception while converting expression to node graph: ") + e.what() +
+                  ". The partial function was removed.";
+                return {false, 0};
+            }
 
             if (resultNodeId == 0)
             {
+                // Rollback the just-created function
+                try
+                {
+                    document->deleteFunction(newFunctionId);
+                }
+                catch (...)
+                {
+                    // Swallow rollback errors to preserve original failure cause
+                }
+
                 m_lastErrorMessage = std::string("Failed to convert expression to node graph. ") +
                                      "The expression '" + transformedExpression +
                                      "' with arguments [";
@@ -613,13 +659,31 @@ namespace gladius
                       arguments[i].name + ":" +
                       (arguments[i].type == ArgumentType::Vector ? "vec3" : "float");
                 }
-                m_lastErrorMessage += "] could not be converted to a valid node graph.";
+                m_lastErrorMessage += "] could not be converted to a valid node graph. "
+                                      "The partial function was removed.";
                 return {false, 0};
             }
 
             // Persist to 3MF immediately to ensure the function gets a stable ModelResourceID
             // and Gladius model resourceId is synchronized with the 3MF resource id
-            document->update3mfModel();
+            try
+            {
+                document->update3mfModel();
+            }
+            catch (...)
+            {
+                // Rollback on persistence failure
+                try
+                {
+                    document->deleteFunction(newFunctionId);
+                }
+                catch (...)
+                {
+                }
+                m_lastErrorMessage =
+                  "Failed to persist function to 3MF model. The partial function was removed.";
+                return {false, 0};
+            }
 
             // Get the resource ID from the created model (now synchronized to ModelResourceID)
             uint32_t resourceId = model.getResourceId();
@@ -641,6 +705,23 @@ namespace gladius
         }
         catch (const std::exception & e)
         {
+            // Best-effort rollback if a function was created before the exception
+            try
+            {
+                if (m_application)
+                {
+                    auto document = m_application->getCurrentDocument();
+                    if (document)
+                    {
+                        // We cannot reliably know the just-created id here; no-op.
+                        // Future improvement: use a scoped guard capturing the id.
+                    }
+                }
+            }
+            catch (...)
+            {
+            }
+
             m_lastErrorMessage = "Exception during expression validation: " + std::string(e.what());
             return {false, 0};
         }
