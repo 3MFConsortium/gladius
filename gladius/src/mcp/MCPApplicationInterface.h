@@ -147,6 +147,41 @@ namespace gladius
         validateForManufacturing(const std::vector<std::string> & functionNames = {},
                                  const nlohmann::json & constraints = {}) const = 0;
 
+        /**
+         * @brief Validate the current model in two phases and return diagnostics.
+         *
+         * Phases:
+         *  1) graph_sync: Update 3MF model and inputs/outputs, validate assembly structure.
+         *  2) opencl_compile: Generate kernels and attempt an OpenCL build.
+         *
+         * Options (JSON):
+         *  - compile (bool, default true): run the OpenCL compile phase.
+         *  - max_messages (int, default 50): limit of diagnostic messages to include.
+         *
+         * Returns a JSON object with fields:
+         * {
+         *   success: bool,
+         *   phases: [
+         *     { name: "graph_sync", ok: bool, errors: n, warnings: n, messages: [...] },
+         *     { name: "opencl_compile", ok: bool, errors: n, warnings: n, messages: [...] }
+         *   ],
+         *   summary: { graph_ok: bool, compile_ok: bool }
+         * }
+         */
+        /**
+         * @brief Optional: Validate the current model. Default returns a stub if not overridden.
+         */
+        virtual nlohmann::json validateModel(const nlohmann::json & options = {})
+        {
+            (void) options; // unused in default implementation
+            nlohmann::json res;
+            res["success"] = false;
+            res["phases"] = nlohmann::json::array();
+            res["summary"] = {{"graph_ok", false}, {"compile_ok", false}};
+            res["error"] = "validateModel not implemented";
+            return res;
+        }
+
         // Batch operations
         virtual bool executeBatchOperations(const nlohmann::json & operations,
                                             bool rollbackOnError = true) = 0;

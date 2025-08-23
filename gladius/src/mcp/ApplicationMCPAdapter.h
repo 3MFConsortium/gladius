@@ -132,5 +132,8 @@ namespace gladius
         // Batch operations
         bool executeBatchOperations(const nlohmann::json & operations,
                                     bool rollbackOnError = true) override;
+
+        // Two-phase validation (graph sync + OpenCL compile)
+        nlohmann::json validateModel(const nlohmann::json & options = {}) override;
     };
 }

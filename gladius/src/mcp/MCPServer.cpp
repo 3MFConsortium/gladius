@@ -778,6 +778,28 @@ namespace gladius::mcp
                   return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
               }
           });
+
+        // MODEL VALIDATION (Two-phase: graph sync + OpenCL compile)
+        registerTool("validate_model",
+                     "Validate the model in two phases: 1) graphs/lib3mf update, 2) OpenCL "
+                     "compile; returns diagnostics",
+                     {{"type", "object"},
+                      {"properties",
+                       {{"compile",
+                         {{"type", "boolean"},
+                          {"description", "If true, run OpenCL compile phase (default true)"}}},
+                        {"max_messages",
+                         {{"type", "integer"},
+                          {"description", "Max diagnostic messages to include (default 50)"}}}}},
+                      {"required", nlohmann::json::array()}},
+                     [this](const json & params) -> json
+                     {
+                         if (!m_application)
+                         {
+                             return {{"success", false}, {"error", "No application available"}};
+                         }
+                         return m_application->validateModel(params);
+                     });
     }
 
     void MCPServer::runStdioLoop()

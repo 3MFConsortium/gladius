@@ -71,10 +71,13 @@ namespace gladius::mcp
             co_await m_backgroundPool->schedule();
 
             // This now runs on background thread - no UI blocking!
-            document->saveAs(std::filesystem::path(path), false);
+            // In headless mode, include thumbnail generation to embed a preview in the 3MF.
+            bool const writeThumbnail = m_application && m_application->isHeadlessMode();
+            document->saveAs(std::filesystem::path(path), writeThumbnail);
 
             // Success
-            m_lastErrorMessage = "Document saved successfully";
+            m_lastErrorMessage = writeThumbnail ? "Document saved successfully with thumbnail"
+                                                : "Document saved successfully";
             co_return true;
         }
         catch (const std::exception & e)
