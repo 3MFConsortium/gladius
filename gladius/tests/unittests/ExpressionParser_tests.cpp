@@ -1,4 +1,5 @@
 #include "ExpressionParser.h"
+#include <algorithm>
 #include <cmath>
 #include <gtest/gtest.h>
 
