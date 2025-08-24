@@ -377,34 +377,6 @@ namespace gladius::mcp
                       {"active_document_path", m_application->getActiveDocumentPath()}};
           });
 
-        // UI CONTROL
-        registerTool(
-          "show_ui",
-          "Ensure the UI is visible and running (useful in headless mode to display results)",
-          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
-          [this](const json & params) -> json
-          {
-              bool ok = m_application->showUI();
-              return {{"success", ok},
-                      {"headless", m_application->isHeadlessMode()},
-                      {"ui_running", m_application->isUIRunning()}};
-          });
-
-        registerTool("set_headless_mode",
-                     "Set application to headless (no UI) or UI mode",
-                     {{"type", "object"},
-                      {"properties",
-                       {{"headless",
-                         {{"type", "boolean"},
-                          {"description", "If true, run without UI; false keeps/enables UI"}}}}},
-                      {"required", {"headless"}}},
-                     [this](const json & params) -> json
-                     {
-                         bool headless = params.value("headless", true);
-                         m_application->setHeadlessMode(headless);
-                         return {{"success", true}, {"headless", m_application->isHeadlessMode()}};
-                     });
-
         // MODEL STRUCTURE INSPECTION
         registerTool(
           "get_3mf_structure",
@@ -445,23 +417,6 @@ namespace gladius::mcp
               }
               uint32_t function_id = params["function_id"];
               return m_application->getFunctionGraph(function_id);
-          });
-
-        registerTool(
-          "ping",
-          "Simple ping tool to test connectivity",
-          {{"type", "object"},
-           {"properties",
-            {{"message", {{"type", "string"}, {"description", "Optional message to echo back"}}}}},
-           {"required", json::array()}},
-          [](const json & params) -> json
-          {
-              std::string message = params.value("message", "pong");
-              auto now = std::chrono::system_clock::now();
-              auto timestamp =
-                std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch())
-                  .count();
-              return {{"response", message}, {"timestamp", timestamp}};
           });
 
         // DOCUMENT MANAGEMENT (3MF FILES)
