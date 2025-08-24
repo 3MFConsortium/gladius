@@ -73,11 +73,39 @@ namespace gladius::mcp
             // This now runs on background thread - no UI blocking!
             // In headless mode, include thumbnail generation to embed a preview in the 3MF.
             bool const writeThumbnail = m_application && m_application->isHeadlessMode();
-            document->saveAs(std::filesystem::path(path), writeThumbnail);
+
+            bool preparationSuccess = true;
+            if (writeThumbnail)
+            {
+                // Get the compute core from the document for thumbnail preparation
+                auto computeCore = document->getCore();
+                if (computeCore)
+                {
+                    // Prepare the model for thumbnail generation
+                    preparationSuccess = computeCore->prepareThumbnailGeneration();
+                    if (!preparationSuccess)
+                    {
+                        setError("Thumbnail preparation failed: model compilation or SDF "
+                                 "precomputation failed");
+                        // Don't fail the save operation, just disable thumbnail generation
+                    }
+                }
+                else
+                {
+                    setError("No compute core available for thumbnail preparation");
+                    preparationSuccess = false;
+                }
+            }
+
+            // Only write thumbnail if preparation succeeded
+            bool const actualWriteThumbnail = writeThumbnail && preparationSuccess;
+            document->saveAs(std::filesystem::path(path), actualWriteThumbnail);
 
             // Success
-            m_lastErrorMessage = writeThumbnail ? "Document saved successfully with thumbnail"
-                                                : "Document saved successfully";
+            m_lastErrorMessage = actualWriteThumbnail ? "Document saved successfully with thumbnail"
+                                 : (writeThumbnail && !preparationSuccess)
+                                   ? "Document saved successfully (thumbnail preparation failed)"
+                                   : "Document saved successfully";
             co_return true;
         }
         catch (const std::exception & e)

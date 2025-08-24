@@ -848,6 +848,61 @@ namespace gladius
         m_programs.getSlicerProgram()->precomputeSdf(*m_primitives, boundingBox);
     }
 
+    bool ComputeCore::prepareThumbnailGeneration()
+    {
+        ProfileFunction
+
+          std::lock_guard<std::recursive_mutex>
+            lock(m_computeMutex);
+
+        try
+        {
+            // Ensure model is compiled and up to date
+            if (!m_programs.getSlicerState().isModelUpToDate())
+            {
+                recompileIfRequired();
+
+                // Check again after recompilation
+                if (!m_programs.getSlicerState().isModelUpToDate())
+                {
+                    logMsg("Model compilation failed during thumbnail preparation");
+                    return false;
+                }
+            }
+
+            // Ensure SDF is precomputed
+            if (!precomputeSdfForWholeBuildPlatform())
+            {
+                logMsg("SDF precomputation failed during thumbnail preparation");
+                return false;
+            }
+
+            // Ensure bounding box is valid
+            updateBBox();
+            if (!m_boundingBox.has_value())
+            {
+                logMsg("Bounding box computation failed during thumbnail preparation");
+                return false;
+            }
+
+            auto const & bb = m_boundingBox.value();
+            if (std::isnan(bb.min.x) || std::isnan(bb.min.y) || std::isnan(bb.min.z) ||
+                std::isnan(bb.max.x) || std::isnan(bb.max.y) || std::isnan(bb.max.z))
+            {
+                logMsg("Bounding box contains invalid values during thumbnail preparation");
+                return false;
+            }
+
+            logMsg("Thumbnail generation preparation completed successfully");
+            return true;
+        }
+        catch (std::exception const & e)
+        {
+            logMsg("Exception during thumbnail preparation: " + std::string(e.what()));
+            return false;
+        }
+    }
+
     SharedGLImageBuffer ComputeCore::getResultImage() const
     {
         return m_resultImage;
@@ -1143,7 +1198,11 @@ namespace gladius
             throw std::runtime_error("Precomputed SDF is not valid");
         }
 
-        glFinish();
+        // Only call glFinish if OpenGL is available
+        if (m_capabilities == RequiredCapabilities::OpenGLInterop)
+        {
+            glFinish();
+        }
         updateBBox();
         if (!m_boundingBox.has_value())
         {

@@ -163,19 +163,26 @@ namespace gladius::tests
         ASSERT_TRUE(response["result"].contains("tools"));
 
         auto tools = response["result"]["tools"];
-        EXPECT_GE(tools.size(), 10); // Should have at least 10 tools
+        EXPECT_GE(tools.size(), 17); // Should have at least 17 tools
 
         // Check for essential tools that are actually implemented
-        std::vector<std::string> expectedTools = {"ping",
-                                                  "get_status",
+        std::vector<std::string> expectedTools = {"get_status",
+                                                  "get_3mf_structure",
+                                                  "get_function_graph",
                                                   "create_document",
                                                   "open_document",
                                                   "save_document_as",
+                                                  "save_document",
                                                   "create_function_from_expression",
                                                   "create_levelset",
                                                   "create_image3d_function",
                                                   "create_volumetric_color",
-                                                  "create_volumetric_property"};
+                                                  "create_volumetric_property",
+                                                  "set_parameter",
+                                                  "validate_model",
+                                                  "set_build_item_object",
+                                                  "set_build_item_transform",
+                                                  "modify_levelset"};
 
         for (const auto & expectedTool : expectedTools)
         {
@@ -190,36 +197,6 @@ namespace gladius::tests
             }
             EXPECT_TRUE(found) << "Expected tool '" << expectedTool << "' not found";
         }
-    }
-
-    // Test ping tool
-    TEST_F(MCPServerTest, PingTool_WithMessage_ReturnsEcho)
-    {
-        // Arrange
-        json request = {
-          {"jsonrpc", "2.0"},
-          {"id", 1},
-          {"method", "tools/call"},
-          {"params", {{"name", "ping"}, {"arguments", {{"message", "test message"}}}}}};
-
-        // Act
-        json response = m_server->processJSONRPCRequest(request);
-
-        // Assert
-        EXPECT_EQ(response["jsonrpc"], "2.0");
-        EXPECT_EQ(response["id"], 1);
-        ASSERT_TRUE(response.contains("result"));
-        ASSERT_TRUE(response["result"].contains("content"));
-
-        auto content = response["result"]["content"];
-        ASSERT_TRUE(content.is_array() && !content.empty());
-        EXPECT_EQ(content[0]["type"], "text");
-
-        // Get the JSON response text (it's already parsed)
-        std::string jsonString = content[0]["text"];
-        json pingResult = json::parse(jsonString);
-        EXPECT_EQ(pingResult["response"], "test message");
-        EXPECT_TRUE(pingResult.contains("timestamp"));
     }
 
     // Test get_status tool

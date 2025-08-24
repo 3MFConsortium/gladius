@@ -341,37 +341,6 @@ namespace gladius::tests
             EXPECT_TRUE(tool["inputSchema"].is_object());
         }
     }
-
-    // Test tools/call method with ping
-    TEST_F(JSONRPCTest, ToolsCall_PingTool_ReturnsResult)
-    {
-        // Arrange
-        json request = {
-          {"jsonrpc", "2.0"},
-          {"id", 1},
-          {"method", "tools/call"},
-          {"params", {{"name", "ping"}, {"arguments", {{"message", "hello world"}}}}}};
-
-        // Act
-        json response = m_server->processJSONRPCRequest(request);
-
-        // Assert
-        EXPECT_EQ(response["jsonrpc"], "2.0");
-        EXPECT_EQ(response["id"], 1);
-        ASSERT_TRUE(response.contains("result"));
-        ASSERT_TRUE(response["result"].contains("content"));
-
-        auto content = response["result"]["content"];
-        EXPECT_TRUE(content.is_array());
-        EXPECT_GT(content.size(), 0);
-        EXPECT_EQ(content[0]["type"], "text");
-
-        // Verify ping response contains expected message (it's already parsed)
-        std::string jsonString = content[0]["text"];
-        json pingResult = json::parse(jsonString);
-        EXPECT_EQ(pingResult["response"], "hello world");
-    }
-
     // Test tools/call method with missing tool name
     TEST_F(JSONRPCTest, ToolsCall_MissingToolName_ReturnsError)
     {
