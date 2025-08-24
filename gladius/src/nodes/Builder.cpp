@@ -80,6 +80,16 @@ namespace gladius::nodes
             shapeSink->setInputFromPort(boxNode->getOutputs().at(FieldNames::Shape));
             return;
         }
+
+        // Union the bounding box with existing shapes using Min node (for SDFs, Min = union)
+        auto uniteNode = target.create<nodes::Min>();
+
+        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
+        uniteNode->parameter()
+          .at(FieldNames::B)
+          .setInputFromPort(boxNode->getOutputs().at(FieldNames::Shape));
+
+        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
     }
 
     void Builder::addComponentRef(Model & target,
@@ -126,6 +136,8 @@ namespace gladius::nodes
 
         uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
         uniteNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+
+        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
     }
 
     void Builder::appendIntersectionWithFunction(Model & target,
@@ -186,11 +198,82 @@ namespace gladius::nodes
             return;
         }
 
+        nodes::Min unionType;
+        auto unionNode = target.create(unionType);
+
+        unionNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
+        unionNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+
+        shapeSink->setInputFromPort(unionNode->getOutputs().at(FieldNames::Result));
+    }
+
+    void Builder::intersectFunctionWithDomain(Model & target,
+                                              Model & referencedModel,
+                                              nodes::Port & coordinateSystemPort,
+                                              std::string const & sdfChannelName)
+    {
+        nodes::Resource resourceNodeType;
+        auto resourceNode = target.create(resourceNodeType);
+        resourceNode->parameter()[FieldNames::ResourceId] =
+          VariantParameter(referencedModel.getResourceId());
+
+        nodes::FunctionCall partType;
+        auto functionCallNode = target.create(partType);
+
+        functionCallNode->parameter()
+          .at(FieldNames::FunctionId)
+          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+
+        functionCallNode->updateInputsAndOutputs(referencedModel);
+        target.registerInputs(*functionCallNode);
+        target.registerOutputs(*functionCallNode);
+
+        // check if partNode has a pos parameter
+        auto iterPosInput = functionCallNode->parameter().find(FieldNames::Pos);
+        if (iterPosInput == std::end(functionCallNode->parameter()))
+        {
+            throw std::runtime_error("Entry function has no pos input");
+        }
+
+        iterPosInput->second.setInputFromPort(coordinateSystemPort);
+
+        // check, if part has a shape
+        auto iterShapeOutput = functionCallNode->getOutputs().find(sdfChannelName);
+        if (iterShapeOutput == std::end(functionCallNode->getOutputs()))
+        {
+            throw std::runtime_error(
+              fmt::format("Entry function has no output with the name {}", sdfChannelName));
+        }
+
+        if (iterShapeOutput->second.getTypeIndex() != nodes::ParameterTypeIndex::Float)
+        {
+            throw std::runtime_error(fmt::format("The output {} is not a scalar", sdfChannelName));
+        }
+
+        auto & functionShapePort = iterShapeOutput->second;
+
+        auto lastShapePort = getLastShape(target);
+        auto shapeSink = target.getEndNode()->getParameter(FieldNames::Shape);
+
+        if (!shapeSink)
+        {
+            throw std::runtime_error("End node is required to have a shape parameter");
+        }
+        if (!lastShapePort)
+        {
+            // If no previous shape (bounding box), just set the function output directly
+            shapeSink->setInputFromPort(functionShapePort);
+            return;
+        }
+
+        // Intersect the function with the existing shape (bounding box) using Max node
+        // In SDF: Max = intersection (farther surface wins, effectively clipping the function to
+        // the domain)
         nodes::Max intersectionType;
         auto intersectionNode = target.create(intersectionType);
 
         intersectionNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        intersectionNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+        intersectionNode->parameter().at(FieldNames::B).setInputFromPort(functionShapePort);
 
         shapeSink->setInputFromPort(intersectionNode->getOutputs().at(FieldNames::Result));
     }

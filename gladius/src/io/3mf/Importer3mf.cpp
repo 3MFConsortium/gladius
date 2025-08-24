@@ -13,6 +13,7 @@
 #include "Parameter.h"
 #include "Profiling.h"
 #include "VdbImporter.h"
+#include "nodes/DerivedNodes.h"
 #include "nodes/utils.h"
 #include <Eigen/Core>
 #include <variant>
@@ -73,7 +74,7 @@ namespace gladius::io
             return gladius::nodes::VariantParameter(float3{0.f, 0.f, 0.f});
         case Lib3MF::eImplicitPortType::Matrix:
         {
-            return VariantParameter(Matrix4x4(), ContentType::Transformation);
+            return gladius::nodes::VariantParameter(Matrix4x4(), ContentType::Transformation);
         }
         default:
             return gladius::nodes::VariantParameter(0);
@@ -1258,6 +1259,8 @@ namespace gladius::io
                 }
                 return;
             }
+
+            // Add the bounding box or mesh reference first
             if (levelSet->GetMeshBBoxOnly())
             {
                 auto const bbox = computeBoundingBox(mesh);
@@ -1266,7 +1269,6 @@ namespace gladius::io
             }
             else
             {
-
                 auto referencedMeshKey = ResourceKey(mesh->GetModelResourceID());
                 loadMeshIfNecessary(model, mesh, doc);
                 builder.addResourceRef(*doc.getAssembly()->assemblyModel(),
@@ -1274,10 +1276,13 @@ namespace gladius::io
                                        buildItemCoordinateSystemPort);
             }
 
-            builder.appendIntersectionWithFunction(*doc.getAssembly()->assemblyModel(),
-                                                   *gladiusFunction,
-                                                   levelSetCoordinateSystemPort,
-                                                   channelName);
+            // Now intersect with the level set function using the proper Builder method
+            // This will create the intersection of the bounding box/mesh with the function using
+            // Max operation
+            builder.intersectFunctionWithDomain(*doc.getAssembly()->assemblyModel(),
+                                                *gladiusFunction,
+                                                levelSetCoordinateSystemPort,
+                                                channelName);
 
             doc.getAssembly()->setFallbackValueLevelSet((levelSet->GetFallBackValue()));
 
