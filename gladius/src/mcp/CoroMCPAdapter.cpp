@@ -81,13 +81,31 @@ namespace gladius::mcp
                 auto computeCore = document->getCore();
                 if (computeCore)
                 {
-                    // Prepare the model for thumbnail generation
-                    preparationSuccess = computeCore->prepareThumbnailGeneration();
-                    if (!preparationSuccess)
+                    // Ensure assembly is updated before thumbnail preparation
+                    try
                     {
-                        setError("Thumbnail preparation failed: model compilation or SDF "
-                                 "precomputation failed");
-                        // Don't fail the save operation, just disable thumbnail generation
+                        document->updateFlatAssembly();
+                        computeCore->tryRefreshProgramProtected(document->getAssembly());
+                    }
+                    catch (const std::exception & e)
+                    {
+                        setError("Assembly update failed: " + std::string(e.what()));
+                        preparationSuccess = false;
+                    }
+
+                    if (preparationSuccess)
+                    {
+                        // Prepare the model for thumbnail generation
+                        preparationSuccess = computeCore->prepareThumbnailGeneration();
+                        if (!preparationSuccess)
+                        {
+                            setError(
+                              "Thumbnail preparation failed: This may be due to model compilation "
+                              "errors, "
+                              "SDF precomputation failure, or invalid bounding box. "
+                              "Check model validation for detailed OpenCL compilation errors.");
+                            // Don't fail the save operation, just disable thumbnail generation
+                        }
                     }
                 }
                 else

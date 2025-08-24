@@ -1824,13 +1824,19 @@ namespace gladius
             j["errors"] = logger->getErrorCount();
             j["warnings"] = logger->getWarningCount();
 
-            // Collect up to maxMessages most recent messages
+            // Collect up to maxMessages most recent messages (filter out info messages)
             nlohmann::json msgs = nlohmann::json::array();
             size_t count = 0;
             for (auto it = logger->cbegin();
                  it != logger->cend() && count < static_cast<size_t>(maxMessages);
-                 ++it, ++count)
+                 ++it)
             {
+                // Skip info messages - only show warnings, errors, and fatal errors
+                if (it->getSeverity() == events::Severity::Info)
+                {
+                    continue;
+                }
+
                 nlohmann::json mj;
                 mj["message"] = it->getMessage();
                 auto tp = it->getTimeStamp();
@@ -1853,6 +1859,7 @@ namespace gladius
                     break;
                 }
                 msgs.push_back(mj);
+                ++count;
             }
             j["messages"] = msgs;
             return j;
