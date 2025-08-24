@@ -193,7 +193,14 @@ configure_file(src/kernel/sdf.cl src/kernel/sdf.cl COPYONLY)
 configure_file(src/kernel/sdf.h src/kernel/sdf.h COPYONLY)
 configure_file(src/kernel/rendering.cl src/kernel/rendering.cl COPYONLY)
 configure_file(src/kernel/sdf_generator.cl src/kernel/sdf_generator.cl COPYONLY)
-configure_file(src/kernel/CNanoVDB.h src/kernel/CNanoVDB.h COPYONLY)
+
+# Copy CNanoVDB.h from vcpkg OpenVDB installation instead of using manually maintained copy
+find_path(NANOVDB_INCLUDE_DIR
+    NAMES nanovdb/CNanoVDB.h
+    HINTS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include
+    REQUIRED
+)
+configure_file(${NANOVDB_INCLUDE_DIR}/nanovdb/CNanoVDB.h src/kernel/CNanoVDB.h COPYONLY)
 configure_file(components/fonts/Roboto-Medium.ttf src/misc/fonts/Roboto-Medium.ttf COPYONLY)
 configure_file(components/fonts/fontawesome-free-5.14.0-web/fa-regular-400.ttf src/misc/fonts/fa-regular-400.ttf COPYONLY)
 configure_file(components/fonts/fontawesome-free-5.14.0-web/fa-solid-900.ttf src/misc/fonts/fa-solid-900.ttf COPYONLY)
