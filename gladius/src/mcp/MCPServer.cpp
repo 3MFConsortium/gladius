@@ -528,70 +528,116 @@ namespace gladius::mcp
           });
 
         // VOLUMETRIC FUNCTIONS (Core of 3MF Volumetric Extension)
-        registerTool(
-          "create_function_from_expression",
-          "Create a volumetric function from mathematical expression - core of 3MF volumetric "
-          "extension",
-          {{"type", "object"},
-           {"properties",
-            {{"name", {{"type", "string"}, {"description", "Function name"}}},
-             {"expression",
-              {{"type", "string"},
-               {"description", "Mathematical expression defining the volumetric function"}}},
-             {"arguments",
-              {{"type", "array"},
-               {"items",
-                {{"type", "object"},
-                 {"properties",
-                  {{"name", {{"type", "string"}, {"description", "Argument name"}}},
-                   {"type",
-                    {{"type", "string"},
-                     {"enum", {"float", "vec3"}},
-                     {"description", "Argument type"}}}}},
-                 {"required", {"name", "type"}}}},
-               {"description", "Function input arguments"}}}}},
-           {"required", {"name", "expression"}}},
-          [this](const json & params) -> json
-          {
-              if (!params.contains("name") || !params.contains("expression"))
-              {
-                  return {{"success", false}, {"error", "Missing required parameters"}};
-              }
+        {
+            // Build schema explicitly to avoid brace mismatches
+            json createFromExprSchema;
+            createFromExprSchema["type"] = "object";
+            json props;
+            props["name"] = {{"type", "string"}, {"description", "Function name"}};
+            {
+                json expr;
+                expr["type"] = "string";
+                expr["description"] =
+                  "Expression syntax (not GLSL):\n"
+                  "- Variables: x, y, z (3D coordinates)\n"
+                  "- Or use a vec3 argument and component access: pos.x, pos.y, pos.z\n"
+                  "- Operators: +, -, *, /, ^ (power)\n"
+                  "- Functions: sin(), cos(), tan(), sqrt(), abs(), exp(), log(), pow()\n"
+                  "- Constants: pi, e\n"
+                  "- Grouping: parentheses (x + y) * z\n\n"
+                  "Notes: no comments, no semicolons, no vector literals, no GLSL built-ins like "
+                  "length().\n\n"
+                  "Examples:\n"
+                  "- Gyroid: sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)\n"
+                  "- Sphere (r=5): sqrt(x*x + y*y + z*z) - 5\n"
+                  "- Scaled wave (period 10 mm): sin(x*2*pi/10)*cos(y*2*pi/10)";
+                expr["examples"] =
+                  json::array({"sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)",
+                               "sqrt(x*x + y*y + z*z) - 5",
+                               "sin(x*2*pi/10)*cos(y*2*pi/10)",
+                               "max(sqrt(x*x+y*y+z*z) - 123, sin(2*pi*x/30)*cos(2*pi*y/30) + "
+                               "sin(2*pi*y/30)*cos(2*pi*z/30) + sin(2*pi*z/30)*cos(2*pi*x/30))"});
+                props["expression"] = expr;
+            }
+            json itemsProps;
+            itemsProps["name"] = {{"type", "string"}, {"description", "Argument name"}};
+            {
+                json typeProp;
+                typeProp["type"] = "string";
+                typeProp["enum"] = json::array({"float", "vec3"});
+                typeProp["description"] =
+                  "Argument type. If you want to use component access (e.g., pos.x), pass a vec3 "
+                  "argument and reference it by that name (e.g., name=pos, type=vec3). "
+                  "Alternatively, you can rely on the implicit coordinate variables x, y, z.";
+                itemsProps["type"] = typeProp;
+            }
+            json itemsObj;
+            itemsObj["type"] = "object";
+            itemsObj["properties"] = itemsProps;
+            itemsObj["required"] = json::array({"name", "type"});
 
-              std::string name = params["name"];
-              std::string expression = params["expression"];
-              std::string outputType = params.value("output_type", "float");
+            json arguments;
+            arguments["type"] = "array";
+            arguments["items"] = itemsObj;
+            arguments["description"] = "Function input arguments";
 
-              // Parse arguments if provided
-              std::vector<FunctionArgument> arguments;
-              if (params.contains("arguments") && params["arguments"].is_array())
+            props["arguments"] = arguments;
+
+            createFromExprSchema["properties"] = props;
+            createFromExprSchema["required"] = json::array({"name", "expression"});
+
+            registerTool(
+              "create_function_from_expression",
+              "Create a volumetric function from a simple math expression (not GLSL). Supported: "
+              "variables x,y,z or component access like pos.x/pos.y/pos.z (if you pass a vec3 "
+              "argument), operators + - * / ^, functions sin cos tan sqrt abs exp log pow, "
+              "constants "
+              "pi and e, and parentheses. No comments (//, /* */), no semicolons, and no "
+              "GLSL-specific "
+              "constructs.",
+              createFromExprSchema,
+              [this](const json & params) -> json
               {
-                  for (const auto & argJson : params["arguments"])
+                  if (!params.contains("name") || !params.contains("expression"))
                   {
-                      std::string argName = argJson["name"];
-                      std::string argType = argJson["type"];
-                      ArgumentType type =
-                        (argType == "float") ? ArgumentType::Scalar : ArgumentType::Vector;
-                      arguments.emplace_back(argName, type);
+                      return {{"success", false}, {"error", "Missing required parameters"}};
                   }
-              }
 
-              auto result = m_application->createFunctionFromExpression(
-                name, expression, outputType, arguments, "");
+                  std::string name = params["name"];
+                  std::string expression = params["expression"];
+                  std::string outputType = params.value("output_type", "float");
 
-              if (result.first)
-              {
-                  return {{"success", true},
-                          {"function_name", name},
-                          {"expression", expression},
-                          {"output_type", outputType},
-                          {"resource_id", result.second}};
-              }
-              else
-              {
-                  return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
-              }
-          });
+                  // Parse arguments if provided
+                  std::vector<FunctionArgument> arguments;
+                  if (params.contains("arguments") && params["arguments"].is_array())
+                  {
+                      for (const auto & argJson : params["arguments"])
+                      {
+                          std::string argName = argJson["name"];
+                          std::string argType = argJson["type"];
+                          ArgumentType type =
+                            (argType == "float") ? ArgumentType::Scalar : ArgumentType::Vector;
+                          arguments.emplace_back(argName, type);
+                      }
+                  }
+
+                  auto result = m_application->createFunctionFromExpression(
+                    name, expression, outputType, arguments, "");
+
+                  if (result.first)
+                  {
+                      return {{"success", true},
+                              {"function_name", name},
+                              {"expression", expression},
+                              {"output_type", outputType},
+                              {"resource_id", result.second}};
+                  }
+                  else
+                  {
+                      return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
+                  }
+              });
+        }
 
         // LEVEL SETS (Convert functions to 3D geometry for 3MF)
         registerTool(
@@ -728,56 +774,56 @@ namespace gladius::mcp
           });
 
         // PARAMETER MANAGEMENT
-        registerTool(
-          "set_parameter",
-          "Set a parameter value in the document",
-          {{"type", "object"},
-           {"properties",
-            {{"model_id", {{"type", "integer"}, {"description", "Model ID"}}},
-             {"node_name", {{"type", "string"}, {"description", "Node name"}}},
-             {"parameter_name", {{"type", "string"}, {"description", "Parameter name"}}},
-             {"value", {{"description", "Parameter value (number or string)"}}},
-             {"type",
-              {{"type", "string"},
-               {"enum", {"float", "string"}},
-               {"description", "Parameter type"}}}}},
-           {"required", {"model_id", "node_name", "parameter_name", "value", "type"}}},
-          [this](const json & params) -> json
-          {
-              uint32_t model_id = params["model_id"];
-              std::string node_name = params["node_name"];
-              std::string parameter_name = params["parameter_name"];
-              std::string type = params["type"];
-              auto value = params["value"];
+        registerTool("set_parameter",
+                     "Set a parameter value in the document",
+                     {{"type", "object"},
+                      {"properties",
+                       {{"model_id", {{"type", "integer"}, {"description", "Model ID"}}},
+                        {"node_name", {{"type", "string"}, {"description", "Node name"}}},
+                        {"parameter_name", {{"type", "string"}, {"description", "Parameter name"}}},
+                        {"value", {{"description", "Parameter value (number or string)"}}},
+                        {"type",
+                         {{"type", "string"},
+                          {"enum", {"float", "string"}},
+                          {"description", "Parameter type"}}}}},
+                      {"required", {"model_id", "node_name", "parameter_name", "value", "type"}}},
+                     [this](const json & params) -> json
+                     {
+                         uint32_t model_id = params["model_id"];
+                         std::string node_name = params["node_name"];
+                         std::string parameter_name = params["parameter_name"];
+                         std::string type = params["type"];
+                         auto value = params["value"];
 
-              bool success = false;
-              if (type == "float")
-              {
-                  float float_value = value;
-                  success = m_application->setFloatParameter(
-                    model_id, node_name, parameter_name, float_value);
-              }
-              else if (type == "string")
-              {
-                  std::string string_value = value;
-                  success = m_application->setStringParameter(
-                    model_id, node_name, parameter_name, string_value);
-              }
+                         bool success = false;
+                         if (type == "float")
+                         {
+                             float float_value = value;
+                             success = m_application->setFloatParameter(
+                               model_id, node_name, parameter_name, float_value);
+                         }
+                         else if (type == "string")
+                         {
+                             std::string string_value = value;
+                             success = m_application->setStringParameter(
+                               model_id, node_name, parameter_name, string_value);
+                         }
 
-              if (success)
-              {
-                  return {{"success", true},
-                          {"model_id", model_id},
-                          {"node_name", node_name},
-                          {"parameter_name", parameter_name},
-                          {"value", value},
-                          {"type", type}};
-              }
-              else
-              {
-                  return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
-              }
-          });
+                         if (success)
+                         {
+                             return {{"success", true},
+                                     {"model_id", model_id},
+                                     {"node_name", node_name},
+                                     {"parameter_name", parameter_name},
+                                     {"value", value},
+                                     {"type", type}};
+                         }
+                         else
+                         {
+                             return {{"success", false},
+                                     {"error", m_application->getLastErrorMessage()}};
+                         }
+                     });
 
         // MODEL VALIDATION (Two-phase: graph sync + OpenCL compile)
         registerTool("validate_model",
@@ -821,32 +867,32 @@ namespace gladius::mcp
               return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
           });
 
-        registerTool(
-          "set_build_item_transform",
-          "Set the transform (4x3 row-major) of an existing build item by index",
-          {{"type", "object"},
-           {"properties",
-            {{"build_item_index",
-              {{"type", "integer"}, {"description", "Zero-based index in build list"}}},
-             {"transform",
-              {{"type", "array"},
-               {"minItems", 12},
-               {"maxItems", 12},
-               {"items", {{"type", "number"}}},
-               {"description", "4x3 matrix row-major: r0c0,r0c1,r0c2,r1c0,...,r3c2"}}}}},
-           {"required", {"build_item_index", "transform"}}},
-          [this](const json & params) -> json
-          {
-              uint32_t idx = params.value("build_item_index", 0);
-              std::array<float, 12> tr{};
-              auto arr = params["transform"];
-              for (size_t i = 0; i < 12 && i < arr.size(); ++i)
-              {
-                  tr[i] = static_cast<float>(arr[i]);
-              }
-              bool ok = m_application->setBuildItemTransformByIndex(idx, tr);
-              return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
-          });
+        registerTool("set_build_item_transform",
+                     "Set the transform (4x3 row-major) of an existing build item by index",
+                     {{"type", "object"},
+                      {"properties",
+                       {{"build_item_index",
+                         {{"type", "integer"}, {"description", "Zero-based index in build list"}}},
+                        {"transform",
+                         {{"type", "array"},
+                          {"minItems", 12},
+                          {"maxItems", 12},
+                          {"items", {{"type", "number"}}},
+                          {"description", "4x3 matrix row-major: r0c0,r0c1,r0c2,r1c0,...,r3c2"}}}}},
+                      {"required", {"build_item_index", "transform"}}},
+                     [this](const json & params) -> json
+                     {
+                         uint32_t idx = params.value("build_item_index", 0);
+                         std::array<float, 12> tr{};
+                         auto arr = params["transform"];
+                         for (size_t i = 0; i < 12 && i < arr.size(); ++i)
+                         {
+                             tr[i] = static_cast<float>(arr[i]);
+                         }
+                         bool ok = m_application->setBuildItemTransformByIndex(idx, tr);
+                         return {{"success", ok},
+                                 {"message", m_application->getLastErrorMessage()}};
+                     });
 
         // LEVELSET MODIFICATION
         registerTool(

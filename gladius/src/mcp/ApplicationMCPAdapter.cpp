@@ -268,8 +268,7 @@ namespace gladius
             bool result = m_coroAdapter->saveDocumentAs(path);
             if (result)
             {
-                m_lastErrorMessage =
-                  "Document saved successfully to " + path + " (using async coroutines)";
+                m_lastErrorMessage = "Document saved successfully to " + path;
             }
             else
             {
