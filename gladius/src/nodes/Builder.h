@@ -61,6 +61,13 @@ namespace gladius::nodes
                                          nodes::Port & coordinateSystemPort,
                                          std::string const & sdfChannelName);
 
+        void addLevelSetWithDomain(Model & target,
+                                   Model & referencedModel,
+                                   nodes::Port & functionCoordinateSystemPort,
+                                   std::string const & sdfChannelName,
+                                   BoundingBox const & boundingBox,
+                                   nodes::Port & domainCoordinateSystemPort);
+
         ComponentType getComponentType(Document & doc, ResourceId modelId);
 
         void createFunctionFromImage3D(Assembly & assenbly,

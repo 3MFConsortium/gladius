@@ -1260,29 +1260,30 @@ namespace gladius::io
                 return;
             }
 
-            // Add the bounding box or mesh reference first
+            // Calculate the bounding box for this level set
+            BoundingBox bbox;
             if (levelSet->GetMeshBBoxOnly())
             {
-                auto const bbox = computeBoundingBox(mesh);
-                builder.addBoundingBox(
-                  *doc.getAssembly()->assemblyModel(), bbox, buildItemCoordinateSystemPort);
+                bbox = computeBoundingBox(mesh);
             }
             else
             {
+                // For full mesh, we still use bounding box for domain intersection
+                bbox = computeBoundingBox(mesh);
+                // Also load the mesh reference if needed
                 auto referencedMeshKey = ResourceKey(mesh->GetModelResourceID());
                 loadMeshIfNecessary(model, mesh, doc);
-                builder.addResourceRef(*doc.getAssembly()->assemblyModel(),
-                                       referencedMeshKey,
-                                       buildItemCoordinateSystemPort);
+                // TODO: Handle full mesh geometry intersection if needed
             }
 
-            // Now intersect with the level set function using the proper Builder method
-            // This will create the intersection of the bounding box/mesh with the function using
-            // Max operation
-            builder.intersectFunctionWithDomain(*doc.getAssembly()->assemblyModel(),
-                                                *gladiusFunction,
-                                                levelSetCoordinateSystemPort,
-                                                channelName);
+            // Use the new method that creates a complete level set operation:
+            // (function ∩ bounding_box) and unions it with existing level sets
+            builder.addLevelSetWithDomain(*doc.getAssembly()->assemblyModel(),
+                                          *gladiusFunction,
+                                          levelSetCoordinateSystemPort,
+                                          channelName,
+                                          bbox,
+                                          buildItemCoordinateSystemPort);
 
             doc.getAssembly()->setFallbackValueLevelSet((levelSet->GetFallBackValue()));
 

@@ -278,6 +278,111 @@ namespace gladius::nodes
         shapeSink->setInputFromPort(intersectionNode->getOutputs().at(FieldNames::Result));
     }
 
+    void Builder::addLevelSetWithDomain(Model & target,
+                                        Model & referencedModel,
+                                        nodes::Port & functionCoordinateSystemPort,
+                                        std::string const & sdfChannelName,
+                                        BoundingBox const & boundingBox,
+                                        nodes::Port & domainCoordinateSystemPort)
+    {
+        // First, create the bounding box for this specific level set
+        auto boundingBoxNode = target.create<nodes::BoxMinMax>();
+        boundingBoxNode->parameter()
+          .at(FieldNames::Pos)
+          .setInputFromPort(domainCoordinateSystemPort);
+
+        // Create min vector node
+        auto minVecNode = target.create<nodes::ConstantVector>();
+        minVecNode->parameter().at(FieldNames::X) = VariantParameter(boundingBox.min.x);
+        minVecNode->parameter().at(FieldNames::Y) = VariantParameter(boundingBox.min.y);
+        minVecNode->parameter().at(FieldNames::Z) = VariantParameter(boundingBox.min.z);
+
+        // Create max vector node
+        auto maxVecNode = target.create<nodes::ConstantVector>();
+        maxVecNode->parameter().at(FieldNames::X) = VariantParameter(boundingBox.max.x);
+        maxVecNode->parameter().at(FieldNames::Y) = VariantParameter(boundingBox.max.y);
+        maxVecNode->parameter().at(FieldNames::Z) = VariantParameter(boundingBox.max.z);
+
+        // Connect min/max vectors to bounding box
+        boundingBoxNode->parameter()
+          .at(FieldNames::Min)
+          .setInputFromPort(minVecNode->getOutputs().at(FieldNames::Vector));
+        boundingBoxNode->parameter()
+          .at(FieldNames::Max)
+          .setInputFromPort(maxVecNode->getOutputs().at(FieldNames::Vector));
+
+        // Create the function call for this level set
+        nodes::Resource resourceNodeType;
+        auto resourceNode = target.create(resourceNodeType);
+        resourceNode->parameter().at(FieldNames::ResourceId) =
+          VariantParameter(referencedModel.getResourceId());
+
+        nodes::FunctionCall partType;
+        auto functionCallNode = target.create(partType);
+
+        functionCallNode->parameter()
+          .at(FieldNames::FunctionId)
+          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+
+        functionCallNode->updateInputsAndOutputs(referencedModel);
+        target.registerInputs(*functionCallNode);
+        target.registerOutputs(*functionCallNode);
+
+        // Set the position input for the function
+        auto iterPosInput = functionCallNode->parameter().find(FieldNames::Pos);
+        if (iterPosInput == std::end(functionCallNode->parameter()))
+        {
+            throw std::runtime_error("Entry function has no pos input");
+        }
+        iterPosInput->second.setInputFromPort(functionCoordinateSystemPort);
+
+        // Get the function output
+        auto iterShapeOutput = functionCallNode->getOutputs().find(sdfChannelName);
+        if (iterShapeOutput == std::end(functionCallNode->getOutputs()))
+        {
+            throw std::runtime_error(
+              fmt::format("Entry function has no output with the name {}", sdfChannelName));
+        }
+        if (iterShapeOutput->second.getTypeIndex() != nodes::ParameterTypeIndex::Float)
+        {
+            throw std::runtime_error(fmt::format("The output {} is not a scalar", sdfChannelName));
+        }
+        auto & functionShapePort = iterShapeOutput->second;
+
+        // Intersect the function with its bounding box (Max operation for SDF intersection)
+        nodes::Max intersectionType;
+        auto intersectionNode = target.create(intersectionType);
+        intersectionNode->parameter()
+          .at(FieldNames::A)
+          .setInputFromPort(boundingBoxNode->getOutputs().at(FieldNames::Shape));
+        intersectionNode->parameter().at(FieldNames::B).setInputFromPort(functionShapePort);
+
+        // Now union this result with any existing shapes (Min operation for SDF union)
+        auto lastShapePort = getLastShape(target);
+        auto shapeSink = target.getEndNode()->getParameter(FieldNames::Shape);
+        if (!shapeSink)
+        {
+            throw std::runtime_error("End node is required to have a shape parameter");
+        }
+
+        if (!lastShapePort)
+        {
+            // First level set - just set the intersection result directly
+            shapeSink->setInputFromPort(intersectionNode->getOutputs().at(FieldNames::Result));
+        }
+        else
+        {
+            // Union this intersection with existing shapes using Min operation
+            nodes::Min unionType;
+            auto unionNode = target.create(unionType);
+            unionNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
+            unionNode->parameter()
+              .at(FieldNames::B)
+              .setInputFromPort(intersectionNode->getOutputs().at(FieldNames::Result));
+            shapeSink->setInputFromPort(unionNode->getOutputs().at(FieldNames::Result));
+        }
+    }
+
     void Builder::appendFunctionForColorOutput(Model & target,
                                                Model & referencedModel,
                                                nodes::Port & coordinateSystemPort,
