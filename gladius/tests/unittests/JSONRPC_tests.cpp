@@ -234,6 +234,35 @@ namespace gladius::tests
         {
             return true;
         }
+
+        // Rendering methods
+        bool renderToFile(const std::string & /*outputPath*/,
+                          uint32_t /*width*/,
+                          uint32_t /*height*/,
+                          const std::string & /*format*/,
+                          float /*quality*/) override
+        {
+            return true;
+        }
+
+        bool renderWithCamera(const std::string & /*outputPath*/,
+                              const nlohmann::json & /*cameraSettings*/,
+                              const nlohmann::json & /*renderSettings*/) override
+        {
+            return true;
+        }
+
+        bool generateThumbnail(const std::string & /*outputPath*/, uint32_t /*size*/) override
+        {
+            return true;
+        }
+
+        nlohmann::json getOptimalCameraPosition() const override
+        {
+            return nlohmann::json{{"eye_position", {1.0, 1.0, 1.0}},
+                                  {"target_position", {0.0, 0.0, 0.0}},
+                                  {"up_vector", {0.0, 0.0, 1.0}}};
+        }
     };
 
     class JSONRPCTest : public ::testing::Test

@@ -126,6 +126,18 @@ namespace gladius::tests
                     modifyLevelSet,
                     (uint32_t, std::optional<uint32_t>, std::optional<std::string>),
                     (override));
+
+        // Rendering methods
+        MOCK_METHOD(bool,
+                    renderToFile,
+                    (const std::string &, uint32_t, uint32_t, const std::string &, float),
+                    (override));
+        MOCK_METHOD(bool,
+                    renderWithCamera,
+                    (const std::string &, const nlohmann::json &, const nlohmann::json &),
+                    (override));
+        MOCK_METHOD(bool, generateThumbnail, (const std::string &, uint32_t), (override));
+        MOCK_METHOD(nlohmann::json, getOptimalCameraPosition, (), (const, override));
     };
 
     class MCPServerTest : public ::testing::Test
@@ -640,5 +652,138 @@ namespace gladius::tests
                     ::testing::HasSubstr("Document has not been saved before"));
         EXPECT_THAT(saveResult["message"].get<std::string>(),
                     ::testing::HasSubstr("Use 'save_document_as'"));
+    }
+
+    // ========================================
+    // Generate Thumbnail tool tests
+    // ========================================
+
+    TEST_F(MCPServerTest, GenerateThumbnailTool_Success_ReturnsSuccessMessage)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, generateThumbnail("/tmp/thumb.png", 256))
+          .WillOnce(::testing::Return(true));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params",
+                         {{"name", "generate_thumbnail"},
+                          {"arguments", {{"output_path", "/tmp/thumb.png"}, {"size", 256}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        ASSERT_TRUE(content.is_array() && !content.empty());
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_EQ(result["success"], true);
+        EXPECT_EQ(result["output_path"], "/tmp/thumb.png");
+        EXPECT_EQ(result["size"], 256);
+    }
+
+    TEST_F(MCPServerTest, GenerateThumbnailTool_MissingOutputPath_ReturnsValidationError)
+    {
+        // Arrange: omit required output_path
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params", {{"name", "generate_thumbnail"}, {"arguments", {}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_TRUE(result.contains("error"));
+        EXPECT_THAT(result["error"].get<std::string>(),
+                    ::testing::HasSubstr("Missing required parameter"));
+    }
+
+    TEST_F(MCPServerTest, GenerateThumbnailTool_ZeroSize_AdapterRejects_PropagatesMessage)
+    {
+        // Arrange: server forwards size to adapter; adapter rejects zero
+        EXPECT_CALL(*m_mockApp, generateThumbnail("/tmp/thumb.png", 0))
+          .WillOnce(::testing::Return(false));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return("Invalid thumbnail size: 0"));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params",
+                         {{"name", "generate_thumbnail"},
+                          {"arguments", {{"output_path", "/tmp/thumb.png"}, {"size", 0}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_EQ(result["success"], false);
+        EXPECT_THAT(result["error"].get<std::string>(),
+                    ::testing::HasSubstr("Invalid thumbnail size"));
+    }
+
+    TEST_F(MCPServerTest, GenerateThumbnailTool_NoActiveDocument_PropagatesAdapterError)
+    {
+        // Arrange
+        EXPECT_CALL(*m_mockApp, generateThumbnail("/tmp/thumb.png", 256))
+          .WillOnce(::testing::Return(false));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(::testing::Return("No active document available for thumbnail generation"));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params",
+                         {{"name", "generate_thumbnail"},
+                          {"arguments", {{"output_path", "/tmp/thumb.png"}, {"size", 256}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_EQ(result["success"], false);
+        EXPECT_THAT(result["error"].get<std::string>(),
+                    ::testing::HasSubstr("No active document available"));
+    }
+
+    TEST_F(MCPServerTest, GenerateThumbnailTool_PreparationFailed_PropagatesAdapterError)
+    {
+        // Arrange: model not compiled or invalid => adapter explains preparation failure
+        EXPECT_CALL(*m_mockApp, generateThumbnail("/tmp/thumb.png", 256))
+          .WillOnce(::testing::Return(false));
+        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
+          .WillOnce(
+            ::testing::Return("Thumbnail preparation failed: This may be due to model compilation "
+                              "failing, SDF precomputation failing, or invalid bounding box"));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params",
+                         {{"name", "generate_thumbnail"},
+                          {"arguments", {{"output_path", "/tmp/thumb.png"}, {"size", 256}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_EQ(result["success"], false);
+        EXPECT_THAT(result["error"].get<std::string>(),
+                    ::testing::HasSubstr("Thumbnail preparation failed"));
     }
 }

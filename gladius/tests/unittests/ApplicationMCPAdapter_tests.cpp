@@ -3,6 +3,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <memory>
+#include <nlohmann/json.hpp>
 
 namespace gladius::tests
 {
@@ -257,6 +258,110 @@ namespace gladius::tests
         std::make_tuple("torus", "sqrt((sqrt(x*x + y*y) - 5)*(sqrt(x*x + y*y) - 5) + z*z) - 1"),
         std::make_tuple("cylinder", "sqrt(x*x + y*y) - 3"),
         std::make_tuple("plane", "z")));
+
+    // Test rendering and thumbnail generation methods
+    TEST_F(ApplicationMCPAdapterTest, GenerateThumbnail_NullApplication_ReturnsFalse)
+    {
+        // Act
+        bool result = m_adapter->generateThumbnail("/test/thumbnail.png", 256);
+
+        // Assert
+        EXPECT_FALSE(result);
+        // Verify error message indicates no active document
+        EXPECT_THAT(m_adapter->getLastErrorMessage(),
+                    ::testing::HasSubstr("No active document available"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, RenderToFile_NullApplication_ReturnsFalse)
+    {
+        // Act
+        bool result = m_adapter->renderToFile("/test/render.png", 512, 512, "png", 0.9f);
+
+        // Assert
+        EXPECT_FALSE(result);
+        // Verify error message indicates no active document
+        EXPECT_THAT(m_adapter->getLastErrorMessage(),
+                    ::testing::HasSubstr("No active document available"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, RenderWithCamera_NullApplication_ReturnsFalse)
+    {
+        // Arrange
+        nlohmann::json cameraSettings = {
+          {"eye_position", {10, 10, 10}}, {"target_position", {0, 0, 0}}, {"up_vector", {0, 0, 1}}};
+        nlohmann::json renderSettings = {{"width", 1024}, {"height", 1024}, {"format", "png"}};
+
+        // Act
+        bool result =
+          m_adapter->renderWithCamera("/test/camera_render.png", cameraSettings, renderSettings);
+
+        // Assert
+        EXPECT_FALSE(result);
+        // Verify error message indicates no active document
+        EXPECT_THAT(m_adapter->getLastErrorMessage(),
+                    ::testing::HasSubstr("No active document available"));
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, GetOptimalCameraPosition_NullApplication_ReturnsError)
+    {
+        // Act
+        auto result = m_adapter->getOptimalCameraPosition();
+
+        // Assert
+        EXPECT_TRUE(result.contains("error"));
+        EXPECT_THAT(result["error"].get<std::string>(),
+                    ::testing::HasSubstr("No active document available"));
+    }
+
+    // Test error message propagation for rendering methods
+    TEST_F(ApplicationMCPAdapterTest, RenderingMethods_NullApplication_ProperErrorMessages)
+    {
+        // Test that all rendering methods provide clear error messages
+
+        // Test generateThumbnail
+        m_adapter->generateThumbnail("/test/thumb.png", 128);
+        EXPECT_THAT(m_adapter->getLastErrorMessage(),
+                    ::testing::HasSubstr("No active document available"));
+
+        // Test renderToFile
+        m_adapter->renderToFile("/test/render.png", 256, 256);
+        EXPECT_THAT(m_adapter->getLastErrorMessage(),
+                    ::testing::HasSubstr("No active document available"));
+
+        // Test renderWithCamera
+        nlohmann::json emptyCam, emptyRender;
+        m_adapter->renderWithCamera("/test/cam.png", emptyCam, emptyRender);
+        EXPECT_THAT(m_adapter->getLastErrorMessage(),
+                    ::testing::HasSubstr("No active document available"));
+    }
+
+    // Test parameter validation for rendering methods
+    TEST_F(ApplicationMCPAdapterTest, RenderToFile_InvalidFormat_HandlesGracefully)
+    {
+        // Act
+        bool result = m_adapter->renderToFile("/test/render.jpg", 512, 512, "unsupported", 0.9f);
+
+        // Assert
+        EXPECT_FALSE(result);
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, GenerateThumbnail_ZeroSize_HandlesGracefully)
+    {
+        // Act
+        bool result = m_adapter->generateThumbnail("/test/thumbnail.png", 0);
+
+        // Assert
+        EXPECT_FALSE(result);
+    }
+
+    TEST_F(ApplicationMCPAdapterTest, RenderToFile_ZeroDimensions_HandlesGracefully)
+    {
+        // Act
+        bool result = m_adapter->renderToFile("/test/render.png", 0, 0);
+
+        // Assert
+        EXPECT_FALSE(result);
+    }
 
 } // namespace gladius::tests
 

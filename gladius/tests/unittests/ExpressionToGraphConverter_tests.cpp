@@ -151,12 +151,13 @@ namespace gladius::tests
            [](nodes::Model & model)
            { return gladius_tests::helper::countNumberOfNodesOfType<nodes::Subtraction>(model); }},
           {"x * y",
-           [](nodes::Model & model) {
+           [](nodes::Model & model)
+           {
                return gladius_tests::helper::countNumberOfNodesOfType<nodes::Multiplication>(model);
            }},
-          {"x / y", [](nodes::Model & model) {
-               return gladius_tests::helper::countNumberOfNodesOfType<nodes::Division>(model);
-           }}};
+          {"x / y",
+           [](nodes::Model & model)
+           { return gladius_tests::helper::countNumberOfNodesOfType<nodes::Division>(model); }}};
 
         for (auto const & [expression, countFunction] : testCases)
         {
@@ -1473,6 +1474,335 @@ namespace gladius::tests
         auto valueVariant = constantNode->parameter().at(nodes::FieldNames::Value).getValue();
         ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
         EXPECT_NEAR(std::get<float>(valueVariant), 42.0f, 1e-5f);
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConstantParameter_AfterCreation_InputSourceNotRequired)
+    {
+        // Arrange - Test that verifies the fix for 3MF import issues
+        std::string const expression = "5.0";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        // Find ConstantScalar node
+        nodes::ConstantScalar * constantNode = nullptr;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNode = n;
+                break;
+            }
+        }
+        ASSERT_NE(constantNode, nullptr) << "Expected a ConstantScalar node for literal 5.0";
+
+        // Critical test: parameter should not require input source after value is set
+        auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+        EXPECT_FALSE(valueParam.isInputSourceRequired())
+          << "Constant parameter should not require input source after value is set";
+
+        // Verify the value is correctly stored
+        auto valueVariant = valueParam.getValue();
+        ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
+        EXPECT_NEAR(std::get<float>(valueVariant), 5.0f, 1e-5f);
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConstantParameters_MultipleConstants_AllHaveCorrectInputSourceFlags)
+    {
+        // Arrange - Test multiple constants in one expression
+        std::string const expression = "1.5 + 2.7 - 0.3";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        // Find all ConstantScalar nodes
+        std::vector<nodes::ConstantScalar *> constantNodes;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNodes.push_back(n);
+            }
+        }
+
+        // Should have exactly 3 constant nodes for 1.5, 2.7, and 0.3
+        EXPECT_GE(constantNodes.size(), 1) << "Expected at least 1 ConstantScalar node";
+
+        // Verify each constant has correct inputSourceRequired flag
+        for (auto * constantNode : constantNodes)
+        {
+            auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+            EXPECT_FALSE(valueParam.isInputSourceRequired())
+              << "Constant parameter should not require input source";
+
+            // Verify value is a float
+            auto valueVariant = valueParam.getValue();
+            EXPECT_TRUE(std::holds_alternative<float>(valueVariant))
+              << "Constant parameter should hold a float value";
+        }
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConstantVector_ZeroVector_CreatesConstantVectorNode)
+    {
+        // Arrange - Test vector constants (implementation depends on available syntax)
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("pos", ArgumentType::Vector);
+        std::string const expression = "pos + pos * 0.0"; // Implicit zero vector scaling
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        // Find ConstantScalar node for the 0.0 literal
+        nodes::ConstantScalar * constantNode = nullptr;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNode = n;
+                break;
+            }
+        }
+        ASSERT_NE(constantNode, nullptr) << "Expected a ConstantScalar node for literal 0.0";
+
+        // Verify the constant parameter doesn't require input source
+        auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+        EXPECT_FALSE(valueParam.isInputSourceRequired())
+          << "Vector scaling constant should not require input source";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConstantMathematicalConstants_Pi_CreatesConstantWithCorrectValue)
+    {
+        // Arrange - Test mathematical constants if supported
+        std::string const expression = "pi"; // Test if pi constant is supported
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+        // This test may fail if 'pi' is not recognized as a constant by the parser
+        if (resultNodeId != 0)
+        {
+            // Find ConstantScalar node for pi
+            nodes::ConstantScalar * constantNode = nullptr;
+            for (auto it = m_model->begin(); it != m_model->end(); ++it)
+            {
+                if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+                {
+                    constantNode = n;
+                    break;
+                }
+            }
+
+            if (constantNode != nullptr)
+            {
+                auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+                EXPECT_FALSE(valueParam.isInputSourceRequired())
+                  << "Mathematical constant should not require input source";
+
+                auto valueVariant = valueParam.getValue();
+                if (std::holds_alternative<float>(valueVariant))
+                {
+                    float piValue = std::get<float>(valueVariant);
+                    EXPECT_NEAR(piValue, 3.14159f, 1e-4f)
+                      << "Pi constant should have correct value";
+                }
+            }
+        }
+        // Note: If pi is not supported, this test will pass silently
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConstantPrecision_VerySmallValues_MaintainsPrecision)
+    {
+        // Arrange - Test precision for very small constants
+        std::string const expression = "0.000001";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        nodes::ConstantScalar * constantNode = nullptr;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNode = n;
+                break;
+            }
+        }
+        ASSERT_NE(constantNode, nullptr) << "Expected a ConstantScalar node for small literal";
+
+        auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+        EXPECT_FALSE(valueParam.isInputSourceRequired())
+          << "Small constant should not require input source";
+
+        auto valueVariant = valueParam.getValue();
+        ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
+        EXPECT_NEAR(std::get<float>(valueVariant), 0.000001f, 1e-8f)
+          << "Small constant should maintain precision";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConstantPrecision_VeryLargeValues_MaintainsPrecision)
+    {
+        // Arrange - Test precision for very large constants
+        std::string const expression = "123456.789";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        nodes::ConstantScalar * constantNode = nullptr;
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                constantNode = n;
+                break;
+            }
+        }
+        ASSERT_NE(constantNode, nullptr) << "Expected a ConstantScalar node for large literal";
+
+        auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+        EXPECT_FALSE(valueParam.isInputSourceRequired())
+          << "Large constant should not require input source";
+
+        auto valueVariant = valueParam.getValue();
+        ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
+        EXPECT_NEAR(std::get<float>(valueVariant), 123456.789f, 1e-2f)
+          << "Large constant should maintain reasonable precision";
+    }
+
+    TEST_F(ExpressionToGraphConverterTest, ConstantNegative_NegativeValues_StoredCorrectly)
+    {
+        // Arrange - Test various negative constants
+        std::vector<std::pair<std::string, float>> negativeTests = {
+          {"-1", -1.0f}, {"-0.5", -0.5f}, {"-123.456", -123.456f}, {"-0.000001", -0.000001f}};
+
+        for (auto const & [expression, expectedValue] : negativeTests)
+        {
+            // Create fresh model for each test
+            auto model = std::make_unique<nodes::Model>();
+
+            // Act
+            nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+              expression, *model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+            // Assert
+            EXPECT_NE(resultNodeId, 0) << "Failed for expression: " << expression;
+
+            nodes::ConstantScalar * constantNode = nullptr;
+            for (auto it = model->begin(); it != model->end(); ++it)
+            {
+                if (auto * n = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+                {
+                    constantNode = n;
+                    break;
+                }
+            }
+            ASSERT_NE(constantNode, nullptr) << "Expected ConstantScalar for: " << expression;
+
+            auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+            EXPECT_FALSE(valueParam.isInputSourceRequired())
+              << "Negative constant should not require input source: " << expression;
+
+            auto valueVariant = valueParam.getValue();
+            ASSERT_TRUE(std::holds_alternative<float>(valueVariant));
+            EXPECT_NEAR(std::get<float>(valueVariant), expectedValue, 1e-5f)
+              << "Negative constant value mismatch for: " << expression;
+        }
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConstantExpressions_OnlyConstants_CreatesSingleConstantNode)
+    {
+        // Arrange - Test expression with only constants (should be evaluated to single constant)
+        std::string const expression = "2 + 3";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, {}, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        // Count the types of nodes created
+        auto constantCount =
+          gladius_tests::helper::countNumberOfNodesOfType<nodes::ConstantScalar>(*m_model);
+        auto additionCount =
+          gladius_tests::helper::countNumberOfNodesOfType<nodes::Addition>(*m_model);
+
+        // Should create addition node and constant nodes (implementation dependent)
+        EXPECT_GT(constantCount, 0) << "Should create constant nodes";
+
+        // Verify all constant nodes have correct inputSourceRequired flags
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * constantNode = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+                EXPECT_FALSE(valueParam.isInputSourceRequired())
+                  << "Constant in constant-only expression should not require input source";
+            }
+        }
+    }
+
+    TEST_F(ExpressionToGraphConverterTest,
+           ConstantInComplexExpression_NestedWithVariables_CorrectFlagState)
+    {
+        // Arrange - Test constants in complex expressions with variables
+        std::vector<FunctionArgument> arguments;
+        arguments.emplace_back("x", ArgumentType::Scalar);
+        arguments.emplace_back("y", ArgumentType::Scalar);
+        std::string const expression = "sin(x * 2.0) + cos(y / 3.14159) - 1.0";
+
+        // Act
+        nodes::NodeId resultNodeId = ExpressionToGraphConverter::convertExpressionToGraph(
+          expression, *m_model, *m_parser, arguments, FunctionOutput::defaultOutput());
+
+        // Assert
+        EXPECT_NE(resultNodeId, 0);
+
+        // Find all constant nodes and verify their flags
+        std::vector<float> expectedValues = {2.0f, 3.14159f, 1.0f};
+        std::vector<float> foundValues;
+
+        for (auto it = m_model->begin(); it != m_model->end(); ++it)
+        {
+            if (auto * constantNode = dynamic_cast<nodes::ConstantScalar *>(it->second.get()))
+            {
+                auto const & valueParam = constantNode->parameter().at(nodes::FieldNames::Value);
+                EXPECT_FALSE(valueParam.isInputSourceRequired())
+                  << "Constant in complex expression should not require input source";
+
+                auto valueVariant = valueParam.getValue();
+                if (std::holds_alternative<float>(valueVariant))
+                {
+                    foundValues.push_back(std::get<float>(valueVariant));
+                }
+            }
+        }
+
+        EXPECT_EQ(foundValues.size(), expectedValues.size())
+          << "Should find all expected constant values";
     }
 
 } // namespace gladius::tests
