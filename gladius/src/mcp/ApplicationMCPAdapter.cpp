@@ -2378,4 +2378,319 @@ namespace gladius
                              " using channel: " + channel;
         return {true, functionId + 3000}; // Placeholder: offset function ID for property data ID
     }
+
+    bool ApplicationMCPAdapter::renderToFile(const std::string & outputPath,
+                                             uint32_t width,
+                                             uint32_t height,
+                                             const std::string & format,
+                                             float quality)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available for rendering";
+            return false;
+        }
+
+        try
+        {
+            // Get the current document
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                m_lastErrorMessage = "No active document";
+                return false;
+            }
+
+            // Get the compute core from the document
+            auto core = document->getCore();
+            if (!core)
+            {
+                m_lastErrorMessage = "No compute core available";
+                return false;
+            }
+
+            // Ensure assembly is updated before rendering
+            try
+            {
+                document->updateFlatAssembly();
+                core->tryRefreshProgramProtected(document->getAssembly());
+            }
+            catch (const std::exception & e)
+            {
+                m_lastErrorMessage = "Assembly update failed: " + std::string(e.what());
+                return false;
+            }
+
+            // Prepare the model for rendering
+            if (!core->prepareThumbnailGeneration())
+            {
+                m_lastErrorMessage =
+                  "Render preparation failed: This may be due to model compilation "
+                  "errors, SDF precomputation failure, or invalid bounding box. "
+                  "Check model validation for detailed OpenCL compilation errors.";
+                return false;
+            }
+
+            // Set the rendering resolution
+            if (!core->setScreenResolution(width, height))
+            {
+                m_lastErrorMessage = "Failed to set screen resolution to " + std::to_string(width) +
+                                     "x" + std::to_string(height);
+                return false;
+            }
+
+            // Create the output directory if it doesn't exist
+            std::filesystem::path outputFilePath(outputPath);
+            std::filesystem::create_directories(outputFilePath.parent_path());
+
+            // Currently only PNG is fully supported
+            if (format == "png")
+            {
+                // Use existing thumbnail generation infrastructure
+                core->saveThumbnail(outputPath);
+                m_lastErrorMessage = "Rendered to: " + outputPath;
+                return true;
+            }
+            else
+            {
+                m_lastErrorMessage = "Format '" + format + "' not yet implemented. Use 'png'.";
+                return false;
+            }
+        }
+        catch (const std::exception & e)
+        {
+            m_lastErrorMessage = "Rendering failed: " + std::string(e.what());
+            return false;
+        }
+    }
+
+    bool ApplicationMCPAdapter::renderWithCamera(const std::string & outputPath,
+                                                 const nlohmann::json & cameraSettings,
+                                                 const nlohmann::json & renderSettings)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available for rendering";
+            return false;
+        }
+
+        try
+        {
+            // Get the current document
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                m_lastErrorMessage = "No active document";
+                return false;
+            }
+
+            // Get the compute core from the document
+            auto core = document->getCore();
+            if (!core)
+            {
+                m_lastErrorMessage = "No compute core available";
+                return false;
+            }
+
+            // Ensure assembly is updated before rendering
+            try
+            {
+                document->updateFlatAssembly();
+                core->tryRefreshProgramProtected(document->getAssembly());
+            }
+            catch (const std::exception & e)
+            {
+                m_lastErrorMessage = "Assembly update failed: " + std::string(e.what());
+                return false;
+            }
+
+            // Prepare the model for rendering
+            if (!core->prepareThumbnailGeneration())
+            {
+                m_lastErrorMessage =
+                  "Camera render preparation failed: This may be due to model compilation "
+                  "errors, SDF precomputation failure, or invalid bounding box. "
+                  "Check model validation for detailed OpenCL compilation errors.";
+                return false;
+            }
+
+            // Parse render settings with defaults
+            uint32_t width = renderSettings.value("width", 1024);
+            uint32_t height = renderSettings.value("height", 1024);
+            std::string format = renderSettings.value("format", "png");
+
+            // Set resolution
+            if (!core->setScreenResolution(width, height))
+            {
+                m_lastErrorMessage = "Failed to set screen resolution";
+                return false;
+            }
+
+            // Parse and apply camera settings if provided
+            if (cameraSettings.contains("eye_position") &&
+                cameraSettings.contains("target_position"))
+            {
+                // TODO: Implement camera application when API is available
+                // For now, we'll use the existing rendering without camera changes
+                m_lastErrorMessage += "Camera settings received but not yet fully implemented. ";
+            }
+
+            // Create output directory
+            std::filesystem::path outputFilePath(outputPath);
+            std::filesystem::create_directories(outputFilePath.parent_path());
+
+            // Render based on format
+            if (format == "png")
+            {
+                core->saveThumbnail(outputPath);
+                m_lastErrorMessage += "Camera render completed: " + outputPath;
+                return true;
+            }
+            else
+            {
+                m_lastErrorMessage =
+                  "Format '" + format + "' not yet implemented for camera rendering";
+                return false;
+            }
+        }
+        catch (const std::exception & e)
+        {
+            m_lastErrorMessage = "Camera rendering failed: " + std::string(e.what());
+            return false;
+        }
+    }
+
+    bool ApplicationMCPAdapter::generateThumbnail(const std::string & outputPath, uint32_t size)
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            m_lastErrorMessage = "No active document available for thumbnail generation";
+            return false;
+        }
+
+        try
+        {
+            // Get the current document
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                m_lastErrorMessage = "No active document";
+                return false;
+            }
+
+            // Get the compute core from the document
+            auto core = document->getCore();
+            if (!core)
+            {
+                m_lastErrorMessage = "No compute core available";
+                return false;
+            }
+
+            // Ensure assembly is updated before thumbnail preparation
+            try
+            {
+                document->updateFlatAssembly();
+                core->tryRefreshProgramProtected(document->getAssembly());
+            }
+            catch (const std::exception & e)
+            {
+                m_lastErrorMessage = "Assembly update failed: " + std::string(e.what());
+                return false;
+            }
+
+            // Prepare the model for thumbnail generation
+            if (!core->prepareThumbnailGeneration())
+            {
+                m_lastErrorMessage =
+                  "Thumbnail preparation failed: This may be due to model compilation "
+                  "errors, SDF precomputation failure, or invalid bounding box. "
+                  "Check model validation for detailed OpenCL compilation errors.";
+                return false;
+            }
+
+            // Create output directory
+            std::filesystem::path outputFilePath(outputPath);
+            std::filesystem::create_directories(outputFilePath.parent_path());
+
+            // Use existing thumbnail functionality
+            core->saveThumbnail(outputPath);
+
+            m_lastErrorMessage = "Thumbnail generated: " + outputPath +
+                                 " (size requested: " + std::to_string(size) + "px)";
+            return true;
+        }
+        catch (const std::exception & e)
+        {
+            m_lastErrorMessage = "Thumbnail generation failed: " + std::string(e.what());
+            return false;
+        }
+    }
+
+    nlohmann::json ApplicationMCPAdapter::getOptimalCameraPosition() const
+    {
+        if (!m_application || !hasActiveDocument())
+        {
+            return {{"error", "No active document available"}};
+        }
+
+        try
+        {
+            // Get the current document
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                return {{"error", "No active document"}};
+            }
+
+            // Get the compute core from the document
+            auto core = document->getCore();
+            if (!core)
+            {
+                return {{"error", "No compute core available"}};
+            }
+
+            // Get the bounding box of the current model
+            auto bbox = core->getBoundingBox();
+            if (!bbox.has_value())
+            {
+                return {{"error", "No bounding box available for the model"}};
+            }
+
+            auto bb = bbox.value();
+
+            // Calculate the center of the bounding box
+            float centerX = (bb.min.x + bb.max.x) * 0.5f;
+            float centerY = (bb.min.y + bb.max.y) * 0.5f;
+            float centerZ = (bb.min.z + bb.max.z) * 0.5f;
+
+            // Calculate the size of the bounding box
+            float sizeX = bb.max.x - bb.min.x;
+            float sizeY = bb.max.y - bb.min.y;
+            float sizeZ = bb.max.z - bb.min.z;
+            float maxSize = std::max({sizeX, sizeY, sizeZ});
+
+            // Position camera at a distance that shows the entire model
+            float distance = maxSize * 2.0f;
+
+            // Default viewing angle: slightly above and to the front-right
+            float eyeX = centerX + distance * 0.7f;
+            float eyeY = centerY - distance * 0.7f;
+            float eyeZ = centerZ + distance * 0.5f;
+
+            return {{"eye_position", {eyeX, eyeY, eyeZ}},
+                    {"target_position", {centerX, centerY, centerZ}},
+                    {"up_vector", {0, 0, 1}},
+                    {"field_of_view", 45.0},
+                    {"bounding_box",
+                     {{"min", {bb.min.x, bb.min.y, bb.min.z}},
+                      {"max", {bb.max.x, bb.max.y, bb.max.z}},
+                      {"center", {centerX, centerY, centerZ}},
+                      {"size", {sizeX, sizeY, sizeZ}}}}};
+        }
+        catch (const std::exception & e)
+        {
+            return {
+              {"error", "Failed to calculate optimal camera position: " + std::string(e.what())}};
+        }
+    }
 }

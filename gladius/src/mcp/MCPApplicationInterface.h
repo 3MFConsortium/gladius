@@ -215,6 +215,58 @@ namespace gladius
             return res;
         }
 
+        // Rendering operations
+        /**
+         * @brief Render the current 3MF model to an image file
+         * @param outputPath File path where to save the rendered image
+         * @param width Image width in pixels (default: 1024)
+         * @param height Image height in pixels (default: 1024)
+         * @param format Output format ("png", "jpg") (default: "png")
+         * @param quality Quality setting 0.0-1.0 for lossy formats (default: 0.9)
+         * @return true on success, false otherwise
+         */
+        virtual bool renderToFile(const std::string & outputPath,
+                                  uint32_t width = 1024,
+                                  uint32_t height = 1024,
+                                  const std::string & format = "png",
+                                  float quality = 0.9f) = 0;
+
+        /**
+         * @brief Render with camera settings
+         * @param outputPath File path where to save the rendered image
+         * @param cameraSettings JSON object with camera parameters:
+         *   - eye_position: [x, y, z] camera position
+         *   - target_position: [x, y, z] look-at target
+         *   - up_vector: [x, y, z] up direction (default: [0, 0, 1])
+         *   - field_of_view: degrees (default: 45.0)
+         * @param renderSettings JSON object with render parameters:
+         *   - width: image width in pixels (default: 1024)
+         *   - height: image height in pixels (default: 1024)
+         *   - format: output format "png", "jpg" (default: "png")
+         *   - quality: quality 0.0-1.0 for lossy formats (default: 0.9)
+         *   - background_color: [r, g, b, a] normalized (default: [0.2, 0.2, 0.2, 1.0])
+         *   - enable_shadows: boolean (default: true)
+         *   - enable_lighting: boolean (default: true)
+         * @return true on success, false otherwise
+         */
+        virtual bool renderWithCamera(const std::string & outputPath,
+                                      const nlohmann::json & cameraSettings = {},
+                                      const nlohmann::json & renderSettings = {}) = 0;
+
+        /**
+         * @brief Generate a thumbnail image of the current model
+         * @param outputPath File path where to save the thumbnail
+         * @param size Thumbnail size in pixels (square image) (default: 256)
+         * @return true on success, false otherwise
+         */
+        virtual bool generateThumbnail(const std::string & outputPath, uint32_t size = 256) = 0;
+
+        /**
+         * @brief Get optimal camera position for the current model
+         * @return JSON object with suggested camera settings for best view
+         */
+        virtual nlohmann::json getOptimalCameraPosition() const = 0;
+
         // Batch operations
         virtual bool executeBatchOperations(const nlohmann::json & operations,
                                             bool rollbackOnError = true) = 0;

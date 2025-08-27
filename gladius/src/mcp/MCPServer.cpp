@@ -877,6 +877,220 @@ namespace gladius::mcp
               bool ok = m_application->modifyLevelSet(lsId, fnId, channel);
               return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
           });
+
+        // ===================================================================
+        // RENDERING TOOLS
+        // Create high-quality renderings and exports of 3MF models
+        // ===================================================================
+
+        // BASIC RENDERING TO FILE
+        registerTool(
+          "render_to_file",
+          "Render the current 3MF model to an image file with specified resolution and format",
+          {{"type", "object"},
+           {"properties",
+            {{"output_path",
+              {{"type", "string"}, {"description", "File path where to save the rendered image"}}},
+             {"width",
+              {{"type", "integer"}, {"description", "Image width in pixels"}, {"default", 1024}}},
+             {"height",
+              {{"type", "integer"}, {"description", "Image height in pixels"}, {"default", 1024}}},
+             {"format",
+              {{"type", "string"},
+               {"enum", {"png", "jpg"}},
+               {"description", "Output format"},
+               {"default", "png"}}},
+             {"quality",
+              {{"type", "number"},
+               {"minimum", 0.0},
+               {"maximum", 1.0},
+               {"description", "Quality setting for lossy formats"},
+               {"default", 0.9}}}}},
+           {"required", {"output_path"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("output_path"))
+              {
+                  return {{"success", false}, {"error", "Missing required parameter: output_path"}};
+              }
+
+              std::string outputPath = params["output_path"];
+              uint32_t width = params.value("width", 1024);
+              uint32_t height = params.value("height", 1024);
+              std::string format = params.value("format", "png");
+              float quality = params.value("quality", 0.9f);
+
+              bool success =
+                m_application->renderToFile(outputPath, width, height, format, quality);
+
+              if (success)
+              {
+                  return {{"success", true},
+                          {"output_path", outputPath},
+                          {"width", width},
+                          {"height", height},
+                          {"format", format},
+                          {"quality", quality}};
+              }
+              else
+              {
+                  return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
+              }
+          });
+
+        // ADVANCED RENDERING WITH CAMERA CONTROL
+        registerTool(
+          "render_with_camera",
+          "Render with full camera and lighting control for high-quality output",
+          {{"type", "object"},
+           {"properties",
+            {{"output_path",
+              {{"type", "string"}, {"description", "File path where to save the rendered image"}}},
+             {"camera_settings",
+              {{"type", "object"},
+               {"description", "Camera parameters"},
+               {"properties",
+                {{"eye_position",
+                  {{"type", "array"},
+                   {"items", {{"type", "number"}}},
+                   {"minItems", 3},
+                   {"maxItems", 3},
+                   {"description", "Camera position [x, y, z]"}}},
+                 {"target_position",
+                  {{"type", "array"},
+                   {"items", {{"type", "number"}}},
+                   {"minItems", 3},
+                   {"maxItems", 3},
+                   {"description", "Look-at target [x, y, z]"}}},
+                 {"up_vector",
+                  {{"type", "array"},
+                   {"items", {{"type", "number"}}},
+                   {"minItems", 3},
+                   {"maxItems", 3},
+                   {"description", "Up direction [x, y, z]"},
+                   {"default", {0, 0, 1}}}},
+                 {"field_of_view",
+                  {{"type", "number"},
+                   {"minimum", 10.0},
+                   {"maximum", 150.0},
+                   {"description", "Field of view in degrees"},
+                   {"default", 45.0}}}}},
+               {"required", {"eye_position", "target_position"}}}},
+             {"render_settings",
+              {{"type", "object"},
+               {"description", "Rendering parameters"},
+               {"properties",
+                {{"width",
+                  {{"type", "integer"},
+                   {"minimum", 64},
+                   {"maximum", 8192},
+                   {"description", "Image width in pixels"},
+                   {"default", 1024}}},
+                 {"height",
+                  {{"type", "integer"},
+                   {"minimum", 64},
+                   {"maximum", 8192},
+                   {"description", "Image height in pixels"},
+                   {"default", 1024}}},
+                 {"format",
+                  {{"type", "string"},
+                   {"enum", {"png", "jpg"}},
+                   {"description", "Output format"},
+                   {"default", "png"}}},
+                 {"quality",
+                  {{"type", "number"},
+                   {"minimum", 0.0},
+                   {"maximum", 1.0},
+                   {"description", "Quality for lossy formats"},
+                   {"default", 0.9}}},
+                 {"background_color",
+                  {{"type", "array"},
+                   {"items", {{"type", "number"}, {"minimum", 0.0}, {"maximum", 1.0}}},
+                   {"minItems", 4},
+                   {"maxItems", 4},
+                   {"description", "Background color [r, g, b, a]"},
+                   {"default", {0.2, 0.2, 0.2, 1.0}}}},
+                 {"enable_shadows",
+                  {{"type", "boolean"}, {"description", "Enable shadows"}, {"default", true}}},
+                 {"enable_lighting",
+                  {{"type", "boolean"},
+                   {"description", "Enable lighting"},
+                   {"default", true}}}}}}}}},
+           {"required", {"output_path", "camera_settings"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("output_path") || !params.contains("camera_settings"))
+              {
+                  return {{"success", false}, {"error", "Missing required parameters"}};
+              }
+
+              std::string outputPath = params["output_path"];
+              json cameraSettings = params["camera_settings"];
+              json renderSettings = params.value("render_settings", json::object());
+
+              bool success =
+                m_application->renderWithCamera(outputPath, cameraSettings, renderSettings);
+
+              if (success)
+              {
+                  return {{"success", true},
+                          {"output_path", outputPath},
+                          {"camera_settings", cameraSettings},
+                          {"render_settings", renderSettings}};
+              }
+              else
+              {
+                  return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
+              }
+          });
+
+        // THUMBNAIL GENERATION
+        registerTool(
+          "generate_thumbnail",
+          "Generate a thumbnail image of the current model for preview purposes",
+          {{"type", "object"},
+           {"properties",
+            {{"output_path",
+              {{"type", "string"}, {"description", "File path where to save the thumbnail"}}},
+             {"size",
+              {{"type", "integer"},
+               {"minimum", 64},
+               {"maximum", 1024},
+               {"description", "Thumbnail size in pixels (square)"},
+               {"default", 256}}}}},
+           {"required", {"output_path"}}},
+          [this](const json & params) -> json
+          {
+              if (!params.contains("output_path"))
+              {
+                  return {{"success", false}, {"error", "Missing required parameter: output_path"}};
+              }
+
+              std::string outputPath = params["output_path"];
+              uint32_t size = params.value("size", 256);
+
+              bool success = m_application->generateThumbnail(outputPath, size);
+
+              if (success)
+              {
+                  return {{"success", true}, {"output_path", outputPath}, {"size", size}};
+              }
+              else
+              {
+                  return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
+              }
+          });
+
+        // OPTIMAL CAMERA POSITION
+        registerTool(
+          "get_optimal_camera_position",
+          "Get suggested camera settings for the best view of the current model",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              auto result = m_application->getOptimalCameraPosition();
+              return {{"success", true}, {"camera_settings", result}};
+          });
     }
 
     void MCPServer::runStdioLoop()

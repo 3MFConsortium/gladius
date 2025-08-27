@@ -129,6 +129,18 @@ namespace gladius
         validateForManufacturing(const std::vector<std::string> & functionNames = {},
                                  const nlohmann::json & constraints = {}) const override;
 
+        // Rendering operations
+        bool renderToFile(const std::string & outputPath,
+                          uint32_t width = 1024,
+                          uint32_t height = 1024,
+                          const std::string & format = "png",
+                          float quality = 0.9f) override;
+        bool renderWithCamera(const std::string & outputPath,
+                              const nlohmann::json & cameraSettings = {},
+                              const nlohmann::json & renderSettings = {}) override;
+        bool generateThumbnail(const std::string & outputPath, uint32_t size = 256) override;
+        nlohmann::json getOptimalCameraPosition() const override;
+
         // Batch operations
         bool executeBatchOperations(const nlohmann::json & operations,
                                     bool rollbackOnError = true) override;
