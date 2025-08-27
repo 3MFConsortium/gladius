@@ -581,6 +581,7 @@ namespace gladius::io
             if (parameter)
             {
                 parameter->setValue(static_cast<float>(value));
+                parameter->setInputSourceRequired(false); // Fix: Constants don't need input sources
             }
         }
         else if (node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::ConstVec)
@@ -601,6 +602,8 @@ namespace gladius::io
                 if (parameter)
                 {
                     parameter->setValue(static_cast<float>(value.m_Coordinates[i]));
+                    parameter->setInputSourceRequired(
+                      false); // Fix: Constants don't need input sources
                 }
                 i++;
             }
@@ -638,6 +641,8 @@ namespace gladius::io
                 if (parameter)
                 {
                     parameter->setValue(static_cast<float>(matrix.m_Field[row][col]));
+                    parameter->setInputSourceRequired(
+                      false); // Fix: Constants don't need input sources
                 }
                 i++;
             }
