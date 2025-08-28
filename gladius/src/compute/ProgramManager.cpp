@@ -264,8 +264,33 @@ namespace gladius
     {
         std::lock_guard<std::mutex> lock(m_modelSourceMutex);
         m_modelSource = std::move(source);
+        if (m_eventLogger)
+        {
+            getLogger().addEvent(
+              {fmt::format("ProgramManager.setModelSource: size={} bytes", m_modelSource.size()),
+               events::Severity::Info});
+        }
         m_slicerState.signalCompilationRequired();
         m_renderState.signalCompilationRequired();
+    }
+
+    bool ProgramManager::hasModelSource() const
+    {
+        std::lock_guard<std::mutex> lock(m_modelSourceMutex);
+        return !m_modelSource.empty();
+    }
+
+    std::string ProgramManager::getDebugStateSummary() const
+    {
+        std::lock_guard<std::mutex> lock(m_modelSourceMutex);
+        std::stringstream ss;
+        ss << "ProgramManager: modelSource="
+           << (m_modelSource.empty() ? 0 : (int) m_modelSource.size())
+           << "B renderUpToDate=" << (m_renderState.isModelUpToDate() ? 1 : 0)
+           << " slicerUpToDate=" << (m_slicerState.isModelUpToDate() ? 1 : 0)
+           << " renderCompiling=" << (m_optimizedRenderProgram->isCompilationInProgress() ? 1 : 0)
+           << " slicerCompiling=" << (m_slicerProgram->isCompilationInProgress() ? 1 : 0);
+        return ss.str();
     }
 
     ModelState const & ProgramManager::getSlicerState()

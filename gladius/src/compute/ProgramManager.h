@@ -9,11 +9,11 @@
 #include <RenderProgram.h>
 #include <ResourceContext.h>
 #include <SlicerProgram.h>
+#include <compute/types.h>
 #include <nodes/BuildParameter.h>
 #include <nodes/Model.h>
 #include <nodes/nodesfwd.h>
 #include <ui/OrbitalCamera.h>
-#include <compute/types.h>
 
 #include <mutex>
 
@@ -57,6 +57,10 @@ namespace gladius
 
         void setModelSource(std::string source);
 
+        /// Debug helpers for headless diagnostics
+        [[nodiscard]] bool hasModelSource() const;
+        [[nodiscard]] std::string getDebugStateSummary() const;
+
         ModelState const & getSlicerState();
         ModelState const & getRendererState();
 
@@ -91,7 +95,7 @@ namespace gladius
 
         bool m_enableVdb = true;
 
-        std::mutex m_modelSourceMutex;
+        mutable std::mutex m_modelSourceMutex;
         std::string m_modelSource;
     };
 }

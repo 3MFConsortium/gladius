@@ -2570,6 +2570,22 @@ namespace gladius
 
         try
         {
+            // Caveman log: entering thumbnail generation (headless friendly)
+            try
+            {
+                auto globalLogger = m_application->getGlobalLogger();
+                if (globalLogger)
+                {
+                    globalLogger->logInfo(
+                      std::string{"MCP.generateThumbnail: start path='"} + outputPath +
+                      "' size=" + std::to_string(size) +
+                      (m_application->isHeadlessMode() ? " headless=1" : " headless=0"));
+                }
+            }
+            catch (...)
+            {
+            }
+
             // Get the current document
             auto document = m_application->getCurrentDocument();
             if (!document)
@@ -2589,12 +2605,25 @@ namespace gladius
             // Ensure assembly is updated before thumbnail preparation
             try
             {
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logInfo("MCP.generateThumbnail: updating flat assembly and program");
+                }
                 document->updateFlatAssembly();
                 core->tryRefreshProgramProtected(document->getAssembly());
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logInfo("MCP.generateThumbnail: assembly/program update OK");
+                }
             }
             catch (const std::exception & e)
             {
                 m_lastErrorMessage = "Assembly update failed: " + std::string(e.what());
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logError(std::string{"MCP.generateThumbnail: assembly update failed: "} +
+                                  e.what());
+                }
                 return false;
             }
 
@@ -2605,6 +2634,11 @@ namespace gladius
                   "Thumbnail preparation failed: This may be due to model compilation "
                   "errors, SDF precomputation failure, or invalid bounding box. "
                   "Check model validation for detailed OpenCL compilation errors.";
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logError(
+                      "MCP.generateThumbnail: prepareThumbnailGeneration returned false");
+                }
                 return false;
             }
 
@@ -2613,15 +2647,37 @@ namespace gladius
             std::filesystem::create_directories(outputFilePath.parent_path());
 
             // Use existing thumbnail functionality
+            if (auto log = document->getSharedLogger())
+            {
+                log->logInfo(std::string{"MCP.generateThumbnail: writing thumbnail to '"} +
+                             outputPath + "'");
+            }
             core->saveThumbnail(outputPath);
 
             m_lastErrorMessage = "Thumbnail generated: " + outputPath +
                                  " (size requested: " + std::to_string(size) + "px)";
+            if (auto log = document->getSharedLogger())
+            {
+                log->logInfo("MCP.generateThumbnail: done");
+            }
             return true;
         }
         catch (const std::exception & e)
         {
             m_lastErrorMessage = "Thumbnail generation failed: " + std::string(e.what());
+            try
+            {
+                if (m_application && m_application->getCurrentDocument())
+                {
+                    if (auto log = m_application->getCurrentDocument()->getSharedLogger())
+                    {
+                        log->logError(std::string{"MCP.generateThumbnail: exception: "} + e.what());
+                    }
+                }
+            }
+            catch (...)
+            {
+            }
             return false;
         }
     }

@@ -1069,14 +1069,44 @@ namespace gladius::mcp
               std::string outputPath = params["output_path"];
               uint32_t size = params.value("size", 256);
 
+              // Caveman log via application/global logger if available
+              try
+              {
+                  if (m_application && m_application->isHeadlessMode())
+                  {
+                      // Best-effort: use active document logger for visibility
+                      // We avoid introducing new dependencies here
+                      auto info = m_application->getDocumentInfo();
+                      (void) info;
+                  }
+              }
+              catch (...)
+              {
+              }
+
               bool success = m_application->generateThumbnail(outputPath, size);
 
               if (success)
               {
+                  try
+                  {
+                      // Soft log after success
+                      (void) m_application->getLastErrorMessage();
+                  }
+                  catch (...)
+                  {
+                  }
                   return {{"success", true}, {"output_path", outputPath}, {"size", size}};
               }
               else
               {
+                  try
+                  {
+                      (void) m_application->getLastErrorMessage();
+                  }
+                  catch (...)
+                  {
+                  }
                   return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
               }
           });

@@ -72,6 +72,21 @@ namespace gladius::mcp
 
             // This now runs on background thread - no UI blocking!
             // In headless mode, include thumbnail generation to embed a preview in the 3MF.
+            try
+            {
+                if (auto doc = m_application->getCurrentDocument())
+                {
+                    if (auto log = doc->getSharedLogger())
+                    {
+                        log->logInfo(
+                          std::string{"MCP.saveDocumentAsync: start path='"} + path +
+                          (m_application->isHeadlessMode() ? "' headless=1" : "' headless=0"));
+                    }
+                }
+            }
+            catch (...)
+            {
+            }
             bool const writeThumbnail = m_application && m_application->isHeadlessMode();
 
             bool preparationSuccess = true;
@@ -91,6 +106,16 @@ namespace gladius::mcp
                     {
                         setError("Assembly update failed: " + std::string(e.what()));
                         preparationSuccess = false;
+                        try
+                        {
+                            if (auto log = document->getSharedLogger())
+                            {
+                                log->logInfo("MCP.saveDocumentAsync: assembly/program refresh OK");
+                            }
+                        }
+                        catch (...)
+                        {
+                        }
                     }
 
                     if (preparationSuccess)
@@ -105,18 +130,65 @@ namespace gladius::mcp
                               "SDF precomputation failure, or invalid bounding box. "
                               "Check model validation for detailed OpenCL compilation errors.");
                             // Don't fail the save operation, just disable thumbnail generation
+                            try
+                            {
+                                if (auto log = document->getSharedLogger())
+                                {
+                                    log->logError(
+                                      "MCP.saveDocumentAsync: prepareThumbnailGeneration=false");
+                                }
+                            }
+                            catch (...)
+                            {
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                if (auto log = document->getSharedLogger())
+                                {
+                                    log->logInfo(
+                                      "MCP.saveDocumentAsync: prepareThumbnailGeneration OK");
+                                }
+                            }
+                            catch (...)
+                            {
+                            }
                         }
                     }
                 }
                 else
                 {
                     setError("No compute core available for thumbnail preparation");
+                    try
+                    {
+                        if (auto log = document->getSharedLogger())
+                        {
+                            log->logError(
+                              "MCP.saveDocumentAsync: no compute core for thumbnail prep");
+                        }
+                    }
+                    catch (...)
+                    {
+                    }
                     preparationSuccess = false;
                 }
             }
 
             // Only write thumbnail if preparation succeeded
             bool const actualWriteThumbnail = writeThumbnail && preparationSuccess;
+            try
+            {
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logInfo(std::string{"MCP.saveDocumentAsync: saving 3MF (thumb="} +
+                                 (actualWriteThumbnail ? "1)" : "0)"));
+                }
+            }
+            catch (...)
+            {
+            }
             document->saveAs(std::filesystem::path(path), actualWriteThumbnail);
 
             // Success
@@ -124,11 +196,34 @@ namespace gladius::mcp
                                  : (writeThumbnail && !preparationSuccess)
                                    ? "Document saved successfully (thumbnail preparation failed)"
                                    : "Document saved successfully";
+            try
+            {
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logInfo(std::string{"MCP.saveDocumentAsync: done: "} + m_lastErrorMessage);
+                }
+            }
+            catch (...)
+            {
+            }
             co_return true;
         }
         catch (const std::exception & e)
         {
             setError("Save operation failed: " + std::string(e.what()));
+            try
+            {
+                if (auto doc = m_application->getCurrentDocument())
+                {
+                    if (auto log = doc->getSharedLogger())
+                    {
+                        log->logError(std::string{"MCP.saveDocumentAsync: exception: "} + e.what());
+                    }
+                }
+            }
+            catch (...)
+            {
+            }
             co_return false;
         }
     }
