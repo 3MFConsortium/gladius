@@ -6,15 +6,102 @@
 #include "MCPServer.h"
 #include "FunctionArgument.h"
 #include "MCPApplicationInterface.h"
+#include <cctype>
 #include <chrono>
 #include <fmt/format.h>
+#include <fstream>
 #include <iostream>
 #include <thread>
+#include <vector>
 
 using json = nlohmann::json;
 
 namespace gladius::mcp
 {
+    namespace
+    {
+        // Minimal Base64 encoder (RFC 4648)
+        static const char b64_table[] =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+        std::string base64Encode(const std::vector<unsigned char> & data)
+        {
+            std::string out;
+            out.reserve(((data.size() + 2) / 3) * 4);
+
+            size_t i = 0;
+            while (i + 2 < data.size())
+            {
+                unsigned int triple = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+                out.push_back(b64_table[(triple >> 18) & 0x3F]);
+                out.push_back(b64_table[(triple >> 12) & 0x3F]);
+                out.push_back(b64_table[(triple >> 6) & 0x3F]);
+                out.push_back(b64_table[triple & 0x3F]);
+                i += 3;
+            }
+
+            if (i < data.size())
+            {
+                unsigned int triple = data[i] << 16;
+                bool twoBytes = false;
+                if (i + 1 < data.size())
+                {
+                    triple |= (data[i + 1] << 8);
+                    twoBytes = true;
+                }
+
+                out.push_back(b64_table[(triple >> 18) & 0x3F]);
+                out.push_back(b64_table[(triple >> 12) & 0x3F]);
+                if (twoBytes)
+                {
+                    out.push_back(b64_table[(triple >> 6) & 0x3F]);
+                    out.push_back('=');
+                }
+                else
+                {
+                    out.push_back('=');
+                    out.push_back('=');
+                }
+            }
+
+            return out;
+        }
+
+        std::string guessMimeTypeFromPath(const std::string & path)
+        {
+            auto dot = path.find_last_of('.');
+            if (dot == std::string::npos)
+                return "image/png"; // default
+            auto ext = path.substr(dot + 1);
+            for (auto & c : ext)
+                c = static_cast<char>(::tolower(c));
+            if (ext == "png")
+                return "image/png";
+            if (ext == "jpg" || ext == "jpeg")
+                return "image/jpeg";
+            if (ext == "bmp")
+                return "image/bmp";
+            if (ext == "gif")
+                return "image/gif";
+            return "image/png";
+        }
+
+        std::vector<unsigned char> readFileBinary(const std::string & path)
+        {
+            std::ifstream in(path, std::ios::binary);
+            if (!in)
+                return {};
+            in.seekg(0, std::ios::end);
+            std::streampos size = in.tellg();
+            if (size <= 0)
+                return {};
+            std::vector<unsigned char> buffer(static_cast<size_t>(size));
+            in.seekg(0, std::ios::beg);
+            in.read(reinterpret_cast<char *>(buffer.data()), size);
+            return buffer;
+        }
+    } // namespace
+
     MCPServer::MCPServer(std::shared_ptr<MCPApplicationInterface> app)
         : m_application(app.get())
         , m_applicationShared(std::move(app))
@@ -1033,10 +1120,26 @@ namespace gladius::mcp
 
               if (success)
               {
-                  return {{"success", true},
-                          {"output_path", outputPath},
-                          {"camera_settings", cameraSettings},
-                          {"render_settings", renderSettings}};
+                  // Attempt to inline the rendered image as base64 for immediate preview
+                  std::string mime = guessMimeTypeFromPath(outputPath);
+                  auto bytes = readFileBinary(outputPath);
+                  json result = {{"success", true},
+                                 {"output_path", outputPath},
+                                 {"camera_settings", cameraSettings},
+                                 {"render_settings", renderSettings}};
+                  if (!bytes.empty())
+                  {
+                      std::string b64 = base64Encode(bytes);
+                      result["image_mime_type"] = mime;
+                      result["image_base64"] = b64; // raw base64 without prefix
+                      result["image_data_url"] = std::string("data:") + mime + ";base64," + b64;
+                      result["image_bytes"] = static_cast<uint32_t>(bytes.size());
+                  }
+                  else
+                  {
+                      result["warning"] = "Rendered file could not be read for inlining";
+                  }
+                  return result;
               }
               else
               {
@@ -1096,7 +1199,23 @@ namespace gladius::mcp
                   catch (...)
                   {
                   }
-                  return {{"success", true}, {"output_path", outputPath}, {"size", size}};
+                  // Attempt to inline the generated thumbnail as base64 for immediate preview
+                  std::string mime = guessMimeTypeFromPath(outputPath);
+                  auto bytes = readFileBinary(outputPath);
+                  json result = {{"success", true}, {"output_path", outputPath}, {"size", size}};
+                  if (!bytes.empty())
+                  {
+                      std::string b64 = base64Encode(bytes);
+                      result["image_mime_type"] = mime;
+                      result["image_base64"] = b64; // raw base64 without prefix
+                      result["image_data_url"] = std::string("data:") + mime + ";base64," + b64;
+                      result["image_bytes"] = static_cast<uint32_t>(bytes.size());
+                  }
+                  else
+                  {
+                      result["warning"] = "Thumbnail file could not be read for inlining";
+                  }
+                  return result;
               }
               else
               {
