@@ -73,15 +73,15 @@ namespace gladius
     Document::Document(std::shared_ptr<ComputeCore> core)
         : m_core(std::move(core))
     {
-        m_channels.push_back(BitmapChannel{"DownSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateDownSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"DownSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateDownSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
-        m_channels.push_back(BitmapChannel{"UpSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateUpSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"UpSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateUpSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
         newModel();
         resetGeneratorContext();
@@ -911,6 +911,12 @@ namespace gladius
     {
         auto computeToken = m_core->waitForComputeToken();
         m_buildItems.clear();
+        // clear event logger
+        auto logger = getSharedLogger();
+        if (logger)
+        {
+            logger->clear();
+        }
         resetGeneratorContext();
         m_core->reset();
         m_core->getResourceContext()->clearImageStacks();
