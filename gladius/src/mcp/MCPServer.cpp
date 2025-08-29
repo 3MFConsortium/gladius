@@ -644,9 +644,21 @@ namespace gladius::mcp
               createFromExprSchema,
               [this](const json & params) -> json
               {
-                  if (!params.contains("name") || !params.contains("expression"))
+                  if (!params.contains("name"))
                   {
-                      return {{"success", false}, {"error", "Missing required parameters"}};
+                      return {{"success", false}, {"error", "Missing required name parameter"}};
+                  }
+
+                  if (!params.contains("expression"))
+                  {
+                      return {{"success", false},
+                              {"error", "Missing required expression parameter"}};
+                  }
+
+                  if (!params.contains("output_type"))
+                  {
+                      return {{"success", false},
+                              {"error", "Missing required output_type parameter"}};
                   }
 
                   std::string name = params["name"];
@@ -661,8 +673,9 @@ namespace gladius::mcp
                       {
                           std::string argName = argJson["name"];
                           std::string argType = argJson["type"];
-                          ArgumentType type =
-                            (argType == "float") ? ArgumentType::Scalar : ArgumentType::Vector;
+                          ArgumentType type = (argType == "float" || argType == "scalar")
+                                                ? ArgumentType::Scalar
+                                                : ArgumentType::Vector;
                           arguments.emplace_back(argName, type);
                       }
                   }

@@ -601,7 +601,9 @@ namespace gladius
             // Create function output specification
             FunctionOutput output;
             output.name = outputName.empty() ? "shape" : outputName;
-            output.type = (outputType == "vec3") ? ArgumentType::Vector : ArgumentType::Scalar;
+            output.type = (outputType == "vec3" || outputType == "vector" || outputType == "float3")
+                            ? ArgumentType::Vector
+                            : ArgumentType::Scalar;
 
             // Create a new function model and get reference to it
             auto & model = document->createNewFunction();
