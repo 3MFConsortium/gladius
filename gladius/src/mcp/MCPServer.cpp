@@ -583,19 +583,21 @@ namespace gladius::mcp
                   "Expression syntax (not GLSL):\n"
                   "- Variables: x, y, z (3D coordinates)\n"
                   "- Or use a vec3 argument and component access: pos.x, pos.y, pos.z\n"
-                  "- Operators: +, -, *, /, ^ (power)\n"
-                  "- Functions: sin(), cos(), tan(), sqrt(), abs(), exp(), log(), pow()\n"
+                  "- Operators: +, -, *, /\n"
+                  "- Functions: sin(), cos(), tan(), sqrt(), abs(), exp(), log(), pow(base, exp)\n"
                   "- Constants: pi, e\n"
                   "- Grouping: parentheses (x + y) * z\n\n"
                   "Notes: no comments, no semicolons, no vector literals, no GLSL built-ins like "
-                  "length().\n\n"
+                  "length(). The `^` operator for power is NOT supported, use `pow()` instead.\n\n"
                   "Examples:\n"
                   "- Gyroid: sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)\n"
                   "- Sphere (r=5): sqrt(x*x + y*y + z*z) - 5\n"
+                  "- Torus: pow(sqrt(x*x + y*y) - 10, 2) + z*z - 4\n"
                   "- Scaled wave (period 10 mm): sin(x*2*pi/10)*cos(y*2*pi/10)";
                 expr["examples"] =
                   json::array({"sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)",
                                "sqrt(x*x + y*y + z*z) - 5",
+                               "pow(sqrt(x*x + y*y) - 10, 2) + z*z - 4",
                                "sin(x*2*pi/10)*cos(y*2*pi/10)",
                                "max(sqrt(x*x+y*y+z*z) - 123, sin(2*pi*x/30)*cos(2*pi*y/30) + "
                                "sin(2*pi*y/30)*cos(2*pi*z/30) + sin(2*pi*z/30)*cos(2*pi*x/30))"});
@@ -608,7 +610,8 @@ namespace gladius::mcp
                 typeProp["type"] = "string";
                 typeProp["enum"] = json::array({"float", "vec3"});
                 typeProp["description"] =
-                  "Argument type. If you want to use component access (e.g., pos.x), pass a vec3 "
+                  "Argument type. The possible values are 'float' and 'vec3'. If you want to use "
+                  "component access (e.g., pos.x), pass a vec3 "
                   "argument and reference it by that name (e.g., name=pos, type=vec3). "
                   "Alternatively, you can rely on the implicit coordinate variables x, y, z.";
                 itemsProps["type"] = typeProp;
@@ -632,9 +635,10 @@ namespace gladius::mcp
               "create_function_from_expression",
               "Create a volumetric function from a simple math expression (not GLSL). Supported: "
               "variables x,y,z or component access like pos.x/pos.y/pos.z (if you pass a vec3 "
-              "argument), operators + - * / ^, functions sin cos tan sqrt abs exp log pow, "
+              "argument), operators + - * /, functions sin, cos, tan, sqrt, abs, exp, log, pow, "
               "constants "
-              "pi and e, and parentheses. No comments (//, /* */), no semicolons, and no "
+              "pi and e, and parentheses. The ^ operator for power is NOT supported, use pow(). No "
+              "comments (//, /* */), no semicolons, and no "
               "GLSL-specific "
               "constructs.",
               createFromExprSchema,
@@ -672,11 +676,17 @@ namespace gladius::mcp
                               {"function_name", name},
                               {"expression", expression},
                               {"output_type", outputType},
-                              {"function_id", result.second}};
+                              {"resource_id", result.second}};
                   }
                   else
                   {
-                      return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
+                      std::string error_message = m_application->getLastErrorMessage();
+                      if (error_message.find('^') != std::string::npos)
+                      {
+                          error_message += "\nNote: The `^` operator for power is not supported. "
+                                           "Please use `pow(base, exponent)`.";
+                      }
+                      return {{"success", false}, {"error", error_message}};
                   }
               });
         }
@@ -1172,33 +1182,14 @@ namespace gladius::mcp
               std::string outputPath = params["output_path"];
               uint32_t size = params.value("size", 256);
 
-              // Caveman log via application/global logger if available
-              try
-              {
-                  if (m_application && m_application->isHeadlessMode())
-                  {
-                      // Best-effort: use active document logger for visibility
-                      // We avoid introducing new dependencies here
-                      auto info = m_application->getDocumentInfo();
-                      (void) info;
-                  }
-              }
-              catch (...)
-              {
-              }
+              // Optional: minimal probe to ensure application is accessible in headless mode
+              // Avoid invoking methods that alter mock expectations
+              (void) m_application;
 
               bool success = m_application->generateThumbnail(outputPath, size);
 
               if (success)
               {
-                  try
-                  {
-                      // Soft log after success
-                      (void) m_application->getLastErrorMessage();
-                  }
-                  catch (...)
-                  {
-                  }
                   // Attempt to inline the generated thumbnail as base64 for immediate preview
                   std::string mime = guessMimeTypeFromPath(outputPath);
                   auto bytes = readFileBinary(outputPath);
@@ -1219,14 +1210,9 @@ namespace gladius::mcp
               }
               else
               {
-                  try
-                  {
-                      (void) m_application->getLastErrorMessage();
-                  }
-                  catch (...)
-                  {
-                  }
-                  return {{"success", false}, {"error", m_application->getLastErrorMessage()}};
+                  // Retrieve error message exactly once to satisfy strict mock expectations
+                  std::string err = m_application->getLastErrorMessage();
+                  return {{"success", false}, {"error", err}};
               }
           });
 
@@ -1260,6 +1246,21 @@ namespace gladius::mcp
                   return {{"success", false}, {"error", "No application available"}};
               }
               return m_application->getModelBoundingBox();
+          });
+
+        // REMOVE UNUSED RESOURCES
+        registerTool(
+          "remove_unused_resources",
+          "Remove all unused 3MF resources from the current document (non-interactive)",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              (void) params;
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              return m_application->removeUnusedResources();
           });
     }
 

@@ -293,6 +293,23 @@ namespace gladius
             return res;
         }
 
+        /**
+         * @brief Remove all unused resources from the current 3MF document.
+         *
+         * This performs a non-interactive cleanup equivalent to the UI's
+         * "Delete unused resources" action but without a selection dialog.
+         *
+         * Returns a JSON object with:
+         * { success: bool, removed_count: number, message?: string, error?: string }
+         */
+        virtual nlohmann::json removeUnusedResources()
+        {
+            // Safe default to avoid breaking mocks; real implementation in adapter
+            return nlohmann::json{{"success", false},
+                                  {"removed_count", 0},
+                                  {"error", "removeUnusedResources not implemented"}};
+        }
+
         // Batch operations
         virtual bool executeBatchOperations(const nlohmann::json & operations,
                                             bool rollbackOnError = true) = 0;

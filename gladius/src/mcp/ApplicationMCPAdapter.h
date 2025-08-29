@@ -144,6 +144,9 @@ namespace gladius
         // Bounding box query
         nlohmann::json getModelBoundingBox() const override;
 
+        // Resource cleanup
+        nlohmann::json removeUnusedResources() override;
+
         // Batch operations
         bool executeBatchOperations(const nlohmann::json & operations,
                                     bool rollbackOnError = true) override;

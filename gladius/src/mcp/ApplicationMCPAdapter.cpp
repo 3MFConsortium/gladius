@@ -2871,4 +2871,46 @@ namespace gladius
             return out;
         }
     }
+
+    nlohmann::json ApplicationMCPAdapter::removeUnusedResources()
+    {
+        nlohmann::json out;
+        if (!m_application || !hasActiveDocument())
+        {
+            out["success"] = false;
+            out["removed_count"] = 0;
+            out["error"] = "No active document available";
+            return out;
+        }
+
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                out["success"] = false;
+                out["removed_count"] = 0;
+                out["error"] = "No active document";
+                return out;
+            }
+
+            // Ensure resource dependency graph is up-to-date, then delete all unused resources
+            // Document::removeUnusedResources() already updates and logs internally
+            std::size_t removed = document->removeUnusedResources();
+            out["success"] = true;
+            out["removed_count"] = static_cast<uint32_t>(removed);
+            if (removed == 0)
+            {
+                out["message"] = "No unused resources found";
+            }
+            return out;
+        }
+        catch (const std::exception & e)
+        {
+            out["success"] = false;
+            out["removed_count"] = 0;
+            out["error"] = std::string("Failed to remove unused resources: ") + e.what();
+            return out;
+        }
+    }
 }
