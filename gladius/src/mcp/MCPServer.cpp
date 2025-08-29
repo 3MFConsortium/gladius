@@ -672,7 +672,7 @@ namespace gladius::mcp
                               {"function_name", name},
                               {"expression", expression},
                               {"output_type", outputType},
-                              {"resource_id", result.second}};
+                              {"function_id", result.second}};
                   }
                   else
                   {
@@ -1238,7 +1238,13 @@ namespace gladius::mcp
           [this](const json & params) -> json
           {
               auto result = m_application->getOptimalCameraPosition();
-              return {{"success", true}, {"camera_settings", result}};
+              bool ok = !(result.contains("error") && !result["error"].is_null());
+              json out = {{"success", ok}, {"camera_settings", result}};
+              if (!ok)
+              {
+                  out["error"] = result["error"]; // surface error at top-level too
+              }
+              return out;
           });
     }
 

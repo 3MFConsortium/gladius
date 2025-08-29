@@ -2707,9 +2707,36 @@ namespace gladius
 
             // Get the bounding box of the current model
             auto bbox = core->getBoundingBox();
+            // If the bbox is not yet available, try to prepare like thumbnail generation does
             if (!bbox.has_value())
             {
-                return {{"error", "No bounding box available for the model"}};
+                // Ensure assembly and programs are up-to-date
+                try
+                {
+                    document->updateFlatAssembly();
+                    core->tryRefreshProgramProtected(document->getAssembly());
+                }
+                catch (const std::exception & e)
+                {
+                    return {
+                      {"error",
+                       std::string("Assembly update failed while computing camera: ") + e.what()}};
+                }
+
+                // Use the same preparation path used for thumbnail generation, which updates bbox
+                if (!core->prepareThumbnailGeneration())
+                {
+                    return {{"error",
+                             "Failed to compute bounding box (model compile/SDF precompute may "
+                             "have failed). Run validate_model for details."}};
+                }
+
+                // Re-query the bounding box
+                bbox = core->getBoundingBox();
+                if (!bbox.has_value())
+                {
+                    return {{"error", "No bounding box available for the model"}};
+                }
             }
 
             auto bb = bbox.value();
