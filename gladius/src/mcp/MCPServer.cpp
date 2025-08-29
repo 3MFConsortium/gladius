@@ -1246,6 +1246,21 @@ namespace gladius::mcp
               }
               return out;
           });
+
+        // MODEL BOUNDING BOX
+        registerTool(
+          "get_model_bounding_box",
+          "Get the axis-aligned bounding box of the whole 3MF model; auto-updates if needed",
+          {{"type", "object"}, {"properties", json::object()}, {"required", json::array()}},
+          [this](const json & params) -> json
+          {
+              (void) params;
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              return m_application->getModelBoundingBox();
+          });
     }
 
     void MCPServer::runStdioLoop()

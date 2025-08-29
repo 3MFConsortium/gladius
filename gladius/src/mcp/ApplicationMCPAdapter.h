@@ -141,6 +141,9 @@ namespace gladius
         bool generateThumbnail(const std::string & outputPath, uint32_t size = 256) override;
         nlohmann::json getOptimalCameraPosition() const override;
 
+        // Bounding box query
+        nlohmann::json getModelBoundingBox() const override;
+
         // Batch operations
         bool executeBatchOperations(const nlohmann::json & operations,
                                     bool rollbackOnError = true) override;

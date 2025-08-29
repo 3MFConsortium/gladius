@@ -2776,4 +2776,99 @@ namespace gladius
               {"error", "Failed to calculate optimal camera position: " + std::string(e.what())}};
         }
     }
+
+    nlohmann::json ApplicationMCPAdapter::getModelBoundingBox() const
+    {
+        nlohmann::json out;
+        if (!m_application || !hasActiveDocument())
+        {
+            out["success"] = false;
+            out["error"] = "No active document available";
+            return out;
+        }
+
+        try
+        {
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                out["success"] = false;
+                out["error"] = "No active document";
+                return out;
+            }
+
+            // Prefer the ComputeCore bbox if present; otherwise fall back to Document helper
+            auto core = document->getCore();
+            std::optional<BoundingBox> bboxOpt;
+            if (core)
+            {
+                bboxOpt = core->getBoundingBox();
+                if (!bboxOpt.has_value())
+                {
+                    // Ensure assembly/program are current and trigger preparation which updates
+                    // bbox
+                    try
+                    {
+                        document->updateFlatAssembly();
+                        core->tryRefreshProgramProtected(document->getAssembly());
+                    }
+                    catch (...)
+                    {
+                        // Ignore, we'll try the document path below
+                    }
+                    if (!core->prepareThumbnailGeneration())
+                    {
+                        // Fall back to document's compute path
+                        bboxOpt.reset();
+                    }
+                    else
+                    {
+                        bboxOpt = core->getBoundingBox();
+                    }
+                }
+            }
+
+            BoundingBox bbox{};
+            if (bboxOpt.has_value())
+            {
+                bbox = bboxOpt.value();
+            }
+            else
+            {
+                // Document path computes/updates bbox as needed
+                bbox = document->computeBoundingBox();
+            }
+
+            const float minx = bbox.min.x;
+            const float miny = bbox.min.y;
+            const float minz = bbox.min.z;
+            const float maxx = bbox.max.x;
+            const float maxy = bbox.max.y;
+            const float maxz = bbox.max.z;
+            const float sx = maxx - minx;
+            const float sy = maxy - miny;
+            const float sz = maxz - minz;
+            const float cx = (minx + maxx) * 0.5f;
+            const float cy = (miny + maxy) * 0.5f;
+            const float cz = (minz + maxz) * 0.5f;
+            const float diag = std::sqrt(sx * sx + sy * sy + sz * sz);
+            const bool isValid = sx > 0 && sy > 0 && sz > 0;
+
+            out["success"] = true;
+            out["bounding_box"] = {{"min", {minx, miny, minz}},
+                                   {"max", {maxx, maxy, maxz}},
+                                   {"size", {sx, sy, sz}},
+                                   {"center", {cx, cy, cz}},
+                                   {"diagonal", diag},
+                                   {"units", "mm"},
+                                   {"is_valid", isValid}};
+            return out;
+        }
+        catch (const std::exception & e)
+        {
+            out["success"] = false;
+            out["error"] = std::string("Failed to get bounding box: ") + e.what();
+            return out;
+        }
+    }
 }

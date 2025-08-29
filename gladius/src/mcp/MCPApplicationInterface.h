@@ -267,6 +267,32 @@ namespace gladius
          */
         virtual nlohmann::json getOptimalCameraPosition() const = 0;
 
+        /**
+         * @brief Get the bounding box of the whole 3MF model (auto-updates if needed).
+         *
+         * Computes or refreshes the model's bounding box and returns a JSON object with:
+         * {
+         *   success: bool,
+         *   bounding_box: {
+         *     min: [x,y,z],
+         *     max: [x,y,z],
+         *     size: [sx,sy,sz],
+         *     center: [cx,cy,cz],
+         *     diagonal: float,
+         *     units: "mm",
+         *     is_valid: bool
+         *   },
+         *   error: string (optional)
+         * }
+         */
+        virtual nlohmann::json getModelBoundingBox() const
+        {
+            nlohmann::json res;
+            res["success"] = false;
+            res["error"] = "getModelBoundingBox not implemented";
+            return res;
+        }
+
         // Batch operations
         virtual bool executeBatchOperations(const nlohmann::json & operations,
                                             bool rollbackOnError = true) = 0;
