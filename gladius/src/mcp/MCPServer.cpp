@@ -646,19 +646,13 @@ namespace gladius::mcp
               {
                   if (!params.contains("name"))
                   {
-                      return {{"success", false}, {"error", "Missing required name parameter"}};
+                      return {{"success", false}, {"error", "Missing required parameter: name"}};
                   }
 
                   if (!params.contains("expression"))
                   {
                       return {{"success", false},
-                              {"error", "Missing required expression parameter"}};
-                  }
-
-                  if (!params.contains("output_type"))
-                  {
-                      return {{"success", false},
-                              {"error", "Missing required output_type parameter"}};
+                              {"error", "Missing required parameter: expression"}};
                   }
 
                   std::string name = params["name"];

@@ -458,16 +458,19 @@ namespace gladius
             ExpressionParser parser;
             if (!parser.parseExpression(expression))
             {
+                // Surface the rich error produced by ExpressionParser (includes caret & hints)
                 m_lastErrorMessage =
-                  "Expression parsing failed: " + parser.getLastError() +
+                  std::string("Expression parsing failed:\n") + parser.getLastError() +
                   "\n\nSupported syntax:" + "\n- Variables: x, y, z (for 3D coordinates)" +
-                  "\n- Math operators: +, -, *, /, ^ (power)" +
-                  "\n- Functions: sin(), cos(), tan(), sqrt(), abs(), exp(), log(), pow()" +
+                  "\n- Math operators: +, -, *, /" +
+                  "\n- Functions: sin(), cos(), tan(), sqrt(), abs(), exp(), log(), pow(base, "
+                  "exp)" +
                   "\n- Constants: pi, e" +
                   "\n- Component access: pos.x, pos.y, pos.z (for vec3 inputs)" +
                   "\n- Parentheses for grouping: (x + y) * z" + "\n\nExample valid expressions:" +
                   "\n- Gyroid: 'sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)'" +
                   "\n- Sphere: 'sqrt(x*x + y*y + z*z) - 5'" +
+                  "\n- Torus: 'pow(sqrt(x*x + y*y) - 10, 2) + z*z - 4'" +
                   "\n- Scaled wave: 'sin(x*2*pi/10)*cos(y*2*pi/10)'";
                 return {false, 0};
             }
