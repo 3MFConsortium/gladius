@@ -2043,7 +2043,7 @@ namespace gladius
             }
 
             // Sync document state
-            document->updateDocumenFrom3mfModel();
+            document->updateDocumentFrom3mfModel();
             m_lastErrorMessage =
               "Build item updated to reference object id " + std::to_string(objectModelResourceId);
             return true;
@@ -2107,7 +2107,7 @@ namespace gladius
             }
             target->SetObjectTransform(tr);
 
-            document->updateDocumenFrom3mfModel();
+            document->updateDocumentFrom3mfModel();
             m_lastErrorMessage = "Build item transform updated";
             return true;
         }
@@ -2181,7 +2181,7 @@ namespace gladius
             }
 
             // Update document/assembly links post-change
-            document->updateDocumenFrom3mfModel();
+            document->updateDocumentFrom3mfModel();
             m_lastErrorMessage = "Level set modified successfully";
             return true;
         }
@@ -2313,7 +2313,7 @@ namespace gladius
             auto buildItem = model3mf->AddBuildItem(levelSet.get(), identityTransform);
 
             // Update the document from the 3MF model
-            document->updateDocumenFrom3mfModel();
+            document->updateDocumentFrom3mfModel();
 
             m_lastErrorMessage =
               "Level set created successfully from function ID: " + std::to_string(functionId) +

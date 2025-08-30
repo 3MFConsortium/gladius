@@ -856,7 +856,7 @@ namespace gladius
             }
 
             // Sync document state
-            document->updateDocumenFrom3mfModel();
+            document->updateDocumentFrom3mfModel();
             m_lastErrorMessage =
               "Build item updated to reference object id " + std::to_string(objectModelResourceId);
             return true;
@@ -920,7 +920,7 @@ namespace gladius
             }
             target->SetObjectTransform(tr);
 
-            document->updateDocumenFrom3mfModel();
+            document->updateDocumentFrom3mfModel();
             m_lastErrorMessage = "Build item transform updated";
             return true;
         }

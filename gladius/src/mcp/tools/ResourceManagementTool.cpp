@@ -272,7 +272,7 @@ namespace gladius
                 }
 
                 // Update document/assembly links post-change
-                document->updateDocumenFrom3mfModel();
+                document->updateDocumentFrom3mfModel();
                 setErrorMessage("Level set modified successfully");
                 return true;
             }

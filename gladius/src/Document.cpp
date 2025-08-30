@@ -1215,7 +1215,7 @@ namespace gladius
         writer.updateModel(*this);
     }
 
-    void Document::updateDocumenFrom3mfModel(bool skipImplicitFunctions)
+    void Document::updateDocumentFrom3mfModel(bool skipImplicitFunctions)
     {
         if (!m_3mfmodel)
         {
