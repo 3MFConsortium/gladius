@@ -87,8 +87,6 @@ namespace gladius::nodes
             return std::make_unique<FunctionCall>();
         if (nodeType == "Resource")
             return std::make_unique<Resource>();
-        if (nodeType == "ImageSampler")
-            return std::make_unique<ImageSampler>();
         if (nodeType == "Round")
             return std::make_unique<Round>();
         if (nodeType == "Ceil")
@@ -101,8 +99,6 @@ namespace gladius::nodes
             return std::make_unique<Sign>();
         if (nodeType == "VectorFromScalar")
             return std::make_unique<VectorFromScalar>();
-        if (nodeType == "BoxMinMax")
-            return std::make_unique<BoxMinMax>();
 
         return nullptr;
     }
