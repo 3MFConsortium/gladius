@@ -138,6 +138,29 @@ namespace gladius::tests
                     (override));
         MOCK_METHOD(bool, generateThumbnail, (const std::string &, uint32_t), (override));
         MOCK_METHOD(nlohmann::json, getOptimalCameraPosition, (), (const, override));
+
+        // Newly added tools
+        MOCK_METHOD(nlohmann::json, getModelBoundingBox, (), (const, override));
+        MOCK_METHOD(nlohmann::json, removeUnusedResources, (), (override));
+
+        MOCK_METHOD(nlohmann::json, getNodeInfo, (uint32_t, uint32_t), (const, override));
+        MOCK_METHOD(nlohmann::json,
+                    createNode,
+                    (uint32_t, const std::string &, const std::string &, uint32_t),
+                    (override));
+        MOCK_METHOD(nlohmann::json, deleteNode, (uint32_t, uint32_t), (override));
+        MOCK_METHOD(nlohmann::json,
+                    setParameterValue,
+                    (uint32_t, uint32_t, const std::string &, const nlohmann::json &),
+                    (override));
+        MOCK_METHOD(nlohmann::json,
+                    createLink,
+                    (uint32_t, uint32_t, const std::string &, uint32_t, const std::string &),
+                    (override));
+        MOCK_METHOD(nlohmann::json,
+                    deleteLink,
+                    (uint32_t, uint32_t, const std::string &),
+                    (override));
     };
 
     class MCPServerTest : public ::testing::Test
@@ -194,7 +217,10 @@ namespace gladius::tests
                                                   "validate_model",
                                                   "set_build_item_object",
                                                   "set_build_item_transform",
-                                                  "modify_levelset"};
+                                                  "modify_levelset",
+                                                  // Newly added tools
+                                                  "get_model_bounding_box",
+                                                  "remove_unused_resources"};
 
         for (const auto & expectedTool : expectedTools)
         {
@@ -785,5 +811,94 @@ namespace gladius::tests
         EXPECT_EQ(result["success"], false);
         EXPECT_THAT(result["error"].get<std::string>(),
                     ::testing::HasSubstr("Thumbnail preparation failed"));
+    }
+
+    // ========================================
+    // Get Model Bounding Box tool tests
+    // ========================================
+
+    TEST_F(MCPServerTest, GetModelBoundingBoxTool_Success_ReturnsBoundingBox)
+    {
+        // Arrange
+        json bbox = {{"success", true},
+                     {"bounding_box",
+                      {{"min", {0.0, 0.0, 0.0}},
+                       {"max", {10.0, 20.0, 30.0}},
+                       {"size", {10.0, 20.0, 30.0}},
+                       {"center", {5.0, 10.0, 15.0}},
+                       {"diagonal", 37.4166},
+                       {"units", "mm"},
+                       {"is_valid", true}}}};
+        EXPECT_CALL(*m_mockApp, getModelBoundingBox()).WillOnce(::testing::Return(bbox));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params", {{"name", "get_model_bounding_box"}, {"arguments", {}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        ASSERT_TRUE(content.is_array() && !content.empty());
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_EQ(result["success"], true);
+        ASSERT_TRUE(result.contains("bounding_box"));
+        auto bb = result["bounding_box"];
+        EXPECT_EQ(bb["min"], json::array({0.0, 0.0, 0.0}));
+        EXPECT_EQ(bb["max"], json::array({10.0, 20.0, 30.0}));
+        EXPECT_EQ(bb["units"], "mm");
+        EXPECT_EQ(bb["is_valid"], true);
+    }
+
+    // ========================================
+    // Remove Unused Resources tool tests
+    // ========================================
+
+    TEST_F(MCPServerTest, RemoveUnusedResourcesTool_Success_ReturnsCount)
+    {
+        // Arrange
+        json cleanup = {{"success", true}, {"removed_count", 5}};
+        EXPECT_CALL(*m_mockApp, removeUnusedResources()).WillOnce(::testing::Return(cleanup));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params", {{"name", "remove_unused_resources"}, {"arguments", {}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        ASSERT_TRUE(content.is_array() && !content.empty());
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_EQ(result["success"], true);
+        EXPECT_EQ(result["removed_count"], 5);
+    }
+
+    TEST_F(MCPServerTest, RemoveUnusedResourcesTool_Failure_PropagatesError)
+    {
+        // Arrange
+        json cleanup = {{"success", false}, {"removed_count", 0}, {"error", "No document"}};
+        EXPECT_CALL(*m_mockApp, removeUnusedResources()).WillOnce(::testing::Return(cleanup));
+
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 1},
+                        {"method", "tools/call"},
+                        {"params", {{"name", "remove_unused_resources"}, {"arguments", {}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        auto content = response["result"]["content"];
+        std::string jsonString = content[0]["text"];
+        json result = json::parse(jsonString);
+        EXPECT_EQ(result["success"], false);
+        EXPECT_THAT(result["error"].get<std::string>(), ::testing::HasSubstr("No document"));
     }
 }

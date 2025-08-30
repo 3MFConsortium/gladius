@@ -263,6 +263,48 @@ namespace gladius::tests
                                   {"target_position", {0.0, 0.0, 0.0}},
                                   {"up_vector", {0.0, 0.0, 1.0}}};
         }
+
+        nlohmann::json getNodeInfo(uint32_t functionId, uint32_t nodeId) const override
+        {
+            return nlohmann::json{{"success", true}};
+        }
+
+        nlohmann::json createNode(uint32_t functionId,
+                                  const std::string & nodeType,
+                                  const std::string & displayName,
+                                  uint32_t nodeId) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
+
+        nlohmann::json deleteNode(uint32_t functionId, uint32_t nodeId) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
+
+        nlohmann::json setParameterValue(uint32_t functionId,
+                                         uint32_t nodeId,
+                                         const std::string & parameterName,
+                                         const nlohmann::json & value) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
+
+        nlohmann::json createLink(uint32_t functionId,
+                                  uint32_t sourceNodeId,
+                                  const std::string & sourcePortName,
+                                  uint32_t targetNodeId,
+                                  const std::string & targetParameterName) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
+
+        nlohmann::json deleteLink(uint32_t functionId,
+                                  uint32_t targetNodeId,
+                                  const std::string & targetParameterName) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
     };
 
     class JSONRPCTest : public ::testing::Test

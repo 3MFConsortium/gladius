@@ -41,7 +41,11 @@ namespace gladius::tests
         // Assert
         EXPECT_FALSE(result);
         EXPECT_FALSE(m_parser->hasValidExpression());
-        EXPECT_FALSE(m_parser->getLastError().empty());
+        auto const err = m_parser->getLastError();
+        EXPECT_FALSE(err.empty());
+        // Error should contain the original expression and a caret
+        EXPECT_NE(err.find(expression), std::string::npos);
+        EXPECT_NE(err.find("^"), std::string::npos);
     }
 
     TEST_F(ExpressionParserTest, GetVariables_SimpleExpression_ReturnsCorrectVariables)
@@ -132,9 +136,14 @@ namespace gladius::tests
         // Test that invalid vector components are rejected
         EXPECT_FALSE(m_parser->parseExpression("pos.w")); // Invalid component
         EXPECT_FALSE(m_parser->hasValidExpression());
+        auto err = m_parser->getLastError();
+        EXPECT_NE(err.find("Invalid vector component"), std::string::npos);
+        EXPECT_NE(err.find("pos.w"), std::string::npos);
 
         EXPECT_FALSE(m_parser->parseExpression("pos.xy")); // Invalid component
         EXPECT_FALSE(m_parser->hasValidExpression());
+        err = m_parser->getLastError();
+        EXPECT_NE(err.find("Invalid vector component"), std::string::npos);
     }
 
     TEST_F(ExpressionParserTest, GetVariables_VectorComponentAccess_ReturnsOriginalSyntax)
@@ -146,6 +155,29 @@ namespace gladius::tests
         // Should contain the original component access syntax
         EXPECT_NE(std::find(variables.begin(), variables.end(), "pos.x"), variables.end());
         EXPECT_NE(std::find(variables.begin(), variables.end(), "vel.y"), variables.end());
+    }
+
+    // New tests for enhanced diagnostics
+    namespace gladius::tests
+    {
+        TEST_F(ExpressionParserTest, ErrorWhenCaretPowerOperator_ShowsHintAndCaret)
+        {
+            std::string expr = "(x^2) + y";
+            bool ok = m_parser->parseExpression(expr);
+            EXPECT_FALSE(ok);
+            auto err = m_parser->getLastError();
+            EXPECT_NE(err.find("pow"), std::string::npos); // suggest pow
+            EXPECT_NE(err.find(expr), std::string::npos);  // include original
+            EXPECT_NE(err.find("^"), std::string::npos);   // caret under position indicator line
+        }
+
+        TEST_F(ExpressionParserTest, ErrorWhenCommentsPresent_ShowsHint)
+        {
+            std::string expr = "x + y // comment";
+            EXPECT_FALSE(m_parser->parseExpression(expr));
+            auto err = m_parser->getLastError();
+            EXPECT_NE(err.find("Comments are not supported"), std::string::npos);
+        }
     }
 
     TEST_F(ExpressionParserTest, GetVariables_MixedVariables_ReturnsCorrectList)

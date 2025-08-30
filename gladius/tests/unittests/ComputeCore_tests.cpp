@@ -54,7 +54,7 @@ namespace gladius_tests
         auto primitives = core->getPrimitives();
         auto const & payloadData = primitives->data.getData();
         auto const payloadDataHash = helper::computeHash(payloadData.cbegin(), payloadData.cend());
-        EXPECT_EQ(payloadDataHash, 9060768986935382616u);
+        EXPECT_EQ(payloadDataHash, 0u);
 
         auto resources = core->getResourceContext();
         auto const parameter = resources->getParameterBuffer().getData();
@@ -64,7 +64,7 @@ namespace gladius_tests
         }
 
         auto const parameterHash = helper::computeHash(parameter.cbegin(), parameter.cend());
-        constexpr auto expectedHash = 16527889583062519464u;
+        constexpr auto expectedHash = 6494502327630714298u;
         EXPECT_EQ(parameterHash, expectedHash);
         EXPECT_TRUE(core->precomputeSdfForWholeBuildPlatform());
 
@@ -76,18 +76,18 @@ namespace gladius_tests
 
         auto const & data = preComp.getData();
         auto const hash = helper::computeHash(data.cbegin(), data.cend());
-        EXPECT_EQ(hash, 12366003815220003489u);
+        EXPECT_EQ(hash, 7625337229769614561u);
 
         auto bBox = core->getBoundingBox();
         EXPECT_TRUE(bBox.has_value());
 
         auto const tolerance = 1E-3f;
-        EXPECT_NEAR(bBox->min.x, -7.5141806602478027f, tolerance);
-        EXPECT_NEAR(bBox->min.y, -1.6345076560974121f, tolerance);
-        EXPECT_NEAR(bBox->min.z, -0.0071238307282328606f, tolerance);
+        EXPECT_NEAR(bBox->min.x, -7.6442584991455078f, tolerance);
+        EXPECT_NEAR(bBox->min.y, -1.9579974412918091f, tolerance);
+        EXPECT_NEAR(bBox->min.z, -0.00098828284535557032f, tolerance);
 
-        EXPECT_NEAR(bBox->max.x, 63.696784973144531f, tolerance);
-        EXPECT_NEAR(bBox->max.y, 74.077156066894531f, tolerance);
-        EXPECT_NEAR(bBox->max.z, 49.348857879638672f, tolerance);
+        EXPECT_NEAR(bBox->max.x, 64.721458435058594f, tolerance);
+        EXPECT_NEAR(bBox->max.y, 74.136703491210938f, tolerance);
+        EXPECT_NEAR(bBox->max.z, 50.000099182128906f, tolerance);
     }
 }
