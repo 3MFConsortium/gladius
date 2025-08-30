@@ -3,7 +3,9 @@ file(GLOB SOURCES LIST_DIRECTORIES true *.h *.cpp)
 
 # Add MCP sources
 file(GLOB MCP_SOURCES LIST_DIRECTORIES true mcp/*.h mcp/*.cpp)
-set(SOURCES ${SOURCES} ${MCP_SOURCES})
+# Add MCP tools sources
+file(GLOB MCP_TOOLS_SOURCES LIST_DIRECTORIES true mcp/tools/*.h mcp/tools/*.cpp)
+set(SOURCES ${SOURCES} ${MCP_SOURCES} ${MCP_TOOLS_SOURCES})
 
 
 

@@ -36,3 +36,4 @@ gladius/examples/implicit/*.gcode
 gladius/src/api/GladiusLib_component/Examples/CSharp/obj/*
 build/
 gladius/vcpkg_installed/*
+gladius/.serena/cache/

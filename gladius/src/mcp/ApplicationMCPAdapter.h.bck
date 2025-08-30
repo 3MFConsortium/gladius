@@ -9,31 +9,6 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 
-// Include tool headers for complete type definitions
-#include "tools/ApplicationLifecycleTool.h"
-#include "tools/DocumentLifecycleTool.h"
-#include "tools/FunctionOperationsTool.h"
-#include "tools/ParameterManagementTool.h"
-#include "tools/RenderingTool.h"
-#include "tools/ResourceManagementTool.h"
-#include "tools/SceneHierarchyTool.h"
-#include "tools/UtilityTool.h"
-#include "tools/ValidationTool.h"
-
-// Forward declarations for tools
-namespace gladius::mcp::tools
-{
-    class ApplicationLifecycleTool;
-    class SceneHierarchyTool;
-    class DocumentLifecycleTool;
-    class ParameterManagementTool;
-    class FunctionOperationsTool;
-    class ResourceManagementTool;
-    class RenderingTool;
-    class ValidationTool;
-    class UtilityTool;
-}
-
 namespace gladius
 {
     class Application; // Forward declaration
@@ -54,20 +29,6 @@ namespace gladius
         Application * m_application;            // Raw pointer to avoid circular dependencies
         mutable std::string m_lastErrorMessage; // Store detailed error information
         std::unique_ptr<mcp::CoroMCPAdapter> m_coroAdapter; // Coroutine-based async operations
-
-        // Tool instances - Complete set as per refactoring plan
-        // Status: 9/9 tools implemented (ApplicationLifecycle, SceneHierarchy, DocumentLifecycle,
-        // ParameterManagement, FunctionOperations, ResourceManagement, Rendering, Validation,
-        // Utility)
-        std::unique_ptr<mcp::tools::ApplicationLifecycleTool> m_lifecycleTool;
-        std::unique_ptr<mcp::tools::SceneHierarchyTool> m_sceneHierarchyTool;
-        std::unique_ptr<mcp::tools::DocumentLifecycleTool> m_documentLifecycleTool;
-        std::unique_ptr<mcp::tools::ParameterManagementTool> m_parameterManagementTool;
-        std::unique_ptr<mcp::tools::FunctionOperationsTool> m_functionOperationsTool;
-        std::unique_ptr<mcp::tools::ResourceManagementTool> m_resourceManagementTool;
-        std::unique_ptr<mcp::tools::RenderingTool> m_renderingTool;
-        std::unique_ptr<mcp::tools::ValidationTool> m_validationTool;
-        std::unique_ptr<mcp::tools::UtilityTool> m_utilityTool;
 
         // Helper method to automatically validate after operations
         nlohmann::json performAutoValidation(bool includeOpenCL = false) const;
@@ -119,7 +80,7 @@ namespace gladius
                                        const std::string & parameterName) override;
 
         // Expression and function operations
-        virtual std::pair<bool, uint32_t>
+        std::pair<bool, uint32_t>
         createFunctionFromExpression(const std::string & name,
                                      const std::string & expression,
                                      const std::string & outputType,
