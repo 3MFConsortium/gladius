@@ -27,8 +27,9 @@ namespace gladius::mcp::tools
 
     bool MCPToolBase::validateActiveDocument() const
     {
-        if (!validateApplication())
+        if (!m_application)
         {
+            setErrorMessage("No active document available");
             return false;
         }
 
