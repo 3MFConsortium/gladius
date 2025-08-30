@@ -3109,6 +3109,14 @@ nlohmann::json gladius::ApplicationMCPAdapter::createNode(uint32_t functionId,
         jn["category"] = static_cast<int>(created->getCategory());
         out["node"] = jn;
         out["success"] = true;
+
+        // Automatically validate the model after node creation
+        auto validation = performAutoValidation(false);
+        if (!validation["success"].get<bool>())
+        {
+            out["validation"] = validation;
+        }
+
         return out;
     }
     catch (const std::exception & e)
@@ -3171,6 +3179,14 @@ nlohmann::json gladius::ApplicationMCPAdapter::deleteNode(uint32_t functionId, u
         model->remove(nodeId);
         model->updateGraphAndOrderIfNeeded();
         out["success"] = true;
+
+        // Automatically validate the model after node deletion
+        auto validation = performAutoValidation(false);
+        if (!validation["success"].get<bool>())
+        {
+            out["validation"] = validation;
+        }
+
         return out;
     }
     catch (const std::exception & e)
@@ -3360,6 +3376,14 @@ nlohmann::json gladius::ApplicationMCPAdapter::setParameterValue(uint32_t functi
         model->updateGraphAndOrderIfNeeded();
 
         out["success"] = true;
+
+        // Automatically validate the model after parameter change
+        auto validation = performAutoValidation(false);
+        if (!validation["success"].get<bool>())
+        {
+            out["validation"] = validation;
+        }
+
         return out;
     }
     catch (const std::exception & e)
@@ -3508,6 +3532,14 @@ nlohmann::json gladius::ApplicationMCPAdapter::createLink(uint32_t functionId,
         }
         model->updateGraphAndOrderIfNeeded();
         out["success"] = true;
+
+        // Automatically validate the model after link creation
+        auto validation = performAutoValidation(false);
+        if (!validation["success"].get<bool>())
+        {
+            out["validation"] = validation;
+        }
+
         return out;
     }
     catch (const std::exception & e)
@@ -3594,6 +3626,14 @@ nlohmann::json gladius::ApplicationMCPAdapter::deleteLink(uint32_t functionId,
         }
         model->updateGraphAndOrderIfNeeded();
         out["success"] = true;
+
+        // Automatically validate the model after link deletion
+        auto validation = performAutoValidation(false);
+        if (!validation["success"].get<bool>())
+        {
+            out["validation"] = validation;
+        }
+
         return out;
     }
     catch (const std::exception & e)
@@ -3602,4 +3642,40 @@ nlohmann::json gladius::ApplicationMCPAdapter::deleteLink(uint32_t functionId,
         out["error"] = std::string("Exception while deleting link: ") + e.what();
         return out;
     }
+}
+
+nlohmann::json gladius::ApplicationMCPAdapter::performAutoValidation(bool includeOpenCL) const
+{
+    nlohmann::json validationOptions;
+    validationOptions["compile"] = includeOpenCL;
+    validationOptions["max_messages"] = 10; // Limit to avoid verbose output
+
+    // Call the existing validateModel method
+    auto result = const_cast<ApplicationMCPAdapter *>(this)->validateModel(validationOptions);
+
+    // Simplify the response for auto-validation
+    nlohmann::json simplified;
+    simplified["success"] = result.value("success", false);
+
+    if (!simplified["success"].get<bool>())
+    {
+        // Extract error messages for failed validation
+        nlohmann::json messages = nlohmann::json::array();
+        if (result.contains("phases"))
+        {
+            for (const auto & phase : result["phases"])
+            {
+                if (phase.contains("messages"))
+                {
+                    for (const auto & msg : phase["messages"])
+                    {
+                        messages.push_back(msg.value("message", "Unknown error"));
+                    }
+                }
+            }
+        }
+        simplified["validation_errors"] = messages;
+    }
+
+    return simplified;
 }

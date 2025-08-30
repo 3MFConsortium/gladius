@@ -837,11 +837,21 @@ namespace gladius::mcp
 
                   if (result.first)
                   {
-                      return {{"success", true},
-                              {"function_name", name},
-                              {"expression", expression},
-                              {"output_type", outputType},
-                              {"resource_id", result.second}};
+                      json response = {{"success", true},
+                                       {"function_name", name},
+                                       {"expression", expression},
+                                       {"output_type", outputType},
+                                       {"resource_id", result.second}};
+
+                      // Add automatic validation after function creation
+                      json validationOptions = {{"compile", false}, {"max_messages", 10}};
+                      auto validation = m_application->validateModel(validationOptions);
+                      if (!validation.value("success", false))
+                      {
+                          response["validation"] = validation;
+                      }
+
+                      return response;
                   }
                   else
                   {
@@ -873,9 +883,19 @@ namespace gladius::mcp
 
               if (result.first)
               {
-                  return {{"success", true},
-                          {"function_id", function_id},
-                          {"resource_id", result.second}};
+                  json response = {{"success", true},
+                                   {"function_id", function_id},
+                                   {"resource_id", result.second}};
+
+                  // Add automatic validation after level set creation
+                  json validationOptions = {{"compile", false}, {"max_messages", 10}};
+                  auto validation = m_application->validateModel(validationOptions);
+                  if (!validation.value("success", false))
+                  {
+                      response["validation"] = validation;
+                  }
+
+                  return response;
               }
               else
               {
@@ -907,12 +927,22 @@ namespace gladius::mcp
 
               if (result.first)
               {
-                  return {{"success", true},
-                          {"function_name", name},
-                          {"image_path", image_path},
-                          {"scale", scale},
-                          {"offset", offset},
-                          {"resource_id", result.second}};
+                  json response = {{"success", true},
+                                   {"function_name", name},
+                                   {"image_path", image_path},
+                                   {"scale", scale},
+                                   {"offset", offset},
+                                   {"resource_id", result.second}};
+
+                  // Add automatic validation after Image3D function creation
+                  json validationOptions = {{"compile", false}, {"max_messages", 10}};
+                  auto validation = m_application->validateModel(validationOptions);
+                  if (!validation.value("success", false))
+                  {
+                      response["validation"] = validation;
+                  }
+
+                  return response;
               }
               else
               {
@@ -943,10 +973,20 @@ namespace gladius::mcp
 
               if (result.first)
               {
-                  return {{"success", true},
-                          {"function_id", function_id},
-                          {"channel", channel},
-                          {"resource_id", result.second}};
+                  json response = {{"success", true},
+                                   {"function_id", function_id},
+                                   {"channel", channel},
+                                   {"resource_id", result.second}};
+
+                  // Add automatic validation after volumetric color creation
+                  json validationOptions = {{"compile", false}, {"max_messages", 10}};
+                  auto validation = m_application->validateModel(validationOptions);
+                  if (!validation.value("success", false))
+                  {
+                      response["validation"] = validation;
+                  }
+
+                  return response;
               }
               else
               {
@@ -978,11 +1018,21 @@ namespace gladius::mcp
 
               if (result.first)
               {
-                  return {{"success", true},
-                          {"property_name", property_name},
-                          {"function_id", function_id},
-                          {"channel", channel},
-                          {"resource_id", result.second}};
+                  json response = {{"success", true},
+                                   {"property_name", property_name},
+                                   {"function_id", function_id},
+                                   {"channel", channel},
+                                   {"resource_id", result.second}};
+
+                  // Add automatic validation after volumetric property creation
+                  json validationOptions = {{"compile", false}, {"max_messages", 10}};
+                  auto validation = m_application->validateModel(validationOptions);
+                  if (!validation.value("success", false))
+                  {
+                      response["validation"] = validation;
+                  }
+
+                  return response;
               }
               else
               {

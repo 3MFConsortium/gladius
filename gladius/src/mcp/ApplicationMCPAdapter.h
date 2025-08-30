@@ -30,6 +30,9 @@ namespace gladius
         mutable std::string m_lastErrorMessage; // Store detailed error information
         std::unique_ptr<mcp::CoroMCPAdapter> m_coroAdapter; // Coroutine-based async operations
 
+        // Helper method to automatically validate after operations
+        nlohmann::json performAutoValidation(bool includeOpenCL = false) const;
+
       public:
         explicit ApplicationMCPAdapter(Application * app);
         ~ApplicationMCPAdapter()

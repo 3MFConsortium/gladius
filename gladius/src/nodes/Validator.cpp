@@ -1,5 +1,6 @@
 
 #include "Validator.h"
+#include <fmt/format.h>
 
 namespace gladius::nodes
 {
@@ -22,7 +23,7 @@ namespace gladius::nodes
     {
         model.updateGraphAndOrderIfNeeded();
         model.updateTypes();
-  
+
         model.updateValidityState();
 
         for (auto & [nodeId, node] : model)
@@ -38,15 +39,17 @@ namespace gladius::nodes
 
     void Validator::validateNodeImpl(NodeBase & node, Model & model)
     {
-         for (auto & [parameterName, parameter] : node.parameter())
+        // Create a descriptive model identifier that includes both name and ID
+        auto modelDisplayName = model.getDisplayName().value_or("unknown");
+        auto modelId = model.getResourceId();
+        std::string modelInfo = fmt::format("{} (ID: {})", modelDisplayName, modelId);
+
+        for (auto & [parameterName, parameter] : node.parameter())
         {
             if (!parameter.getConstSource().has_value() && parameter.isInputSourceRequired())
             {
-                m_errors.push_back(ValidationError{"Missing input",
-                                                   model.getDisplayName().value_or("unknown"),
-                                                   node.getDisplayName(),
-                                                   "unknown",
-                                                   parameterName});
+                m_errors.push_back(ValidationError{
+                  "Missing input", modelInfo, node.getDisplayName(), "unknown", parameterName});
                 model.setIsValid(false);
             }
             if (parameter.getConstSource().has_value())
@@ -58,11 +61,11 @@ namespace gladius::nodes
                 if (!referendedPort)
                 {
                     m_errors.push_back(
-                      ValidationError{"Parameter references non-existing port",   // message
-                                      model.getDisplayName().value_or("unknown"), // model
-                                      node.getDisplayName(),                      // node
-                                      "unknown",                                  // port
-                                      parameterName});                            // parameter
+                      ValidationError{"Parameter references non-existing port", // message
+                                      modelInfo,                                // model
+                                      node.getDisplayName(),                    // node
+                                      "unknown",                                // port
+                                      parameterName});                          // parameter
 
                     parameter.setValid(false);
                     model.setIsValid(false);
@@ -71,12 +74,11 @@ namespace gladius::nodes
 
                 if (parameter.getTypeIndex() != referendedPort->getTypeIndex())
                 {
-                    m_errors.push_back(
-                      ValidationError{"Datatype mismatch",  // message
-                                      model.getDisplayName().value_or("unknown"), // model
-                                      node.getDisplayName(),                      // node
-                                      referendedPort->getUniqueName(),            // port
-                                      parameterName});                            // parameter
+                    m_errors.push_back(ValidationError{"Datatype mismatch",             // message
+                                                       modelInfo,                       // model
+                                                       node.getDisplayName(),           // node
+                                                       referendedPort->getUniqueName(), // port
+                                                       parameterName});                 // parameter
                     parameter.setValid(false);
                     model.setIsValid(false);
                 }
@@ -90,16 +92,20 @@ namespace gladius::nodes
         node.resolveFunctionId();
         auto referencedId = node.getFunctionId();
         auto referencedModel = assembly.findModel(referencedId);
+
+        // Create a descriptive model identifier that includes both name and ID
+        auto modelDisplayName = model.getDisplayName().value_or("unknown");
+        auto modelId = model.getResourceId();
+        std::string modelInfo = fmt::format("{} (ID: {})", modelDisplayName, modelId);
+
         if (!referencedModel)
         {
             m_errors.push_back(ValidationError{"Function reference not found",
-                                               model.getDisplayName().value_or("unknown"),
+                                               modelInfo,
                                                node.getDisplayName(),
                                                "unknown",
                                                "FunctionId"});
             model.setIsValid(false);
         }
-        
-
     }
 }
