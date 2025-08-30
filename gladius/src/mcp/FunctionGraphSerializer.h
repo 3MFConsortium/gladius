@@ -20,8 +20,6 @@ namespace gladius
          * @return nlohmann::json representation of the model graph.
          */
         static nlohmann::json serialize(const nodes::Model & model);
-
-      private:
         static const char * typeIndexToString(std::type_index idx);
     };
 }

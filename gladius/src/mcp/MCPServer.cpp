@@ -506,6 +506,164 @@ namespace gladius::mcp
               return m_application->getFunctionGraph(function_id);
           });
 
+        // FUNCTION GRAPH MANIPULATION
+        registerTool(
+          "get_node_info",
+          "Get detailed information about a specific node in a function graph",
+          {{"type", "object"},
+           {"properties",
+            {{"function_id",
+              {{"type", "integer"}, {"description", "ModelResourceID of the function"}}},
+             {"node_id", {{"type", "integer"}, {"description", "ID of the node to inspect"}}}}},
+           {"required", {"function_id", "node_id"}}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              if (!params.contains("function_id"))
+              {
+                  return {{"success", false}, {"error", "Missing required parameter: function_id"}};
+              }
+              if (!params.contains("node_id"))
+              {
+                  return {{"success", false}, {"error", "Missing required parameter: node_id"}};
+              }
+              uint32_t function_id = params["function_id"];
+              uint32_t node_id = params["node_id"];
+              return m_application->getNodeInfo(function_id, node_id);
+          });
+
+        registerTool(
+          "create_node",
+          "Create a new node in a function graph",
+          {{"type", "object"},
+           {"properties",
+            {{"function_id",
+              {{"type", "integer"}, {"description", "ModelResourceID of the function"}}},
+             {"node_type", {{"type", "string"}, {"description", "Type of the node to create"}}},
+             {"display_name",
+              {{"type", "string"}, {"description", "Optional display name for the node"}}},
+             {"node_id", {{"type", "integer"}, {"description", "Optional ID for the new node"}}}}},
+           {"required", {"function_id", "node_type"}}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              uint32_t function_id = params["function_id"];
+              std::string node_type = params["node_type"];
+              std::string display_name = params.value("display_name", "");
+              uint32_t node_id = params.value("node_id", 0);
+              return m_application->createNode(function_id, node_type, display_name, node_id);
+          });
+
+        registerTool(
+          "delete_node",
+          "Delete a node from a function graph",
+          {{"type", "object"},
+           {"properties",
+            {{"function_id",
+              {{"type", "integer"}, {"description", "ModelResourceID of the function"}}},
+             {"node_id", {{"type", "integer"}, {"description", "ID of the node to delete"}}}}},
+           {"required", {"function_id", "node_id"}}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              uint32_t function_id = params["function_id"];
+              uint32_t node_id = params["node_id"];
+              return m_application->deleteNode(function_id, node_id);
+          });
+
+        registerTool("set_parameter_value",
+                     "Set the value of a parameter on a node",
+                     {{"type", "object"},
+                      {"properties",
+                       {{"function_id",
+                         {{"type", "integer"}, {"description", "ModelResourceID of the function"}}},
+                        {"node_id", {{"type", "integer"}, {"description", "ID of the node"}}},
+                        {"parameter_name",
+                         {{"type", "string"}, {"description", "Name of the parameter to set"}}},
+                        {"value", {{"description", "Value to set"}}}}},
+                      {"required", {"function_id", "node_id", "parameter_name", "value"}}},
+                     [this](const json & params) -> json
+                     {
+                         if (!m_application)
+                         {
+                             return {{"success", false}, {"error", "No application available"}};
+                         }
+                         uint32_t function_id = params["function_id"];
+                         uint32_t node_id = params["node_id"];
+                         std::string parameter_name = params["parameter_name"];
+                         json value = params["value"];
+                         return m_application->setParameterValue(
+                           function_id, node_id, parameter_name, value);
+                     });
+
+        registerTool(
+          "create_link",
+          "Create a link between two nodes in a function graph",
+          {{"type", "object"},
+           {"properties",
+            {{"function_id",
+              {{"type", "integer"}, {"description", "ModelResourceID of the function"}}},
+             {"source_node_id", {{"type", "integer"}, {"description", "ID of the source node"}}},
+             {"source_port_name", {{"type", "string"}, {"description", "Name of the source port"}}},
+             {"target_node_id", {{"type", "integer"}, {"description", "ID of the target node"}}},
+             {"target_parameter_name",
+              {{"type", "string"}, {"description", "Name of the target parameter"}}}}},
+           {"required",
+            {"function_id",
+             "source_node_id",
+             "source_port_name",
+             "target_node_id",
+             "target_parameter_name"}}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              uint32_t function_id = params["function_id"];
+              uint32_t source_node_id = params["source_node_id"];
+              std::string source_port_name = params["source_port_name"];
+              uint32_t target_node_id = params["target_node_id"];
+              std::string target_parameter_name = params["target_parameter_name"];
+              return m_application->createLink(function_id,
+                                               source_node_id,
+                                               source_port_name,
+                                               target_node_id,
+                                               target_parameter_name);
+          });
+
+        registerTool(
+          "delete_link",
+          "Delete a link from a function graph",
+          {{"type", "object"},
+           {"properties",
+            {{"function_id",
+              {{"type", "integer"}, {"description", "ModelResourceID of the function"}}},
+             {"target_node_id", {{"type", "integer"}, {"description", "ID of the target node"}}},
+             {"target_parameter_name",
+              {{"type", "string"}, {"description", "Name of the target parameter"}}}}},
+           {"required", {"function_id", "target_node_id", "target_parameter_name"}}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              uint32_t function_id = params["function_id"];
+              uint32_t target_node_id = params["target_node_id"];
+              std::string target_parameter_name = params["target_parameter_name"];
+              return m_application->deleteLink(function_id, target_node_id, target_parameter_name);
+          });
+
         // DOCUMENT MANAGEMENT (3MF FILES)
         registerTool(
           "create_document",

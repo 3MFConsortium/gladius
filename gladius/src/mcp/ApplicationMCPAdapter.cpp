@@ -11,6 +11,7 @@
 #include "../io/3mf/ResourceIdUtil.h"
 #include "CoroMCPAdapter.h"
 #include "FunctionGraphSerializer.h"
+#include "nodes/NodeFactory.h"
 #include <array>
 #include <filesystem> // Only include here, not in header
 #include <nlohmann/json.hpp>
@@ -1814,7 +1815,7 @@ namespace gladius
         int const maxMessages = options.value("max_messages", 50);
 
         // Helper to snapshot logger state/messages
-        auto snapshotLogger = [&](events::SharedLogger const & logger)
+        auto snapshotLogger = [&](events::SharedLogger const & logger) -> nlohmann::json
         {
             nlohmann::json j;
             if (!logger)
@@ -2917,5 +2918,639 @@ namespace gladius
             out["error"] = std::string("Failed to remove unused resources: ") + e.what();
             return out;
         }
+    }
+
+    nlohmann::json ApplicationMCPAdapter::getNodeInfo(uint32_t functionId, uint32_t nodeId) const
+    {
+        using json = nlohmann::json;
+        json out;
+        out["requested_function_id"] = functionId;
+        out["requested_node_id"] = nodeId;
+
+        if (!m_application)
+        {
+            out["success"] = false;
+            out["error"] = "No application instance available";
+            return out;
+        }
+
+        auto document = m_application->getCurrentDocument();
+        if (!document)
+        {
+            out["success"] = false;
+            out["error"] = "No active document available";
+            return out;
+        }
+
+        try
+        {
+            auto assembly = document->getAssembly();
+            if (!assembly)
+            {
+                out["success"] = false;
+                out["error"] = "No assembly available";
+                return out;
+            }
+
+            auto model = assembly->findModel(functionId);
+            if (!model)
+            {
+                out["success"] = false;
+                out["error"] = "Function (model) not found for id";
+                return out;
+            }
+
+            auto nodeOpt = model->getNode(nodeId);
+            if (!nodeOpt.has_value() || nodeOpt.value() == nullptr)
+            {
+                out["success"] = false;
+                out["error"] = "Node not found for id";
+                return out;
+            }
+
+            json jn;
+            auto * node = nodeOpt.value();
+            jn["id"] = node->getId();
+            jn["order"] = node->getOrder();
+            jn["name"] = node->name();
+            jn["unique_name"] = node->getUniqueName();
+            jn["display_name"] = node->getDisplayName();
+            jn["category"] = static_cast<int>(node->getCategory());
+            auto pos = const_cast<nodes::NodeBase *>(node)->screenPos();
+            jn["position"] = {pos.x, pos.y};
+
+            // Parameters (inputs)
+            json jparams = json::array();
+            for (auto const & [pname, param] : node->constParameter())
+            {
+                json jp;
+                jp["name"] = pname;
+                jp["type"] = FunctionGraphSerializer::typeIndexToString(param.getTypeIndex());
+                jp["size"] = param.getSize();
+                jp["content_type"] = static_cast<int>(param.getContentType());
+                jp["modifiable"] = param.isModifiable();
+                jp["is_argument"] = param.isArgument();
+
+                auto const & srcOpt = param.getConstSource();
+                if (srcOpt.has_value())
+                {
+                    json js;
+                    js["node_id"] = srcOpt->nodeId;
+                    js["port_id"] = srcOpt->portId;
+                    js["unique_name"] = srcOpt->uniqueName;
+                    js["short_name"] = srcOpt->shortName;
+                    js["type"] = FunctionGraphSerializer::typeIndexToString(srcOpt->type);
+                    jp["source"] = js;
+                }
+                else
+                {
+                    jp["source"] = nullptr;
+                }
+
+                jparams.push_back(jp);
+            }
+            jn["parameters"] = jparams;
+
+            // Outputs (ports)
+            json jouts = json::array();
+            for (auto const & [oname, port] : node->outputs())
+            {
+                json jo;
+                jo["name"] = oname;
+                jo["id"] = port.getId();
+                jo["unique_name"] = port.getUniqueName();
+                jo["short_name"] = port.getShortName();
+                jo["type"] = FunctionGraphSerializer::typeIndexToString(port.getTypeIndex());
+                jo["visible"] = port.isVisible();
+                jo["is_used"] = port.isUsed();
+                jouts.push_back(jo);
+            }
+            jn["outputs"] = jouts;
+
+            out["node"] = jn;
+            out["success"] = true;
+
+            return out;
+        }
+        catch (const std::exception & e)
+        {
+            out["success"] = false;
+            out["error"] = std::string("Exception while getting node info: ") + e.what();
+            return out;
+        }
+    }
+}
+
+nlohmann::json gladius::ApplicationMCPAdapter::createNode(uint32_t functionId,
+                                                          const std::string & nodeType,
+                                                          const std::string & displayName,
+                                                          uint32_t /*nodeId*/)
+{
+    using json = nlohmann::json;
+    json out;
+    out["requested_function_id"] = functionId;
+    out["requested_node_type"] = nodeType;
+
+    if (!m_application)
+    {
+        out["success"] = false;
+        out["error"] = "No application instance available";
+        return out;
+    }
+
+    auto document = m_application->getCurrentDocument();
+    if (!document)
+    {
+        out["success"] = false;
+        out["error"] = "No active document available";
+        return out;
+    }
+
+    try
+    {
+        auto assembly = document->getAssembly();
+        if (!assembly)
+        {
+            out["success"] = false;
+            out["error"] = "No assembly available";
+            return out;
+        }
+
+        auto model = assembly->findModel(functionId);
+        if (!model)
+        {
+            out["success"] = false;
+            out["error"] = "Function (model) not found for id";
+            return out;
+        }
+
+        // Create the node via factory
+        auto newNode = nodes::NodeFactory::createNode(nodeType);
+        if (!newNode)
+        {
+            out["success"] = false;
+            out["error"] = std::string("Unknown node type: ") + nodeType;
+            return out;
+        }
+
+        if (!displayName.empty())
+        {
+            newNode->setDisplayName(displayName);
+        }
+
+        // Insert into the model (assigns a new id and registers ports/params)
+        auto * created = model->insert(std::move(newNode));
+        model->updateGraphAndOrderIfNeeded();
+
+        json jn;
+        jn["id"] = created->getId();
+        jn["unique_name"] = created->getUniqueName();
+        jn["display_name"] = created->getDisplayName();
+        jn["category"] = static_cast<int>(created->getCategory());
+        out["node"] = jn;
+        out["success"] = true;
+        return out;
+    }
+    catch (const std::exception & e)
+    {
+        out["success"] = false;
+        out["error"] = std::string("Exception while creating node: ") + e.what();
+        return out;
+    }
+}
+
+nlohmann::json gladius::ApplicationMCPAdapter::deleteNode(uint32_t functionId, uint32_t nodeId)
+{
+    using json = nlohmann::json;
+    json out;
+    out["requested_function_id"] = functionId;
+    out["requested_node_id"] = nodeId;
+
+    if (!m_application)
+    {
+        out["success"] = false;
+        out["error"] = "No application instance available";
+        return out;
+    }
+
+    auto document = m_application->getCurrentDocument();
+    if (!document)
+    {
+        out["success"] = false;
+        out["error"] = "No active document available";
+        return out;
+    }
+
+    try
+    {
+        auto assembly = document->getAssembly();
+        if (!assembly)
+        {
+            out["success"] = false;
+            out["error"] = "No assembly available";
+            return out;
+        }
+
+        auto model = assembly->findModel(functionId);
+        if (!model)
+        {
+            out["success"] = false;
+            out["error"] = "Function (model) not found for id";
+            return out;
+        }
+
+        // Ensure node exists prior to removal
+        auto nodeOpt = model->getNode(nodeId);
+        if (!nodeOpt.has_value() || nodeOpt.value() == nullptr)
+        {
+            out["success"] = false;
+            out["error"] = "Node not found for id";
+            return out;
+        }
+
+        model->remove(nodeId);
+        model->updateGraphAndOrderIfNeeded();
+        out["success"] = true;
+        return out;
+    }
+    catch (const std::exception & e)
+    {
+        out["success"] = false;
+        out["error"] = std::string("Exception while deleting node: ") + e.what();
+        return out;
+    }
+}
+
+nlohmann::json gladius::ApplicationMCPAdapter::setParameterValue(uint32_t functionId,
+                                                                 uint32_t nodeId,
+                                                                 const std::string & parameterName,
+                                                                 const nlohmann::json & value)
+{
+    using json = nlohmann::json;
+    json out;
+    out["requested_function_id"] = functionId;
+    out["requested_node_id"] = nodeId;
+    out["parameter_name"] = parameterName;
+
+    if (!m_application)
+    {
+        out["success"] = false;
+        out["error"] = "No application instance available";
+        return out;
+    }
+
+    auto document = m_application->getCurrentDocument();
+    if (!document)
+    {
+        out["success"] = false;
+        out["error"] = "No active document available";
+        return out;
+    }
+
+    try
+    {
+        auto assembly = document->getAssembly();
+        if (!assembly)
+        {
+            out["success"] = false;
+            out["error"] = "No assembly available";
+            return out;
+        }
+
+        auto model = assembly->findModel(functionId);
+        if (!model)
+        {
+            out["success"] = false;
+            out["error"] = "Function (model) not found for id";
+            return out;
+        }
+
+        auto nodeOpt = model->getNode(nodeId);
+        if (!nodeOpt.has_value() || nodeOpt.value() == nullptr)
+        {
+            out["success"] = false;
+            out["error"] = "Node not found for id";
+            return out;
+        }
+
+        auto * node = nodeOpt.value();
+        auto * param = node->getParameter(parameterName);
+        if (!param)
+        {
+            out["success"] = false;
+            out["error"] = "Parameter not found";
+            return out;
+        }
+
+        // Determine parameter type and assign from JSON
+        auto typeIdx = param->getTypeIndex();
+        try
+        {
+            if (typeIdx == nodes::ParameterTypeIndex::Float)
+            {
+                float v = 0.f;
+                if (value.is_number_float())
+                    v = static_cast<float>(value.get<double>());
+                else if (value.is_number_integer())
+                    v = static_cast<float>(value.get<long long>());
+                else
+                    throw std::runtime_error("Expected number for float parameter");
+                param->setValue(nodes::VariantType{v});
+            }
+            else if (typeIdx == nodes::ParameterTypeIndex::Int)
+            {
+                int v = 0;
+                if (value.is_number_integer())
+                    v = static_cast<int>(value.get<long long>());
+                else if (value.is_number_float())
+                    v = static_cast<int>(value.get<double>());
+                else
+                    throw std::runtime_error("Expected integer for int parameter");
+                param->setValue(nodes::VariantType{v});
+            }
+            else if (typeIdx == nodes::ParameterTypeIndex::String)
+            {
+                if (!value.is_string())
+                    throw std::runtime_error("Expected string for string parameter");
+                param->setValue(nodes::VariantType{value.get<std::string>()});
+            }
+            else if (typeIdx == nodes::ParameterTypeIndex::Float3)
+            {
+                nodes::float3 v{};
+                if (value.is_array() && value.size() == 3 && value[0].is_number() &&
+                    value[1].is_number() && value[2].is_number())
+                {
+                    v.x = static_cast<float>(value[0].get<double>());
+                    v.y = static_cast<float>(value[1].get<double>());
+                    v.z = static_cast<float>(value[2].get<double>());
+                }
+                else if (value.is_object() && value.contains("x") && value.contains("y") &&
+                         value.contains("z"))
+                {
+                    v.x = static_cast<float>(value["x"].get<double>());
+                    v.y = static_cast<float>(value["y"].get<double>());
+                    v.z = static_cast<float>(value["z"].get<double>());
+                }
+                else
+                {
+                    throw std::runtime_error(
+                      "Expected [x,y,z] array or {x,y,z} for float3 parameter");
+                }
+                param->setValue(nodes::VariantType{v});
+            }
+            else if (typeIdx == nodes::ParameterTypeIndex::Matrix4)
+            {
+                nodes::Matrix4x4 m{};
+                if (value.is_array() && value.size() == 16)
+                {
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        for (int j = 0; j < 4; ++j)
+                        {
+                            m[i][j] = static_cast<float>(value[i * 4 + j].get<double>());
+                        }
+                    }
+                }
+                else if (value.is_array() && value.size() == 4 && value[0].is_array() &&
+                         value[1].is_array() && value[2].is_array() && value[3].is_array())
+                {
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        for (int j = 0; j < 4; ++j)
+                        {
+                            m[i][j] = static_cast<float>(value[i][j].get<double>());
+                        }
+                    }
+                }
+                else
+                {
+                    throw std::runtime_error("Expected 16-array or 4x4 array for matrix parameter");
+                }
+                param->setValue(nodes::VariantType{m});
+            }
+            else if (typeIdx == nodes::ParameterTypeIndex::ResourceId)
+            {
+                if (!value.is_number_integer())
+                    throw std::runtime_error("Expected integer for resource id parameter");
+                param->setValue(
+                  nodes::VariantType{static_cast<gladius::ResourceId>(value.get<long long>())});
+            }
+            else
+            {
+                // Fallback: try to set as float
+                if (value.is_number())
+                {
+                    param->setValue(nodes::VariantType{static_cast<float>(value.get<double>())});
+                }
+                else
+                {
+                    throw std::runtime_error("Unsupported parameter type");
+                }
+            }
+        }
+        catch (const std::exception & ex)
+        {
+            out["success"] = false;
+            out["error"] = std::string("Failed to set parameter value: ") + ex.what();
+            return out;
+        }
+
+        // Invalidate and refresh ordering/types
+        model->invalidateGraph();
+        model->updateGraphAndOrderIfNeeded();
+
+        out["success"] = true;
+        return out;
+    }
+    catch (const std::exception & e)
+    {
+        out["success"] = false;
+        out["error"] = std::string("Exception while setting parameter: ") + e.what();
+        return out;
+    }
+}
+
+nlohmann::json gladius::ApplicationMCPAdapter::createLink(uint32_t functionId,
+                                                          uint32_t sourceNodeId,
+                                                          const std::string & sourcePortName,
+                                                          uint32_t targetNodeId,
+                                                          const std::string & targetParameterName)
+{
+    using json = nlohmann::json;
+    json out;
+    out["requested_function_id"] = functionId;
+    out["source_node_id"] = sourceNodeId;
+    out["source_port_name"] = sourcePortName;
+    out["target_node_id"] = targetNodeId;
+    out["target_parameter_name"] = targetParameterName;
+
+    if (!m_application)
+    {
+        out["success"] = false;
+        out["error"] = "No application instance available";
+        return out;
+    }
+
+    auto document = m_application->getCurrentDocument();
+    if (!document)
+    {
+        out["success"] = false;
+        out["error"] = "No active document available";
+        return out;
+    }
+
+    try
+    {
+        auto assembly = document->getAssembly();
+        if (!assembly)
+        {
+            out["success"] = false;
+            out["error"] = "No assembly available";
+            return out;
+        }
+
+        auto model = assembly->findModel(functionId);
+        if (!model)
+        {
+            out["success"] = false;
+            out["error"] = "Function (model) not found for id";
+            return out;
+        }
+
+        auto srcNodeOpt = model->getNode(sourceNodeId);
+        auto dstNodeOpt = model->getNode(targetNodeId);
+        if (!srcNodeOpt.has_value() || srcNodeOpt.value() == nullptr)
+        {
+            out["success"] = false;
+            out["error"] = "Source node not found";
+            return out;
+        }
+        if (!dstNodeOpt.has_value() || dstNodeOpt.value() == nullptr)
+        {
+            out["success"] = false;
+            out["error"] = "Target node not found";
+            return out;
+        }
+
+        auto * srcNode = srcNodeOpt.value();
+        auto * dstNode = dstNodeOpt.value();
+        auto * port = srcNode->findOutputPort(sourcePortName);
+        if (!port)
+        {
+            out["success"] = false;
+            out["error"] = "Source port not found on source node";
+            return out;
+        }
+
+        auto * param = dstNode->getParameter(targetParameterName);
+        if (!param)
+        {
+            out["success"] = false;
+            out["error"] = "Target parameter not found on target node";
+            return out;
+        }
+
+        bool ok = model->addLink(port->getId(), param->getId());
+        if (!ok)
+        {
+            out["success"] = false;
+            out["error"] = "Link not valid or failed to add";
+            return out;
+        }
+        model->updateGraphAndOrderIfNeeded();
+        out["success"] = true;
+        return out;
+    }
+    catch (const std::exception & e)
+    {
+        out["success"] = false;
+        out["error"] = std::string("Exception while creating link: ") + e.what();
+        return out;
+    }
+}
+
+nlohmann::json gladius::ApplicationMCPAdapter::deleteLink(uint32_t functionId,
+                                                          uint32_t targetNodeId,
+                                                          const std::string & targetParameterName)
+{
+    using json = nlohmann::json;
+    json out;
+    out["requested_function_id"] = functionId;
+    out["target_node_id"] = targetNodeId;
+    out["target_parameter_name"] = targetParameterName;
+
+    if (!m_application)
+    {
+        out["success"] = false;
+        out["error"] = "No application instance available";
+        return out;
+    }
+
+    auto document = m_application->getCurrentDocument();
+    if (!document)
+    {
+        out["success"] = false;
+        out["error"] = "No active document available";
+        return out;
+    }
+
+    try
+    {
+        auto assembly = document->getAssembly();
+        if (!assembly)
+        {
+            out["success"] = false;
+            out["error"] = "No assembly available";
+            return out;
+        }
+
+        auto model = assembly->findModel(functionId);
+        if (!model)
+        {
+            out["success"] = false;
+            out["error"] = "Function (model) not found for id";
+            return out;
+        }
+
+        auto dstNodeOpt = model->getNode(targetNodeId);
+        if (!dstNodeOpt.has_value() || dstNodeOpt.value() == nullptr)
+        {
+            out["success"] = false;
+            out["error"] = "Target node not found";
+            return out;
+        }
+        auto * dstNode = dstNodeOpt.value();
+        auto * param = dstNode->getParameter(targetParameterName);
+        if (!param)
+        {
+            out["success"] = false;
+            out["error"] = "Target parameter not found";
+            return out;
+        }
+
+        auto const & srcOpt = param->getConstSource();
+        if (!srcOpt.has_value())
+        {
+            out["success"] = false;
+            out["error"] = "Parameter has no source link";
+            return out;
+        }
+
+        bool ok = model->removeLink(srcOpt->portId, param->getId());
+        if (!ok)
+        {
+            out["success"] = false;
+            out["error"] = "Failed to remove link";
+            return out;
+        }
+        model->updateGraphAndOrderIfNeeded();
+        out["success"] = true;
+        return out;
+    }
+    catch (const std::exception & e)
+    {
+        out["success"] = false;
+        out["error"] = std::string("Exception while deleting link: ") + e.what();
+        return out;
     }
 }

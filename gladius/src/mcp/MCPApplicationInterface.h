@@ -142,6 +142,80 @@ namespace gladius
          */
         virtual nlohmann::json getFunctionGraph(uint32_t functionId) const = 0;
 
+        /**
+         * @brief Serialize and return information about a specific node in a function graph.
+         *
+         * @param functionId ModelResourceID of the function (model).
+         * @param nodeId NodeID of the node to inspect.
+         * @return JSON with node information.
+         */
+        virtual nlohmann::json getNodeInfo(uint32_t functionId, uint32_t nodeId) const = 0;
+
+        /**
+         * @brief Creates a new node in a function graph.
+         *
+         * @param functionId ModelResourceID of the function (model).
+         * @param nodeType The type of the node to create.
+         * @param displayName An optional display name for the new node.
+         * @param nodeId An optional ID for the new node.
+         * @return JSON with the new node's ID.
+         */
+        virtual nlohmann::json createNode(uint32_t functionId,
+                                          const std::string & nodeType,
+                                          const std::string & displayName,
+                                          uint32_t nodeId) = 0;
+
+        /**
+         * @brief Deletes a node from a function graph.
+         *
+         * @param functionId ModelResourceID of the function (model).
+         * @param nodeId The ID of the node to delete.
+         * @return JSON with success status.
+         */
+        virtual nlohmann::json deleteNode(uint32_t functionId, uint32_t nodeId) = 0;
+
+        /**
+         * @brief Sets the value of a parameter on a node.
+         *
+         * @param functionId ModelResourceID of the function (model).
+         * @param nodeId The ID of the node.
+         * @param parameterName The name of the parameter to set.
+         * @param value The value to set.
+         * @return JSON with success status.
+         */
+        virtual nlohmann::json setParameterValue(uint32_t functionId,
+                                                 uint32_t nodeId,
+                                                 const std::string & parameterName,
+                                                 const nlohmann::json & value) = 0;
+
+        /**
+         * @brief Creates a link between two nodes in a function graph.
+         *
+         * @param functionId ModelResourceID of the function (model).
+         * @param sourceNodeId The ID of the source node.
+         * @param sourcePortName The name of the source port.
+         * @param targetNodeId The ID of the target node.
+         * @param targetParameterName The name of the target parameter.
+         * @return JSON with success status.
+         */
+        virtual nlohmann::json createLink(uint32_t functionId,
+                                          uint32_t sourceNodeId,
+                                          const std::string & sourcePortName,
+                                          uint32_t targetNodeId,
+                                          const std::string & targetParameterName) = 0;
+
+        /**
+         * @brief Deletes a link from a function graph.
+         *
+         * @param functionId ModelResourceID of the function (model).
+         * @param targetNodeId The ID of the target node.
+         * @param targetParameterName The name of the target parameter.
+         * @return JSON with success status.
+         */
+        virtual nlohmann::json deleteLink(uint32_t functionId,
+                                          uint32_t targetNodeId,
+                                          const std::string & targetParameterName) = 0;
+
         // Manufacturing validation
         virtual nlohmann::json
         validateForManufacturing(const std::vector<std::string> & functionNames = {},
