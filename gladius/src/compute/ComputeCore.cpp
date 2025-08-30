@@ -865,7 +865,7 @@ namespace gladius
         m_programs.getSlicerProgram()->precomputeSdf(*m_primitives, boundingBox);
     }
 
-    bool ComputeCore::prepareThumbnailGeneration()
+    bool ComputeCore::prepareImageRendering()
     {
         ProfileFunction
 

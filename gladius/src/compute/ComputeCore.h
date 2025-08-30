@@ -408,7 +408,7 @@ namespace gladius
 
         /// @brief Prepares the compute core for thumbnail generation in headless mode
         /// @return true if preparation succeeded, false otherwise
-        bool prepareThumbnailGeneration();
+        bool prepareImageRendering();
         [[nodiscard]] SharedGLImageBuffer getResultImage() const;
         [[nodiscard]] SharedContourExtractor getContour() const;
 
