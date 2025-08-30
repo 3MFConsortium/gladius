@@ -225,7 +225,7 @@ namespace gladius::mcp::tools
                     {
                         // Ignore, we'll try the document path below
                     }
-                    if (!core->prepareThumbnailGeneration())
+                    if (!core->prepareImageRendering())
                     {
                         // Fall back to document's compute path
                         bboxOpt.reset();

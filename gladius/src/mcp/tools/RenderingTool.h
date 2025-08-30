@@ -6,8 +6,15 @@
 #pragma once
 
 #include "MCPToolBase.h"
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
+
+// Forward declarations
+namespace gladius
+{
+    class ComputeCore;
+}
 
 namespace gladius
 {
@@ -78,6 +85,53 @@ namespace gladius
              * @return JSON response with bounding box data
              */
             nlohmann::json getModelBoundingBox();
+
+          private:
+            /**
+             * @brief Get validated compute core from current document
+             * @return Shared pointer to ComputeCore or nullptr if validation fails
+             */
+            std::shared_ptr<ComputeCore> getValidatedComputeCore();
+
+            /**
+             * @brief Prepare model for rendering by refreshing and validating
+             * @param core The compute core to prepare
+             * @return True if preparation successful, false otherwise
+             */
+            bool prepareModelForRendering(std::shared_ptr<ComputeCore> core);
+
+            /**
+             * @brief Validate render format
+             * @param format The format string to validate
+             * @return True if format is valid, false otherwise
+             */
+            bool validateRenderFormat(const std::string & format);
+
+            /**
+             * @brief Create output directory for the given path
+             * @param outputPath The output file path
+             */
+            void createOutputDirectory(const std::string & outputPath);
+
+            /**
+             * @brief Create a standardized success response
+             * @param message Success message
+             * @param outputPath Output file path
+             * @param requestedWidth Requested image width
+             * @param requestedHeight Requested image height
+             * @param format Image format
+             * @param quality Image quality
+             * @param additionalData Any additional data to include
+             * @return JSON success response
+             */
+            nlohmann::json
+            createSuccessResponse(const std::string & message,
+                                  const std::string & outputPath,
+                                  unsigned int requestedWidth,
+                                  unsigned int requestedHeight,
+                                  const std::string & format,
+                                  float quality,
+                                  const nlohmann::json & additionalData = nlohmann::json::object());
         };
     }
 }

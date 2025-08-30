@@ -19,6 +19,102 @@ namespace gladius
         {
         }
 
+        std::shared_ptr<ComputeCore> RenderingTool::getValidatedComputeCore()
+        {
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                setErrorMessage("No active document");
+                return nullptr;
+            }
+
+            auto core = document->getCore();
+            if (!core)
+            {
+                setErrorMessage("No compute core available");
+                return nullptr;
+            }
+
+            return core;
+        }
+
+        bool RenderingTool::prepareModelForRendering(std::shared_ptr<ComputeCore> core)
+        {
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                setErrorMessage("No active document");
+                return false;
+            }
+
+            // Ensure assembly is updated before rendering
+            try
+            {
+                document->refreshModelBlocking();
+            }
+            catch (const std::exception & e)
+            {
+                setErrorMessage("Assembly update failed: " + std::string(e.what()));
+                return false;
+            }
+
+            // Prepare the model for rendering
+            if (!core->prepareImageRendering())
+            {
+                setErrorMessage(
+                  "Model preparation for rendering failed: This may be due to model "
+                  "compilation errors, SDF precomputation failure, or invalid bounding box. "
+                  "Check model validation for detailed OpenCL compilation errors.");
+                return false;
+            }
+
+            return true;
+        }
+
+        bool RenderingTool::validateRenderFormat(const std::string & format)
+        {
+            if (format != "png" && format != "jpg")
+            {
+                setErrorMessage("Unsupported format: " + format + ". Supported formats: png, jpg");
+                return false;
+            }
+            return true;
+        }
+
+        void RenderingTool::createOutputDirectory(const std::string & outputPath)
+        {
+            std::filesystem::path outputFilePath(outputPath);
+            std::filesystem::create_directories(outputFilePath.parent_path());
+        }
+
+        nlohmann::json RenderingTool::createSuccessResponse(const std::string & message,
+                                                            const std::string & outputPath,
+                                                            unsigned int requestedWidth,
+                                                            unsigned int requestedHeight,
+                                                            const std::string & format,
+                                                            float quality,
+                                                            const nlohmann::json & additionalData)
+        {
+            nlohmann::json response;
+            response["success"] = true;
+            response["message"] = message;
+            response["outputPath"] = outputPath;
+            response["actualWidth"] = 256;  // Current thumbnail system limitation
+            response["actualHeight"] = 256; // Current thumbnail system limitation
+            response["requestedWidth"] = requestedWidth;
+            response["requestedHeight"] = requestedHeight;
+            response["format"] = format;
+            response["quality"] = quality;
+
+            // Merge any additional data
+            for (auto & [key, value] : additionalData.items())
+            {
+                response[key] = value;
+            }
+
+            return response;
+        }
+
         nlohmann::json RenderingTool::renderToFile(const std::string & outputPath,
                                                    unsigned int width,
                                                    unsigned int height,
@@ -34,84 +130,45 @@ namespace gladius
                 return response;
             }
 
+            // Validate format
+            if (!validateRenderFormat(format))
+            {
+                response["success"] = false;
+                response["error"] = getLastErrorMessage();
+                return response;
+            }
+
             try
             {
-                // Get the current document
-                auto document = m_application->getCurrentDocument();
-                if (!document)
-                {
-                    setErrorMessage("No active document");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Get the compute core from the document
-                auto core = document->getCore();
+                // Get validated compute core
+                auto core = getValidatedComputeCore();
                 if (!core)
                 {
-                    setErrorMessage("No compute core available");
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
                 }
 
-                // Validate format
-                if (format != "png" && format != "jpg")
+                // Prepare model for rendering
+                if (!prepareModelForRendering(core))
                 {
-                    setErrorMessage("Unsupported format: " + format +
-                                    ". Supported formats: png, jpg");
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
                 }
 
-                // Ensure assembly is updated before rendering
-                try
-                {
-                    document->updateFlatAssembly();
-                    core->tryRefreshProgramProtected(document->getAssembly());
-                }
-                catch (const std::exception & e)
-                {
-                    setErrorMessage("Assembly update failed: " + std::string(e.what()));
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Prepare the model for rendering (similar to thumbnail generation)
-                if (!core->prepareThumbnailGeneration())
-                {
-                    setErrorMessage(
-                      "Model preparation for rendering failed: This may be due to model "
-                      "compilation errors, SDF precomputation failure, or invalid bounding box. "
-                      "Check model validation for detailed OpenCL compilation errors.");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Create output directory
-                std::filesystem::path outputFilePath(outputPath);
-                std::filesystem::create_directories(outputFilePath.parent_path());
-
-                // For now, use the existing thumbnail generation but note that it's limited to
-                // 256x256
-                // TODO: Extend rendering system to support arbitrary resolutions
+                // Create output directory and render
+                createOutputDirectory(outputPath);
                 core->saveThumbnail(outputPath);
 
-                response["success"] = true;
-                response["message"] = "Rendering completed successfully (using thumbnail system - "
-                                      "currently limited to 256x256 resolution)";
-                response["outputPath"] = outputPath;
-                response["actualWidth"] = 256;  // Current limitation
-                response["actualHeight"] = 256; // Current limitation
-                response["requestedWidth"] = width;
-                response["requestedHeight"] = height;
-                response["format"] = format;
-                response["quality"] = quality;
-                return response;
+                return createSuccessResponse(
+                  "Rendering completed successfully (using thumbnail system - "
+                  "currently limited to 256x256 resolution)",
+                  outputPath,
+                  width,
+                  height,
+                  format,
+                  quality);
             }
             catch (const std::exception & e)
             {
@@ -135,88 +192,57 @@ namespace gladius
                 return response;
             }
 
+            // Parse camera settings
+            if (!cameraSettings.contains("eye_position") ||
+                !cameraSettings.contains("target_position"))
+            {
+                setErrorMessage(
+                  "Camera settings must contain 'eye_position' and 'target_position'");
+                response["success"] = false;
+                response["error"] = getLastErrorMessage();
+                return response;
+            }
+
+            auto eyePos = cameraSettings["eye_position"];
+            auto targetPos = cameraSettings["target_position"];
+
+            if (!eyePos.is_array() || eyePos.size() != 3 || !targetPos.is_array() ||
+                targetPos.size() != 3)
+            {
+                setErrorMessage("Camera positions must be arrays of 3 numbers [x, y, z]");
+                response["success"] = false;
+                response["error"] = getLastErrorMessage();
+                return response;
+            }
+
+            // Extract render settings (with defaults)
+            std::string format = renderSettings.value("format", "png");
+            unsigned int width = renderSettings.value("width", 256);
+            unsigned int height = renderSettings.value("height", 256);
+            float quality = renderSettings.value("quality", 0.9f);
+
+            // Validate format
+            if (!validateRenderFormat(format))
+            {
+                response["success"] = false;
+                response["error"] = getLastErrorMessage();
+                return response;
+            }
+
             try
             {
-                // Get the current document
-                auto document = m_application->getCurrentDocument();
-                if (!document)
-                {
-                    setErrorMessage("No active document");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Get the compute core from the document
-                auto core = document->getCore();
+                // Get validated compute core
+                auto core = getValidatedComputeCore();
                 if (!core)
                 {
-                    setErrorMessage("No compute core available");
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
                 }
 
-                // Parse camera settings
-                if (!cameraSettings.contains("eye_position") ||
-                    !cameraSettings.contains("target_position"))
+                // Prepare model for rendering
+                if (!prepareModelForRendering(core))
                 {
-                    setErrorMessage(
-                      "Camera settings must contain 'eye_position' and 'target_position'");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                auto eyePos = cameraSettings["eye_position"];
-                auto targetPos = cameraSettings["target_position"];
-
-                if (!eyePos.is_array() || eyePos.size() != 3 || !targetPos.is_array() ||
-                    targetPos.size() != 3)
-                {
-                    setErrorMessage("Camera positions must be arrays of 3 numbers [x, y, z]");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Extract render settings (with defaults)
-                std::string format = renderSettings.value("format", "png");
-                unsigned int width = renderSettings.value("width", 256);
-                unsigned int height = renderSettings.value("height", 256);
-                float quality = renderSettings.value("quality", 0.9f);
-
-                // Validate format
-                if (format != "png" && format != "jpg")
-                {
-                    setErrorMessage("Unsupported format: " + format +
-                                    ". Supported formats: png, jpg");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Ensure assembly is updated before rendering
-                try
-                {
-                    document->updateFlatAssembly();
-                    core->tryRefreshProgramProtected(document->getAssembly());
-                }
-                catch (const std::exception & e)
-                {
-                    setErrorMessage("Assembly update failed: " + std::string(e.what()));
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Prepare the model for rendering
-                if (!core->prepareThumbnailGeneration())
-                {
-                    setErrorMessage(
-                      "Model preparation for rendering failed: This may be due to model "
-                      "compilation errors, SDF precomputation failure, or invalid bounding box. "
-                      "Check model validation for detailed OpenCL compilation errors.");
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
@@ -255,30 +281,26 @@ namespace gladius
                     // Apply the custom camera settings
                     core->applyCamera(customCamera);
 
-                    // Create output directory
-                    std::filesystem::path outputFilePath(outputPath);
-                    std::filesystem::create_directories(outputFilePath.parent_path());
-
-                    // Render using the existing thumbnail system
-                    // TODO: Extend to support arbitrary resolutions
+                    // Create output directory and render
+                    createOutputDirectory(outputPath);
                     core->saveThumbnail(outputPath);
 
                     // Restore original camera settings
                     core->getResourceContext()->setEyePosition(originalEyePos);
                     core->getResourceContext()->setModelViewPerspectiveMat(originalViewMat);
 
-                    response["success"] = true;
-                    response["message"] =
+                    nlohmann::json additionalData = {{"cameraSettings", cameraSettings},
+                                                     {"renderSettings", renderSettings}};
+
+                    return createSuccessResponse(
                       "Camera-based rendering completed successfully (using thumbnail system - "
-                      "currently limited to 256x256 resolution)";
-                    response["outputPath"] = outputPath;
-                    response["actualWidth"] = 256;  // Current limitation
-                    response["actualHeight"] = 256; // Current limitation
-                    response["requestedWidth"] = width;
-                    response["requestedHeight"] = height;
-                    response["cameraSettings"] = cameraSettings;
-                    response["renderSettings"] = renderSettings;
-                    return response;
+                      "currently limited to 256x256 resolution)",
+                      outputPath,
+                      width,
+                      height,
+                      format,
+                      quality,
+                      additionalData);
                 }
                 catch (const std::exception & e)
                 {
@@ -311,64 +333,35 @@ namespace gladius
 
             try
             {
-                // Get the current document
-                auto document = m_application->getCurrentDocument();
-                if (!document)
-                {
-                    setErrorMessage("No active document");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Get the compute core from the document
-                auto core = document->getCore();
+                // Get validated compute core
+                auto core = getValidatedComputeCore();
                 if (!core)
                 {
-                    setErrorMessage("No compute core available");
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
                 }
 
-                // Ensure assembly is updated before thumbnail preparation
-                try
+                // Prepare model for rendering
+                if (!prepareModelForRendering(core))
                 {
-                    document->updateFlatAssembly();
-                    core->tryRefreshProgramProtected(document->getAssembly());
-                }
-                catch (const std::exception & e)
-                {
-                    setErrorMessage("Assembly update failed: " + std::string(e.what()));
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
                 }
 
-                // Prepare the model for thumbnail generation
-                if (!core->prepareThumbnailGeneration())
-                {
-                    setErrorMessage(
-                      "Thumbnail preparation failed: This may be due to model compilation "
-                      "errors, SDF precomputation failure, or invalid bounding box. "
-                      "Check model validation for detailed OpenCL compilation errors.");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Create output directory
-                std::filesystem::path outputFilePath(outputPath);
-                std::filesystem::create_directories(outputFilePath.parent_path());
-
-                // Use existing thumbnail functionality
+                // Create output directory and generate thumbnail
+                createOutputDirectory(outputPath);
                 core->saveThumbnail(outputPath);
 
-                response["success"] = true;
-                response["message"] = "Thumbnail generated successfully";
-                response["outputPath"] = outputPath;
-                response["size"] = size;
-                return response;
+                nlohmann::json additionalData = {{"size", size}};
+                return createSuccessResponse("Thumbnail generated successfully",
+                                             outputPath,
+                                             size,
+                                             size,
+                                             "png",
+                                             1.0f,
+                                             additionalData);
             }
             catch (const std::exception & e)
             {
@@ -392,21 +385,10 @@ namespace gladius
 
             try
             {
-                // Get the current document
-                auto document = m_application->getCurrentDocument();
-                if (!document)
-                {
-                    setErrorMessage("No active document");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Get the compute core from the document
-                auto core = document->getCore();
+                // Get validated compute core
+                auto core = getValidatedComputeCore();
                 if (!core)
                 {
-                    setErrorMessage("No compute core available");
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
@@ -449,7 +431,7 @@ namespace gladius
 
                 response["success"] = true;
                 response["message"] = "Optimal camera position calculated successfully";
-                response["camera"] = {
+                response["camera_settings"] = {
                   {"eye_position", {eyePosition.x, eyePosition.y, eyePosition.z}},
                   {"target_position", {lookAt.x, lookAt.y, lookAt.z}},
                   {"up_vector", {0.0f, 0.0f, 1.0f}}, // Standard up vector
@@ -479,21 +461,10 @@ namespace gladius
 
             try
             {
-                // Get the current document
-                auto document = m_application->getCurrentDocument();
-                if (!document)
-                {
-                    setErrorMessage("No active document");
-                    response["success"] = false;
-                    response["error"] = getLastErrorMessage();
-                    return response;
-                }
-
-                // Get the compute core from the document
-                auto core = document->getCore();
+                // Get validated compute core
+                auto core = getValidatedComputeCore();
                 if (!core)
                 {
-                    setErrorMessage("No compute core available");
                     response["success"] = false;
                     response["error"] = getLastErrorMessage();
                     return response;
