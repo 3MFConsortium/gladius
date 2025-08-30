@@ -990,7 +990,17 @@ namespace gladius
                 if (!newNode)
                 {
                     out["success"] = false;
-                    out["error"] = std::string("Unknown node type: ") + nodeType;
+                    std::string errorMsg =
+                      std::string("Unknown node type: ") + nodeType + ". Valid node types are: ";
+                    auto validTypes = nodes::NodeFactory::getValidNodeTypes();
+                    for (size_t i = 0; i < validTypes.size(); ++i)
+                    {
+                        if (i > 0)
+                            errorMsg += ", ";
+                        errorMsg += validTypes[i];
+                    }
+                    out["error"] = errorMsg;
+                    out["valid_node_types"] = validTypes;
                     return out;
                 }
 

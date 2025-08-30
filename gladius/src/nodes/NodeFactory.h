@@ -3,6 +3,7 @@
 #include "NodeBase.h"
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace gladius::nodes
 {
@@ -10,5 +11,6 @@ namespace gladius::nodes
     {
       public:
         static std::unique_ptr<NodeBase> createNode(const std::string & nodeType);
+        static std::vector<std::string> getValidNodeTypes();
     };
 }
