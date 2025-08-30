@@ -121,7 +121,7 @@ namespace gladius::mcp
                     if (preparationSuccess)
                     {
                         // Prepare the model for thumbnail generation
-                        preparationSuccess = computeCore->prepareThumbnailGeneration();
+                        preparationSuccess = computeCore->prepareImageRendering();
                         if (!preparationSuccess)
                         {
                             setError(

@@ -39,6 +39,14 @@ namespace gladius::nodes
 
     void Validator::validateNodeImpl(NodeBase & node, Model & model)
     {
+        // Skip validation for Begin and End nodes - they are special input/output nodes
+        // that don't require input connections by design
+        if (node.getCategory() == Category::Internal &&
+            (node.name() == "Input" || node.name() == "Output"))
+        {
+            return;
+        }
+
         // Create a descriptive model identifier that includes both name and ID
         auto modelDisplayName = model.getDisplayName().value_or("unknown");
         auto modelId = model.getResourceId();
@@ -49,7 +57,15 @@ namespace gladius::nodes
             if (!parameter.getConstSource().has_value() && parameter.isInputSourceRequired())
             {
                 m_errors.push_back(ValidationError{
-                  "Missing input", modelInfo, node.getDisplayName(), "unknown", parameterName});
+                  fmt::format(
+                    "Node '{}' requires input for parameter '{}' but no connection found. "
+                    "Connect an output from another node to this parameter.",
+                    node.getDisplayName(),
+                    parameterName),
+                  modelInfo,
+                  node.getDisplayName(),
+                  "unknown",
+                  parameterName});
                 model.setIsValid(false);
             }
             if (parameter.getConstSource().has_value())
@@ -60,12 +76,15 @@ namespace gladius::nodes
 
                 if (!referendedPort)
                 {
-                    m_errors.push_back(
-                      ValidationError{"Parameter references non-existing port", // message
-                                      modelInfo,                                // model
-                                      node.getDisplayName(),                    // node
-                                      "unknown",                                // port
-                                      parameterName});                          // parameter
+                    m_errors.push_back(ValidationError{
+                      fmt::format("Parameter '{}' of node '{}' references a non-existing port. "
+                                  "The referenced node or port may have been deleted.",
+                                  parameterName,
+                                  node.getDisplayName()), // message
+                      modelInfo,                          // model
+                      node.getDisplayName(),              // node
+                      "unknown",                          // port
+                      parameterName});                    // parameter
 
                     parameter.setValid(false);
                     model.setIsValid(false);
@@ -74,11 +93,18 @@ namespace gladius::nodes
 
                 if (parameter.getTypeIndex() != referendedPort->getTypeIndex())
                 {
-                    m_errors.push_back(ValidationError{"Datatype mismatch",             // message
-                                                       modelInfo,                       // model
-                                                       node.getDisplayName(),           // node
-                                                       referendedPort->getUniqueName(), // port
-                                                       parameterName});                 // parameter
+                    m_errors.push_back(ValidationError{
+                      fmt::format(
+                        "Type mismatch: Parameter '{}' of node '{}' expects different data type "
+                        "than provided by connected port '{}'. Check node documentation for "
+                        "required types.",
+                        parameterName,
+                        node.getDisplayName(),
+                        referendedPort->getUniqueName()), // message
+                      modelInfo,                          // model
+                      node.getDisplayName(),              // node
+                      referendedPort->getUniqueName(),    // port
+                      parameterName});                    // parameter
                     parameter.setValid(false);
                     model.setIsValid(false);
                 }
