@@ -3429,6 +3429,41 @@ nlohmann::json gladius::ApplicationMCPAdapter::createLink(uint32_t functionId,
         {
             out["success"] = false;
             out["error"] = "Target node not found";
+
+            // Provide information about all nodes with unconnected inputs
+            json nodesWithUnconnectedInputs = json::array();
+            for (auto const & [nodeId, nodePtr] : *model)
+            {
+                if (nodePtr)
+                {
+                    json nodeInfo;
+                    nodeInfo["id"] = nodePtr->getId();
+                    nodeInfo["name"] = nodePtr->name();
+                    nodeInfo["display_name"] = nodePtr->getDisplayName();
+
+                    json unconnectedParams = json::array();
+                    for (auto const & [pname, parameter] : nodePtr->constParameter())
+                    {
+                        if (!parameter.getConstSource().has_value())
+                        {
+                            json paramInfo;
+                            paramInfo["name"] = pname;
+                            paramInfo["type"] =
+                              FunctionGraphSerializer::typeIndexToString(parameter.getTypeIndex());
+                            paramInfo["is_connected"] = false;
+                            unconnectedParams.push_back(paramInfo);
+                        }
+                    }
+
+                    if (!unconnectedParams.empty())
+                    {
+                        nodeInfo["unconnected_parameters"] = unconnectedParams;
+                        nodesWithUnconnectedInputs.push_back(nodeInfo);
+                    }
+                }
+            }
+            out["nodes_with_unconnected_inputs"] = nodesWithUnconnectedInputs;
+
             return out;
         }
 
@@ -3447,6 +3482,20 @@ nlohmann::json gladius::ApplicationMCPAdapter::createLink(uint32_t functionId,
         {
             out["success"] = false;
             out["error"] = "Target parameter not found on target node";
+
+            // Provide detailed information about the target node's available parameters
+            json targetNodeParams = json::array();
+            for (auto const & [pname, parameter] : dstNode->constParameter())
+            {
+                json paramInfo;
+                paramInfo["name"] = pname;
+                paramInfo["type"] =
+                  FunctionGraphSerializer::typeIndexToString(parameter.getTypeIndex());
+                paramInfo["is_connected"] = parameter.getConstSource().has_value();
+                targetNodeParams.push_back(paramInfo);
+            }
+            out["target_node_available_parameters"] = targetNodeParams;
+
             return out;
         }
 
