@@ -38,6 +38,13 @@ namespace gladius
                 return out;
             }
 
+            // Clear old validation events before starting new validation
+            auto logger = document->getSharedLogger();
+            if (logger)
+            {
+                logger->clear();
+            }
+
             bool const doCompile = options.value("compile", true);
             int const maxMessages = options.value("max_messages", 50);
 
