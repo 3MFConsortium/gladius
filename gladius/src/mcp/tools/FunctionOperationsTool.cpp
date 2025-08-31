@@ -1646,5 +1646,185 @@ namespace gladius
                 return out;
             }
         }
+
+        nlohmann::json
+        FunctionOperationsTool::createConstantNodesForMissingParameters(uint32_t functionId,
+                                                                        uint32_t nodeId,
+                                                                        bool autoConnect)
+        {
+            using json = nlohmann::json;
+            json out;
+            out["function_id"] = functionId;
+            out["node_id"] = nodeId;
+            out["auto_connect"] = autoConnect;
+
+            if (!validateApplication())
+            {
+                out["success"] = false;
+                out["error"] = "No application instance available";
+                return out;
+            }
+
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                out["success"] = false;
+                out["error"] = "No active document available";
+                return out;
+            }
+
+            try
+            {
+                auto assembly = document->getAssembly();
+                if (!assembly)
+                {
+                    out["success"] = false;
+                    out["error"] = "No assembly available";
+                    return out;
+                }
+
+                auto model = assembly->findModel(functionId);
+                if (!model)
+                {
+                    out["success"] = false;
+                    out["error"] = "Function (model) not found for id";
+                    return out;
+                }
+
+                auto nodeOpt = model->getNode(nodeId);
+                if (!nodeOpt.has_value() || nodeOpt.value() == nullptr)
+                {
+                    out["success"] = false;
+                    out["error"] = "Node not found for id";
+                    return out;
+                }
+
+                auto * node = nodeOpt.value();
+
+                // Find all unconnected required parameters
+                json unconnectedParams = json::array();
+                json createdNodes = json::array();
+                json createdLinks = json::array();
+
+                for (auto const & [paramName, param] : node->constParameter())
+                {
+                    // Check if parameter needs an input source and doesn't have one
+                    if (!param.getConstSource().has_value() && param.isInputSourceRequired())
+                    {
+                        json paramInfo = createSimplifiedInputInfo(param, paramName);
+                        unconnectedParams.push_back(paramInfo);
+
+                        // Create appropriate constant node based on parameter type
+                        nodes::NodeBase * createdConstantNode = nullptr;
+                        nodes::Port const * outputPort = nullptr;
+
+                        auto typeIdx = param.getTypeIndex();
+                        if (typeIdx == nodes::ParameterTypeIndex::Float)
+                        {
+                            auto * constantNode = model->create<nodes::ConstantScalar>();
+                            constantNode->setDisplayName(paramName);
+
+                            createdConstantNode = constantNode;
+                            outputPort = &constantNode->getValueOutputPort();
+                        }
+                        else if (typeIdx == nodes::ParameterTypeIndex::Float3)
+                        {
+                            auto * constantNode = model->create<nodes::ConstantVector>();
+                            constantNode->setDisplayName(paramName);
+
+                            createdConstantNode = constantNode;
+                            outputPort = &constantNode->getVectorOutputPort();
+                        }
+                        else if (typeIdx == nodes::ParameterTypeIndex::Matrix4)
+                        {
+                            auto * constantNode = model->create<nodes::ConstantMatrix>();
+                            constantNode->setDisplayName(paramName);
+
+                            createdConstantNode = constantNode;
+                            outputPort = &constantNode->getMatrixOutputPort();
+                        }
+                        else if (typeIdx == nodes::ParameterTypeIndex::ResourceId)
+                        {
+                            auto * constantNode = model->create<nodes::Resource>();
+                            constantNode->setDisplayName(paramName);
+
+                            createdConstantNode = constantNode;
+                            outputPort = &constantNode->getOutputs().at(nodes::FieldNames::Value);
+                        }
+                        else
+                        {
+                            // For unsupported types, just record the parameter
+                            json unsupportedParam;
+                            unsupportedParam["parameter_name"] = paramName;
+                            unsupportedParam["type"] =
+                              FunctionGraphSerializer::typeIndexToString(typeIdx);
+                            unsupportedParam["error"] =
+                              "Unsupported parameter type for constant node creation";
+                            unconnectedParams.push_back(unsupportedParam);
+                            continue;
+                        }
+
+                        if (createdConstantNode)
+                        {
+                            json nodeInfo;
+                            nodeInfo["id"] = createdConstantNode->getId();
+                            nodeInfo["unique_name"] = createdConstantNode->getUniqueName();
+                            nodeInfo["display_name"] = createdConstantNode->getDisplayName();
+                            nodeInfo["type"] = createdConstantNode->name();
+                            nodeInfo["parameter_name"] = paramName;
+                            nodeInfo["parameter_type"] =
+                              FunctionGraphSerializer::typeIndexToString(typeIdx);
+
+                            createdNodes.push_back(nodeInfo);
+
+                            // Auto-connect if requested and possible
+                            if (autoConnect && outputPort)
+                            {
+                                bool linkCreated =
+                                  model->addLink(outputPort->getId(), param.getId());
+                                if (linkCreated)
+                                {
+                                    json linkInfo;
+                                    linkInfo["source_node_id"] = createdConstantNode->getId();
+                                    linkInfo["source_port_name"] = outputPort->getShortName();
+                                    linkInfo["target_node_id"] = nodeId;
+                                    linkInfo["target_parameter_name"] = paramName;
+
+                                    createdLinks.push_back(linkInfo);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Update the graph to ensure everything is properly connected
+                model->updateGraphAndOrderIfNeeded();
+
+                out["success"] = true;
+                out["unconnected_parameters"] = unconnectedParams;
+                out["created_constant_nodes"] = createdNodes;
+                out["created_links"] = createdLinks;
+                out["total_created_nodes"] = createdNodes.size();
+                out["total_created_links"] = createdLinks.size();
+
+                if (createdNodes.empty())
+                {
+                    out["message"] = "No missing parameters found that require constant nodes";
+                }
+                else
+                {
+                    out["message"] = "Created " + std::to_string(createdNodes.size()) +
+                                     " constant node(s) for missing parameters";
+                }
+
+                return out;
+            }
+            catch (const std::exception & e)
+            {
+                out["success"] = false;
+                out["error"] = std::string("Exception while creating constant nodes: ") + e.what();
+                return out;
+            }
+        }
     }
 }

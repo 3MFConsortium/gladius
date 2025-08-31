@@ -165,6 +165,11 @@ namespace gladius::tests
                     createFunctionCallNode,
                     (uint32_t, uint32_t, const std::string &),
                     (override));
+        MOCK_METHOD(nlohmann::json,
+                    createConstantNodesForMissingParameters,
+                    (uint32_t, uint32_t, bool),
+                    (override));
+        MOCK_METHOD(nlohmann::json, validateModel, (const nlohmann::json &), (override));
     };
 
     class MCPServerTest : public ::testing::Test
@@ -173,6 +178,11 @@ namespace gladius::tests
         void SetUp() override
         {
             m_mockApp = std::make_unique<MockMCPApplication>();
+
+            // Set up default behavior for validateModel to avoid failures
+            EXPECT_CALL(*m_mockApp, validateModel(::testing::_))
+              .WillRepeatedly(::testing::Return(nlohmann::json{{"success", true}}));
+
             m_server = std::make_unique<mcp::MCPServer>(m_mockApp.get());
         }
 
@@ -329,6 +339,9 @@ namespace gladius::tests
     TEST_F(MCPServerTest, CreateFunctionFromExpressionTool_ValidExpression_CallsAdapter)
     {
         // Arrange
+        EXPECT_CALL(*m_mockApp, validateModel(::testing::_))
+          .WillRepeatedly(::testing::Return(nlohmann::json{{"success", true}}));
+
         EXPECT_CALL(*m_mockApp,
                     createFunctionFromExpression(
                       "test_function", "sin(x) + cos(y)", "float", ::testing::_, ::testing::_))
@@ -461,6 +474,9 @@ namespace gladius::tests
     TEST_F(MCPServerTest, CreateFunctionFromExpressionTool_GyroidExpression_ValidatesPattern)
     {
         // Arrange
+        EXPECT_CALL(*m_mockApp, validateModel(::testing::_))
+          .WillRepeatedly(::testing::Return(nlohmann::json{{"success", true}}));
+
         EXPECT_CALL(*m_mockApp,
                     createFunctionFromExpression(
                       "gyroid",

@@ -312,6 +312,18 @@ namespace gladius::tests
         {
             return nlohmann::json{{"success", true}};
         }
+
+        nlohmann::json createConstantNodesForMissingParameters(uint32_t functionId,
+                                                               uint32_t nodeId,
+                                                               bool autoConnect) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
+
+        nlohmann::json validateModel(const nlohmann::json & options) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
     };
 
     class JSONRPCTest : public ::testing::Test

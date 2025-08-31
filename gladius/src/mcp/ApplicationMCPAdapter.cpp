@@ -1029,6 +1029,15 @@ gladius::ApplicationMCPAdapter::createFunctionCallNode(uint32_t targetFunctionId
       targetFunctionId, referencedFunctionId, displayName);
 }
 
+nlohmann::json
+gladius::ApplicationMCPAdapter::createConstantNodesForMissingParameters(uint32_t functionId,
+                                                                        uint32_t nodeId,
+                                                                        bool autoConnect)
+{
+    return m_functionOperationsTool->createConstantNodesForMissingParameters(
+      functionId, nodeId, autoConnect);
+}
+
 bool gladius::ApplicationMCPAdapter::renderToFile(const std::string & outputPath,
                                                   uint32_t width,
                                                   uint32_t height,

@@ -235,6 +235,26 @@ namespace gladius
                                                       uint32_t referencedFunctionId,
                                                       const std::string & displayName = "") = 0;
 
+        /**
+         * @brief Creates constant nodes for missing parameters on a node (typically a function call
+         * node)
+         *
+         * This method analyzes a node to find parameters that require input sources but don't have
+         * them, then creates appropriate constant nodes (ConstantScalar, ConstantVector,
+         * ConstantMatrix, or Resource) based on the parameter types. Optionally auto-connects the
+         * created constant nodes.
+         *
+         * @param functionId ModelResourceID of the function (model) containing the node
+         * @param nodeId The ID of the node to analyze for missing parameters
+         * @param autoConnect Whether to automatically connect the created constant nodes to the
+         * missing parameters
+         * @return JSON with creation result, including information about created constant nodes and
+         * links
+         */
+        virtual nlohmann::json createConstantNodesForMissingParameters(uint32_t functionId,
+                                                                       uint32_t nodeId,
+                                                                       bool autoConnect = true) = 0;
+
         // Manufacturing validation
         virtual nlohmann::json
         validateForManufacturing(const std::vector<std::string> & functionNames = {},

@@ -93,6 +93,9 @@ namespace gladius
             nlohmann::json createFunctionCallNode(uint32_t targetFunctionId,
                                                   uint32_t referencedFunctionId,
                                                   const std::string & displayName = "");
+            nlohmann::json createConstantNodesForMissingParameters(uint32_t functionId,
+                                                                   uint32_t nodeId,
+                                                                   bool autoConnect = true);
         };
     }
 }
