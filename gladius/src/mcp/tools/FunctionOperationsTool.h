@@ -82,6 +82,7 @@ namespace gladius
             nlohmann::json createConstantNodesForMissingParameters(uint32_t functionId,
                                                                    uint32_t nodeId,
                                                                    bool autoConnect = true);
+            nlohmann::json removeUnusedNodes(uint32_t functionId);
         };
     }
 }

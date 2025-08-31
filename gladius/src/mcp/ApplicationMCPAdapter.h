@@ -175,6 +175,7 @@ namespace gladius
         nlohmann::json createConstantNodesForMissingParameters(uint32_t functionId,
                                                                uint32_t nodeId,
                                                                bool autoConnect = true) override;
+        nlohmann::json removeUnusedNodes(uint32_t functionId) override;
 
         // Manufacturing validation
         nlohmann::json

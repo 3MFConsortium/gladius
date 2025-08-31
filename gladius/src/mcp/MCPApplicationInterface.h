@@ -240,6 +240,19 @@ namespace gladius
                                                                        uint32_t nodeId,
                                                                        bool autoConnect = true) = 0;
 
+        /**
+         * @brief Removes unused nodes from a function graph
+         *
+         * This method analyzes a function graph to find nodes whose outputs are not connected
+         * to any other nodes or to the function's output ports. Such nodes are considered unused
+         * and can be safely removed. This is useful for cleaning up after automatic node creation
+         * or when nodes become disconnected during graph editing.
+         *
+         * @param functionId ModelResourceID of the function (model) to clean up
+         * @return JSON with removal result, including information about removed nodes
+         */
+        virtual nlohmann::json removeUnusedNodes(uint32_t functionId) = 0;
+
         // Manufacturing validation
         virtual nlohmann::json
         validateForManufacturing(const std::vector<std::string> & functionNames = {},

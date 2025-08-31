@@ -122,19 +122,6 @@ namespace gladius::tests
         {
             return true;
         }
-        std::pair<bool, uint32_t> createSDFFunction(const std::string & name,
-                                                    const std::string & sdfExpression) override
-        {
-            return {true, 456}; // Mock resource ID
-        }
-        std::pair<bool, uint32_t> createCSGOperation(const std::string & name,
-                                                     const std::string & operation,
-                                                     const std::vector<std::string> & operands,
-                                                     bool smooth = false,
-                                                     float blendRadius = 0.1f) override
-        {
-            return {true, 789}; // Mock resource ID
-        }
 
         // New 3MF Resource creation methods
         std::pair<bool, uint32_t> createLevelSet(uint32_t functionId) override
@@ -159,24 +146,12 @@ namespace gladius::tests
         {
             return {true, functionId + 3000}; // Mock property data ID
         }
-        bool applyTransformToFunction(const std::string & functionName,
-                                      const std::array<float, 3> & translation,
-                                      const std::array<float, 3> & rotation,
-                                      const std::array<float, 3> & scale) override
-        {
-            return true;
-        }
+
         nlohmann::json analyzeFunctionProperties(const std::string & functionName) const override
         {
             return nlohmann::json{{"status", "mock"}};
         }
-        nlohmann::json generateMeshFromFunction(
-          const std::string & functionName,
-          int resolution = 64,
-          const std::array<float, 6> & bounds = {-10, -10, -10, 10, 10, 10}) const override
-        {
-            return nlohmann::json{{"vertices", 0}, {"faces", 0}};
-        }
+
         nlohmann::json getSceneHierarchy() const override
         {
             return nlohmann::json{{"nodes", nlohmann::json::array()}};
@@ -316,6 +291,11 @@ namespace gladius::tests
         nlohmann::json createConstantNodesForMissingParameters(uint32_t functionId,
                                                                uint32_t nodeId,
                                                                bool autoConnect) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
+
+        nlohmann::json removeUnusedNodes(uint32_t functionId) override
         {
             return nlohmann::json{{"success", true}};
         }

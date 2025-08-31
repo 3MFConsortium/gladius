@@ -68,15 +68,6 @@ namespace gladius::tests
         // New MCP interface methods
         MOCK_METHOD(bool, validateDocumentFor3MF, (), (const, override));
         MOCK_METHOD(bool, exportDocumentAs3MF, (const std::string &, bool), (const, override));
-        MOCK_METHOD((std::pair<bool, uint32_t>),
-                    createSDFFunction,
-                    (const std::string &, const std::string &),
-                    (override));
-        MOCK_METHOD(
-          (std::pair<bool, uint32_t>),
-          createCSGOperation,
-          (const std::string &, const std::string &, const std::vector<std::string> &, bool, float),
-          (override));
 
         // New 3MF Resource creation methods
         MOCK_METHOD((std::pair<bool, uint32_t>), createLevelSet, (uint32_t), (override));
@@ -92,19 +83,12 @@ namespace gladius::tests
                     createVolumetricProperty,
                     (const std::string &, uint32_t, const std::string &),
                     (override));
-        MOCK_METHOD(
-          bool,
-          applyTransformToFunction,
-          (const std::string &, const Float3Array &, const Float3Array &, const Float3Array &),
-          (override));
+
         MOCK_METHOD(nlohmann::json,
                     analyzeFunctionProperties,
                     (const std::string &),
                     (const, override));
-        MOCK_METHOD(nlohmann::json,
-                    generateMeshFromFunction,
-                    (const std::string &, int, const Float6Array &),
-                    (const, override));
+
         MOCK_METHOD(nlohmann::json, getSceneHierarchy, (), (const, override));
         MOCK_METHOD(nlohmann::json, getDocumentInfo, (), (const, override));
         MOCK_METHOD(nlohmann::json, get3MFStructure, (), (const, override));
@@ -169,6 +153,7 @@ namespace gladius::tests
                     createConstantNodesForMissingParameters,
                     (uint32_t, uint32_t, bool),
                     (override));
+        MOCK_METHOD(nlohmann::json, removeUnusedNodes, (uint32_t), (override));
         MOCK_METHOD(nlohmann::json, validateModel, (const nlohmann::json &), (override));
     };
 

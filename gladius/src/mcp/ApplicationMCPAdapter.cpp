@@ -1003,6 +1003,11 @@ gladius::ApplicationMCPAdapter::createConstantNodesForMissingParameters(uint32_t
       functionId, nodeId, autoConnect);
 }
 
+nlohmann::json gladius::ApplicationMCPAdapter::removeUnusedNodes(uint32_t functionId)
+{
+    return m_functionOperationsTool->removeUnusedNodes(functionId);
+}
+
 bool gladius::ApplicationMCPAdapter::renderToFile(const std::string & outputPath,
                                                   uint32_t width,
                                                   uint32_t height,

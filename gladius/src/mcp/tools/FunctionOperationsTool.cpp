@@ -19,6 +19,8 @@
 #include <array>
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include <queue>
+#include <set>
 #include <string>
 
 namespace gladius
@@ -1702,6 +1704,147 @@ namespace gladius
             {
                 out["success"] = false;
                 out["error"] = std::string("Exception while creating constant nodes: ") + e.what();
+                return out;
+            }
+        }
+
+        nlohmann::json FunctionOperationsTool::removeUnusedNodes(uint32_t functionId)
+        {
+            nlohmann::json out;
+
+            try
+            {
+                auto document = m_application->getCurrentDocument();
+                if (!document)
+                {
+                    out["success"] = false;
+                    out["error"] = "No active document";
+                    return out;
+                }
+
+                auto assembly = document->getAssembly();
+                if (!assembly)
+                {
+                    out["success"] = false;
+                    out["error"] = "No assembly available";
+                    return out;
+                }
+
+                auto model = assembly->findModel(functionId);
+                if (!model)
+                {
+                    out["success"] = false;
+                    out["error"] = "Function with id " + std::to_string(functionId) + " not found";
+                    return out;
+                }
+
+                // Model is already mutable through shared_ptr
+
+                // Find all nodes in the function
+                std::vector<nodes::NodeBase *> allNodes;
+                for (auto const & [nodeId, nodePtr] : *model)
+                {
+                    allNodes.push_back(nodePtr.get());
+                }
+
+                // Find nodes that are connected to the function output or have dependencies
+                std::set<uint32_t> usedNodeIds;
+                std::queue<nodes::NodeBase *> nodeQueue;
+
+                // Start with nodes connected to function outputs
+                for (auto const & [outputName, outputParam] : model->getOutputs())
+                {
+                    if (outputParam.getConstSource().has_value())
+                    {
+                        auto const & source = outputParam.getConstSource().value();
+                        auto const * sourcePort = model->getPort(source.portId);
+                        if (sourcePort)
+                        {
+                            auto * sourceNode = sourcePort->getParent();
+                            if (sourceNode)
+                            {
+                                usedNodeIds.insert(sourceNode->getId());
+                                nodeQueue.push(sourceNode);
+                            }
+                        }
+                    }
+                }
+
+                // Traverse backwards to find all nodes that contribute to the outputs
+                while (!nodeQueue.empty())
+                {
+                    auto * currentNode = nodeQueue.front();
+                    nodeQueue.pop();
+
+                    // Check all parameters of this node to find source nodes
+                    for (auto const & [paramName, param] : currentNode->constParameter())
+                    {
+                        if (param.getConstSource().has_value())
+                        {
+                            auto const & source = param.getConstSource().value();
+                            auto const * sourcePort = model->getPort(source.portId);
+                            if (sourcePort)
+                            {
+                                auto * sourceNode = sourcePort->getParent();
+                                if (sourceNode && usedNodeIds.count(sourceNode->getId()) == 0)
+                                {
+                                    usedNodeIds.insert(sourceNode->getId());
+                                    nodeQueue.push(sourceNode);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Find unused nodes (nodes not in the usedNodeIds set)
+                std::vector<nodes::NodeBase *> unusedNodes;
+                for (auto * node : allNodes)
+                {
+                    if (usedNodeIds.count(node->getId()) == 0)
+                    {
+                        unusedNodes.push_back(node);
+                    }
+                }
+
+                // Remove unused nodes and collect information
+                nlohmann::json removedNodes = nlohmann::json::array();
+                for (auto * unusedNode : unusedNodes)
+                {
+                    nlohmann::json nodeInfo;
+                    nodeInfo["id"] = unusedNode->getId();
+                    nodeInfo["unique_name"] = unusedNode->getUniqueName();
+                    nodeInfo["display_name"] = unusedNode->getDisplayName();
+                    nodeInfo["type"] = unusedNode->name();
+
+                    removedNodes.push_back(nodeInfo);
+
+                    // Remove the node from the model
+                    model->remove(unusedNode->getId());
+                }
+
+                // Update the graph to ensure everything is properly cleaned up
+                model->updateGraphAndOrderIfNeeded();
+
+                out["success"] = true;
+                out["removed_nodes"] = removedNodes;
+                out["total_removed_nodes"] = removedNodes.size();
+
+                if (removedNodes.empty())
+                {
+                    out["message"] = "No unused nodes found to remove";
+                }
+                else
+                {
+                    out["message"] =
+                      "Removed " + std::to_string(removedNodes.size()) + " unused node(s)";
+                }
+
+                return out;
+            }
+            catch (const std::exception & e)
+            {
+                out["success"] = false;
+                out["error"] = std::string("Exception while removing unused nodes: ") + e.what();
                 return out;
             }
         }
