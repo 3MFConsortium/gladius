@@ -1848,5 +1848,161 @@ namespace gladius
                 return out;
             }
         }
+
+        nlohmann::json FunctionOperationsTool::listChangeableParameters() const
+        {
+            using json = nlohmann::json;
+            json out;
+            out["changeable_parameters"] = json::array();
+
+            if (!validateApplication())
+            {
+                out["success"] = false;
+                out["error"] = "No application instance available";
+                return out;
+            }
+
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                out["success"] = false;
+                out["error"] = "No active document available";
+                return out;
+            }
+
+            try
+            {
+                auto assembly = document->getAssembly();
+                if (!assembly)
+                {
+                    out["success"] = false;
+                    out["error"] = "No assembly available";
+                    return out;
+                }
+
+                json changeableParams = json::array();
+                uint32_t totalParams = 0;
+
+                // Iterate through all functions in the assembly
+                for (const auto & [functionId, model] : assembly->getFunctions())
+                {
+                    if (!model)
+                        continue;
+
+                    // Get function display name and info
+                    std::string functionDisplayName =
+                      model->getDisplayName().value_or("Unnamed Function");
+                    std::string functionName = model->getDisplayName().value_or("unnamed_function");
+
+                    // Iterate through all nodes in this function
+                    for (auto const & [nodeId, nodePtr] : *model)
+                    {
+                        if (!nodePtr)
+                            continue;
+
+                        // Check if this is a constant node
+                        const std::string & nodeName = nodePtr->name();
+                        bool isConstantNode =
+                          (nodeName == "ConstantScalar" || nodeName == "ConstantVector" ||
+                           nodeName == "ConstantMatrix" || nodeName == "Resource");
+
+                        if (!isConstantNode)
+                            continue;
+
+                        // For constant nodes, all their parameters are changeable
+                        for (auto const & [paramName, param] : nodePtr->constParameter())
+                        {
+                            // Only include parameters that are not connected (constant nodes should
+                            // have unconnected params)
+                            if (!param.getConstSource().has_value())
+                            {
+                                json paramInfo;
+                                paramInfo["parameter_name"] = paramName;
+                                paramInfo["display_name"] =
+                                  paramName; // Use parameter name as display name
+                                paramInfo["parameter_type"] =
+                                  FunctionGraphSerializer::typeIndexToString(param.getTypeIndex());
+                                paramInfo["node_id"] = nodePtr->getId();
+                                paramInfo["node_display_name"] = nodePtr->getDisplayName();
+                                paramInfo["node_unique_name"] = nodePtr->getUniqueName();
+                                paramInfo["node_type"] = nodeName;
+                                paramInfo["function_id"] = functionId;
+                                paramInfo["function_name"] = functionName;
+                                paramInfo["function_display_name"] = functionDisplayName;
+
+                                // Add current parameter value for context
+                                try
+                                {
+                                    auto typeIdx = param.getTypeIndex();
+                                    auto paramValue = param.getValue();
+                                    if (typeIdx == nodes::ParameterTypeIndex::Float)
+                                    {
+                                        if (auto const * val = std::get_if<float>(&paramValue))
+                                            paramInfo["current_value"] = *val;
+                                    }
+                                    else if (typeIdx == nodes::ParameterTypeIndex::Int)
+                                    {
+                                        if (auto const * val = std::get_if<int>(&paramValue))
+                                            paramInfo["current_value"] = *val;
+                                    }
+                                    else if (typeIdx == nodes::ParameterTypeIndex::String)
+                                    {
+                                        if (auto const * val =
+                                              std::get_if<std::string>(&paramValue))
+                                            paramInfo["current_value"] = *val;
+                                    }
+                                    else if (typeIdx == nodes::ParameterTypeIndex::Float3)
+                                    {
+                                        if (auto const * val =
+                                              std::get_if<nodes::float3>(&paramValue))
+                                        {
+                                            paramInfo["current_value"] = {
+                                              {"x", val->x}, {"y", val->y}, {"z", val->z}};
+                                        }
+                                    }
+                                    else if (typeIdx == nodes::ParameterTypeIndex::ResourceId)
+                                    {
+                                        if (auto const * val = std::get_if<uint32_t>(&paramValue))
+                                            paramInfo["current_value"] = *val;
+                                    }
+                                    // For Matrix4x4, we could add support later if needed
+                                }
+                                catch (const std::exception &)
+                                {
+                                    // If we can't get the current value, just omit it
+                                    paramInfo["current_value"] = nullptr;
+                                }
+
+                                changeableParams.push_back(paramInfo);
+                                totalParams++;
+                            }
+                        }
+                    }
+                }
+
+                out["changeable_parameters"] = changeableParams;
+                out["total_parameters"] = totalParams;
+                out["success"] = true;
+
+                if (totalParams == 0)
+                {
+                    out["message"] = "No changeable parameters found in constant nodes";
+                }
+                else
+                {
+                    out["message"] = "Found " + std::to_string(totalParams) +
+                                     " changeable parameter(s) in constant nodes";
+                }
+
+                return out;
+            }
+            catch (const std::exception & e)
+            {
+                out["success"] = false;
+                out["error"] =
+                  std::string("Exception while listing changeable parameters: ") + e.what();
+                return out;
+            }
+        }
     }
 }

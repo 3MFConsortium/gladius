@@ -83,6 +83,7 @@ namespace gladius
                                                                    uint32_t nodeId,
                                                                    bool autoConnect = true);
             nlohmann::json removeUnusedNodes(uint32_t functionId);
+            nlohmann::json listChangeableParameters() const;
         };
     }
 }
