@@ -45,20 +45,6 @@ namespace gladius
                                          const std::vector<FunctionArgument> & arguments = {},
                                          const std::string & outputName = "");
 
-            std::pair<bool, uint32_t> createSDFFunction(const std::string & name,
-                                                        const std::string & sdfExpression);
-
-            std::pair<bool, uint32_t> createCSGOperation(const std::string & name,
-                                                         const std::string & operation,
-                                                         const std::vector<std::string> & operands,
-                                                         bool smooth = false,
-                                                         float blendRadius = 0.1f);
-
-            bool applyTransformToFunction(const std::string & functionName,
-                                          const std::array<float, 3> & translation,
-                                          const std::array<float, 3> & rotation,
-                                          const std::array<float, 3> & scale);
-
             // Function analysis
             nlohmann::json analyzeFunctionProperties(const std::string & functionName) const;
 

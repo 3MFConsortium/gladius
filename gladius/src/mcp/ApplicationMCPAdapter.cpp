@@ -301,45 +301,10 @@ namespace gladius
         }
     }
 
-    std::pair<bool, uint32_t>
-    ApplicationMCPAdapter::createSDFFunction(const std::string & name,
-                                             const std::string & sdfExpression)
-    {
-        return m_functionOperationsTool->createSDFFunction(name, sdfExpression);
-    }
-
-    std::pair<bool, uint32_t>
-    ApplicationMCPAdapter::createCSGOperation(const std::string & name,
-                                              const std::string & operation,
-                                              const std::vector<std::string> & operands,
-                                              bool smooth,
-                                              float blendRadius)
-    {
-        return m_functionOperationsTool->createCSGOperation(
-          name, operation, operands, smooth, blendRadius);
-    }
-
-    bool ApplicationMCPAdapter::applyTransformToFunction(const std::string & functionName,
-                                                         const std::array<float, 3> & translation,
-                                                         const std::array<float, 3> & rotation,
-                                                         const std::array<float, 3> & scale)
-    {
-        return m_functionOperationsTool->applyTransformToFunction(
-          functionName, translation, rotation, scale);
-    }
-
     nlohmann::json
     ApplicationMCPAdapter::analyzeFunctionProperties(const std::string & functionName) const
     {
         return m_functionOperationsTool->analyzeFunctionProperties(functionName);
-    }
-
-    nlohmann::json
-    ApplicationMCPAdapter::generateMeshFromFunction(const std::string & functionName,
-                                                    int resolution,
-                                                    const std::array<float, 6> & bounds) const
-    {
-        return m_functionOperationsTool->generateMeshFromFunction(functionName, resolution, bounds);
     }
 
     nlohmann::json ApplicationMCPAdapter::getSceneHierarchy() const
