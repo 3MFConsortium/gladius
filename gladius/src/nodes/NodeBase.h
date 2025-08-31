@@ -225,6 +225,14 @@ namespace gladius::nodes
             return {"Basic node"};
         }
 
+        /// @brief Determines if this node should be exempt from input connection validation
+        /// @return true if the node doesn't require input validation (e.g., input/output markers,
+        /// constants)
+        [[nodiscard]] virtual bool isExemptFromInputValidation() const
+        {
+            return false;
+        }
+
         bool updateTypes(nodes::Model & model);
 
         virtual void applyTypeRule(const TypeRule & rule)

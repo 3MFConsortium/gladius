@@ -5,11 +5,11 @@
 #include "Parameter.h"
 #include "nodesfwd.h"
 
+#include "Primitives.h"
 #include <filesystem>
 #include <fmt/format.h>
 #include <limits>
 #include <map>
-#include "Primitives.h"
 
 #include "ImageStackResource.h"
 #include "ResourceContext.h"
@@ -53,6 +53,12 @@ namespace gladius::nodes
                     "geometry itself."};
         }
 
+        /// @brief Begin nodes are exempt from input validation as they are input markers
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
+        }
+
         // name does not match, but it is called when the model is updated
         void updateMemoryOffsets(GeneratorContext &) override
         {
@@ -89,6 +95,12 @@ namespace gladius::nodes
         {
             return {"A End node consumes the calculated distance (shape) and color. \"End\" can be "
                     "seen as the end of a function."};
+        }
+
+        /// @brief End nodes are exempt from input validation as they are output markers
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         // name does not match, but it is called when the model is updated
@@ -133,6 +145,12 @@ namespace gladius::nodes
         [[nodiscard]] Port & getValueOutputPort()
         {
             return m_outputs.at(FieldNames::Value);
+        }
+
+        /// @brief Constant nodes are exempt from input validation as they provide constant values
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         // name does not match, but it is called when the model is updated
@@ -195,6 +213,12 @@ namespace gladius::nodes
             {
                 param.second.setInputSourceRequired(false);
             }
+        }
+
+        /// @brief Constant nodes are exempt from input validation as they provide constant values
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         [[nodiscard]] Port & getVectorOutputPort()
@@ -268,6 +292,12 @@ namespace gladius::nodes
             {
                 param.second.setInputSourceRequired(false);
             }
+        }
+
+        /// @brief Constant nodes are exempt from input validation as they provide constant values
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         [[nodiscard]] Port & getMatrixOutputPort()
@@ -1333,6 +1363,11 @@ namespace gladius::nodes
             }
         }
 
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
+        }
+
       private:
     };
 
@@ -1569,7 +1604,6 @@ namespace gladius::nodes
                                           {FieldNames::Alpha, ParameterTypeIndex::Float}}}};
             applyTypeRule(m_typeRules.front());
 
-            
             updateNodeIds();
         }
 

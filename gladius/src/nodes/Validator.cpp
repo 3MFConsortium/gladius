@@ -3,31 +3,6 @@
 #include "DerivedNodes.h"
 #include <fmt/format.h>
 
-namespace
-{
-    using namespace gladius::nodes;
-
-    // Helper to determine if a node should be exempt from input-connection validation
-    inline bool isNodeExemptFromInputValidation(NodeBase & node)
-    {
-        // Input/Output markers
-        if (dynamic_cast<Begin *>(&node) != nullptr)
-            return true;
-        if (dynamic_cast<End *>(&node) != nullptr)
-            return true;
-
-        // Constant literal providers
-        if (dynamic_cast<ConstantScalar *>(&node) != nullptr)
-            return true;
-        if (dynamic_cast<ConstantVector *>(&node) != nullptr)
-            return true;
-        if (dynamic_cast<ConstantMatrix *>(&node) != nullptr)
-            return true;
-
-        return false;
-    }
-}
-
 namespace gladius::nodes
 {
     bool Validator::validate(Assembly & assembly)
@@ -65,8 +40,8 @@ namespace gladius::nodes
 
     void Validator::validateNodeImpl(NodeBase & node, Model & model)
     {
-        // Skip validation for special nodes (I/O markers and constants) via type-based checks
-        if (isNodeExemptFromInputValidation(node))
+        // Skip validation for nodes that are exempt from input validation
+        if (node.isExemptFromInputValidation())
         {
             return;
         }
