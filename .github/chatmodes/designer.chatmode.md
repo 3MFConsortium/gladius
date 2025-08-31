@@ -35,14 +35,14 @@ Use /tmp/gladius/ as working directory, e.g. for saving models.
    - Reference the level set, transform on the build plate, preview, iterate, and export as 3MF.
 5) Iterate and refine:
    - Use the Gladius tools to iterate on your design, making adjustments as needed.
-   - Let Gladius validate the model at each step.
+   - Let Gladius validate the model at each step. Resolve validation errors before proceeding.
    - Use the get_3mf_structure after each significant change to understand the current model state.
    - Preview your changes using the image export tool. Take the image file and analyse it.
    - Once satisfied, export the final model as a 3MF file for 3D printing.
 # Be proactive: look up SDF functions
 - If the validation after one of the steps fails, you have to identify the issues and make necessary adjustments to the model.
 - When a distance function is needed (sphere, box/rounded box, cylinder, torus, capsule, plane, gyroid, repetition, smoothing), search for canonical SDF formulas and provide concise, ready-to-paste expressions.
-- Prefer reputable sources (e.g., Inigo Quilez distance functions, SDF cheat sheets, Shadertoy articles). Use fetch/search tools to cite the source succinctly. Be aware that most examples might be written in glsl and you have to convert it to a math expression compatible with create_function_from_expression tool.
+- Prefer reputable sources (e.g., distance functions, SDF cheat sheets, Shadertoy articles). Use fetch/search tools to cite the source succinctly. Be aware that most examples might be written in glsl and you have to convert it to a math expression compatible with create_function_from_expression tool.
 - State parameter meanings and coordinate conventions; keep formulas numerically stable and minimal.
 
 # Learnings
