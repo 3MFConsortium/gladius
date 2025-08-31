@@ -10,7 +10,9 @@
 #include "../../ExpressionToGraphConverter.h"
 #include "../../FunctionArgument.h"
 #include "../../io/3mf/ResourceIdUtil.h"
+#include "../../nodes/DerivedNodes.h"
 #include "../../nodes/NodeFactory.h"
+#include "../../nodes/nodesfwd.h"
 #include "../FunctionGraphSerializer.h"
 #include <array>
 #include <filesystem>
@@ -1518,6 +1520,160 @@ namespace gladius
             {
                 out["success"] = false;
                 out["error"] = std::string("Exception while deleting link: ") + e.what();
+                return out;
+            }
+        }
+
+        nlohmann::json
+        FunctionOperationsTool::createFunctionCallNode(uint32_t targetFunctionId,
+                                                       uint32_t referencedFunctionId,
+                                                       const std::string & displayName)
+        {
+            using json = nlohmann::json;
+            json out;
+            out["target_function_id"] = targetFunctionId;
+            out["referenced_function_id"] = referencedFunctionId;
+            out["display_name"] = displayName;
+
+            if (!validateApplication())
+            {
+                out["success"] = false;
+                out["error"] = "No application instance available";
+                return out;
+            }
+
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                out["success"] = false;
+                out["error"] = "No active document available";
+                return out;
+            }
+
+            try
+            {
+                auto assembly = document->getAssembly();
+                if (!assembly)
+                {
+                    out["success"] = false;
+                    out["error"] = "No assembly available";
+                    return out;
+                }
+
+                // Find the target model (where we're adding the function call)
+                auto targetModel = assembly->findModel(targetFunctionId);
+                if (!targetModel)
+                {
+                    out["success"] = false;
+                    out["error"] = "Target function (model) not found for id";
+                    return out;
+                }
+
+                // Verify the referenced function exists
+                auto referencedModel = assembly->findModel(referencedFunctionId);
+                if (!referencedModel)
+                {
+                    out["success"] = false;
+                    out["error"] = "Referenced function (model) not found for id";
+                    return out;
+                }
+
+                // Create a Resource node for the function ID
+                auto resourceNode = targetModel->create<nodes::Resource>();
+                resourceNode->parameter().at(nodes::FieldNames::ResourceId) =
+                  nodes::VariantParameter(referencedFunctionId);
+
+                if (!displayName.empty())
+                {
+                    std::string resourceDisplayName = displayName + "_Resource";
+                    resourceNode->setDisplayName(resourceDisplayName);
+                }
+
+                // Create the FunctionCall node
+                auto functionCallNode = targetModel->create<nodes::FunctionCall>();
+
+                // Connect the Resource node's output to the FunctionCall's FunctionId input
+                functionCallNode->parameter()
+                  .at(nodes::FieldNames::FunctionId)
+                  .setInputFromPort(resourceNode->getOutputs().at(nodes::FieldNames::Value));
+
+                // Update inputs and outputs based on the referenced function
+                functionCallNode->updateInputsAndOutputs(*referencedModel);
+
+                // Register the function call node's parameters and outputs with the model
+                targetModel->registerInputs(*functionCallNode);
+                targetModel->registerOutputs(*functionCallNode);
+
+                // Set display name if provided
+                if (!displayName.empty())
+                {
+                    functionCallNode->setDisplayName(displayName);
+                }
+                else if (referencedModel->getDisplayName().has_value())
+                {
+                    functionCallNode->setDisplayName(referencedModel->getDisplayName().value());
+                }
+
+                // Update the graph to ensure everything is properly connected
+                targetModel->updateGraphAndOrderIfNeeded();
+
+                // Prepare response with node information
+                json resourceNodeInfo;
+                resourceNodeInfo["id"] = resourceNode->getId();
+                resourceNodeInfo["unique_name"] = resourceNode->getUniqueName();
+                resourceNodeInfo["display_name"] = resourceNode->getDisplayName();
+                resourceNodeInfo["type"] = "Resource";
+
+                json functionCallNodeInfo;
+                functionCallNodeInfo["id"] = functionCallNode->getId();
+                functionCallNodeInfo["unique_name"] = functionCallNode->getUniqueName();
+                functionCallNodeInfo["display_name"] = functionCallNode->getDisplayName();
+                functionCallNodeInfo["type"] = "FunctionCall";
+
+                // Collect unconnected inputs (parameters without sources)
+                json unconnectedInputs = json::array();
+                for (auto const & [paramName, param] : functionCallNode->constParameter())
+                {
+                    if (!param.getConstSource().has_value() && param.isInputSourceRequired())
+                    {
+                        json inputInfo;
+                        inputInfo["name"] = paramName;
+                        inputInfo["type"] =
+                          FunctionGraphSerializer::typeIndexToString(param.getTypeIndex());
+                        inputInfo["parameter_id"] = param.getId();
+                        inputInfo["required"] = param.isInputSourceRequired();
+                        inputInfo["is_argument"] = param.isArgument();
+                        unconnectedInputs.push_back(inputInfo);
+                    }
+                }
+
+                // Collect all outputs
+                json outputs = json::array();
+                for (auto const & [portName, port] : functionCallNode->getOutputs())
+                {
+                    json outputInfo;
+                    outputInfo["name"] = portName;
+                    outputInfo["type"] =
+                      FunctionGraphSerializer::typeIndexToString(port.getTypeIndex());
+                    outputInfo["port_id"] = port.getId();
+                    outputInfo["unique_name"] = port.getUniqueName();
+                    outputInfo["visible"] = port.isVisible();
+                    outputs.push_back(outputInfo);
+                }
+
+                out["success"] = true;
+                out["resource_node"] = resourceNodeInfo;
+                out["function_call_node"] = functionCallNodeInfo;
+                out["unconnected_inputs"] = unconnectedInputs;
+                out["outputs"] = outputs;
+
+                return out;
+            }
+            catch (const std::exception & e)
+            {
+                out["success"] = false;
+                out["error"] =
+                  std::string("Exception while creating function call node: ") + e.what();
                 return out;
             }
         }

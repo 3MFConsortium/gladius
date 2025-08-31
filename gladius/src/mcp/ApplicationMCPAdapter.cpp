@@ -1020,6 +1020,15 @@ nlohmann::json gladius::ApplicationMCPAdapter::deleteLink(uint32_t functionId,
     return m_functionOperationsTool->deleteLink(functionId, targetNodeId, targetParameterName);
 }
 
+nlohmann::json
+gladius::ApplicationMCPAdapter::createFunctionCallNode(uint32_t targetFunctionId,
+                                                       uint32_t referencedFunctionId,
+                                                       const std::string & displayName)
+{
+    return m_functionOperationsTool->createFunctionCallNode(
+      targetFunctionId, referencedFunctionId, displayName);
+}
+
 bool gladius::ApplicationMCPAdapter::renderToFile(const std::string & outputPath,
                                                   uint32_t width,
                                                   uint32_t height,

@@ -89,6 +89,9 @@ namespace gladius
             nlohmann::json deleteLink(uint32_t functionId,
                                       uint32_t targetNodeId,
                                       const std::string & targetParameterName);
+            nlohmann::json createFunctionCallNode(uint32_t targetFunctionId,
+                                                  uint32_t referencedFunctionId,
+                                                  const std::string & displayName = "");
         };
     }
 }

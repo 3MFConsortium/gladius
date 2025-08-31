@@ -216,6 +216,25 @@ namespace gladius
                                           uint32_t targetNodeId,
                                           const std::string & targetParameterName) = 0;
 
+        /**
+         * @brief Creates a function call node with a resource node for the function reference.
+         *
+         * This is a specialized node creation method that:
+         * 1. Creates a Resource node with the referenced function ID
+         * 2. Creates a FunctionCall node
+         * 3. Connects the Resource node's output to the FunctionCall's FunctionId input
+         * 4. Updates the FunctionCall node's inputs/outputs based on the referenced function
+         * 5. Registers the new nodes with the model
+         *
+         * @param targetFunctionId The ID of the function (model) where the nodes will be added
+         * @param referencedFunctionId The ID of the function that will be called
+         * @param displayName Optional display name for the function call node
+         * @return JSON with creation result, including unconnected inputs and outputs
+         */
+        virtual nlohmann::json createFunctionCallNode(uint32_t targetFunctionId,
+                                                      uint32_t referencedFunctionId,
+                                                      const std::string & displayName = "") = 0;
+
         // Manufacturing validation
         virtual nlohmann::json
         validateForManufacturing(const std::vector<std::string> & functionNames = {},

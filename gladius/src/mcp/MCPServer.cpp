@@ -664,6 +664,38 @@ namespace gladius::mcp
               return m_application->deleteLink(function_id, target_node_id, target_parameter_name);
           });
 
+        registerTool(
+          "create_function_call_node",
+          "Creates a function call node with a resource node for the function reference. This "
+          "is a specialized node creation method that: 1) Creates a Resource node with the "
+          "referenced function ID, 2) Creates a FunctionCall node, 3) Connects the Resource "
+          "node's output to the FunctionCall's FunctionId input, 4) Updates the FunctionCall "
+          "node's inputs/outputs based on the referenced function, 5) Registers the new nodes "
+          "with the model. Returns unconnected inputs and outputs with their types.",
+          {{"type", "object"},
+           {"properties",
+            {{"target_function_id",
+              {{"type", "integer"},
+               {"description", "The ID of the function (model) where the nodes will be added"}}},
+             {"referenced_function_id",
+              {{"type", "integer"}, {"description", "The ID of the function that will be called"}}},
+             {"display_name",
+              {{"type", "string"},
+               {"description", "Optional display name for the function call node"}}}}},
+           {"required", {"target_function_id", "referenced_function_id"}}},
+          [this](const json & params) -> json
+          {
+              if (!m_application)
+              {
+                  return {{"success", false}, {"error", "No application available"}};
+              }
+              uint32_t target_function_id = params["target_function_id"];
+              uint32_t referenced_function_id = params["referenced_function_id"];
+              std::string display_name = params.value("display_name", "");
+              return m_application->createFunctionCallNode(
+                target_function_id, referenced_function_id, display_name);
+          });
+
         // DOCUMENT MANAGEMENT (3MF FILES)
         registerTool(
           "create_document",
