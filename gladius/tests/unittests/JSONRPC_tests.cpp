@@ -305,6 +305,13 @@ namespace gladius::tests
         {
             return nlohmann::json{{"success", true}};
         }
+
+        nlohmann::json createFunctionCallNode(uint32_t targetFunctionId,
+                                              uint32_t referencedFunctionId,
+                                              const std::string & displayName) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
     };
 
     class JSONRPCTest : public ::testing::Test

@@ -12,6 +12,8 @@
 #include "../../io/3mf/ResourceIdUtil.h"
 #include "../../nodes/DerivedNodes.h"
 #include "../../nodes/NodeFactory.h"
+#include "../../nodes/Parameter.h"
+#include "../../nodes/Port.h"
 #include "../../nodes/nodesfwd.h"
 #include "../FunctionGraphSerializer.h"
 #include <array>
@@ -23,6 +25,27 @@ namespace gladius
 {
     namespace mcp::tools
     {
+        /// @brief Creates simplified input parameter information for MCP responses
+        static nlohmann::json createSimplifiedInputInfo(const nodes::VariantParameter & param,
+                                                        const std::string & name)
+        {
+            nlohmann::json result;
+            result["name"] = name;
+            result["type"] = FunctionGraphSerializer::typeIndexToString(param.getTypeIndex());
+            result["is_connected"] = param.getConstSource().has_value();
+            return result;
+        }
+
+        /// @brief Creates simplified output port information for MCP responses
+        static nlohmann::json createSimplifiedOutputInfo(const nodes::Port & port,
+                                                         const std::string & name)
+        {
+            nlohmann::json result;
+            result["name"] = name;
+            result["type"] = FunctionGraphSerializer::typeIndexToString(port.getTypeIndex());
+            return result;
+        }
+
         FunctionOperationsTool::FunctionOperationsTool(Application * app)
             : MCPToolBase(app)
         {
@@ -883,51 +906,19 @@ namespace gladius
                 auto pos = const_cast<nodes::NodeBase *>(node)->screenPos();
                 jn["position"] = {pos.x, pos.y};
 
-                // Parameters (inputs)
+                // Parameters (inputs) - simplified for MCP
                 json jparams = json::array();
                 for (auto const & [pname, param] : node->constParameter())
                 {
-                    json jp;
-                    jp["name"] = pname;
-                    jp["type"] = FunctionGraphSerializer::typeIndexToString(param.getTypeIndex());
-                    jp["size"] = param.getSize();
-                    jp["content_type"] = static_cast<int>(param.getContentType());
-                    jp["modifiable"] = param.isModifiable();
-                    jp["is_argument"] = param.isArgument();
-
-                    auto const & srcOpt = param.getConstSource();
-                    if (srcOpt.has_value())
-                    {
-                        json js;
-                        js["node_id"] = srcOpt->nodeId;
-                        js["port_id"] = srcOpt->portId;
-                        js["unique_name"] = srcOpt->uniqueName;
-                        js["short_name"] = srcOpt->shortName;
-                        js["type"] = FunctionGraphSerializer::typeIndexToString(srcOpt->type);
-                        jp["source"] = js;
-                    }
-                    else
-                    {
-                        jp["source"] = nullptr;
-                    }
-
-                    jparams.push_back(jp);
+                    jparams.push_back(createSimplifiedInputInfo(param, pname));
                 }
                 jn["parameters"] = jparams;
 
-                // Outputs (ports)
+                // Outputs (ports) - simplified for MCP
                 json jouts = json::array();
                 for (auto const & [oname, port] : node->outputs())
                 {
-                    json jo;
-                    jo["name"] = oname;
-                    jo["id"] = port.getId();
-                    jo["unique_name"] = port.getUniqueName();
-                    jo["short_name"] = port.getShortName();
-                    jo["type"] = FunctionGraphSerializer::typeIndexToString(port.getTypeIndex());
-                    jo["visible"] = port.isVisible();
-                    jo["is_used"] = port.isUsed();
-                    jouts.push_back(jo);
+                    jouts.push_back(createSimplifiedOutputInfo(port, oname));
                 }
                 jn["outputs"] = jouts;
 
@@ -1364,12 +1355,8 @@ namespace gladius
                             {
                                 if (!parameter.getConstSource().has_value())
                                 {
-                                    json paramInfo;
-                                    paramInfo["name"] = pname;
-                                    paramInfo["type"] = FunctionGraphSerializer::typeIndexToString(
-                                      parameter.getTypeIndex());
-                                    paramInfo["is_connected"] = false;
-                                    unconnectedParams.push_back(paramInfo);
+                                    unconnectedParams.push_back(
+                                      createSimplifiedInputInfo(parameter, pname));
                                 }
                             }
 
@@ -1401,16 +1388,12 @@ namespace gladius
                     out["success"] = false;
                     out["error"] = "Target parameter not found on target node";
 
-                    // Provide detailed information about the target node's available parameters
+                    // Provide detailed information about the target node's available parameters -
+                    // simplified for MCP
                     json targetNodeParams = json::array();
                     for (auto const & [pname, parameter] : dstNode->constParameter())
                     {
-                        json paramInfo;
-                        paramInfo["name"] = pname;
-                        paramInfo["type"] =
-                          FunctionGraphSerializer::typeIndexToString(parameter.getTypeIndex());
-                        paramInfo["is_connected"] = parameter.getConstSource().has_value();
-                        targetNodeParams.push_back(paramInfo);
+                        targetNodeParams.push_back(createSimplifiedInputInfo(parameter, pname));
                     }
                     out["target_node_available_parameters"] = targetNodeParams;
 
@@ -1630,35 +1613,21 @@ namespace gladius
                 functionCallNodeInfo["display_name"] = functionCallNode->getDisplayName();
                 functionCallNodeInfo["type"] = "FunctionCall";
 
-                // Collect unconnected inputs (parameters without sources)
+                // Collect unconnected inputs (parameters without sources) - simplified for MCP
                 json unconnectedInputs = json::array();
                 for (auto const & [paramName, param] : functionCallNode->constParameter())
                 {
                     if (!param.getConstSource().has_value() && param.isInputSourceRequired())
                     {
-                        json inputInfo;
-                        inputInfo["name"] = paramName;
-                        inputInfo["type"] =
-                          FunctionGraphSerializer::typeIndexToString(param.getTypeIndex());
-                        inputInfo["parameter_id"] = param.getId();
-                        inputInfo["required"] = param.isInputSourceRequired();
-                        inputInfo["is_argument"] = param.isArgument();
-                        unconnectedInputs.push_back(inputInfo);
+                        unconnectedInputs.push_back(createSimplifiedInputInfo(param, paramName));
                     }
                 }
 
-                // Collect all outputs
+                // Collect all outputs - simplified for MCP
                 json outputs = json::array();
                 for (auto const & [portName, port] : functionCallNode->getOutputs())
                 {
-                    json outputInfo;
-                    outputInfo["name"] = portName;
-                    outputInfo["type"] =
-                      FunctionGraphSerializer::typeIndexToString(port.getTypeIndex());
-                    outputInfo["port_id"] = port.getId();
-                    outputInfo["unique_name"] = port.getUniqueName();
-                    outputInfo["visible"] = port.isVisible();
-                    outputs.push_back(outputInfo);
+                    outputs.push_back(createSimplifiedOutputInfo(port, portName));
                 }
 
                 out["success"] = true;

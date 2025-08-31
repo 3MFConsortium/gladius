@@ -83,8 +83,6 @@ namespace gladius::nodes
             return std::make_unique<ComposeMatrixFromColumns>();
         if (nodeType == "ComposeMatrixFromRows")
             return std::make_unique<ComposeMatrixFromRows>();
-        if (nodeType == "FunctionCall")
-            return std::make_unique<FunctionCall>();
         if (nodeType == "Resource")
             return std::make_unique<Resource>();
         if (nodeType == "Round")
@@ -144,7 +142,6 @@ namespace gladius::nodes
                 "ComposeMatrix",
                 "ComposeMatrixFromColumns",
                 "ComposeMatrixFromRows",
-                "FunctionCall",
                 "Resource",
                 "Round",
                 "Ceil",

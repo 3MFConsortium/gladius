@@ -161,6 +161,10 @@ namespace gladius::tests
                     deleteLink,
                     (uint32_t, uint32_t, const std::string &),
                     (override));
+        MOCK_METHOD(nlohmann::json,
+                    createFunctionCallNode,
+                    (uint32_t, uint32_t, const std::string &),
+                    (override));
     };
 
     class MCPServerTest : public ::testing::Test

@@ -5,13 +5,14 @@
 
 #pragma once
 
-#include "../FunctionArgument.h"
-#include "MCPToolBase.h"
-#include <array>
-#include <memory>
+#include <map>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include "../FunctionArgument.h"
+#include "MCPToolBase.h"
 
 namespace gladius
 {
