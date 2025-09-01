@@ -14,6 +14,8 @@
 #include <thread>
 #include <vector>
 
+#include "../version.h"
+
 using json = nlohmann::json;
 
 namespace gladius::mcp
@@ -358,13 +360,16 @@ namespace gladius::mcp
 
     json MCPServer::handleInitialize(const json & request)
     {
+        std::string const serverVersion = std::to_string(gladius::Version::major) + "." +
+                                          std::to_string(gladius::Version::minor) + "." +
+                                          std::to_string(gladius::Version::revision);
         json response = {
           {"jsonrpc", "2.0"},
           {"id", request.value("id", 0)},
           {"result",
            {{"protocolVersion", "2024-11-05"},
             {"capabilities", {{"tools", json::object()}}},
-            {"serverInfo", {{"name", "Gladius MCP Server"}, {"version", "1.0.0"}}}}}};
+            {"serverInfo", {{"name", "Gladius MCP Server"}, {"version", serverVersion}}}}}};
 
         return response;
     }
