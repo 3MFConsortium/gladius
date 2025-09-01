@@ -168,4 +168,95 @@ namespace gladius
 
         return out;
     }
+
+    json FunctionGraphSerializer::serializeMinimal(const nodes::Model & model)
+    {
+        json out;
+        // Basic model info
+        out["model"] = {
+          {"resource_id", model.getResourceId()},
+          {"name", const_cast<nodes::Model &>(model).getModelName()},
+        };
+        if (auto dn = model.getDisplayName())
+            out["model"]["display_name"] = *dn;
+        else
+            out["model"]["display_name"] = nullptr;
+
+        // Nodes (essential fields only)
+        json jnodes = json::array();
+        for (auto it = const_cast<nodes::Model &>(model).begin();
+             it != const_cast<nodes::Model &>(model).end();
+             ++it)
+        {
+            const nodes::NodeBase * node = it->second.get();
+            if (!node)
+                continue;
+
+            json jn;
+            jn["id"] = node->getId();
+            jn["type"] = node->name();
+            jn["display_name"] = node->getDisplayName();
+
+            // Minimal parameters
+            json jparams = json::array();
+            for (auto const & [pname, param] : node->constParameter())
+            {
+                json jp;
+                jp["name"] = pname;
+                jp["type"] = typeIndexToString(param.getTypeIndex());
+                jp["is_connected"] = param.getConstSource().has_value();
+                if (auto const & srcOpt = param.getConstSource(); srcOpt.has_value())
+                {
+                    jp["source"] = {
+                      {"node_id", srcOpt->nodeId},
+                      {"port", srcOpt->shortName},
+                    };
+                }
+                jparams.push_back(jp);
+            }
+            jn["parameters"] = jparams;
+
+            // Minimal outputs
+            json jouts = json::array();
+            for (auto const & [oname, port] : node->outputs())
+            {
+                jouts.push_back({
+                  {"name", oname},
+                  {"type", typeIndexToString(port.getTypeIndex())},
+                });
+            }
+            jn["outputs"] = jouts;
+
+            jnodes.push_back(jn);
+        }
+        out["nodes"] = jnodes;
+
+        // Links (derived from inputs)
+        json jlinks = json::array();
+        for (auto it = const_cast<nodes::Model &>(model).begin();
+             it != const_cast<nodes::Model &>(model).end();
+             ++it)
+        {
+            const nodes::NodeBase * node = it->second.get();
+            if (!node)
+                continue;
+            for (auto const & [pname, param] : node->constParameter())
+            {
+                auto const & srcOpt = param.getConstSource();
+                if (srcOpt.has_value())
+                {
+                    jlinks.push_back({
+                      {"from_node_id", srcOpt->nodeId},
+                      {"from_port", srcOpt->shortName},
+                      {"to_node_id", node->getId()},
+                      {"to_parameter", pname},
+                      {"type", typeIndexToString(param.getTypeIndex())},
+                    });
+                }
+            }
+        }
+        out["links"] = jlinks;
+        out["counts"] = {{"nodes", jnodes.size()}, {"links", jlinks.size()}};
+        return out;
+    }
 }

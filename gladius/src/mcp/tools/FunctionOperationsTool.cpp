@@ -714,7 +714,7 @@ namespace gladius
                 // Ensure parameters and graph are up-to-date
                 const_cast<nodes::Model &>(*model).updateGraphAndOrderIfNeeded();
 
-                auto j = FunctionGraphSerializer::serialize(*model);
+                auto j = FunctionGraphSerializer::serializeMinimal(*model);
                 j["success"] = true;
                 return j;
             }
