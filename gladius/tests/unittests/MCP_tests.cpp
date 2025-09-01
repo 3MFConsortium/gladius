@@ -505,8 +505,6 @@ namespace gladius::tests
     {
         // Arrange
         EXPECT_CALL(*m_mockApp, saveDocumentAs("/tmp/test.3mf")).WillOnce(::testing::Return(true));
-        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
-          .WillOnce(::testing::Return("Document saved successfully to /tmp/test.3mf"));
 
         json request = {
           {"jsonrpc", "2.0"},
@@ -523,8 +521,8 @@ namespace gladius::tests
         json saveResult = json::parse(jsonString);
         EXPECT_EQ(saveResult["success"], true);
         EXPECT_EQ(saveResult["path"], "/tmp/test.3mf");
-        EXPECT_THAT(saveResult["message"].get<std::string>(),
-                    ::testing::HasSubstr("Document saved successfully"));
+        // On success, no message is included
+        EXPECT_FALSE(saveResult.contains("message"));
     }
 
     TEST_F(MCPServerTest, SaveDocumentAsTool_InvalidPath_ReturnsDetailedError)
@@ -638,8 +636,8 @@ namespace gladius::tests
     {
         // Arrange
         EXPECT_CALL(*m_mockApp, saveDocument()).WillOnce(::testing::Return(true));
-        EXPECT_CALL(*m_mockApp, getLastErrorMessage())
-          .WillOnce(::testing::Return("Document saved successfully to /current/file.3mf"));
+        EXPECT_CALL(*m_mockApp, getActiveDocumentPath())
+          .WillOnce(::testing::Return("/current/file.3mf"));
 
         json request = {{"jsonrpc", "2.0"},
                         {"id", 1},
@@ -654,8 +652,9 @@ namespace gladius::tests
         std::string jsonString = content[0]["text"];
         json saveResult = json::parse(jsonString);
         EXPECT_EQ(saveResult["success"], true);
-        EXPECT_THAT(saveResult["message"].get<std::string>(),
-                    ::testing::HasSubstr("Document saved successfully"));
+        // On success, we return the current file path instead of a message
+        EXPECT_EQ(saveResult["path"], "/current/file.3mf");
+        EXPECT_FALSE(saveResult.contains("message"));
     }
 
     TEST_F(MCPServerTest, SaveDocumentTool_NoCurrentFile_ReturnsDetailedError)

@@ -738,9 +738,12 @@ namespace gladius::mcp
               }
               std::string path = params["path"];
               bool success = m_application->saveDocumentAs(path);
-              return {{"success", success},
-                      {"path", path},
-                      {"message", m_application->getLastErrorMessage()}};
+              json result = {{"success", success}, {"path", path}};
+              if (!success)
+              {
+                  result["message"] = m_application->getLastErrorMessage();
+              }
+              return result;
           });
 
         registerTool(
@@ -750,11 +753,14 @@ namespace gladius::mcp
           [this](const json & params) -> json
           {
               bool success = m_application->saveDocument();
-              json result = {{"success", success},
-                             {"message", m_application->getLastErrorMessage()}};
+              json result = {{"success", success}};
               if (success)
               {
                   result["path"] = m_application->getActiveDocumentPath();
+              }
+              else
+              {
+                  result["message"] = m_application->getLastErrorMessage();
               }
               return result;
           });
@@ -1163,7 +1169,12 @@ namespace gladius::mcp
               uint32_t idx = params.value("build_item_index", 0);
               uint32_t objId = params.value("object_id", 0);
               bool ok = m_application->setBuildItemObjectByIndex(idx, objId);
-              return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
+              json out = {{"success", ok}};
+              if (!ok)
+              {
+                  out["message"] = m_application->getLastErrorMessage();
+              }
+              return out;
           });
 
         registerTool("set_build_item_transform",
@@ -1189,8 +1200,12 @@ namespace gladius::mcp
                              tr[i] = static_cast<float>(arr[i]);
                          }
                          bool ok = m_application->setBuildItemTransformByIndex(idx, tr);
-                         return {{"success", ok},
-                                 {"message", m_application->getLastErrorMessage()}};
+                         json out = {{"success", ok}};
+                         if (!ok)
+                         {
+                             out["message"] = m_application->getLastErrorMessage();
+                         }
+                         return out;
                      });
 
         // LEVELSET MODIFICATION
@@ -1219,7 +1234,12 @@ namespace gladius::mcp
                   channel = params["channel"].get<std::string>();
               }
               bool ok = m_application->modifyLevelSet(lsId, fnId, channel);
-              return {{"success", ok}, {"message", m_application->getLastErrorMessage()}};
+              json out = {{"success", ok}};
+              if (!ok)
+              {
+                  out["message"] = m_application->getLastErrorMessage();
+              }
+              return out;
           });
 
         // ===================================================================
