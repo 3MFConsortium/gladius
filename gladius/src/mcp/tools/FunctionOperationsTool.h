@@ -63,6 +63,26 @@ namespace gladius
                                       const std::string & nodeType,
                                       const std::string & displayName,
                                       uint32_t nodeId);
+            /**
+             * @brief Replace or create a function graph from JSON in one operation.
+             *
+             * Expected JSON (minimal schema):
+             * {
+             *   model?: { display_name?: string },
+             *   nodes: [ { id: number, type: string, display_name?: string, position?: [x,y] } ],
+             *   links: [ { from_node_id: number, from_port: string, to_node_id: number,
+             * to_parameter: string } ]
+             * }
+             * Notes:
+             * - Node IDs in the JSON are used only to reference links. Actual internal IDs are
+             *   assigned by the model; an id_map is returned.
+             * - "Input" and "Output" nodes are mapped to the model's Begin/End nodes.
+             * - If replace == true (default), the existing graph is cleared first and a fresh
+             *   Begin/End pair is created.
+             */
+            nlohmann::json setFunctionGraph(uint32_t functionId,
+                                            const nlohmann::json & graph,
+                                            bool replace = true);
             nlohmann::json deleteNode(uint32_t functionId, uint32_t nodeId);
             nlohmann::json setParameterValue(uint32_t functionId,
                                              uint32_t nodeId,

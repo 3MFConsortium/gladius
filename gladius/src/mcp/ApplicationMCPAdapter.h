@@ -156,6 +156,9 @@ namespace gladius
                                   const std::string & nodeType,
                                   const std::string & displayName,
                                   uint32_t nodeId) override;
+        nlohmann::json setFunctionGraph(uint32_t functionId,
+                                        const nlohmann::json & graph,
+                                        bool replace = true) override;
         nlohmann::json deleteNode(uint32_t functionId, uint32_t nodeId) override;
         nlohmann::json setParameterValue(uint32_t functionId,
                                          uint32_t nodeId,

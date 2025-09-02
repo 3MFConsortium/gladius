@@ -175,6 +175,14 @@ namespace gladius::tests
                                   {"links", nlohmann::json::array()},
                                   {"counts", {{"nodes", 0}, {"links", 0}}}};
         }
+
+        nlohmann::json setFunctionGraph(uint32_t /*functionId*/,
+                                        const nlohmann::json & /*graph*/,
+                                        bool /*replace*/) override
+        {
+            // Minimal success response with empty id map
+            return nlohmann::json{{"success", true}, {"id_map", nlohmann::json::object()}};
+        }
         std::vector<std::string> listAvailableFunctions() const override
         {
             return {};
@@ -569,5 +577,71 @@ namespace gladius::tests
         EXPECT_EQ(response["jsonrpc"], "2.0");
         EXPECT_TRUE(response["id"].is_null());
         EXPECT_TRUE(response.contains("result"));
+    }
+
+    // New tests for set_function_graph
+    TEST_F(JSONRPCTest, ToolsCall_SetFunctionGraph_MissingParams_ReturnsError)
+    {
+        // Arrange: missing function_id
+        json reqMissingFunctionId = {
+          {"jsonrpc", "2.0"},
+          {"id", 1},
+          {"method", "tools/call"},
+          {"params",
+           {{"name", "set_function_graph"},
+            {"arguments", {{"graph", {{"nodes", json::array()}, {"links", json::array()}}}}}}}};
+
+        // Act
+        json res1 = m_server->processJSONRPCRequest(reqMissingFunctionId);
+
+        // Assert: server wraps tool errors in result payload (not JSON-RPC error)
+        ASSERT_TRUE(res1.contains("result"));
+        auto content1 = res1["result"]["content"][0]["text"].get<std::string>();
+        auto payload1 = json::parse(content1);
+        ASSERT_TRUE(payload1.contains("success"));
+        EXPECT_FALSE(payload1["success"].get<bool>());
+        ASSERT_TRUE(payload1.contains("error"));
+        EXPECT_NE(payload1["error"].get<std::string>().find("Missing required"), std::string::npos);
+
+        // Arrange: missing graph
+        json reqMissingGraph = {
+          {"jsonrpc", "2.0"},
+          {"id", 2},
+          {"method", "tools/call"},
+          {"params", {{"name", "set_function_graph"}, {"arguments", {{"function_id", 123}}}}}};
+
+        // Act
+        json res2 = m_server->processJSONRPCRequest(reqMissingGraph);
+
+        // Assert: server wraps tool errors in result payload (not JSON-RPC error)
+        ASSERT_TRUE(res2.contains("result"));
+        auto content2 = res2["result"]["content"][0]["text"].get<std::string>();
+        auto payload2 = json::parse(content2);
+        ASSERT_TRUE(payload2.contains("success"));
+        EXPECT_FALSE(payload2["success"].get<bool>());
+        ASSERT_TRUE(payload2.contains("error"));
+        EXPECT_NE(payload2["error"].get<std::string>().find("Missing required"), std::string::npos);
+    }
+
+    TEST_F(JSONRPCTest, ToolsCall_SetFunctionGraph_MinimalGraph_Succeeds)
+    {
+        // Arrange
+        json minimalGraph = {{"nodes", json::array()}, {"links", json::array()}};
+        json request = {{"jsonrpc", "2.0"},
+                        {"id", 3},
+                        {"method", "tools/call"},
+                        {"params",
+                         {{"name", "set_function_graph"},
+                          {"arguments", {{"function_id", 42}, {"graph", minimalGraph}}}}}};
+
+        // Act
+        json response = m_server->processJSONRPCRequest(request);
+
+        // Assert
+        ASSERT_TRUE(response.contains("result"));
+        auto content = response["result"]["content"][0]["text"].get<std::string>();
+        auto payload = json::parse(content);
+        EXPECT_TRUE(payload.contains("success"));
+        EXPECT_TRUE(payload["success"].get<bool>());
     }
 }

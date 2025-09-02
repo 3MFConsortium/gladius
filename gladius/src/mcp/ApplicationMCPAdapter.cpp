@@ -955,6 +955,13 @@ nlohmann::json gladius::ApplicationMCPAdapter::createNode(uint32_t functionId,
     return m_functionOperationsTool->createNode(functionId, nodeType, displayName, 0);
 }
 
+nlohmann::json gladius::ApplicationMCPAdapter::setFunctionGraph(uint32_t functionId,
+                                                                const nlohmann::json & graph,
+                                                                bool replace)
+{
+    return m_functionOperationsTool->setFunctionGraph(functionId, graph, replace);
+}
+
 nlohmann::json gladius::ApplicationMCPAdapter::deleteNode(uint32_t functionId, uint32_t nodeId)
 {
     return m_functionOperationsTool->deleteNode(functionId, nodeId);

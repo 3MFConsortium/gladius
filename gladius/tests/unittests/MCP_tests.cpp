@@ -93,6 +93,13 @@ namespace gladius::tests
         MOCK_METHOD(nlohmann::json, getDocumentInfo, (), (const, override));
         MOCK_METHOD(nlohmann::json, get3MFStructure, (), (const, override));
         MOCK_METHOD(nlohmann::json, getFunctionGraph, (uint32_t), (const, override));
+        // Simple inline override to satisfy pure virtual; tests don't use it explicitly here
+        nlohmann::json setFunctionGraph(uint32_t /*functionId*/,
+                                        const nlohmann::json & /*graph*/,
+                                        bool /*replace*/) override
+        {
+            return nlohmann::json{{"success", true}};
+        }
         MOCK_METHOD(std::vector<std::string>, listAvailableFunctions, (), (const, override));
         MOCK_METHOD(nlohmann::json,
                     validateForManufacturing,

@@ -176,6 +176,11 @@ namespace gladius
                                [](double x, double minVal, double maxVal) -> double
                                { return std::min(std::max(x, minVal), maxVal); });
 
+            // Add pow function (power) to support pow(base, exponent)
+            m_parser.DefineFun("pow",
+                               [](double base, double exponent) -> double
+                               { return std::pow(base, exponent); });
+
             // Define common mathematical constants
             // Ensure tokens like 'pi' and 'e' are recognized as constants by muParser
             try
@@ -390,7 +395,7 @@ namespace gladius
                 // Skip known functions (extend this list as needed)
                 if (var != "sin" && var != "cos" && var != "tan" && var != "exp" && var != "log" &&
                     var != "sqrt" && var != "abs" && var != "pi" && var != "e" && var != "clamp" &&
-                    var != "pow")
+                    var != "pow" && var != "min" && var != "max" && var != "atan2" && var != "fmod")
                 {
                     // Check if variable is already in the list
                     if (std::find(variables.begin(), variables.end(), var) == variables.end())

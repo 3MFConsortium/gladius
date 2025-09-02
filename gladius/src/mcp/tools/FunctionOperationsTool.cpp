@@ -15,6 +15,7 @@
 #include "../../nodes/Parameter.h"
 #include "../../nodes/Port.h"
 #include "../../nodes/nodesfwd.h"
+#include "../FunctionGraphDeserializer.h"
 #include "../FunctionGraphSerializer.h"
 #include <array>
 #include <filesystem>
@@ -902,6 +903,53 @@ namespace gladius
                 out["success"] = false;
                 out["error"] = std::string("Exception while creating node: ") + e.what();
                 return out;
+            }
+        }
+
+        nlohmann::json FunctionOperationsTool::setFunctionGraph(uint32_t functionId,
+                                                                const nlohmann::json & graph,
+                                                                bool replace)
+        {
+            using json = nlohmann::json;
+            json out;
+            out["requested_function_id"] = functionId;
+
+            if (!validateApplication())
+            {
+                return json{{"success", false}, {"error", "No application instance available"}};
+            }
+
+            auto document = m_application->getCurrentDocument();
+            if (!document)
+            {
+                return json{{"success", false}, {"error", "No active document available"}};
+            }
+
+            try
+            {
+                auto assembly = document->getAssembly();
+                if (!assembly)
+                {
+                    return json{{"success", false}, {"error", "No assembly available"}};
+                }
+
+                auto model = assembly->findModel(functionId);
+                if (!model)
+                {
+                    return json{{"success", false}, {"error", "Function (model) not found for id"}};
+                }
+
+                // Delegate to deserializer
+                json result = mcp::FunctionGraphDeserializer::applyToModel(*model, graph, replace);
+                // Preserve request context
+                result["requested_function_id"] = functionId;
+                return result;
+            }
+            catch (const std::exception & e)
+            {
+                return json{
+                  {"success", false},
+                  {"error", std::string("Exception while setting function graph: ") + e.what()}};
             }
         }
 

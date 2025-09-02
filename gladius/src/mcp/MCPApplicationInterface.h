@@ -151,6 +151,14 @@ namespace gladius
                                           uint32_t nodeId) = 0;
 
         /**
+         * @brief Replace or create a function graph from JSON in one operation.
+         * See FunctionOperationsTool::setFunctionGraph for expected schema.
+         */
+        virtual nlohmann::json setFunctionGraph(uint32_t functionId,
+                                                const nlohmann::json & graph,
+                                                bool replace = true) = 0;
+
+        /**
          * @brief Deletes a node from a function graph.
          *
          * @param functionId ModelResourceID of the function (model).

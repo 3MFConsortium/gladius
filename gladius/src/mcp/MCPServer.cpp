@@ -511,6 +511,38 @@ namespace gladius::mcp
               return m_application->getFunctionGraph(function_id);
           });
 
+        // FUNCTION GRAPH IMPORT (batch create)
+        registerTool("set_function_graph",
+                     "Create or replace a function graph from a JSON description (nodes + links)",
+                     {{"type", "object"},
+                      {"properties",
+                       {{"function_id",
+                         {{"type", "integer"}, {"description", "ModelResourceID of the function"}}},
+                        {"graph",
+                         {{"description",
+                           "Graph JSON with nodes and links. Minimal schema: { "
+                           "nodes:[{id,type,display_name?,position?}], "
+                           "links:[{from_node_id,from_port,to_node_id,to_parameter}] }"}}},
+                        {"replace",
+                         {{"type", "boolean"},
+                          {"description", "Replace existing graph (default true), else merge"}}}}},
+                      {"required", {"function_id", "graph"}}},
+                     [this](const json & params) -> json
+                     {
+                         if (!m_application)
+                         {
+                             return {{"success", false}, {"error", "No application available"}};
+                         }
+                         if (!params.contains("function_id") || !params.contains("graph"))
+                         {
+                             return {{"success", false}, {"error", "Missing required parameters"}};
+                         }
+                         uint32_t function_id = params["function_id"];
+                         bool replace = params.value("replace", true);
+                         return m_application->setFunctionGraph(
+                           function_id, params["graph"], replace);
+                     });
+
         // FUNCTION GRAPH MANIPULATION
         registerTool(
           "get_node_info",
