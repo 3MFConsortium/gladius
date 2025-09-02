@@ -181,6 +181,22 @@ namespace gladius
                                [](double base, double exponent) -> double
                                { return std::pow(base, exponent); });
 
+            // Add inverse trigonometric functions for involute gear calculations
+            m_parser.DefineFun("acos", [](double x) -> double { return std::acos(x); });
+            m_parser.DefineFun("asin", [](double x) -> double { return std::asin(x); });
+            m_parser.DefineFun("atan", [](double x) -> double { return std::atan(x); });
+            m_parser.DefineFun("atan2",
+                               [](double y, double x) -> double { return std::atan2(y, x); });
+
+            // Add modulo functions for angular repetition in gears
+            m_parser.DefineFun("mod", [](double x, double y) -> double { return std::fmod(x, y); });
+            m_parser.DefineFun("fmod",
+                               [](double x, double y) -> double { return std::fmod(x, y); });
+
+            // Add min/max functions for boolean operations
+            m_parser.DefineFun("min", [](double a, double b) -> double { return std::min(a, b); });
+            m_parser.DefineFun("max", [](double a, double b) -> double { return std::max(a, b); });
+
             // Define common mathematical constants
             // Ensure tokens like 'pi' and 'e' are recognized as constants by muParser
             try
@@ -334,6 +350,7 @@ namespace gladius
                 if (var != "sin" && var != "cos" && var != "tan" && var != "exp" && var != "log" &&
                     var != "sqrt" && var != "abs" && var != "pi" && var != "e" && var != "pow" &&
                     var != "min" && var != "max" && var != "atan2" && var != "fmod" &&
+                    var != "acos" && var != "asin" && var != "atan" && var != "mod" &&
                     var != "clamp")
                 {
                     // Check if this variable is part of a component access
@@ -395,7 +412,9 @@ namespace gladius
                 // Skip known functions (extend this list as needed)
                 if (var != "sin" && var != "cos" && var != "tan" && var != "exp" && var != "log" &&
                     var != "sqrt" && var != "abs" && var != "pi" && var != "e" && var != "clamp" &&
-                    var != "pow" && var != "min" && var != "max" && var != "atan2" && var != "fmod")
+                    var != "pow" && var != "min" && var != "max" && var != "atan2" &&
+                    var != "fmod" && var != "acos" && var != "asin" && var != "atan" &&
+                    var != "mod")
                 {
                     // Check if variable is already in the list
                     if (std::find(variables.begin(), variables.end(), var) == variables.end())

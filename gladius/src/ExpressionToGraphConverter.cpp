@@ -535,7 +535,7 @@ namespace gladius
                 nodeTypeName = "Pow";
             else if (functionName == "atan2")
                 nodeTypeName = "ArcTan2";
-            else if (functionName == "fmod")
+            else if (functionName == "fmod" || functionName == "mod")
                 nodeTypeName = "Fmod";
             else if (functionName == "min")
                 nodeTypeName = "Min";
@@ -681,7 +681,8 @@ namespace gladius
 
     bool ExpressionToGraphConverter::isBinaryFunction(std::string const & functionName)
     {
-        static const std::set<std::string> binaryFunctions = {"pow", "atan2", "fmod", "min", "max"};
+        static const std::set<std::string> binaryFunctions = {
+          "pow", "atan2", "fmod", "mod", "min", "max"};
 
         return binaryFunctions.find(functionName) != binaryFunctions.end();
     }
@@ -1521,7 +1522,7 @@ namespace gladius
                 nodeTypeName = "Pow";
             else if (functionName == "atan2")
                 nodeTypeName = "ArcTan2";
-            else if (functionName == "fmod")
+            else if (functionName == "fmod" || functionName == "mod")
                 nodeTypeName = "Fmod";
             else if (functionName == "min")
                 nodeTypeName = "Min";

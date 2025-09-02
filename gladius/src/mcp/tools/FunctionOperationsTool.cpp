@@ -105,8 +105,9 @@ namespace gladius
                       std::string("Expression parsing failed:\n") + parser.getLastError() +
                       "\n\nSupported syntax:" + "\n- Variables: x, y, z (for 3D coordinates)" +
                       "\n- Math operators: +, -, *, /" +
-                      "\n- Functions: sin(), cos(), tan(), sqrt(), abs(), exp(), log(), pow(base, "
-                      "exp)" +
+                      "\n- Functions: sin(), cos(), tan(), asin(), acos(), atan(), atan2(), "
+                      "sqrt(), abs(), exp(), log(), pow(base, exp)" +
+                      "\n- Modulo: mod(x, y), fmod(x, y)" + "\n- Min/Max: min(a, b), max(a, b)" +
                       "\n- Constants: pi, e" +
                       "\n- Component access: pos.x, pos.y, pos.z (for vec3 inputs)" +
                       "\n- Parentheses for grouping: (x + y) * z" +
@@ -114,7 +115,7 @@ namespace gladius
                       "\n- Gyroid: 'sin(x)*cos(y) + sin(y)*cos(z) + sin(z)*cos(x)'" +
                       "\n- Sphere: 'sqrt(x*x + y*y + z*z) - 5'" +
                       "\n- Torus: 'pow(sqrt(x*x + y*y) - 10, 2) + z*z - 4'" +
-                      "\n- Scaled wave: 'sin(x*2*pi/10)*cos(y*2*pi/10)'";
+                      "\n- Scaled wave: 'sin(x*2*pi/10)*cos(y*2*pi/10)'" + "\n-";
                     return {false, 0};
                 }
 
