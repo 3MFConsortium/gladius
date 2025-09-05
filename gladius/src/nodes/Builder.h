@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components.h"
+#include "DerivedNodes.h"
 #include "Model.h"
 
 namespace gladius
@@ -33,6 +34,10 @@ namespace gladius::nodes
         void addResourceRef(Model & target,
                             ResourceKey const & resourceKey,
                             nodes::Port & coordinateSystemPort);
+
+        void addBeamLatticeRef(Model & target,
+                               ResourceKey const & resourceKey,
+                               nodes::Port & coordinateSystemPort);
 
         void addBoundingBox(Model & target,
                             BoundingBox const & boundingBox,

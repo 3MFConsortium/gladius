@@ -28,6 +28,10 @@ enum PrimitiveType
     SDF_VDB_FACE_INDICES,
     SDF_VDB_GRAYSCALE_8BIT,
     SDF_IMAGESTACK,
+    SDF_BEAM_LATTICE,      // Beam lattice root node
+    SDF_BEAM,              // Individual beam primitive
+    SDF_BALL,              // Ball at beam vertex
+    SDF_BEAM_BVH_NODE,     // BVH internal node for beams
 };
 
 
@@ -100,6 +104,76 @@ struct PrimitiveMeta
 };
 
 typedef float PrimitiveData;
+
+#ifdef COMPILING_FOR_HOST
+// Beam data structure for lattice beams (aligned for GPU access)
+struct BeamData
+{
+    float4 startPos;       // Start position (w component unused)
+    float4 endPos;         // End position (w component unused) 
+    float startRadius;     // Radius at start
+    float endRadius;       // Radius at end
+    int startCapStyle;     // Cap style: 0=hemisphere, 1=sphere, 2=butt
+    int endCapStyle;       // Cap style for end
+    int materialId;        // Material/property ID
+    int padding;           // Alignment padding
+};
+
+// Ball data structure for beam lattice nodes
+struct BallData
+{
+    float4 position;       // Ball center (w component unused)
+    float radius;          // Ball radius
+    int materialId;        // Material/property ID
+    int padding[2];        // Alignment padding
+};
+
+// BVH node structure for beam lattice spatial acceleration
+struct BeamBVHNode
+{
+    float4 boundingBoxMin;
+    float4 boundingBoxMax;
+    int leftChild;         // Index to left child (-1 if leaf)
+    int rightChild;        // Index to right child (-1 if leaf)
+    int primitiveStart;    // First primitive index (for leaves)
+    int primitiveCount;    // Number of primitives (for leaves)
+    int depth;             // Node depth for debugging
+    int padding[3];        // Alignment
+};
+#else
+// OpenCL versions of beam structures
+struct BeamData
+{
+    float4 startPos;
+    float4 endPos;
+    float startRadius;
+    float endRadius;
+    int startCapStyle;
+    int endCapStyle;
+    int materialId;
+    int padding;
+};
+
+struct BallData
+{
+    float4 position;
+    float radius;
+    int materialId;
+    int padding[2];
+};
+
+struct BeamBVHNode
+{
+    float4 boundingBoxMin;
+    float4 boundingBoxMax;
+    int leftChild;         // Index to left child (-1 if leaf)
+    int rightChild;        // Index to right child (-1 if leaf)
+    int primitiveStart;    // First primitive index (for leaves)
+    int primitiveCount;    // Number of primitives (for leaves)
+    int depth;             // Node depth for debugging
+    int padding[3];        // Alignment
+};
+#endif
 
 struct RenderingSettings // Note that the alignment has to be considered
 {

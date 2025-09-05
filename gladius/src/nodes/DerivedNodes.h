@@ -487,6 +487,14 @@ namespace gladius::nodes
         void updateMemoryOffsets(GeneratorContext & generatorContext);
     };
 
+    class SignedDistanceToBeamLattice : public ClonableNode<SignedDistanceToBeamLattice>
+    {
+      public:
+        SignedDistanceToBeamLattice();
+        explicit SignedDistanceToBeamLattice(NodeId id);
+        void updateMemoryOffsets(GeneratorContext & generatorContext);
+    };
+
     class UnsignedDistanceToMesh : public ClonableNode<UnsignedDistanceToMesh>
     {
       public:

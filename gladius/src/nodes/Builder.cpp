@@ -42,6 +42,44 @@ namespace gladius::nodes
         shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
     }
 
+    void Builder::addBeamLatticeRef(Model & target,
+                                    ResourceKey const & resourceKey,
+                                    nodes::Port & coordinateSystemPort)
+    {
+        nodes::Resource resourceNodeType;
+        auto resourceNode = target.create(resourceNodeType);
+        resourceNode->parameter().at(FieldNames::ResourceId) =
+          VariantParameter(resourceKey.getResourceId().value_or(0));
+
+        nodes::SignedDistanceToBeamLattice importedGeometryType;
+        auto importNode = target.create(importedGeometryType);
+
+        importNode->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
+
+        auto & beamLatticeInput = importNode->parameter().at(FieldNames::BeamLattice);
+        beamLatticeInput.setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+
+        auto & resourceShapePort = importNode->getOutputs().at(FieldNames::Distance);
+        auto lastShapePort = getLastShape(target);
+        auto shapeSink = target.getEndNode()->getParameter(FieldNames::Shape);
+
+        if (!shapeSink)
+        {
+            throw std::runtime_error("End node is required to have a shape parameter");
+        }
+        if (!lastShapePort)
+        {
+            shapeSink->setInputFromPort(resourceShapePort);
+            return;
+        }
+        auto uniteNode = target.create<nodes::Min>();
+
+        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
+        uniteNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+
+        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+    }
+
     void Builder::addBoundingBox(Model & target,
                                  BoundingBox const & boundingBox,
                                  nodes::Port & coordinateSystemPort)

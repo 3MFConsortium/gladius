@@ -17,6 +17,7 @@
 
 #include "../CLMath.h"
 #include "../IconFontCppHeaders/IconsFontAwesome5.h"
+#include "BeamLatticeView.h"
 #include "ComponentsObjectView.h"
 #include "Document.h"
 #include "MeshResource.h"
@@ -298,6 +299,25 @@ namespace gladius::ui
               "allow for easier mixing between different shapes.\n\n"
               "For a level set you need a function with a \"pos\" vector as input and a scalar "
               "output.\n");
+
+            ImGui::BeginGroup();
+            if (ImGui::TreeNodeEx("Beam Lattices", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                BeamLatticeView beamLatticeView;
+                if (beamLatticeView.render(m_doc))
+                {
+                    markModelAsModified();
+                }
+                ImGui::TreePop();
+            }
+            ImGui::EndGroup();
+            frameOverlay(ImVec4(0.8f, 0.4f, 1.0f, 0.1f),
+                         "Beam Lattices\n\n"
+                         "Complex structural geometries made of interconnected beams and nodes.\n"
+                         "Beam lattices are ideal for lightweight structures, supports,\n"
+                         "and metamaterials with specific mechanical properties.\n\n"
+                         "Import beam lattices from 3MF files with embedded beam lattice data,\n"
+                         "or create them programmatically using beam and ball primitive data.\n");
 
             resourceOutline();
 

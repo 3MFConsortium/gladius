@@ -374,6 +374,21 @@ namespace gladius::nodes
           signedDistanceToMesh.parameter()[FieldNames::End].toString());
     }
 
+    void ToOclVisitor::visit(SignedDistanceToBeamLattice & signedDistanceToBeamLattice)
+    {
+        if (!isOutPutOfNodeValid(signedDistanceToBeamLattice))
+        {
+            return;
+        }
+
+        m_definition << fmt::format(
+          "float const {0} = payload((float3)({1}), (int)({2}), (int)({3}), PASS_PAYLOAD_ARGS);\n",
+          signedDistanceToBeamLattice.getOutputs()[FieldNames::Distance].getUniqueName(),
+          signedDistanceToBeamLattice.parameter()[FieldNames::Pos].toString(),
+          signedDistanceToBeamLattice.parameter()[FieldNames::Start].toString(),
+          signedDistanceToBeamLattice.parameter()[FieldNames::End].toString());
+    }
+
     void ToOclVisitor::visit(FunctionCall & functionCall)
     {
         if (!isOutPutOfNodeValid(functionCall))

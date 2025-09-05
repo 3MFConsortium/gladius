@@ -170,6 +170,97 @@ namespace gladius::nodes
         }
     }
 
+    SignedDistanceToBeamLattice::SignedDistanceToBeamLattice()
+        : SignedDistanceToBeamLattice({})
+    {
+    }
+
+    SignedDistanceToBeamLattice::SignedDistanceToBeamLattice(NodeId id)
+        : ClonableNode<SignedDistanceToBeamLattice>(NodeName("SignedDistanceToBeamLattice"),
+                                                    id,
+                                                    Category::Primitive)
+    {
+        TypeRule rule = {RuleType::Default,
+                         InputTypeMap{{FieldNames::Pos, ParameterTypeIndex::Float3},
+                                      {FieldNames::BeamLattice, ParameterTypeIndex::ResourceId}},
+                         OutputTypeMap{{FieldNames::Distance, ParameterTypeIndex::Float}}};
+
+        m_typeRules = {rule};
+        applyTypeRule(rule);
+
+        m_parameter[FieldNames::Start] = VariantParameter(int{0});
+        m_parameter[FieldNames::End] = VariantParameter(int{0});
+
+        m_parameter[FieldNames::Start].hide();
+        m_parameter[FieldNames::End].hide();
+
+        m_parameter[FieldNames::Start].setInputSourceRequired(false);
+        m_parameter[FieldNames::End].setInputSourceRequired(false);
+
+        updateNodeIds();
+    }
+
+    void SignedDistanceToBeamLattice::updateMemoryOffsets(GeneratorContext & generatorContext)
+    {
+
+        m_parameter[FieldNames::Start].hide();
+        m_parameter[FieldNames::End].hide();
+
+        m_parameter[FieldNames::Start].setInputSourceRequired(false);
+        m_parameter[FieldNames::End].setInputSourceRequired(false);
+
+        auto & resMan = generatorContext.resourceManager;
+
+        auto beamLatticeParameter = m_parameter.at(FieldNames::BeamLattice);
+        auto sourceParameter = beamLatticeParameter.getSource();
+        if (!sourceParameter.has_value())
+        {
+            return;
+        }
+
+        auto * sourcePort = sourceParameter.value().port;
+        if (!sourcePort)
+        {
+            throw std::runtime_error("Invalid source port");
+        }
+
+        auto sourceNode = sourcePort->getParent();
+
+        if (!sourceNode)
+        {
+            return;
+        }
+
+        nodes::Resource * resNode = dynamic_cast<nodes::Resource *>(sourceNode);
+        if (!resNode)
+        {
+            return;
+        }
+
+        auto variantResId = resNode->parameter().at(FieldNames::ResourceId).getValue();
+
+        if (const auto resId = std::get_if<ResourceId>(&variantResId))
+        {
+            try
+            {
+                auto & res = resMan.getResource(ResourceKey{*resId});
+                res.setInUse(true);
+
+                m_parameter[FieldNames::Start].setValue(res.getStartIndex());
+                m_parameter[FieldNames::End].setValue(res.getEndIndex());
+            }
+            catch (...)
+            {
+                m_parameter[FieldNames::Start].setValue(0);
+                m_parameter[FieldNames::End].setValue(0);
+            }
+        }
+        else
+        {
+            throw std::runtime_error("Invalid resource id");
+        }
+    }
+
     UnsignedDistanceToMesh::UnsignedDistanceToMesh()
         : UnsignedDistanceToMesh({})
     {

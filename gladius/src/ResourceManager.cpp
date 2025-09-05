@@ -1,5 +1,6 @@
 #include "ResourceManager.h"
 
+#include "BeamLatticeResource.h"
 #include "ImageStackResource.h"
 #include "ResourceContext.h"
 #include "StlResource.h"
@@ -62,6 +63,12 @@ namespace gladius
     void ResourceManager::addResource(ResourceKey key, io::ImageStack && stack)
     {
         m_resources[key] = std::make_unique<ImageStackResource>(key, std::move(stack));
+    }
+
+    void ResourceManager::addResource(ResourceKey key,
+                                      std::unique_ptr<BeamLatticeResource> && resource)
+    {
+        m_resources[key] = std::move(resource);
     }
 
     void ResourceManager::loadResources()
