@@ -1,11 +1,13 @@
 #include "Importer3mf.h"
 
+#include <fmt/format.h>
 #include <lib3mf_abi.hpp>
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
 #include <set>
 #include <vector>
 
+#include "BeamLatticeResource.h"
 #include "Builder.h"
 #include "Document.h"
 #include "FunctionComparator.h"
@@ -1091,6 +1093,110 @@ namespace gladius::io
             return;
         }
         doc.getGeneratorContext().resourceManager.addResource(key, std::move(mesh));
+
+        // Also load beam lattice if present
+        loadBeamLatticeIfNecessary(model, meshObject, doc);
+    }
+
+    void Importer3mf::loadBeamLatticeIfNecessary(Lib3MF::PModel model,
+                                                 Lib3MF::PMeshObject meshObject,
+                                                 Document & doc)
+    {
+        ProfileFunction
+
+        try
+        {
+            // Check if mesh object has a beam lattice
+            Lib3MF::PBeamLattice beamLattice = meshObject->BeamLattice();
+            if (!beamLattice)
+            {
+                return; // No beam lattice in this mesh object
+            }
+
+            // Create resource key for beam lattice (use same ID as mesh but with suffix)
+            auto key = ResourceKey(static_cast<int>(meshObject->GetModelResourceID()));
+            key.setDisplayName(meshObject->GetName() + "_BeamLattice");
+
+            // Check if beam lattice resource already exists
+            if (doc.getGeneratorContext().resourceManager.hasResource(key))
+            {
+                return;
+            }
+
+            // Extract beam data from lib3mf
+            std::vector<BeamData> beams;
+            Lib3MF_uint32 beamCount = beamLattice->GetBeamCount();
+
+            for (Lib3MF_uint32 i = 0; i < beamCount; ++i)
+            {
+                Lib3MF::sBeam beamInfo = beamLattice->GetBeam(i);
+
+                BeamData beam;
+
+                // Set node indices - we'll resolve positions later
+                auto startVertex = meshObject->GetVertex(beamInfo.m_Indices[0]);
+                auto endVertex = meshObject->GetVertex(beamInfo.m_Indices[1]);
+
+                beam.startPos = {static_cast<float>(startVertex.m_Coordinates[0]),
+                                 static_cast<float>(startVertex.m_Coordinates[1]),
+                                 static_cast<float>(startVertex.m_Coordinates[2]),
+                                 1.0f};
+                beam.endPos = {static_cast<float>(endVertex.m_Coordinates[0]),
+                               static_cast<float>(endVertex.m_Coordinates[1]),
+                               static_cast<float>(endVertex.m_Coordinates[2]),
+                               1.0f};
+
+                beam.startRadius = static_cast<float>(beamInfo.m_Radii[0]);
+                beam.endRadius = static_cast<float>(beamInfo.m_Radii[1]);
+
+                // Cap styles: convert from 3MF to internal representation
+                beam.startCapStyle = static_cast<int>(beamInfo.m_CapModes[0]);
+                beam.endCapStyle = static_cast<int>(beamInfo.m_CapModes[1]);
+                beam.materialId = 0; // Default material
+                beam.padding = 0;
+
+                beams.push_back(beam);
+            }
+
+            // Extract balls (vertices) from mesh object
+            std::vector<BallData> balls;
+            auto const numVertices = meshObject->GetVertexCount();
+            for (Lib3MF_uint32 i = 0; i < numVertices; ++i)
+            {
+                auto const vertex = meshObject->GetVertex(i);
+                BallData ball;
+                ball.position = {static_cast<float>(vertex.m_Coordinates[0]),
+                                 static_cast<float>(vertex.m_Coordinates[1]),
+                                 static_cast<float>(vertex.m_Coordinates[2]),
+                                 1.0f};
+                ball.radius = 0.0f;  // Default radius - could be set from beam lattice ball options
+                ball.materialId = 0; // Default material
+                ball.padding[0] = 0;
+                ball.padding[1] = 0;
+                balls.push_back(ball);
+            }
+
+            // Create and add beam lattice resource
+            if (beams.size() > 0 && balls.size() > 0)
+            {
+                auto beamLatticeResource =
+                  std::make_unique<BeamLatticeResource>(key, std::move(beams), std::move(balls));
+                doc.getGeneratorContext().resourceManager.addResource(
+                  key, std::move(beamLatticeResource));
+            }
+        }
+        catch (const std::exception & e)
+        {
+            // Log error but don't throw - let processing continue
+            if (m_eventLogger)
+            {
+                m_eventLogger->addEvent(
+                  {fmt::format("Error loading beam lattice from mesh object {}: {}",
+                               meshObject->GetModelResourceID(),
+                               e.what()),
+                   gladius::events::Severity::Error});
+            }
+        }
     }
 
     BoundingBox Importer3mf::computeBoundingBox(Lib3MF::PMeshObject mesh)
@@ -1144,6 +1250,32 @@ namespace gladius::io
             if (volume)
             {
                 addVolumeData(volume, model, doc, builder, coordinateSystemPort);
+            }
+        }
+    }
+
+    void Importer3mf::addBeamLatticeObject(Lib3MF::PModel model,
+                                           ResourceKey const & key,
+                                           Lib3MF::PMeshObject meshObject,
+                                           nodes::Matrix4x4 const & trafo,
+                                           Document & doc)
+    {
+        // BEAM_LATTICE_VERIFICATION_MARKER_2025_09_05
+        nodes::Builder builder;
+
+        if (meshObject)
+        {
+            // Check if mesh object has a beam lattice (same pattern as in
+            // loadBeamLatticeIfNecessary)
+            Lib3MF::PBeamLattice beamLattice = meshObject->BeamLattice();
+            if (beamLattice)
+            {
+                auto coordinateSystemPort =
+                  builder.addTransformationToInputCs(*doc.getAssembly()->assemblyModel(), trafo);
+
+                // Use the beam lattice-specific builder method
+                builder.addBeamLatticeRef(
+                  *doc.getAssembly()->assemblyModel(), key, coordinateSystemPort);
             }
         }
     }
@@ -1476,7 +1608,20 @@ namespace gladius::io
         if (objectRes.IsMeshObject())
         {
             auto mesh = model->GetMeshObjectByID(objectRes.GetUniqueResourceID());
-            addMeshObject(model, key, mesh, trafo, doc);
+
+            // Check for beam lattice first (using same pattern as loadBeamLatticeIfNecessary)
+            if (mesh)
+            {
+                Lib3MF::PBeamLattice beamLattice = mesh->BeamLattice();
+                if (beamLattice)
+                {
+                    addBeamLatticeObject(model, key, mesh, trafo, doc);
+                }
+                else
+                {
+                    addMeshObject(model, key, mesh, trafo, doc);
+                }
+            }
         }
         else if (objectRes.IsLevelSetObject())
         {

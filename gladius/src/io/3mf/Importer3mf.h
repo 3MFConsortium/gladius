@@ -16,14 +16,15 @@ namespace gladius::io
 {
     /**
      * @brief Structure to represent duplicated implicit functions.
-     * 
+     *
      * This structure holds two implicit functions that are considered duplicates:
      * one from the original function list and one from the extended model.
      */
     struct Duplicates
     {
-        Lib3MF::PImplicitFunction originalFunction;   ///< Function from the original list
-        Lib3MF::PImplicitFunction duplicateFunction;  ///< Duplicated function from the extended model
+        Lib3MF::PImplicitFunction originalFunction; ///< Function from the original list
+        Lib3MF::PImplicitFunction
+          duplicateFunction; ///< Duplicated function from the extended model
     };
 }
 
@@ -83,7 +84,7 @@ namespace gladius::io
         /**
          * @brief Loads all implicit functions from a 3MF model and adds them to the document,
          * except for those identified as duplicates.
-         * 
+         *
          * This function is similar to loadImplicitFunctions, but it skips loading any functions
          * that are included in the duplicates list. This is useful for avoiding the creation
          * of duplicate functions when merging 3MF models.
@@ -92,8 +93,9 @@ namespace gladius::io
          * @param doc The document to add the loaded implicit functions to.
          * @param duplicates Vector of Duplicates structs containing functions to be skipped.
          */
-        void loadImplicitFunctionsFiltered(Lib3MF::PModel model, Document & doc, 
-                                           std::vector<Duplicates> const& duplicates);
+        void loadImplicitFunctionsFiltered(Lib3MF::PModel model,
+                                           Document & doc,
+                                           std::vector<Duplicates> const & duplicates);
 
         /**
          * @brief Loads all component objects from a 3MF model and adds them to the document.
@@ -106,17 +108,17 @@ namespace gladius::io
 
         /**
          * @brief Replaces references to duplicated functions in an implicit function graph.
-         * 
+         *
          * This method iterates through all implicit functions in the model. For each function,
          * it identifies nodes of type ConstResourceID that reference a duplicated function,
          * and replaces those references with the original function.
-         * 
-         * @param duplicates Vector of Duplicates structs containing pairs of original and duplicate functions
+         *
+         * @param duplicates Vector of Duplicates structs containing pairs of original and duplicate
+         * functions
          * @param model The 3MF model containing functions that may reference duplicate functions
          */
-        void replaceDuplicatedFunctionReferences(
-            std::vector<Duplicates> const& duplicates,
-            Lib3MF::PModel const& model) const;
+        void replaceDuplicatedFunctionReferences(std::vector<Duplicates> const & duplicates,
+                                                 Lib3MF::PModel const & model) const;
 
       private:
         void logWarnings(std::filesystem::path const & filename, Lib3MF::PReader reader);
@@ -133,11 +135,28 @@ namespace gladius::io
         void
         loadMeshIfNecessary(Lib3MF::PModel model, Lib3MF::PMeshObject meshObject, Document & doc);
 
+        /**
+         * @brief Loads a beam lattice from a mesh object if present and adds it to the document.
+         *
+         * @param model The 3MF model containing the mesh object.
+         * @param meshObject The mesh object that may contain a beam lattice.
+         * @param doc The document to add the loaded beam lattice to.
+         */
+        void loadBeamLatticeIfNecessary(Lib3MF::PModel model,
+                                        Lib3MF::PMeshObject meshObject,
+                                        Document & doc);
+
         void addMeshObject(Lib3MF::PModel model,
                            ResourceKey const & key,
                            Lib3MF::PMeshObject meshObject,
                            nodes::Matrix4x4 const & trafo,
                            Document & doc);
+
+        void addBeamLatticeObject(Lib3MF::PModel model,
+                                  ResourceKey const & key,
+                                  Lib3MF::PMeshObject meshObject,
+                                  nodes::Matrix4x4 const & trafo,
+                                  Document & doc);
 
         void addVolumeData(Lib3MF::PVolumeData & volume,
                            Lib3MF::PModel & model,
@@ -154,8 +173,6 @@ namespace gladius::io
         void loadImageStacks(std::filesystem::path const & filename,
                              Lib3MF::PModel model,
                              Document & doc);
-
-
 
         void createObject(Lib3MF::CObject & objectRes,
                           Lib3MF::PModel & model,
@@ -180,28 +197,30 @@ namespace gladius::io
 
         /**
          * @brief Collects all implicit functions from a 3MF model.
-         * 
+         *
          * This function iterates through all resources in the model and collects
          * all implicit functions (excluding functions from 3D images).
-         * 
+         *
          * @param model The 3MF model to collect implicit functions from.
          * @return A vector containing shared pointers to the implicit functions in the model.
          */
-        std::vector<Lib3MF::PImplicitFunction> collectImplicitFunctions(Lib3MF::PModel const & model) const;
-        
+        std::vector<Lib3MF::PImplicitFunction>
+        collectImplicitFunctions(Lib3MF::PModel const & model) const;
+
         /**
-         * @brief Finds duplicated implicit functions between original functions and an extended model.
-         * 
+         * @brief Finds duplicated implicit functions between original functions and an extended
+         * model.
+         *
          * This function compares each original function with functions in the extended model
          * to identify duplicates using the FunctionComparator.
-         * 
+         *
          * @param originalFunctions Vector of implicit functions to check for duplicates
          * @param extendedModel The extended model to search in for duplicates
          * @return Vector of Duplicates structs containing the IDs of duplicated functions
          */
-        std::vector<Duplicates> findDuplicatedFunctions(
-            std::vector<Lib3MF::PImplicitFunction> const& originalFunctions,
-            Lib3MF::PModel const& extendedModel) const;
+        std::vector<Duplicates>
+        findDuplicatedFunctions(std::vector<Lib3MF::PImplicitFunction> const & originalFunctions,
+                                Lib3MF::PModel const & extendedModel) const;
 
         void connectOutputs(gladius::nodes::Model & model,
                             gladius::nodes::NodeBase & endNode,
@@ -210,7 +229,7 @@ namespace gladius::io
         void connectNode(Lib3MF::CImplicitNode & node3mf,
                          Lib3MF::CImplicitFunction & func,
                          nodes::Model & model);
-        
+
         BoundingBox computeBoundingBox(Lib3MF::PMeshObject mesh);
 
         Lib3MF::PWrapper m_wrapper{};
