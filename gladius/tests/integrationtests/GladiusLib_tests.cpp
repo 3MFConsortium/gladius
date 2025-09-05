@@ -5,6 +5,7 @@
 #include <gladius_dynamic.hpp>
 
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <iostream>
@@ -175,5 +176,58 @@ namespace gladius_integration_tests
         gladius->ClearDetailedErrors();
 
         EXPECT_EQ(detailedErrorAccessor->GetSize(), 0u);
+    }
+
+    /// Test VariableVoronoi file loading and bounding box computation
+    TEST_F(GladiusLib_test, VariableVoronoi_LoadAssembly_BoundingBoxIsValid)
+    {
+        auto const gladius = getWrapper()->CreateGladius();
+        EXPECT_TRUE(gladius);
+
+        // Load the variable voronoi 3MF file
+        gladius->LoadAssembly(FileNames::VariableVoronoi);
+
+        // Check that there are no errors from loading
+        auto const detailedErrorAccessor = gladius->GetDetailedErrorAccessor();
+        EXPECT_EQ(detailedErrorAccessor->GetSize(), 0u);
+
+        // Compute the bounding box
+        auto boundingBox = gladius->ComputeBoundingBox();
+        EXPECT_TRUE(boundingBox);
+
+        // Get min and max points
+        auto minPoint = boundingBox->GetMin();
+        auto maxPoint = boundingBox->GetMax();
+
+        // Verify that bounding box values are finite (no NaN or inf)
+        EXPECT_TRUE(std::isfinite(minPoint.m_Coordinates[0]))
+          << "Min X coordinate should be finite";
+        EXPECT_TRUE(std::isfinite(minPoint.m_Coordinates[1]))
+          << "Min Y coordinate should be finite";
+        EXPECT_TRUE(std::isfinite(minPoint.m_Coordinates[2]))
+          << "Min Z coordinate should be finite";
+
+        EXPECT_TRUE(std::isfinite(maxPoint.m_Coordinates[0]))
+          << "Max X coordinate should be finite";
+        EXPECT_TRUE(std::isfinite(maxPoint.m_Coordinates[1]))
+          << "Max Y coordinate should be finite";
+        EXPECT_TRUE(std::isfinite(maxPoint.m_Coordinates[2]))
+          << "Max Z coordinate should be finite";
+
+        // Verify that min <= max for all coordinates
+        EXPECT_LE(minPoint.m_Coordinates[0], maxPoint.m_Coordinates[0])
+          << "Min X should be <= Max X";
+        EXPECT_LE(minPoint.m_Coordinates[1], maxPoint.m_Coordinates[1])
+          << "Min Y should be <= Max Y";
+        EXPECT_LE(minPoint.m_Coordinates[2], maxPoint.m_Coordinates[2])
+          << "Min Z should be <= Max Z";
+
+        // Print bounding box for debugging purposes
+        std::cout << "Bounding box - Min: (" << minPoint.m_Coordinates[0] << ", "
+                  << minPoint.m_Coordinates[1] << ", " << minPoint.m_Coordinates[2] << ")"
+                  << std::endl;
+        std::cout << "Bounding box - Max: (" << maxPoint.m_Coordinates[0] << ", "
+                  << maxPoint.m_Coordinates[1] << ", " << maxPoint.m_Coordinates[2] << ")"
+                  << std::endl;
     }
 }
