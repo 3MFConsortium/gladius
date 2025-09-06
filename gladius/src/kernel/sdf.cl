@@ -1352,6 +1352,158 @@ float evaluateBeamLatticeBVH(
     return minDist;
 }
 
+/// @brief Sample primitive index from voxel grid
+/// @details Helper function to sample 3D voxel grid data
+uint primitiveIndexFromVoxelGrid(float3 pos, int voxelGridIndex, PAYLOAD_ARGS)
+{
+    struct PrimitiveMeta voxelGrid = primitives[voxelGridIndex];
+    
+    // Get voxel grid parameters from data
+    int dataStart = voxelGrid.start;
+    if (dataStart + 9 >= voxelGrid.end) {
+        return 0; // Invalid voxel grid
+    }
+    
+    // Voxel grid header: origin (3), dimensions (3), voxel size (1), max distance (1), total voxels (1)
+    float3 origin = (float3)(data[dataStart], data[dataStart + 1], data[dataStart + 2]);
+    int3 dimensions = (int3)((int)data[dataStart + 3], (int)data[dataStart + 4], (int)data[dataStart + 5]);
+    float voxelSize = data[dataStart + 6];
+    int voxelDataStart = dataStart + 9;
+    
+    // Convert position to voxel coordinates
+    float3 localPos = (pos - origin) / voxelSize;
+    int3 voxelCoord = (int3)((int)floor(localPos.x), (int)floor(localPos.y), (int)floor(localPos.z));
+    
+    // Check bounds
+    if (voxelCoord.x < 0 || voxelCoord.x >= dimensions.x ||
+        voxelCoord.y < 0 || voxelCoord.y >= dimensions.y ||
+        voxelCoord.z < 0 || voxelCoord.z >= dimensions.z) {
+        return 0; // Outside grid
+    }
+    
+    // Calculate linear voxel index
+    int voxelIndex = voxelCoord.z * dimensions.y * dimensions.x + voxelCoord.y * dimensions.x + voxelCoord.x;
+    int dataIndex = voxelDataStart + voxelIndex;
+    
+    if (dataIndex >= voxelGrid.end) {
+        return 0; // Out of bounds
+    }
+    
+    return (uint)data[dataIndex];
+}
+
+/// @brief Extract primitive type from encoded index (if encoding is used)
+/// @details If voxel grid uses type encoding, extract type from upper bits
+uint primitiveTypeFromVoxelGrid(uint encodedIndex)
+{
+    // If encoding is used, type is in upper bit (bit 31)
+    return (encodedIndex >> 31) & 1u; // 0 = beam, 1 = ball
+}
+
+/// @brief Evaluate beam lattice distance using voxel acceleration
+/// @details Uses pre-computed voxel grid to find candidate primitives efficiently
+float evaluateBeamLatticeVoxel(
+    float3 pos,
+    int latticeIndex,
+    int voxelGridIndex,
+    int beamIndex,
+    int ballIndex,
+    PAYLOAD_ARGS)
+{
+    struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
+    struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
+    
+    float minDist = FLT_MAX;
+    
+    // Sample 3x3x3 stencil around current position to find candidate primitives
+    struct PrimitiveMeta voxelGrid = primitives[voxelGridIndex];
+    float voxelSize = data[voxelGrid.start + 6]; // Voxel size from header
+    
+    // Sample positions in 3x3x3 neighborhood
+    for (int dz = -1; dz <= 1; dz++) {
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                float3 samplePos = pos + (float3)(dx, dy, dz) * voxelSize;
+                uint encodedIndex = primitiveIndexFromVoxelGrid(samplePos, voxelGridIndex, PASS_PAYLOAD_ARGS);
+                
+                if (encodedIndex == 0) {
+                    continue; // No primitive in this voxel
+                }
+                
+                // Extract primitive index and type
+                uint primitiveIndex = encodedIndex & 0x7FFFFFFF; // Lower 31 bits
+                uint primitiveType = primitiveTypeFromVoxelGrid(encodedIndex);
+                
+                float dist = FLT_MAX;
+                
+                if (primitiveType == 0) { // BEAM primitive
+                    int beamDataStart = beamPrimitive.start + primitiveIndex * 11; // 11 floats per beam
+                    if (beamDataStart + 10 < beamPrimitive.end) {
+                        // Load beam data
+                        float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
+                        float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
+                        float startRadius = data[beamDataStart + 6];
+                        float endRadius = data[beamDataStart + 7];
+                        int startCapStyle = (int)data[beamDataStart + 8];
+                        int endCapStyle = (int)data[beamDataStart + 9];
+                        // int materialId = (int)data[beamDataStart + 10]; // unused here
+
+                        float3 axis = endPos - startPos;
+                        float length_val = length(axis);
+                        if (length_val > 0.0f) {
+                            float3 dir = axis / length_val;
+                            float3 toPoint = pos - startPos;
+                            float t_unclamped = dot(toPoint, dir);
+                            float t = clamp(t_unclamped, 0.0f, length_val);
+                            float3 projection = startPos + t * dir;
+                            float distToAxis = length(pos - projection);
+
+                            // Interpolate radius along the beam
+                            float radius = startRadius + (endRadius - startRadius) * (t / max(length_val, 1e-6f));
+
+                            float surfaceDist = distToAxis - radius;
+                            if (t_unclamped <= 0.0f) {
+                                // Near start cap
+                                if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - startPos) - startRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, -t_unclamped);
+                                }
+                            } else if (t_unclamped >= length_val) {
+                                float overrun = t_unclamped - length_val;
+                                if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - endPos) - endRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, overrun);
+                                }
+                            } else {
+                                dist = surfaceDist;
+                            }
+                        } else {
+                            // Degenerate beam -> treat as sphere with max radius at start
+                            float rad = fmax(startRadius, endRadius);
+                            dist = length(pos - startPos) - rad;
+                        }
+                    }
+                } else if (primitiveType == 1) { // BALL primitive
+                    int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per ball
+                    if (ballDataStart + 3 < ballPrimitive.end) {
+                        // Calculate ball distance
+                        float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                        float radius = data[ballDataStart + 3];
+                        
+                        dist = length(pos - ballPos) - radius;
+                    }
+                }
+                
+                minDist = min(minDist, dist);
+            }
+        }
+    }
+    
+    return minDist;
+}
+
 float payloadPrimitives(float3 pos, bool useApproximation, PAYLOAD_ARGS)
 {
     return payload(pos, 0, primitivesSize, PASS_PAYLOAD_ARGS);
@@ -1417,32 +1569,50 @@ __attribute__((noinline)) float payload(float3 pos, int startIndex, int endIndex
         {
             // Find associated primitive indices, beam, and ball primitives
             int primitiveIndicesIndex = -1;
+            int voxelGridIndex = -1;
             int beamIndex = -1;
             int ballIndex = -1;
             
-            // Look for primitive indices (usually next after beam lattice)
-            if (i + 1 < endIndex && primitives[i + 1].primitiveType == SDF_PRIMITIVE_INDICES) {
-                primitiveIndicesIndex = i + 1;
+            // Look for voxel grid acceleration first
+            if (i + 1 < endIndex && primitives[i + 1].primitiveType == SDF_BEAM_LATTICE_VOXEL_INDEX) {
+                voxelGridIndex = i + 1;
+            }
+            
+            // Look for primitive indices (usually next after beam lattice or voxel grid)
+            int nextIndex = (voxelGridIndex >= 0) ? voxelGridIndex + 1 : i + 1;
+            if (nextIndex < endIndex && primitives[nextIndex].primitiveType == SDF_PRIMITIVE_INDICES) {
+                primitiveIndicesIndex = nextIndex;
             }
             
             // Look for beam primitive (usually after primitive indices)
-            if (i + 2 < endIndex && primitives[i + 2].primitiveType == SDF_BEAM) {
-                beamIndex = i + 2;
+            nextIndex = (primitiveIndicesIndex >= 0) ? primitiveIndicesIndex + 1 : nextIndex + 1;
+            if (nextIndex < endIndex && primitives[nextIndex].primitiveType == SDF_BEAM) {
+                beamIndex = nextIndex;
             }
             
             // Look for ball primitive (usually after beam)
-            if (i + 3 < endIndex && primitives[i + 3].primitiveType == SDF_BALL) {
-                ballIndex = i + 3;
+            nextIndex = beamIndex + 1;
+            if (nextIndex < endIndex && primitives[nextIndex].primitiveType == SDF_BALL) {
+                ballIndex = nextIndex;
             }
             
-            // Only evaluate if we have primitive indices mapping
-            if (primitiveIndicesIndex >= 0) {
-                // Evaluate beam lattice distance using clean BVH traversal
-                float dist = evaluateBeamLatticeBVH(pos, i, primitiveIndicesIndex, beamIndex, ballIndex, PASS_PAYLOAD_ARGS);
+            float dist = FLT_MAX;
+            
+            // Choose evaluation method based on available acceleration structures
+            if (voxelGridIndex >= 0 && beamIndex >= 0) {
+                // Use voxel acceleration if available
+                dist = evaluateBeamLatticeVoxel(pos, i, voxelGridIndex, beamIndex, ballIndex, PASS_PAYLOAD_ARGS);
+            } else if (primitiveIndicesIndex >= 0) {
+                // Fall back to BVH traversal
+                dist = evaluateBeamLatticeBVH(pos, i, primitiveIndicesIndex, beamIndex, ballIndex, PASS_PAYLOAD_ARGS);
+            }
+            
+            if (dist != FLT_MAX) {
                 sdf = uniteSmooth(sdf, dist, 0.0f);
             }
             
             // Skip processed primitives to avoid double processing
+            if (voxelGridIndex >= 0) i = voxelGridIndex;
             if (primitiveIndicesIndex >= 0) i = primitiveIndicesIndex;
             if (beamIndex >= 0) i = beamIndex;
             if (ballIndex >= 0) i = ballIndex;

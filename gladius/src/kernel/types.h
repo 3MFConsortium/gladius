@@ -28,10 +28,13 @@ enum PrimitiveType
     SDF_VDB_FACE_INDICES,
     SDF_VDB_GRAYSCALE_8BIT,
     SDF_IMAGESTACK,
-    SDF_BEAM_LATTICE,      // Beam lattice root node
+    SDF_BEAM_LATTICE,      // Beam lattice root node (BVH acceleration)
     SDF_BEAM,              // Individual beam primitive
     SDF_BALL,              // Ball at beam vertex
     SDF_BEAM_BVH_NODE,     // BVH internal node for beams
+    SDF_PRIMITIVE_INDICES, // Primitive indices mapping for BVH traversal
+    SDF_BEAM_LATTICE_VOXEL_INDEX, // Voxel grid with primitive indices
+    SDF_BEAM_LATTICE_VOXEL_TYPE,  // Voxel grid with primitive types (optional)
 };
 
 
