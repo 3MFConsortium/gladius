@@ -39,7 +39,6 @@ int main(int argc, char ** argv)
     bool mcpStdio = false;
     int mcpPort = 8080;
     bool headless = false;
-    bool runBeamBVHTests = false;
     std::optional<std::filesystem::path> filename;
 
     // Graceful termination flag for headless MCP mode
@@ -85,10 +84,6 @@ int main(int argc, char ** argv)
         {
             headless = true;
         }
-        else if (arg == "--test-beam-bvh")
-        {
-            runBeamBVHTests = true;
-        }
         else if (arg == "--help")
         {
             printUsage();
@@ -111,23 +106,6 @@ int main(int argc, char ** argv)
 
     // Create application based on arguments
     gladius::Application app(headless);
-
-    // Run beam BVH tests if requested
-    if (runBeamBVHTests)
-    {
-        std::cout << "Running Beam BVH Tests...\n" << std::endl;
-        try
-        {
-            gladius::test::runAllTests();
-            std::cout << "\nAll Beam BVH tests completed successfully!" << std::endl;
-            return 0;
-        }
-        catch (const std::exception & e)
-        {
-            std::cerr << "Beam BVH tests failed: " << e.what() << std::endl;
-            return 1;
-        }
-    }
 
     // Enable MCP server if requested (before starting main loop)
     if (enableMCP)
