@@ -1,18 +1,21 @@
 #include "BeamLatticeResource.h"
-#include "EventLogger.h"
+#include "BeamLatticeVoxelAcceleration.h"
 #include "Primitives.h"
 
 #include <algorithm>
+#include <iostream>
 #include <stdexcept>
 
 namespace gladius
 {
     BeamLatticeResource::BeamLatticeResource(ResourceKey key,
                                              std::vector<BeamData> && beams,
-                                             std::vector<BallData> && balls)
+                                             std::vector<BallData> && balls,
+                                             bool useVoxelAcceleration)
         : ResourceBase(std::move(key))
         , m_beams(std::move(beams))
         , m_balls(std::move(balls))
+        , m_useVoxelAcceleration(useVoxelAcceleration)
     {
         // Validate input data
         if (m_beams.empty() && m_balls.empty())
@@ -21,9 +24,9 @@ namespace gladius
               "BeamLatticeResource: Cannot create resource with no beams or balls");
         }
 
-        // Set reasonable BVH build parameters
-        m_bvhParams.maxDepth = 20;
-        m_bvhParams.maxPrimitivesPerLeaf = 4;
+        // Set optimized BVH build parameters for large lattices
+        m_bvhParams.maxDepth = 16;
+        m_bvhParams.maxPrimitivesPerLeaf = 8;
         m_bvhParams.traversalCost = 1.0f;
         m_bvhParams.intersectionCost = 2.0f;
     }
@@ -35,6 +38,24 @@ namespace gladius
         m_payloadData.data.clear();
         m_bvhNodes.clear();
 
+        // Build acceleration structure based on configuration
+        buildAccelerationStructure();
+    }
+
+    void BeamLatticeResource::buildAccelerationStructure()
+    {
+        if (m_useVoxelAcceleration)
+        {
+            buildVoxelAcceleration();
+        }
+        else
+        {
+            buildBVH();
+        }
+    }
+
+    void BeamLatticeResource::buildBVH()
+    {
         // Build BVH hierarchy from beam and ball data
         BeamBVHBuilder builder;
         m_bvhNodes = builder.build(m_beams, m_balls, m_bvhParams);
@@ -50,6 +71,105 @@ namespace gladius
         writeBeamPrimitivesToPayload();
 
         // Write ball primitives to payload data
+        writeBallPrimitivesToPayload();
+    }
+
+    void BeamLatticeResource::buildVoxelAcceleration()
+    {
+        // Build voxel grids from beam/ball data
+        BeamLatticeVoxelSettings settings;
+        settings.voxelSize = 1.0f; // TODO: expose as parameter
+        settings.maxDistance = 10.0f;
+        settings.separateBeamBallGrids = false;
+        settings.encodeTypeInIndex = true; // encode type in upper bit
+        settings.enableDebugOutput = false;
+
+        BeamLatticeVoxelBuilder builder;
+        auto [primitiveIndexGrid, primitiveTypeGrid] =
+          builder.buildVoxelGrids(m_beams, m_balls, settings);
+
+        if (!primitiveIndexGrid)
+        {
+            // Fallback to BVH if voxel build failed
+            std::cout << "BeamLatticeResource: Voxel grid build returned null, falling back to BVH."
+                      << std::endl;
+            buildBVH();
+            return;
+        }
+
+        // Write a Beam Lattice meta so kernel knows to look for voxel grid next
+        PrimitiveMeta latticeMeta = {};
+        latticeMeta.primitiveType = SDF_BEAM_LATTICE;
+        latticeMeta.start = static_cast<int>(m_payloadData.data.size());
+        latticeMeta.end = latticeMeta.start; // no direct data for the lattice node
+        latticeMeta.scaling = 1.0f;
+        m_payloadData.meta.push_back(latticeMeta);
+
+        // Serialize voxel grid header and data as simple flat buffer expected by kernel
+        // Header layout: origin (3), dimensions (3), voxel size (1), padding (2) => we use 9 floats
+        // total
+        auto const & bbox = primitiveIndexGrid->evalActiveVoxelBoundingBox();
+        auto const & transform = primitiveIndexGrid->transform();
+        openvdb::Vec3d originIndex(bbox.min().x(), bbox.min().y(), bbox.min().z());
+        openvdb::Vec3d originWorld = transform.indexToWorld(originIndex);
+        openvdb::Coord dim = bbox.dim();
+
+        PrimitiveMeta voxelMeta = {};
+        voxelMeta.primitiveType = SDF_BEAM_LATTICE_VOXEL_INDEX;
+        voxelMeta.start = static_cast<int>(m_payloadData.data.size());
+
+        // origin (world)
+        m_payloadData.data.push_back(static_cast<float>(originWorld.x()));
+        m_payloadData.data.push_back(static_cast<float>(originWorld.y()));
+        m_payloadData.data.push_back(static_cast<float>(originWorld.z()));
+        // dimensions
+        m_payloadData.data.push_back(static_cast<float>(dim.x()));
+        m_payloadData.data.push_back(static_cast<float>(dim.y()));
+        m_payloadData.data.push_back(static_cast<float>(dim.z()));
+        // voxel size
+        float const voxelSize = static_cast<float>(transform.voxelSize()[0]);
+        m_payloadData.data.push_back(voxelSize);
+        // two padding values to reach 9 floats like kernel expects
+        m_payloadData.data.push_back(0.0f);
+        m_payloadData.data.push_back(0.0f);
+
+        // Flat voxel data in z-major order used by kernel: z * Y * X + y * X + x
+        auto accessor = primitiveIndexGrid->getAccessor();
+        for (int z = bbox.min().z(); z <= bbox.max().z(); ++z)
+        {
+            for (int y = bbox.min().y(); y <= bbox.max().y(); ++y)
+            {
+                for (int x = bbox.min().x(); x <= bbox.max().x(); ++x)
+                {
+                    openvdb::Coord c(x, y, z);
+                    int v = accessor.getValue(c);
+                    m_payloadData.data.push_back(static_cast<float>(v));
+                }
+            }
+        }
+
+        voxelMeta.end = static_cast<int>(m_payloadData.data.size());
+        voxelMeta.scaling = 1.0f;
+        m_payloadData.meta.push_back(voxelMeta);
+
+        // Primitive indices mapping is still needed for evaluation details (BVH path fallbacks)
+        // We create the same ordering as BVH builder would: beams first then balls
+        std::vector<BeamPrimitive> ordering;
+        ordering.reserve(m_beams.size() + m_balls.size());
+        for (size_t i = 0; i < m_beams.size(); ++i)
+        {
+            ordering.emplace_back(
+              BeamPrimitive::BEAM, static_cast<int>(i), calculateBeamBounds(m_beams[i]));
+        }
+        for (size_t i = 0; i < m_balls.size(); ++i)
+        {
+            ordering.emplace_back(
+              BeamPrimitive::BALL, static_cast<int>(i), calculateBallBounds(m_balls[i]));
+        }
+        writePrimitiveIndicesToPayload(ordering);
+
+        // Write beam and ball raw data blocks for distance evaluation
+        writeBeamPrimitivesToPayload();
         writeBallPrimitivesToPayload();
     }
 
@@ -209,9 +329,8 @@ namespace gladius
             m_payloadData.data.push_back(ball.position.y);
             m_payloadData.data.push_back(ball.position.z);
 
-            // Write ball radius and material (2 floats)
+            // Write ball radius (1 float)
             m_payloadData.data.push_back(ball.radius);
-            m_payloadData.data.push_back(static_cast<float>(ball.materialId));
         }
 
         meta.end = static_cast<int>(m_payloadData.data.size());
@@ -244,10 +363,8 @@ namespace gladius
 
     BoundingBox BeamLatticeResource::calculateBeamBounds(const BeamData & beam)
     {
-        // Calculate tight bounding box for conical beam
-        const float maxRadius = std::max(beam.startRadius, beam.endRadius);
-
         BoundingBox bounds;
+        float maxRadius = std::max(beam.startRadius, beam.endRadius);
         bounds.min.x = std::min(beam.startPos.x, beam.endPos.x) - maxRadius;
         bounds.min.y = std::min(beam.startPos.y, beam.endPos.y) - maxRadius;
         bounds.min.z = std::min(beam.startPos.z, beam.endPos.z) - maxRadius;

@@ -917,6 +917,19 @@ namespace gladius
         {
             logger->clear();
         }
+
+        // Check if file exists before attempting to load
+        if (!std::filesystem::exists(filename))
+        {
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("File not found: {}", filename.string()), events::Severity::Error});
+            }
+            newModel(); // Create empty model if file doesn't exist
+            return;
+        }
+
         resetGeneratorContext();
         m_core->reset();
         m_core->getResourceContext()->clearImageStacks();

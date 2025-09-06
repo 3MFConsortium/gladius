@@ -9,7 +9,7 @@
 
 namespace gladius
 {
-    /// @brief Resource class for managing beam lattice data and BVH structures
+    /// @brief Resource class for managing beam lattice data and acceleration structures
     /// @details Extends ResourceBase to handle beam lattice loading, BVH construction,
     /// and GPU data transfer following the established resource management pattern
     class BeamLatticeResource : public ResourceBase
@@ -19,9 +19,11 @@ namespace gladius
         /// @param key Resource key for identification and metadata
         /// @param beams Vector of beam primitive data (moved for efficiency)
         /// @param balls Vector of ball primitive data (moved for efficiency)
+        /// @param useVoxelAcceleration Whether to use voxel or BVH acceleration
         BeamLatticeResource(ResourceKey key,
                             std::vector<BeamData> && beams,
-                            std::vector<BallData> && balls);
+                            std::vector<BallData> && balls,
+                            bool useVoxelAcceleration = true);
 
         /// @brief Get read-only access to beam data
         /// @return Const reference to beam vector
@@ -65,6 +67,20 @@ namespace gladius
             return !m_balls.empty();
         }
 
+        /// @brief Enable or disable voxel acceleration
+        /// @param enable Whether to use voxel acceleration instead of BVH
+        void setUseVoxelAcceleration(bool enable)
+        {
+            m_useVoxelAcceleration = enable;
+        }
+
+        /// @brief Check if voxel acceleration is enabled
+        /// @return True if using voxel acceleration, false if using BVH
+        bool isUsingVoxelAcceleration() const
+        {
+            return m_useVoxelAcceleration;
+        }
+
         /// @brief Write beam lattice data to primitives collection
         /// @details Implements the ResourceBase::write interface to add BVH hierarchy
         /// and primitive data to the global primitives collection for GPU consumption.
@@ -81,10 +97,19 @@ namespace gladius
         BoundingBox calculateBallBounds(const BallData & ball);
 
       private:
-        /// @brief Implementation of resource loading (BVH construction)
+        /// @brief Implementation of resource loading (acceleration structure construction)
         /// @details Called by ResourceBase::load() when resource needs initialization.
         /// Constructs BVH from beam/ball data and prepares GPU payload.
         void loadImpl() override;
+
+        /// @brief Build acceleration structure based on configuration
+        void buildAccelerationStructure();
+
+        /// @brief Build BVH acceleration structure
+        void buildBVH();
+
+        /// @brief Build voxel acceleration structure
+        void buildVoxelAcceleration();
 
         /// @brief Write BVH nodes to payload as primitive metadata
         void writeBVHNodesToPayload();
@@ -102,15 +127,16 @@ namespace gladius
         std::vector<BeamData> m_beams; ///< Beam primitive data
         std::vector<BallData> m_balls; ///< Ball primitive data (optional)
 
-        // BVH hierarchy data
+        // BVH acceleration data
         std::vector<BeamBVHNode> m_bvhNodes;     ///< BVH hierarchy for efficient traversal
         BeamBVHBuilder::BuildStats m_buildStats; ///< Statistics from BVH construction
+        BeamBVHBuilder::BuildParams m_bvhParams; ///< BVH builder parameters for construction
+
+        // Acceleration method selection
+        bool m_useVoxelAcceleration = true; ///< Whether to use voxel acceleration instead of BVH
 
         // GPU data management
         PrimitiveBuffer m_payloadData; ///< Prepared data for GPU transfer
-
-        /// @brief BVH builder parameters for construction
-        BeamBVHBuilder::BuildParams m_bvhParams;
     };
 
     /// @brief Type alias for shared beam lattice resource
