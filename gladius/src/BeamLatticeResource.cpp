@@ -91,8 +91,6 @@ namespace gladius
         if (!primitiveIndexGrid)
         {
             // Fallback to BVH if voxel build failed
-            std::cout << "BeamLatticeResource: Voxel grid build returned null, falling back to BVH."
-                      << std::endl;
             buildBVH();
             return;
         }

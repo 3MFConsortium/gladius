@@ -1034,16 +1034,11 @@ namespace gladius::io
             if (object->IsMeshObject())
             {
                 auto const meshObj = model->GetMeshObjectByID(object->GetUniqueResourceID());
-                std::cout << "DEBUG: Processing mesh object - UniqueResourceID="
-                          << object->GetUniqueResourceID()
-                          << ", ModelResourceID=" << meshObj->GetModelResourceID() << ", Name='"
-                          << meshObj->GetName() << "'" << std::endl;
                 loadMeshIfNecessary(model, meshObj, doc);
             }
             else
             {
-                std::cout << "DEBUG: Skipping non-mesh object - UniqueResourceID="
-                          << object->GetUniqueResourceID() << std::endl;
+                // Skip non-mesh objects
             }
         }
     }
@@ -1081,22 +1076,14 @@ namespace gladius::io
           ResourceKey(static_cast<uint32_t>(meshObject->GetModelResourceID()), ResourceType::Mesh);
         key.setDisplayName(meshObject->GetName());
 
-        std::cout << "DEBUG: Loading mesh - ResourceID=" << meshObject->GetModelResourceID()
-                  << ", Name='" << meshObject->GetName() << "'"
-                  << ", ResourceKey="
-                  << (key.getResourceId() ? std::to_string(key.getResourceId().value()) : "none")
-                  << ", Type=Mesh" << std::endl;
-
         if (doc.getGeneratorContext().resourceManager.hasResource(key))
         {
-            std::cout << "DEBUG: Mesh resource already exists, skipping" << std::endl;
             return;
         }
 
         vdb::TriangleMesh mesh;
 
         auto const numFaces = meshObject->GetTriangleCount();
-        std::cout << "DEBUG: Mesh has " << numFaces << " triangles" << std::endl;
 
         for (auto faceIndex = 0u; faceIndex < numFaces; ++faceIndex)
         {
@@ -1109,14 +1096,10 @@ namespace gladius::io
 
         if (mesh.indices.size() == 0u)
         {
-            std::cout << "DEBUG: Mesh has no indices, but checking for beam lattice anyway"
-                      << std::endl;
             // Still check for beam lattice even if mesh has no triangles
             loadBeamLatticeIfNecessary(model, meshObject, doc);
             return;
         }
-        std::cout << "DEBUG: Adding mesh resource with " << mesh.indices.size() << " indices"
-                  << std::endl;
         doc.getGeneratorContext().resourceManager.addResource(key, std::move(mesh));
 
         // Also load beam lattice if present
@@ -1132,37 +1115,20 @@ namespace gladius::io
         try
         {
             // Check if mesh object has a beam lattice by trying to get it
-            std::cout << "DEBUG: Checking beam lattice for mesh '" << meshObject->GetName() << "'"
-                      << std::endl;
-
             Lib3MF::PBeamLattice beamLattice = meshObject->BeamLattice();
             if (!beamLattice)
             {
-                std::cout << "DEBUG: No beam lattice found in mesh object '"
-                          << meshObject->GetName() << "'" << std::endl;
                 return; // No beam lattice in this mesh object
             }
-
-            std::cout << "DEBUG: Found beam lattice in mesh '" << meshObject->GetName() << "'"
-                      << std::endl;
 
             // Create resource key for beam lattice (use same resource ID but different type)
             auto key = ResourceKey(static_cast<uint32_t>(meshObject->GetModelResourceID()),
                                    ResourceType::BeamLattice);
             key.setDisplayName(meshObject->GetName() + "_BeamLattice");
 
-            std::cout << "DEBUG: Loading beam lattice - ResourceID="
-                      << meshObject->GetModelResourceID() << ", Name='"
-                      << meshObject->GetName() + "_BeamLattice" << "'"
-                      << ", ResourceKey="
-                      << (key.getResourceId() ? std::to_string(key.getResourceId().value())
-                                              : "none")
-                      << ", Type=BeamLattice" << std::endl;
-
             // Check if beam lattice resource already exists
             if (doc.getGeneratorContext().resourceManager.hasResource(key))
             {
-                std::cout << "DEBUG: Beam lattice resource already exists, skipping" << std::endl;
                 return;
             }
 
@@ -1170,16 +1136,11 @@ namespace gladius::io
             std::vector<BeamData> beams;
             Lib3MF_uint32 beamCount = beamLattice->GetBeamCount();
 
-            std::cout << "DEBUG: Beam lattice has " << beamCount << " beams" << std::endl;
-
             // Use bulk API to get all beams efficiently
             if (beamCount > 0)
             {
                 std::vector<Lib3MF::sBeam> lib3mfBeams;
                 beamLattice->GetBeams(lib3mfBeams);
-
-                std::cout << "DEBUG: Successfully retrieved " << lib3mfBeams.size()
-                          << " beams from lib3mf" << std::endl;
 
                 for (const auto & beamInfo : lib3mfBeams)
                 {
@@ -1215,8 +1176,6 @@ namespace gladius::io
             std::vector<BallData> balls;
             Lib3MF_uint32 ballCount = beamLattice->GetBallCount();
 
-            std::cout << "DEBUG: Beam lattice has " << ballCount << " balls" << std::endl;
-
             // Use bulk API to get all balls efficiently
             if (ballCount > 0)
             {
@@ -1244,18 +1203,14 @@ namespace gladius::io
             // Create and add beam lattice resource when either beams or balls exist
             if (beams.size() > 0 || balls.size() > 0)
             {
-                std::cout << "DEBUG: Creating beam lattice resource with " << beams.size()
-                          << " beams and " << balls.size() << " balls" << std::endl;
                 auto beamLatticeResource =
                   std::make_unique<BeamLatticeResource>(key, std::move(beams), std::move(balls));
                 doc.getGeneratorContext().resourceManager.addResource(
                   key, std::move(beamLatticeResource));
-                std::cout << "DEBUG: Beam lattice resource added successfully" << std::endl;
             }
             else
             {
-                std::cout << "DEBUG: Not creating beam lattice resource - beams: " << beams.size()
-                          << ", balls: " << balls.size() << std::endl;
+                // No beams or balls to create resource for
             }
         }
         catch (const std::exception & e)
@@ -1269,8 +1224,6 @@ namespace gladius::io
                                e.what()),
                    gladius::events::Severity::Error});
             }
-            std::cout << "DEBUG: Exception in loadBeamLatticeIfNecessary: " << e.what()
-                      << std::endl;
         }
     }
 

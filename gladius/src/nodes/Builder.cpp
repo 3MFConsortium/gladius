@@ -40,9 +40,6 @@ namespace gladius::nodes
         uniteNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
 
         shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
-
-        std::cout << "DEBUG: Connected SignedDistanceToBeamLattice via Min node to shape sink"
-                  << std::endl;
     }
 
     void Builder::addResourceRef(Model & target,

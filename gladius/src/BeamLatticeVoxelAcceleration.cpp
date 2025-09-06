@@ -25,7 +25,6 @@ namespace gladius
 
         if (beams.empty() && balls.empty())
         {
-            std::cout << "BeamLatticeVoxelBuilder: No primitives to voxelize" << std::endl;
             return {nullptr, nullptr};
         }
 
@@ -37,12 +36,6 @@ namespace gladius
 
         // Calculate bounding box for all primitives
         openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "BeamLatticeVoxelBuilder: Bounding box min=" << bbox.min().x() << ","
-                      << bbox.min().y() << "," << bbox.min().z() << " max=" << bbox.max().x() << ","
-                      << bbox.max().y() << "," << bbox.max().z() << std::endl;
-        }
 
         // Create primitive index grid with background 0 (means no primitive)
         auto primitiveIndexGrid = openvdb::Int32Grid::create(0);
@@ -77,8 +70,6 @@ namespace gladius
             openvdb::Coord gridSize = maxCoord - minCoord;
             m_lastStats.totalVoxels =
               static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
-            std::cout << "BeamLatticeVoxelBuilder: Processing " << m_lastStats.totalVoxels
-                      << " voxels" << std::endl;
         }
 
         // Process each voxel in the bounding box (triple loop; can be optimized later)
@@ -137,12 +128,6 @@ namespace gladius
                     processedVoxels++;
                 }
             }
-
-            if (settings.enableDebugOutput && processedVoxels % 100000 == 0)
-            {
-                std::cout << "BeamLatticeVoxelBuilder: Processed " << processedVoxels << " voxels"
-                          << std::endl;
-            }
         }
 
         if (m_lastStats.activeVoxels > 0)
@@ -166,15 +151,6 @@ namespace gladius
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
         m_lastStats.buildTimeSeconds = duration.count() / 1000.0f;
-
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "BeamLatticeVoxelBuilder: Built grid with " << m_lastStats.activeVoxels
-                      << " active voxels in " << m_lastStats.buildTimeSeconds << " seconds"
-                      << std::endl;
-            std::cout << "BeamLatticeVoxelBuilder: Memory usage: "
-                      << (m_lastStats.memoryUsageBytes / (1024 * 1024)) << " MB" << std::endl;
-        }
 
         return {primitiveIndexGrid, primitiveTypeGrid};
     }
