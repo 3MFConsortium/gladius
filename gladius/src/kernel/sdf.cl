@@ -1030,6 +1030,7 @@ float ballDistance(float3 pos, __global const struct BallData* ball)
 float evaluateBeamLatticeFlat(
     float3 pos,
     int latticeIndex,
+    int primitiveIndicesIndex,
     int beamIndex, 
     int ballIndex,
     PAYLOAD_ARGS)
@@ -1044,27 +1045,19 @@ float evaluateBeamLatticeFlat(
         return FLT_MAX; // No BVH data
     }
     
-    // Get beam and ball counts from the respective primitives
-    int numBeams = 0;
-    int numBalls = 0;
-    
-    if (beamIndex >= 0 && beamIndex < primitivesSize) {
-        struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
-        if (beamPrimitive.primitiveType == SDF_BEAM) {
-            numBeams = (beamPrimitive.end - beamPrimitive.start) / 11; // 11 floats per beam
-        }
+    // Get primitive indices mapping
+    struct PrimitiveMeta primitiveIndicesMeta = primitives[primitiveIndicesIndex];
+    if (primitiveIndicesMeta.primitiveType != SDF_PRIMITIVE_INDICES) {
+        return FLT_MAX; // Invalid primitive indices
     }
     
-    if (ballIndex >= 0 && ballIndex < primitivesSize) {
-        struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
-        if (ballPrimitive.primitiveType == SDF_BALL) {
-            numBalls = (ballPrimitive.end - ballPrimitive.start) / 5; // 5 floats per ball
-        }
-    }
+    // Get beam and ball primitive metadata
+    struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
+    struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
     
     float minDist = FLT_MAX;
     
-    // Simple BVH traversal using flat data
+    // BVH traversal using flat data with proper primitive indices
     int stack[32];
     int stackPtr = 0;
     stack[stackPtr++] = 0; // Start with root node
@@ -1104,89 +1097,377 @@ float evaluateBeamLatticeFlat(
                 stack[stackPtr++] = leftChild;
             }
         } else {
-            // Leaf node - test primitives directly
-            // For simplicity, test all beams and balls (since primitive indices aren't easily accessible)
-            
-            // Test all beams
-            if (beamIndex >= 0 && numBeams > 0) {
-                struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
-                for (int beamIdx = 0; beamIdx < numBeams; beamIdx++) {
-                    int beamDataStart = beamPrimitive.start + beamIdx * 11;
-                    
-                    // Read beam data directly from flat array
-                    float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
-                    float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
-                    float startRadius = data[beamDataStart + 6];
-                    float endRadius = data[beamDataStart + 7];
-                    int startCapStyle = (int)data[beamDataStart + 8];
-                    int endCapStyle = (int)data[beamDataStart + 9];
-                    
-                    // Calculate beam distance inline to avoid struct pointer issues
-                    float3 axis = endPos - startPos;
-                    float length_val = length(axis);
-                    
-                    float dist;
-                    if (length_val < 1e-6f) {
-                        // Degenerate beam - treat as sphere
-                        float radius = max(startRadius, endRadius);
-                        dist = length(pos - startPos) - radius;
-                    } else {
-                        axis /= length_val;
+            // Leaf node - test only the primitives assigned to this node
+            for (int i = 0; i < primitiveCount; i++) {
+                int primitiveIndex = primitiveStart + i;
+                
+                // Read primitive index mapping (3 floats per entry: type, index, unused)
+                int primitiveIndicesDataStart = primitiveIndicesMeta.start + primitiveIndex * 3;
+                int primitiveType = (int)data[primitiveIndicesDataStart];     // 0 = BEAM, 1 = BALL
+                int primitiveDataIndex = (int)data[primitiveIndicesDataStart + 1]; // Index into beam/ball array
+                
+                float dist = FLT_MAX;
+                
+                if (primitiveType == 0) { // BEAM
+                    // Calculate beam distance
+                    if (beamIndex >= 0 && beamPrimitive.primitiveType == SDF_BEAM) {
+                        int beamDataStart = beamPrimitive.start + primitiveDataIndex * 11;
                         
-                        // Project point onto beam axis
-                        float3 toPoint = pos - startPos;
-                        float t_unclamped = dot(toPoint, axis);
-                        float t = clamp(t_unclamped, 0.0f, length_val);
+                        // Read beam data directly from flat array
+                        float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
+                        float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
+                        float startRadius = data[beamDataStart + 6];
+                        float endRadius = data[beamDataStart + 7];
+                        int startCapStyle = (int)data[beamDataStart + 8];
+                        int endCapStyle = (int)data[beamDataStart + 9];
                         
-                        // Interpolate radius at projection point
-                        float radius = mix(startRadius, endRadius, t / length_val);
+                        // Calculate beam distance inline
+                        float3 axis = endPos - startPos;
+                        float length_val = length(axis);
                         
-                        // Calculate distance to axis
-                        float3 projection = startPos + t * axis;
-                        float distToAxis = length(pos - projection);
-                        
-                        // Distance to cylindrical surface
-                        float surfaceDist = distToAxis - radius;
-                        
-                        // Handle caps based on cap style
-                        if (t_unclamped <= 0.0f) {
-                            // Near start cap
-                            if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
-                                dist = length(pos - startPos) - startRadius;
-                            } else { // butt
-                                dist = max(surfaceDist, -t_unclamped);
-                            }
-                        } else if (t_unclamped >= length_val) {
-                            // Near end cap
-                            float overrun = t_unclamped - length_val;
-                            if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
-                                dist = length(pos - endPos) - endRadius;
-                            } else { // butt
-                                dist = max(surfaceDist, overrun);
-                            }
+                        if (length_val < 1e-6f) {
+                            // Degenerate beam - treat as sphere
+                            float radius = max(startRadius, endRadius);
+                            dist = length(pos - startPos) - radius;
                         } else {
-                            dist = surfaceDist;
+                            axis /= length_val;
+                            
+                            // Project point onto beam axis
+                            float3 toPoint = pos - startPos;
+                            float t_unclamped = dot(toPoint, axis);
+                            float t = clamp(t_unclamped, 0.0f, length_val);
+                            
+                            // Interpolate radius at projection point
+                            float radius = mix(startRadius, endRadius, t / length_val);
+                            
+                            // Calculate distance to axis
+                            float3 projection = startPos + t * axis;
+                            float distToAxis = length(pos - projection);
+                            
+                            // Distance to cylindrical surface
+                            float surfaceDist = distToAxis - radius;
+                            
+                            // Handle caps based on cap style
+                            if (t_unclamped <= 0.0f) {
+                                // Near start cap
+                                if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - startPos) - startRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, -t_unclamped);
+                                }
+                            } else if (t_unclamped >= length_val) {
+                                // Near end cap
+                                float overrun = t_unclamped - length_val;
+                                if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - endPos) - endRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, overrun);
+                                }
+                            } else {
+                                dist = surfaceDist;
+                            }
                         }
                     }
-                    
-                    minDist = min(minDist, dist);
+                } else if (primitiveType == 1) { // BALL
+                    // Calculate ball distance
+                    if (ballIndex >= 0 && ballPrimitive.primitiveType == SDF_BALL) {
+                        int ballDataStart = ballPrimitive.start + primitiveDataIndex * 5;
+                        
+                        // Read ball data directly from flat array
+                        float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                        float radius = data[ballDataStart + 3];
+                        
+                        // Calculate ball distance inline
+                        dist = length(pos - ballPos) - radius;
+                    }
                 }
+                
+                minDist = min(minDist, dist);
+            }
+        }
+    }
+    
+    return minDist;
+}
+
+/// @brief Evaluate beam lattice distance using clean BVH traversal 
+/// @details Simplified and optimized BVH traversal implementation
+float evaluateBeamLatticeBVH(
+    float3 pos,
+    int latticeIndex,
+    int primitiveIndicesIndex, 
+    int beamIndex,
+    int ballIndex,
+    PAYLOAD_ARGS)
+{
+    struct PrimitiveMeta lattice = primitives[latticeIndex];
+    
+    // Compute number of BVH nodes from data size (10 floats per node)
+    int latticeDataSize = lattice.end - lattice.start;
+    int numBVHNodes = latticeDataSize / 10;
+    
+    if (numBVHNodes <= 0) {
+        return FLT_MAX; // No BVH data
+    }
+    
+    // Get primitive indices mapping and beam/ball data
+    struct PrimitiveMeta primitiveIndicesMeta = primitives[primitiveIndicesIndex];
+    struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
+    struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
+    
+    float minDist = FLT_MAX;
+    
+    // Check for malformed BVH structure (root node is leaf with 0 primitives)
+    int rootDataStart = lattice.start;
+    int rootLeftChild = (int)data[rootDataStart + 6];
+    int rootRightChild = (int)data[rootDataStart + 7];
+    int rootPrimitiveCount = (int)data[rootDataStart + 9];
+    
+    bool malformedBVH = (rootLeftChild == -1 && rootRightChild == -1 && rootPrimitiveCount == 0);
+    
+    if (malformedBVH) {
+        // WORKAROUND: Process all leaf nodes with primitives directly
+        for (int nodeIdx = 0; nodeIdx < numBVHNodes; ++nodeIdx) {
+            int nodeDataStart = lattice.start + nodeIdx * 10;
+            
+            // Node metadata
+            int leftChild = (int)data[nodeDataStart + 6];
+            int rightChild = (int)data[nodeDataStart + 7]; 
+            int primitiveStart = (int)data[nodeDataStart + 8];
+            int primitiveCount = (int)data[nodeDataStart + 9];
+            
+            // Only process leaf nodes with primitives
+            bool isLeaf = (leftChild == -1 && rightChild == -1);
+            if (!isLeaf || primitiveCount <= 0) {
+                continue;
             }
             
-            // Test all balls
-            if (ballIndex >= 0 && numBalls > 0) {
-                struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
-                for (int ballIdx = 0; ballIdx < numBalls; ballIdx++) {
-                    int ballDataStart = ballPrimitive.start + ballIdx * 5;
-                    
-                    // Read ball data directly from flat array
-                    float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
-                    float radius = data[ballDataStart + 3];
-                    
-                    // Calculate ball distance inline
-                    float dist = length(pos - ballPos) - radius;
-                    minDist = min(minDist, dist);
+            // Bounding box check
+            float3 bbMin = (float3)(data[nodeDataStart], data[nodeDataStart + 1], data[nodeDataStart + 2]);
+            float3 bbMax = (float3)(data[nodeDataStart + 3], data[nodeDataStart + 4], data[nodeDataStart + 5]);
+            float bbDist = bbBox(pos, bbMin, bbMax);
+            if (bbDist > minDist) {
+                continue; // Skip if already found closer primitive
+            }
+            
+            // Process primitives in this leaf node
+            for (int i = 0; i < primitiveCount; ++i) {
+                int primitiveDataIndex = primitiveIndicesMeta.start + (primitiveStart + i) * 3;
+                
+                if (primitiveDataIndex + 2 >= primitiveIndicesMeta.end) {
+                    break; // Safety check for bounds
                 }
+                
+                // Read primitive index entry (type, index, unused)
+                int primitiveType = (int)data[primitiveDataIndex];
+                int primitiveIndex = (int)data[primitiveDataIndex + 1];
+                
+                float dist = FLT_MAX;
+                
+                if (primitiveType == 0) { // BEAM primitive
+                    int beamDataStart = beamPrimitive.start + primitiveIndex * 11; // 11 floats per beam
+                    if (beamDataStart + 10 < beamPrimitive.end) {
+                        // Calculate beam distance directly from flat storage
+                        float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
+                        float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
+                        float startRadius = data[beamDataStart + 6];
+                        float endRadius = data[beamDataStart + 7];
+                        int startCapStyle = (int)data[beamDataStart + 8];
+                        int endCapStyle = (int)data[beamDataStart + 9];
+                        
+                        // Calculate beam distance inline
+                        float3 axis = endPos - startPos;
+                        float length_val = length(axis);
+                        
+                        if (length_val < 1e-6f) {
+                            // Degenerate beam - treat as sphere
+                            float radius = max(startRadius, endRadius);
+                            dist = length(pos - startPos) - radius;
+                        } else {
+                            axis /= length_val;
+                            
+                            // Project point onto beam axis
+                            float3 toPoint = pos - startPos;
+                            float t_unclamped = dot(toPoint, axis);
+                            float t = clamp(t_unclamped, 0.0f, length_val);
+                            
+                            // Interpolate radius at projection point
+                            float radius = mix(startRadius, endRadius, t / length_val);
+                            
+                            // Calculate distance to axis
+                            float3 projection = startPos + t * axis;
+                            float distToAxis = length(pos - projection);
+                            
+                            // Distance to cylindrical surface
+                            float surfaceDist = distToAxis - radius;
+                            
+                            // Handle caps based on cap style
+                            if (t_unclamped <= 0.0f) {
+                                // Near start cap
+                                if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - startPos) - startRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, -t_unclamped);
+                                }
+                            } else if (t_unclamped >= length_val) {
+                                // Near end cap
+                                float overrun = t_unclamped - length_val;
+                                if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - endPos) - endRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, overrun);
+                                }
+                            } else {
+                                dist = surfaceDist;
+                            }
+                        }
+                    }
+                } else if (primitiveType == 1) { // BALL primitive
+                    int ballDataStart = ballPrimitive.start + primitiveIndex * 6; // 6 floats per ball
+                    if (ballDataStart + 5 < ballPrimitive.end) {
+                        // Calculate ball distance directly from flat storage
+                        float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                        float radius = data[ballDataStart + 3];
+                        
+                        dist = length(pos - ballPos) - radius;
+                    }
+                }
+                
+                minDist = min(minDist, dist);
+            }
+        }
+        
+        return minDist;
+    }
+    
+    // Normal BVH traversal for well-formed trees
+    int stack[32];
+    int stackPtr = 0;
+    stack[stackPtr++] = 0; // Start with root node (index 0)
+    
+    while (stackPtr > 0 && stackPtr < 32) {
+        int nodeIndex = stack[--stackPtr];
+        
+        if (nodeIndex >= numBVHNodes || nodeIndex < 0) {
+            continue; // Skip invalid nodes
+        }
+        
+        // Read BVH node data (10 floats per node)
+        int nodeDataStart = lattice.start + nodeIndex * 10;
+        
+        // Bounding box (6 floats: min.xyz, max.xyz)
+        float3 bbMin = (float3)(data[nodeDataStart], data[nodeDataStart + 1], data[nodeDataStart + 2]);
+        float3 bbMax = (float3)(data[nodeDataStart + 3], data[nodeDataStart + 4], data[nodeDataStart + 5]);
+        
+        // Check if point is potentially close to bounding box  
+        float bbDist = bbBox(pos, bbMin, bbMax);
+        if (bbDist > minDist) {
+            continue; // Skip if already found closer primitive
+        }
+        
+        // Node metadata (4 floats: leftChild, rightChild, primitiveStart, primitiveCount)
+        int leftChild = (int)data[nodeDataStart + 6];
+        int rightChild = (int)data[nodeDataStart + 7]; 
+        int primitiveStart = (int)data[nodeDataStart + 8];
+        int primitiveCount = (int)data[nodeDataStart + 9];
+        
+        // Check if this is a leaf node (-1 means no child)
+        bool isLeaf = (leftChild == -1 && rightChild == -1);
+        
+        if (isLeaf) {
+            // Process primitives in this leaf node
+            for (int i = 0; i < primitiveCount; ++i) {
+                int primitiveDataIndex = primitiveIndicesMeta.start + (primitiveStart + i) * 3;
+                
+                if (primitiveDataIndex + 2 >= primitiveIndicesMeta.end) {
+                    break; // Safety check for bounds
+                }
+                
+                // Read primitive index entry (type, index, unused)
+                int primitiveType = (int)data[primitiveDataIndex];
+                int primitiveIndex = (int)data[primitiveDataIndex + 1];
+                
+                float dist = FLT_MAX;
+                
+                if (primitiveType == 0) { // BEAM primitive
+                    int beamDataStart = beamPrimitive.start + primitiveIndex * 11; // 11 floats per beam
+                    if (beamDataStart + 10 < beamPrimitive.end) {
+                        // Calculate beam distance directly from flat storage
+                        float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
+                        float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
+                        float startRadius = data[beamDataStart + 6];
+                        float endRadius = data[beamDataStart + 7];
+                        int startCapStyle = (int)data[beamDataStart + 8];
+                        int endCapStyle = (int)data[beamDataStart + 9];
+                        
+                        // Calculate beam distance inline
+                        float3 axis = endPos - startPos;
+                        float length_val = length(axis);
+                        
+                        if (length_val < 1e-6f) {
+                            // Degenerate beam - treat as sphere
+                            float radius = max(startRadius, endRadius);
+                            dist = length(pos - startPos) - radius;
+                        } else {
+                            axis /= length_val;
+                            
+                            // Project point onto beam axis
+                            float3 toPoint = pos - startPos;
+                            float t_unclamped = dot(toPoint, axis);
+                            float t = clamp(t_unclamped, 0.0f, length_val);
+                            
+                            // Interpolate radius at projection point
+                            float radius = mix(startRadius, endRadius, t / length_val);
+                            
+                            // Calculate distance to axis
+                            float3 projection = startPos + t * axis;
+                            float distToAxis = length(pos - projection);
+                            
+                            // Distance to cylindrical surface
+                            float surfaceDist = distToAxis - radius;
+                            
+                            // Handle caps based on cap style
+                            if (t_unclamped <= 0.0f) {
+                                // Near start cap
+                                if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - startPos) - startRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, -t_unclamped);
+                                }
+                            } else if (t_unclamped >= length_val) {
+                                // Near end cap
+                                float overrun = t_unclamped - length_val;
+                                if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
+                                    dist = length(pos - endPos) - endRadius;
+                                } else { // butt
+                                    dist = max(surfaceDist, overrun);
+                                }
+                            } else {
+                                dist = surfaceDist;
+                            }
+                        }
+                    }
+                } else if (primitiveType == 1) { // BALL primitive
+                    int ballDataStart = ballPrimitive.start + primitiveIndex * 6; // 6 floats per ball
+                    if (ballDataStart + 5 < ballPrimitive.end) {
+                        // Calculate ball distance directly from flat storage
+                        float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                        float radius = data[ballDataStart + 3];
+                        
+                        dist = length(pos - ballPos) - radius;
+                    }
+                }
+                
+                minDist = min(minDist, dist);
+            }
+        } else {
+            // Internal node - add children to stack for traversal
+            // Add right child first so left is processed first (depth-first)
+            if (rightChild >= 0 && rightChild < numBVHNodes && stackPtr < 31) {
+                stack[stackPtr++] = rightChild;
+            }
+            if (leftChild >= 0 && leftChild < numBVHNodes && stackPtr < 31) {
+                stack[stackPtr++] = leftChild;
             }
         }
     }
@@ -1257,27 +1538,35 @@ __attribute__((noinline)) float payload(float3 pos, int startIndex, int endIndex
 
         if (primitive.primitiveType == SDF_BEAM_LATTICE)
         {
-            // Find associated beam and ball primitives
+            // Find associated primitive indices, beam, and ball primitives
+            int primitiveIndicesIndex = -1;
             int beamIndex = -1;
             int ballIndex = -1;
             
-            // Look for beam primitive (usually next)
-            if (i + 1 < endIndex && primitives[i + 1].primitiveType == SDF_BEAM) {
-                beamIndex = i + 1;
+            // Look for primitive indices (usually next after beam lattice)
+            if (i + 1 < endIndex && primitives[i + 1].primitiveType == SDF_PRIMITIVE_INDICES) {
+                primitiveIndicesIndex = i + 1;
+            }
+            
+            // Look for beam primitive (usually after primitive indices)
+            if (i + 2 < endIndex && primitives[i + 2].primitiveType == SDF_BEAM) {
+                beamIndex = i + 2;
             }
             
             // Look for ball primitive (usually after beam)
-            if (i + 2 < endIndex && primitives[i + 2].primitiveType == SDF_BALL) {
-                ballIndex = i + 2;
-            } else if (beamIndex == -1 && i + 1 < endIndex && primitives[i + 1].primitiveType == SDF_BALL) {
-                ballIndex = i + 1; // Ball without beams
+            if (i + 3 < endIndex && primitives[i + 3].primitiveType == SDF_BALL) {
+                ballIndex = i + 3;
             }
             
-            // Evaluate beam lattice distance using flat data
-            float dist = evaluateBeamLatticeFlat(pos, i, beamIndex, ballIndex, PASS_PAYLOAD_ARGS);
-            sdf = uniteSmooth(sdf, dist, 0.0f);
+            // Only evaluate if we have primitive indices mapping
+            if (primitiveIndicesIndex >= 0) {
+                // Evaluate beam lattice distance using clean BVH traversal
+                float dist = evaluateBeamLatticeBVH(pos, i, primitiveIndicesIndex, beamIndex, ballIndex, PASS_PAYLOAD_ARGS);
+                sdf = uniteSmooth(sdf, dist, 0.0f);
+            }
             
-            // Skip processed beam/ball primitives to avoid double processing
+            // Skip processed primitives to avoid double processing
+            if (primitiveIndicesIndex >= 0) i = primitiveIndicesIndex;
             if (beamIndex >= 0) i = beamIndex;
             if (ballIndex >= 0) i = ballIndex;
         }
