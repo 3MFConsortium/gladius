@@ -97,6 +97,7 @@ namespace gladius
 
         // Document lifecycle operations
         bool createNewDocument() override;
+        bool createEmptyDocument(); // Creates empty document without template (for testing)
         bool openDocument(const std::string & path) override;
         bool saveDocument() override;
         bool saveDocumentAs(const std::string & path) override;

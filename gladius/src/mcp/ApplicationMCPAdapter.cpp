@@ -110,6 +110,11 @@ namespace gladius
         return m_documentLifecycleTool->createNewDocument();
     }
 
+    bool ApplicationMCPAdapter::createEmptyDocument()
+    {
+        return m_documentLifecycleTool->createEmptyDocument();
+    }
+
     bool ApplicationMCPAdapter::openDocument(const std::string & path)
     {
         return m_documentLifecycleTool->openDocument(path);
