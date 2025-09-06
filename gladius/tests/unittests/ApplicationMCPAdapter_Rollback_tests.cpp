@@ -16,8 +16,8 @@ namespace gladius::tests
             m_app = std::make_unique<Application>(true /*headless*/);
             m_adapter = std::make_unique<ApplicationMCPAdapter>(m_app.get());
 
-            // Ensure we have a fresh document
-            ASSERT_TRUE(m_adapter->createNewDocument());
+            // Ensure we have a fresh empty document (not from template)
+            ASSERT_TRUE(m_adapter->createEmptyDocument());
             ASSERT_TRUE(m_adapter->hasActiveDocument());
         }
     };

@@ -1,6 +1,11 @@
-#include "BeamBVH.h"
 #include "ResourceKey.h"
 #include <gtest/gtest.h>
+
+// Forward declaration to test type availability without including full header
+namespace gladius
+{
+    class BeamBVHBuilder;
+}
 
 using namespace gladius;
 
