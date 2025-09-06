@@ -510,40 +510,6 @@ namespace gladius::tests
         EXPECT_EQ(primitiveOrdering.size(), testData.beams.size() + testData.balls.size())
           << "Primitive ordering should contain all primitives";
 
-        // Debug BVH structure
-        std::cout << "\n=== BVH Structure Debug ===" << std::endl;
-        std::cout << "Total BVH nodes: " << bvhNodes.size() << std::endl;
-        std::cout << "Total primitives: " << primitiveOrdering.size() << std::endl;
-
-        for (size_t i = 0; i < bvhNodes.size(); ++i)
-        {
-            const BeamBVHNode & node = bvhNodes[i];
-            std::cout << "Node " << i << ": ";
-            if (node.leftChild == -1 && node.rightChild == -1)
-            {
-                std::cout << "LEAF - primitives [" << node.primitiveStart << ".."
-                          << (node.primitiveStart + node.primitiveCount - 1)
-                          << "] count=" << node.primitiveCount;
-            }
-            else
-            {
-                std::cout << "INTERNAL - left=" << node.leftChild << ", right=" << node.rightChild;
-            }
-            std::cout << ", bbox=(" << node.boundingBox.min.x << "," << node.boundingBox.min.y
-                      << "," << node.boundingBox.min.z << ") to (" << node.boundingBox.max.x << ","
-                      << node.boundingBox.max.y << "," << node.boundingBox.max.z << ")"
-                      << std::endl;
-        }
-
-        std::cout << "\n=== Primitive Ordering Debug ===" << std::endl;
-        for (size_t i = 0; i < primitiveOrdering.size(); ++i)
-        {
-            const BeamPrimitive & prim = primitiveOrdering[i];
-            std::cout << "Primitive " << i << ": "
-                      << (prim.type == BeamPrimitive::BEAM ? "BEAM" : "BALL")
-                      << " index=" << prim.index << std::endl;
-        }
-
         // Test all points
         for (size_t i = 0; i < testData.testPoints.size(); ++i)
         {
@@ -556,25 +522,6 @@ namespace gladius::tests
 
             float bvhResult = BeamLatticeCPU::evaluateBeamLatticeBVH(
               point, bvhNodes, primitiveOrdering, testData.beams, testData.balls, &debugBVH);
-
-            if (i == 0)
-            { // Only debug first point to avoid too much output
-                std::cout << "\n=== Point 0 Debug ===" << std::endl;
-                std::cout << "Point: (" << point.x << ", " << point.y << ", " << point.z << ")"
-                          << std::endl;
-                std::cout << "Flat result: " << flatResult << " (checked "
-                          << debugFlat.primitivesChecked << " primitives)" << std::endl;
-                std::cout << "BVH result: " << bvhResult << " (checked "
-                          << debugBVH.primitivesChecked << " primitives, visited "
-                          << debugBVH.nodesVisited << " nodes)" << std::endl;
-
-                std::cout << "BVH visited nodes: ";
-                for (int nodeId : debugBVH.visitedNodes)
-                {
-                    std::cout << nodeId << " ";
-                }
-                std::cout << std::endl;
-            }
 
             EXPECT_NEAR(flatResult, bvhResult, 1e-5f)
               << "Results should be identical for point " << i << " (" << point.x << ", " << point.y
@@ -611,28 +558,6 @@ namespace gladius::tests
           farPoint, bvhNodes, primitiveOrdering, testData.beams, testData.balls, &debugBVH);
 
         EXPECT_NEAR(flatResult, bvhResult, 1e-5f) << "Results should be identical";
-
-        // BVH should provide identical results even if not more efficient for small datasets
-        std::cout << "\n=== BVH Efficiency Test ===" << std::endl;
-        std::cout << "Test point: (" << farPoint.x << ", " << farPoint.y << ", " << farPoint.z
-                  << ")" << std::endl;
-        std::cout << "Flat evaluation: " << flatResult << " (checked "
-                  << debugFlat.primitivesChecked << " primitives)" << std::endl;
-        std::cout << "BVH evaluation: " << bvhResult << " (checked " << debugBVH.primitivesChecked
-                  << " primitives, visited " << debugBVH.nodesVisited << " nodes)" << std::endl;
-
-        // For small datasets, BVH may not be more efficient but should be correct
-        if (debugBVH.primitivesChecked < debugFlat.primitivesChecked)
-        {
-            float efficiency = (float) debugFlat.primitivesChecked / debugBVH.primitivesChecked;
-            std::cout << "Efficiency gain: " << efficiency << "x" << std::endl;
-        }
-        else
-        {
-            std::cout
-              << "No efficiency gain for this small test dataset (expected for 5 primitives)"
-              << std::endl;
-        }
     }
 
     /// @brief Test BVH with detailed debugging output
