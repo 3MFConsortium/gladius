@@ -1,12 +1,12 @@
 #include "ImporterVdb.h"
 
 #include "Builder.h"
-#include "nodes/Assembly.h"
-#include "nodes/Model.h"
 #include "Document.h"
 #include "Primitives.h"
 #include "ResourceContext.h"
 #include "io/VdbImporter.h"
+#include "nodes/Assembly.h"
+#include "nodes/Model.h"
 #include "vdb.h"
 
 #include <cstring>
@@ -14,9 +14,9 @@
 
 #include "Document.h"
 #include "Model.h"
-#include "nodes/nodesfwd.h"
 #include "Profiling.h"
 #include "exceptions.h"
+#include "nodes/nodesfwd.h"
 #include "types.h"
 namespace gladius::io
 {
@@ -37,19 +37,18 @@ namespace gladius::io
 
         vdb::VdbImporter vdbImporter;
         ResourceId const openVdbResourceId = 123;
-        auto openVdbResourceKey = ResourceKey{openVdbResourceId};
+        auto openVdbResourceKey = ResourceKey{openVdbResourceId, ResourceType::Vdb};
         openvdb::GridBase::Ptr grid = vdbImporter.load(filename);
-        
+
         auto voxelSize = grid->transform().voxelSize();
         auto dimensions = grid->evalActiveVoxelDim();
-        
+
         resMan.addResource(openVdbResourceKey, std::move(grid));
 
         auto & res = resMan.getResource(openVdbResourceKey);
 
         res.setInUse(true);
         res.load();
-        
 
         auto function = doc.getAssembly()->assemblyModel();
 
@@ -66,7 +65,6 @@ namespace gladius::io
           VariantParameter(static_cast<int>(TextureTileStyle::TTS_CLAMP));
         imageSamplerNode->parameter().at(FieldNames::TileStyleW) =
           VariantParameter(static_cast<int>(TextureTileStyle::TTS_CLAMP));
-
 
         float3 worldToIndexFactor = float3{1.0f / static_cast<float>(voxelSize.x()),
                                            1.0f / static_cast<float>(voxelSize.y()),
