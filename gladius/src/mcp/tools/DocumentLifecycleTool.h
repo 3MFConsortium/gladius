@@ -34,6 +34,9 @@ namespace gladius::mcp::tools
         /// @brief Create a new empty document
         bool createNewDocument();
 
+        /// @brief Create a new empty document without template (for testing)
+        bool createEmptyDocument();
+
         /// @brief Open a document from file path
         /// @param path Absolute path to the document file
         bool openDocument(const std::string & path);

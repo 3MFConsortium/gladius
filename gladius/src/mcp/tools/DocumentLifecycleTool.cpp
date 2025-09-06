@@ -55,6 +55,45 @@ namespace gladius::mcp::tools
         }
     }
 
+    bool DocumentLifecycleTool::createEmptyDocument()
+    {
+        if (!validateApplication())
+        {
+            return false;
+        }
+
+        try
+        {
+            if (m_application->isHeadlessMode())
+            {
+                // Ensure headless has a valid core/document if UI wasn't started
+                if (!m_application->getMainWindow().getCurrentDocument())
+                {
+                    m_application->getMainWindow().setupHeadless(m_application->getGlobalLogger());
+                }
+
+                // Create truly empty document without template
+                auto doc = m_application->getCurrentDocument();
+                if (!doc)
+                {
+                    return false;
+                }
+                doc->newEmptyModel();
+                m_application->getMainWindow().hideWelcomeScreen();
+                return true;
+            }
+
+            // UI mode: use the full UI flow for empty model
+            m_application->getMainWindow().newModel();
+            m_application->getMainWindow().hideWelcomeScreen();
+            return true;
+        }
+        catch (const std::exception &)
+        {
+            return false;
+        }
+    }
+
     bool DocumentLifecycleTool::openDocument(const std::string & path)
     {
         if (!validateApplication())
