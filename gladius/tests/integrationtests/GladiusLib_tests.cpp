@@ -189,6 +189,24 @@ namespace gladius_integration_tests
 
         // Check that there are no errors from loading
         auto const detailedErrorAccessor = gladius->GetDetailedErrorAccessor();
+
+        // Debug: Print all detailed errors
+        std::cout << "DEBUG: Number of detailed errors: " << detailedErrorAccessor->GetSize()
+                  << std::endl;
+        if (detailedErrorAccessor->GetSize() > 0)
+        {
+            detailedErrorAccessor->Begin(); // Go to first error
+            for (uint32_t i = 0; i < detailedErrorAccessor->GetSize(); ++i)
+            {
+                std::cout << "DEBUG: Error " << i << ": " << detailedErrorAccessor->GetTitle()
+                          << " - " << detailedErrorAccessor->GetDescription() << std::endl;
+                if (i < detailedErrorAccessor->GetSize() - 1)
+                {
+                    detailedErrorAccessor->Next(); // Move to next error
+                }
+            }
+        }
+
         EXPECT_EQ(detailedErrorAccessor->GetSize(), 0u);
 
         // Compute the bounding box

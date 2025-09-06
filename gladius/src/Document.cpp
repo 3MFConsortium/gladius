@@ -1045,7 +1045,7 @@ namespace gladius
 
         auto & resourceManager = getGeneratorContext().resourceManager;
 
-        ResourceKey key = ResourceKey(new3mfMesh->GetModelResourceID());
+        ResourceKey key = ResourceKey(new3mfMesh->GetModelResourceID(), ResourceType::Mesh);
         key.setDisplayName(name);
         resourceManager.addResource(key, std::move(mesh));
 
@@ -1196,10 +1196,10 @@ namespace gladius
                    events::Severity::Error});
             }
 
-            return ResourceKey{0};
+            return ResourceKey{0, ResourceType::Unknown};
         }
         auto & resourceManager = getGeneratorContext().resourceManager;
-        auto const key = ResourceKey{stack->GetModelResourceID()};
+        auto const key = ResourceKey{stack->GetModelResourceID(), ResourceType::ImageStack};
 
         io::ImageExtractor extractor;
 
@@ -1345,7 +1345,7 @@ namespace gladius
             {
                 // Get the model resource ID for this resource
                 Lib3MF_uint32 modelResourceId = resource->GetModelResourceID();
-                ResourceKey key{modelResourceId};
+                ResourceKey key{modelResourceId, ResourceType::Unknown};
 
                 // Check if this is actually a function (need to handle differently)
                 bool isFunction = false;
