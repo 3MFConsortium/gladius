@@ -89,6 +89,9 @@ namespace gladius
         /// @brief Write BVH nodes to payload as primitive metadata
         void writeBVHNodesToPayload();
 
+        /// @brief Write primitive indices mapping to payload data
+        void writePrimitiveIndicesToPayload(const std::vector<BeamPrimitive> & primitiveOrdering);
+
         /// @brief Write beam primitives to payload data
         void writeBeamPrimitivesToPayload();
 

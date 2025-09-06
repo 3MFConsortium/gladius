@@ -378,8 +378,12 @@ namespace gladius
         }
 
         // Build children
-        node.leftChild = buildRecursive(context, start, split, depth + 1, nodes, params);
-        node.rightChild = buildRecursive(context, split, end, depth + 1, nodes, params);
+        int leftChild = buildRecursive(context, start, split, depth + 1, nodes, params);
+        int rightChild = buildRecursive(context, split, end, depth + 1, nodes, params);
+
+        // Re-establish node reference after potential vector reallocation
+        nodes[nodeIndex].leftChild = leftChild;
+        nodes[nodeIndex].rightChild = rightChild;
 
         return nodeIndex;
     }
@@ -415,6 +419,7 @@ namespace gladius
         if (beams.empty() && balls.empty())
         {
             m_lastStats = BuildStats{};
+            m_lastPrimitiveOrdering.clear();
             return nodes;
         }
 
@@ -422,10 +427,34 @@ namespace gladius
         BuildContext context = createBuildContext(beams, balls);
 
         // Build BVH recursively
-        buildRecursive(context, 0, static_cast<int>(context.primitives.size()), 0, nodes, params);
+        int rootIndex =
+          buildRecursive(context, 0, static_cast<int>(context.primitives.size()), 0, nodes, params);
+
+        // Ensure root is at index 0 for OpenCL traversal
+        if (rootIndex != 0 && !nodes.empty())
+        {
+            std::swap(nodes[0], nodes[rootIndex]);
+
+            // Update references to swapped nodes
+            for (auto & node : nodes)
+            {
+                if (node.leftChild == 0)
+                    node.leftChild = rootIndex;
+                else if (node.leftChild == rootIndex)
+                    node.leftChild = 0;
+
+                if (node.rightChild == 0)
+                    node.rightChild = rootIndex;
+                else if (node.rightChild == rootIndex)
+                    node.rightChild = 0;
+            }
+        }
 
         // Update statistics
         updateStats(nodes);
+
+        // Store primitive ordering for later access
+        m_lastPrimitiveOrdering = context.primitives;
 
         return nodes;
     }

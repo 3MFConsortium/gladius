@@ -43,6 +43,9 @@ namespace gladius
         // Write BVH nodes to payload data
         writeBVHNodesToPayload();
 
+        // Write primitive indices mapping to payload data
+        writePrimitiveIndicesToPayload(builder.getPrimitiveOrdering());
+
         // Write beam primitives to payload data
         writeBeamPrimitivesToPayload();
 
@@ -93,6 +96,32 @@ namespace gladius
             m_payloadData.data.push_back(static_cast<float>(node.rightChild));
             m_payloadData.data.push_back(static_cast<float>(node.primitiveStart));
             m_payloadData.data.push_back(static_cast<float>(node.primitiveCount));
+        }
+
+        meta.end = static_cast<int>(m_payloadData.data.size());
+        m_payloadData.meta.push_back(meta);
+    }
+
+    void BeamLatticeResource::writePrimitiveIndicesToPayload(
+      const std::vector<BeamPrimitive> & primitiveOrdering)
+    {
+        if (primitiveOrdering.empty())
+        {
+            return;
+        }
+
+        PrimitiveMeta meta = {};
+        meta.primitiveType = SDF_PRIMITIVE_INDICES; // We'll need to define this type
+        meta.start = static_cast<int>(m_payloadData.data.size());
+
+        // Write primitive mapping data
+        // Each primitive entry has 3 floats: type (beam=0, ball=1), index, unused
+        for (const auto & primitive : primitiveOrdering)
+        {
+            m_payloadData.data.push_back(static_cast<float>(primitive.type)); // 0 = BEAM, 1 = BALL
+            m_payloadData.data.push_back(
+              static_cast<float>(primitive.index)); // Index into beam/ball array
+            m_payloadData.data.push_back(0.0f); // Unused - pad to align with other data structures
         }
 
         meta.end = static_cast<int>(m_payloadData.data.size());

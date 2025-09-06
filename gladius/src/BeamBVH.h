@@ -111,6 +111,12 @@ namespace gladius
             return m_lastStats;
         }
 
+        /// Get the primitive ordering after BVH construction
+        const std::vector<BeamPrimitive> & getPrimitiveOrdering() const
+        {
+            return m_lastPrimitiveOrdering;
+        }
+
       private:
         struct BuildContext
         {
@@ -120,6 +126,7 @@ namespace gladius
         };
 
         BuildStats m_lastStats;
+        std::vector<BeamPrimitive> m_lastPrimitiveOrdering;
 
         /// Initialize build context from input data
         BuildContext createBuildContext(const std::vector<BeamData> & beams,
