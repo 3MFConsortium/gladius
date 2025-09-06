@@ -4,22 +4,22 @@
 
 namespace gladius::nodes
 {
-    void Builder::addResourceRef(Model & target,
-                                 ResourceKey const & resourceKey,
-                                 nodes::Port & coordinateSystemPort)
+    void Builder::addBeamLatticeRef(Model & target,
+                                    ResourceKey const & resourceKey,
+                                    nodes::Port & coordinateSystemPort)
     {
         nodes::Resource resourceNodeType;
         auto resourceNode = target.create(resourceNodeType);
         resourceNode->parameter().at(FieldNames::ResourceId) =
           VariantParameter(resourceKey.getResourceId().value_or(0));
 
-        nodes::SignedDistanceToMesh importedGeometryType;
+        nodes::SignedDistanceToBeamLattice importedGeometryType;
         auto importNode = target.create(importedGeometryType);
 
         importNode->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
 
-        auto & meshInput = importNode->parameter().at(FieldNames::Mesh);
-        meshInput.setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+        auto & beamLatticeInput = importNode->parameter().at(FieldNames::BeamLattice);
+        beamLatticeInput.setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
 
         auto & resourceShapePort = importNode->getOutputs().at(FieldNames::Distance);
         auto lastShapePort = getLastShape(target);
@@ -40,24 +40,27 @@ namespace gladius::nodes
         uniteNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
 
         shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+
+        std::cout << "DEBUG: Connected SignedDistanceToBeamLattice via Min node to shape sink"
+                  << std::endl;
     }
 
-    void Builder::addBeamLatticeRef(Model & target,
-                                    ResourceKey const & resourceKey,
-                                    nodes::Port & coordinateSystemPort)
+    void Builder::addResourceRef(Model & target,
+                                 ResourceKey const & resourceKey,
+                                 nodes::Port & coordinateSystemPort)
     {
         nodes::Resource resourceNodeType;
         auto resourceNode = target.create(resourceNodeType);
         resourceNode->parameter().at(FieldNames::ResourceId) =
           VariantParameter(resourceKey.getResourceId().value_or(0));
 
-        nodes::SignedDistanceToBeamLattice importedGeometryType;
+        nodes::SignedDistanceToMesh importedGeometryType;
         auto importNode = target.create(importedGeometryType);
 
         importNode->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
 
-        auto & beamLatticeInput = importNode->parameter().at(FieldNames::BeamLattice);
-        beamLatticeInput.setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+        auto & meshInput = importNode->parameter().at(FieldNames::Mesh);
+        meshInput.setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
 
         auto & resourceShapePort = importNode->getOutputs().at(FieldNames::Distance);
         auto lastShapePort = getLastShape(target);

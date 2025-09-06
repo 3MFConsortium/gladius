@@ -152,7 +152,7 @@ namespace gladius::nodes
         {
             try
             {
-                auto & res = resMan.getResource(ResourceKey{*resId});
+                auto & res = resMan.getResource(ResourceKey{*resId, ResourceType::Mesh});
                 res.setInUse(true);
 
                 m_parameter[FieldNames::Start].setValue(res.getStartIndex());
@@ -243,7 +243,7 @@ namespace gladius::nodes
         {
             try
             {
-                auto & res = resMan.getResource(ResourceKey{*resId});
+                auto & res = resMan.getResource(ResourceKey{*resId, ResourceType::BeamLattice});
                 res.setInUse(true);
 
                 m_parameter[FieldNames::Start].setValue(res.getStartIndex());
@@ -332,7 +332,7 @@ namespace gladius::nodes
         {
             try
             {
-                auto & res = resMan.getResource(ResourceKey{*resId});
+                auto & res = resMan.getResource(ResourceKey{*resId, ResourceType::Mesh});
                 res.setInUse(true);
 
                 m_parameter[FieldNames::Start].setValue(res.getStartIndex());

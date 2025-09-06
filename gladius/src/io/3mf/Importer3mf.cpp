@@ -1034,7 +1034,16 @@ namespace gladius::io
             if (object->IsMeshObject())
             {
                 auto const meshObj = model->GetMeshObjectByID(object->GetUniqueResourceID());
+                std::cout << "DEBUG: Processing mesh object - UniqueResourceID="
+                          << object->GetUniqueResourceID()
+                          << ", ModelResourceID=" << meshObj->GetModelResourceID() << ", Name='"
+                          << meshObj->GetName() << "'" << std::endl;
                 loadMeshIfNecessary(model, meshObj, doc);
+            }
+            else
+            {
+                std::cout << "DEBUG: Skipping non-mesh object - UniqueResourceID="
+                          << object->GetUniqueResourceID() << std::endl;
             }
         }
     }
@@ -1068,16 +1077,26 @@ namespace gladius::io
                                           Lib3MF::PMeshObject meshObject,
                                           Document & doc)
     {
-        ProfileFunction auto key = ResourceKey(static_cast<int>(meshObject->GetModelResourceID()));
+        ProfileFunction auto key =
+          ResourceKey(static_cast<uint32_t>(meshObject->GetModelResourceID()), ResourceType::Mesh);
         key.setDisplayName(meshObject->GetName());
+
+        std::cout << "DEBUG: Loading mesh - ResourceID=" << meshObject->GetModelResourceID()
+                  << ", Name='" << meshObject->GetName() << "'"
+                  << ", ResourceKey="
+                  << (key.getResourceId() ? std::to_string(key.getResourceId().value()) : "none")
+                  << ", Type=Mesh" << std::endl;
+
         if (doc.getGeneratorContext().resourceManager.hasResource(key))
         {
+            std::cout << "DEBUG: Mesh resource already exists, skipping" << std::endl;
             return;
         }
 
         vdb::TriangleMesh mesh;
 
         auto const numFaces = meshObject->GetTriangleCount();
+        std::cout << "DEBUG: Mesh has " << numFaces << " triangles" << std::endl;
 
         for (auto faceIndex = 0u; faceIndex < numFaces; ++faceIndex)
         {
@@ -1090,8 +1109,14 @@ namespace gladius::io
 
         if (mesh.indices.size() == 0u)
         {
+            std::cout << "DEBUG: Mesh has no indices, but checking for beam lattice anyway"
+                      << std::endl;
+            // Still check for beam lattice even if mesh has no triangles
+            loadBeamLatticeIfNecessary(model, meshObject, doc);
             return;
         }
+        std::cout << "DEBUG: Adding mesh resource with " << mesh.indices.size() << " indices"
+                  << std::endl;
         doc.getGeneratorContext().resourceManager.addResource(key, std::move(mesh));
 
         // Also load beam lattice if present
@@ -1106,20 +1131,38 @@ namespace gladius::io
 
         try
         {
-            // Check if mesh object has a beam lattice
+            // Check if mesh object has a beam lattice by trying to get it
+            std::cout << "DEBUG: Checking beam lattice for mesh '" << meshObject->GetName() << "'"
+                      << std::endl;
+
             Lib3MF::PBeamLattice beamLattice = meshObject->BeamLattice();
             if (!beamLattice)
             {
+                std::cout << "DEBUG: No beam lattice found in mesh object '"
+                          << meshObject->GetName() << "'" << std::endl;
                 return; // No beam lattice in this mesh object
             }
 
-            // Create resource key for beam lattice (use same ID as mesh but with suffix)
-            auto key = ResourceKey(static_cast<int>(meshObject->GetModelResourceID()));
+            std::cout << "DEBUG: Found beam lattice in mesh '" << meshObject->GetName() << "'"
+                      << std::endl;
+
+            // Create resource key for beam lattice (use same resource ID but different type)
+            auto key = ResourceKey(static_cast<uint32_t>(meshObject->GetModelResourceID()),
+                                   ResourceType::BeamLattice);
             key.setDisplayName(meshObject->GetName() + "_BeamLattice");
+
+            std::cout << "DEBUG: Loading beam lattice - ResourceID="
+                      << meshObject->GetModelResourceID() << ", Name='"
+                      << meshObject->GetName() + "_BeamLattice" << "'"
+                      << ", ResourceKey="
+                      << (key.getResourceId() ? std::to_string(key.getResourceId().value())
+                                              : "none")
+                      << ", Type=BeamLattice" << std::endl;
 
             // Check if beam lattice resource already exists
             if (doc.getGeneratorContext().resourceManager.hasResource(key))
             {
+                std::cout << "DEBUG: Beam lattice resource already exists, skipping" << std::endl;
                 return;
             }
 
@@ -1127,62 +1170,92 @@ namespace gladius::io
             std::vector<BeamData> beams;
             Lib3MF_uint32 beamCount = beamLattice->GetBeamCount();
 
-            for (Lib3MF_uint32 i = 0; i < beamCount; ++i)
+            std::cout << "DEBUG: Beam lattice has " << beamCount << " beams" << std::endl;
+
+            // Use bulk API to get all beams efficiently
+            if (beamCount > 0)
             {
-                Lib3MF::sBeam beamInfo = beamLattice->GetBeam(i);
+                std::vector<Lib3MF::sBeam> lib3mfBeams;
+                beamLattice->GetBeams(lib3mfBeams);
 
-                BeamData beam;
+                std::cout << "DEBUG: Successfully retrieved " << lib3mfBeams.size()
+                          << " beams from lib3mf" << std::endl;
 
-                // Set node indices - we'll resolve positions later
-                auto startVertex = meshObject->GetVertex(beamInfo.m_Indices[0]);
-                auto endVertex = meshObject->GetVertex(beamInfo.m_Indices[1]);
+                for (const auto & beamInfo : lib3mfBeams)
+                {
+                    BeamData beam;
 
-                beam.startPos = {static_cast<float>(startVertex.m_Coordinates[0]),
-                                 static_cast<float>(startVertex.m_Coordinates[1]),
-                                 static_cast<float>(startVertex.m_Coordinates[2]),
-                                 1.0f};
-                beam.endPos = {static_cast<float>(endVertex.m_Coordinates[0]),
-                               static_cast<float>(endVertex.m_Coordinates[1]),
-                               static_cast<float>(endVertex.m_Coordinates[2]),
-                               1.0f};
+                    // Beams reference vertices by index - resolve the actual vertex positions
+                    auto startVertex = meshObject->GetVertex(beamInfo.m_Indices[0]);
+                    auto endVertex = meshObject->GetVertex(beamInfo.m_Indices[1]);
 
-                beam.startRadius = static_cast<float>(beamInfo.m_Radii[0]);
-                beam.endRadius = static_cast<float>(beamInfo.m_Radii[1]);
+                    beam.startPos = {static_cast<float>(startVertex.m_Coordinates[0]),
+                                     static_cast<float>(startVertex.m_Coordinates[1]),
+                                     static_cast<float>(startVertex.m_Coordinates[2]),
+                                     1.0f};
+                    beam.endPos = {static_cast<float>(endVertex.m_Coordinates[0]),
+                                   static_cast<float>(endVertex.m_Coordinates[1]),
+                                   static_cast<float>(endVertex.m_Coordinates[2]),
+                                   1.0f};
 
-                // Cap styles: convert from 3MF to internal representation
-                beam.startCapStyle = static_cast<int>(beamInfo.m_CapModes[0]);
-                beam.endCapStyle = static_cast<int>(beamInfo.m_CapModes[1]);
-                beam.materialId = 0; // Default material
-                beam.padding = 0;
+                    beam.startRadius = static_cast<float>(beamInfo.m_Radii[0]);
+                    beam.endRadius = static_cast<float>(beamInfo.m_Radii[1]);
 
-                beams.push_back(beam);
+                    // Cap styles: convert from 3MF to internal representation
+                    beam.startCapStyle = static_cast<int>(beamInfo.m_CapModes[0]);
+                    beam.endCapStyle = static_cast<int>(beamInfo.m_CapModes[1]);
+                    beam.materialId = 0; // Default material
+                    beam.padding = 0;
+
+                    beams.push_back(beam);
+                }
             }
 
-            // Extract balls (vertices) from mesh object
+            // Extract balls from beam lattice (not from mesh vertices)
             std::vector<BallData> balls;
-            auto const numVertices = meshObject->GetVertexCount();
-            for (Lib3MF_uint32 i = 0; i < numVertices; ++i)
+            Lib3MF_uint32 ballCount = beamLattice->GetBallCount();
+
+            std::cout << "DEBUG: Beam lattice has " << ballCount << " balls" << std::endl;
+
+            // Use bulk API to get all balls efficiently
+            if (ballCount > 0)
             {
-                auto const vertex = meshObject->GetVertex(i);
-                BallData ball;
-                ball.position = {static_cast<float>(vertex.m_Coordinates[0]),
-                                 static_cast<float>(vertex.m_Coordinates[1]),
-                                 static_cast<float>(vertex.m_Coordinates[2]),
-                                 1.0f};
-                ball.radius = 0.0f;  // Default radius - could be set from beam lattice ball options
-                ball.materialId = 0; // Default material
-                ball.padding[0] = 0;
-                ball.padding[1] = 0;
-                balls.push_back(ball);
+                std::vector<Lib3MF::sBall> lib3mfBalls;
+                beamLattice->GetBalls(lib3mfBalls);
+
+                for (const auto & ballInfo : lib3mfBalls)
+                {
+                    BallData ball;
+
+                    // Get vertex position from mesh using ball's vertex index
+                    auto const vertex = meshObject->GetVertex(ballInfo.m_Index);
+                    ball.position = {static_cast<float>(vertex.m_Coordinates[0]),
+                                     static_cast<float>(vertex.m_Coordinates[1]),
+                                     static_cast<float>(vertex.m_Coordinates[2]),
+                                     1.0f};
+                    ball.radius = static_cast<float>(ballInfo.m_Radius);
+                    ball.materialId = 0; // Default material
+                    ball.padding[0] = 0;
+                    ball.padding[1] = 0;
+                    balls.push_back(ball);
+                }
             }
 
-            // Create and add beam lattice resource
-            if (beams.size() > 0 && balls.size() > 0)
+            // Create and add beam lattice resource when either beams or balls exist
+            if (beams.size() > 0 || balls.size() > 0)
             {
+                std::cout << "DEBUG: Creating beam lattice resource with " << beams.size()
+                          << " beams and " << balls.size() << " balls" << std::endl;
                 auto beamLatticeResource =
                   std::make_unique<BeamLatticeResource>(key, std::move(beams), std::move(balls));
                 doc.getGeneratorContext().resourceManager.addResource(
                   key, std::move(beamLatticeResource));
+                std::cout << "DEBUG: Beam lattice resource added successfully" << std::endl;
+            }
+            else
+            {
+                std::cout << "DEBUG: Not creating beam lattice resource - beams: " << beams.size()
+                          << ", balls: " << balls.size() << std::endl;
             }
         }
         catch (const std::exception & e)
@@ -1196,6 +1269,8 @@ namespace gladius::io
                                e.what()),
                    gladius::events::Severity::Error});
             }
+            std::cout << "DEBUG: Exception in loadBeamLatticeIfNecessary: " << e.what()
+                      << std::endl;
         }
     }
 
@@ -1408,7 +1483,8 @@ namespace gladius::io
                 // For full mesh, we still use bounding box for domain intersection
                 bbox = computeBoundingBox(mesh);
                 // Also load the mesh reference if needed
-                auto referencedMeshKey = ResourceKey(mesh->GetModelResourceID());
+                auto referencedMeshKey =
+                  ResourceKey(mesh->GetModelResourceID(), ResourceType::Mesh);
                 loadMeshIfNecessary(model, mesh, doc);
                 // TODO: Handle full mesh geometry intersection if needed
             }
@@ -1454,10 +1530,6 @@ namespace gladius::io
             {
                 auto image3d = image3dIterator->GetCurrentImage3D();
                 auto & resMan = doc.getGeneratorContext().resourceManager;
-                if (resMan.hasResource(ResourceKey{image3d->GetModelResourceID()}))
-                {
-                    continue;
-                }
 
                 if (image3d->IsImageStack())
                 {
@@ -1481,7 +1553,16 @@ namespace gladius::io
                     bool const useVdb = extractor.determinePixelFormat(fileList.front()) ==
                                         PixelFormat::GRAYSCALE_8BIT;
 
-                    auto key = ResourceKey{image3d->GetModelResourceID()};
+                    ResourceType resourceType =
+                      useVdb ? ResourceType::Vdb : ResourceType::ImageStack;
+                    auto key = ResourceKey{image3d->GetModelResourceID(), resourceType};
+
+                    // Check if resource already exists
+                    if (resMan.hasResource(key))
+                    {
+                        continue;
+                    }
+
                     key.setDisplayName(image3d->GetName());
                     if (useVdb)
                     {
@@ -1587,13 +1668,43 @@ namespace gladius::io
                     auto key = ResourceKey{componentObj->GetModelResourceID()};
                     key.setDisplayName(componentObj->GetName());
 
+                    // Check if this component has a beam lattice to determine the correct resource
+                    // type
+                    if (componentObj->IsMeshObject())
+                    {
+                        auto mesh = model->GetMeshObjectByID(componentObj->GetUniqueResourceID());
+                        if (mesh && mesh->BeamLattice())
+                        {
+                            // This is a beam lattice component - create key with BeamLattice type
+                            key =
+                              ResourceKey{static_cast<uint32_t>(componentObj->GetModelResourceID()),
+                                          ResourceType::BeamLattice};
+                            key.setDisplayName(componentObj->GetName() + "_BeamLattice");
+                        }
+                    }
+
                     createObject(*componentObj, model, key, componentTrafo, doc);
                 }
             }
             else
             {
-                auto key = ResourceKey{objectRes->GetModelResourceID()};
+                auto key = ResourceKey{objectRes->GetModelResourceID(), ResourceType::Mesh};
                 key.setDisplayName(currentBuildItem->GetObjectResource()->GetName());
+
+                // Check if this object has a beam lattice to determine the correct resource type
+                if (objectRes->IsMeshObject())
+                {
+                    auto mesh = model->GetMeshObjectByID(objectRes->GetUniqueResourceID());
+                    if (mesh && mesh->BeamLattice())
+                    {
+                        // This is a beam lattice object - create key with BeamLattice type
+                        key = ResourceKey{static_cast<uint32_t>(objectRes->GetModelResourceID()),
+                                          ResourceType::BeamLattice};
+                        key.setDisplayName(currentBuildItem->GetObjectResource()->GetName() +
+                                           "_BeamLattice");
+                    }
+                }
+
                 createObject(*objectRes, model, key, trafo, doc);
             }
         }
@@ -1661,6 +1772,7 @@ namespace gladius::io
 
         loadImageStacks(filename, model, doc);
         loadImplicitFunctions(model, doc);
+        loadMeshes(model, doc);
         // loadComponentObjects(model, doc);
         loadBuildItems(model, doc);
     }
