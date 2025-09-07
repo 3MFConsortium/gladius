@@ -1458,8 +1458,8 @@ float evaluateBeamLatticeVoxel(
                             float3 projection = startPos + t * dir;
                             float distToAxis = length(pos - projection);
 
-                            // Interpolate radius along the beam
-                            float radius = startRadius + (endRadius - startRadius) * (t / max(length_val, 1e-6f));
+                            // Interpolate radius along the beam (consistent with beamDistance)
+                            float radius = mix(startRadius, endRadius, t / length_val);
 
                             float surfaceDist = distToAxis - radius;
                             if (t_unclamped <= 0.0f) {
