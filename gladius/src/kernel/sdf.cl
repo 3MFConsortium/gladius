@@ -1401,54 +1401,101 @@ float evaluateBeamLatticeVoxel(
     
     float minDist = FLT_MAX;
     
-    // Sample 3x3x3 stencil around current position to find candidate primitives
+    // Get voxel grid parameters
     struct PrimitiveMeta voxelGrid = primitives[voxelGridIndex];
     float voxelSize = data[voxelGrid.start + 6]; // Voxel size from header
     
-    // Sample positions in 3x3x3 neighborhood
-    for (int dz = -1; dz <= 1; dz++) {
-        for (int dy = -1; dy <= 1; dy++) {
-            for (int dx = -1; dx <= 1; dx++) {
-                float3 samplePos = pos + (float3)(dx, dy, dz) * voxelSize;
-                uint encodedIndex = primitiveIndexFromVoxelGrid(samplePos, voxelGridIndex, PASS_PAYLOAD_ARGS);
-                
-                if (encodedIndex == 0) {
-                    continue; // No primitive in this voxel
-                }
-                
-                // Extract primitive index and type
-                uint primitiveIndex = encodedIndex & 0x7FFFFFFF; // Lower 31 bits
-                uint primitiveType = primitiveTypeFromVoxelGrid(encodedIndex);
-                
-                float dist = FLT_MAX;
-                
-                if (primitiveType == 0) { // BEAM primitive
-                    int beamDataStart = beamPrimitive.start + primitiveIndex * 11; // 11 floats per beam
-                    if (beamDataStart + 10 < beamPrimitive.end) {
-                        // Load beam data
-                        float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
-                        float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
-                        float startRadius = data[beamDataStart + 6];
-                        float endRadius = data[beamDataStart + 7];
-                        int startCapStyle = (int)data[beamDataStart + 8];
-                        int endCapStyle = (int)data[beamDataStart + 9];
-                        // int materialId = (int)data[beamDataStart + 10]; // unused here
+    // Calculate voxel diagonal distance (sqrt(3) * voxelSize)
+    float voxelDiagonal = 1.732050808f * voxelSize; // sqrt(3) ≈ 1.732050808
+    
+    // First, check distance at current position only
+    uint encodedIndex = primitiveIndexFromVoxelGrid(pos, voxelGridIndex, PASS_PAYLOAD_ARGS);
+    
+    if (encodedIndex != 0) {
+        // Extract primitive index and type
+        uint primitiveIndex = encodedIndex & 0x7FFFFFFF; // Lower 31 bits
+        uint primitiveType = primitiveTypeFromVoxelGrid(encodedIndex);
+        
+        if (primitiveType == 0) { // BEAM primitive
+            int beamDataStart = beamPrimitive.start + primitiveIndex * 11; // 11 floats per beam
+            if (beamDataStart + 10 < beamPrimitive.end) {
+                // Load beam data
+                float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
+                float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
+                float startRadius = data[beamDataStart + 6];
+                float endRadius = data[beamDataStart + 7];
+                int startCapStyle = (int)data[beamDataStart + 8];
+                int endCapStyle = (int)data[beamDataStart + 9];
 
-                        // Use extracted beam distance function
-                        dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
-                    }
-                } else if (primitiveType == 1) { // BALL primitive
-                    int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per ball
-                    if (ballDataStart + 3 < ballPrimitive.end) {
-                        // Calculate ball distance
-                        float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
-                        float radius = data[ballDataStart + 3];
-                        
-                        dist = length(pos - ballPos) - radius;
-                    }
-                }
-                
+                // Use extracted beam distance function
+                float dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
                 minDist = min(minDist, dist);
+            }
+        } else if (primitiveType == 1) { // BALL primitive
+            int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per ball
+            if (ballDataStart + 3 < ballPrimitive.end) {
+                // Calculate ball distance
+                float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                float radius = data[ballDataStart + 3];
+                
+                float dist = length(pos - ballPos) - radius;
+                minDist = min(minDist, dist);
+            }
+        }
+    }
+    
+    // Only check neighborhood if the distance at current position is small enough
+    // This optimization avoids unnecessary neighborhood checks when far from primitives
+    if (fabs(minDist) <= voxelDiagonal) {
+        // Sample 3x3x3 stencil around current position to find candidate primitives
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    // Skip center voxel since we already checked it
+                    if (dx == 0 && dy == 0 && dz == 0) {
+                        continue;
+                    }
+                    
+                    float3 samplePos = pos + (float3)(dx, dy, dz) * voxelSize;
+                    uint neighborEncodedIndex = primitiveIndexFromVoxelGrid(samplePos, voxelGridIndex, PASS_PAYLOAD_ARGS);
+                    
+                    if (neighborEncodedIndex == 0) {
+                        continue; // No primitive in this voxel
+                    }
+                    
+                    // Extract primitive index and type
+                    uint neighborPrimitiveIndex = neighborEncodedIndex & 0x7FFFFFFF; // Lower 31 bits
+                    uint neighborPrimitiveType = primitiveTypeFromVoxelGrid(neighborEncodedIndex);
+                    
+                    float dist = FLT_MAX;
+                    
+                    if (neighborPrimitiveType == 0) { // BEAM primitive
+                        int beamDataStart = beamPrimitive.start + neighborPrimitiveIndex * 11; // 11 floats per beam
+                        if (beamDataStart + 10 < beamPrimitive.end) {
+                            // Load beam data
+                            float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
+                            float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
+                            float startRadius = data[beamDataStart + 6];
+                            float endRadius = data[beamDataStart + 7];
+                            int startCapStyle = (int)data[beamDataStart + 8];
+                            int endCapStyle = (int)data[beamDataStart + 9];
+
+                            // Use extracted beam distance function
+                            dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
+                        }
+                    } else if (neighborPrimitiveType == 1) { // BALL primitive
+                        int ballDataStart = ballPrimitive.start + neighborPrimitiveIndex * 4; // 4 floats per ball
+                        if (ballDataStart + 3 < ballPrimitive.end) {
+                            // Calculate ball distance
+                            float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                            float radius = data[ballDataStart + 3];
+                            
+                            dist = length(pos - ballPos) - radius;
+                        }
+                    }
+                    
+                    minDist = min(minDist, dist);
+                }
             }
         }
     }
