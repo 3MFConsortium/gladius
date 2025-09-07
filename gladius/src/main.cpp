@@ -6,12 +6,6 @@
 #include <iostream>
 #include <string>
 
-// Forward declaration for beam BVH tests
-namespace gladius::test
-{
-    void runAllTests();
-}
-
 using namespace std;
 
 void printUsage()
@@ -22,7 +16,6 @@ void printUsage()
       << "  --mcp-server [port]  Enable MCP server with HTTP transport (default port: 8080)\n";
     std::cout << "  --mcp-stdio          Enable MCP server with stdio transport (for VS Code)\n";
     std::cout << "  --headless          Run without starting the UI (headless mode)\n";
-    std::cout << "  --test-beam-bvh     Run beam BVH tests and exit\n";
     std::cout
       << "  --debug-opencl      Enable OpenCL debug output (kernel validation, buffer checks)\n";
     std::cout << "  --help              Show this help message\n";
@@ -90,11 +83,6 @@ int main(int argc, char ** argv)
         else if (arg == "--debug-opencl")
         {
             gladius::ComputeContext::setDebugOutputEnabled(true);
-        }
-        else if (arg == "--test-beam-bvh")
-        {
-            gladius::test::runAllTests();
-            return 0;
         }
         else if (arg == "--help")
         {
