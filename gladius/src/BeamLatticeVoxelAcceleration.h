@@ -67,6 +67,20 @@ namespace gladius
       private:
         BuildStats m_lastStats;
 
+        /// @brief Cached beam bounding box for quick rejection tests
+        struct BeamBounds
+        {
+            float minX, maxX, minY, maxY, minZ, maxZ;
+            size_t beamIndex;
+        };
+
+        /// @brief Cached ball bounding box for quick rejection tests
+        struct BallBounds
+        {
+            float centerX, centerY, centerZ, radius;
+            size_t ballIndex;
+        };
+
         /// @brief Calculate distance from point to beam primitive
         float calculateBeamDistance(openvdb::Vec3f const & point, BeamData const & beam) const;
 
@@ -83,6 +97,28 @@ namespace gladius
                                                  std::vector<BeamData> const & beams,
                                                  std::vector<BallData> const & balls,
                                                  float maxDist) const;
+
+        /// @brief Find closest primitive to a point using cached bounds
+        /// @param point World space position
+        /// @param beamBounds Cached beam bounding boxes
+        /// @param ballBounds Cached ball bounding boxes
+        /// @param beams Vector of beam primitives (for distance calculation)
+        /// @param balls Vector of ball primitives (for distance calculation)
+        /// @param maxDist Maximum search distance
+        /// @return Pair of (primitive index, type) where type: 0=beam, 1=ball, -1=none
+        std::pair<int, int>
+        findClosestPrimitiveOptimized(openvdb::Vec3f const & point,
+                                      std::vector<BeamBounds> const & beamBounds,
+                                      std::vector<BallBounds> const & ballBounds,
+                                      std::vector<BeamData> const & beams,
+                                      std::vector<BallData> const & balls,
+                                      float maxDist) const;
+
+        /// @brief Pre-compute bounding boxes for all beams
+        std::vector<BeamBounds> precomputeBeamBounds(std::vector<BeamData> const & beams) const;
+
+        /// @brief Pre-compute bounding boxes for all balls
+        std::vector<BallBounds> precomputeBallBounds(std::vector<BallData> const & balls) const;
 
         /// @brief Build bounding box encompassing all primitives
         openvdb::BBoxd calculateBoundingBox(std::vector<BeamData> const & beams,
