@@ -32,6 +32,12 @@ namespace gladius
 
         /// @brief Enable debug output during grid construction
         bool enableDebugOutput = false;
+
+        /// @brief Optimization phase to use (1=bounding box, 2=primitive-centric)
+        int optimizationPhase = 2;
+
+        /// @brief Spatial hash cell size multiplier (relative to voxel size)
+        float spatialHashCellSizeMultiplier = 4.0f;
     };
 
     /// @brief Creates voxel acceleration grids for beam lattice structures
@@ -48,6 +54,12 @@ namespace gladius
                         const std::vector<BallData> & balls,
                         BeamLatticeVoxelSettings const & settings = {});
 
+        /// @brief Phase 1: Build voxel grids using bounding box optimization
+        std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
+        buildVoxelGridsPhase1(const std::vector<BeamData> & beams,
+                              const std::vector<BallData> & balls,
+                              BeamLatticeVoxelSettings const & settings);
+
         /// @brief Get statistics from last grid build
         struct BuildStats
         {
@@ -57,6 +69,12 @@ namespace gladius
             float maxDistance = 0.0f;
             size_t memoryUsageBytes = 0;
             float buildTimeSeconds = 0.0f;
+
+            // Phase 2 optimization statistics
+            size_t spatialHashCells = 0;          ///< Number of spatial hash cells created
+            size_t primitiveVoxelPairs = 0;       ///< Number of primitive-voxel pairs processed
+            float hashBuildTimeSeconds = 0.0f;    ///< Time to build spatial hash
+            float voxelProcessTimeSeconds = 0.0f; ///< Time to process voxels
         };
 
         BuildStats const & getLastBuildStats() const
@@ -79,6 +97,45 @@ namespace gladius
         {
             float centerX, centerY, centerZ, radius;
             size_t ballIndex;
+        };
+
+        /// @brief Phase 2: Spatial hash cell for primitive-centric algorithm
+        struct SpatialHashCell
+        {
+            std::vector<size_t> beamIndices; ///< Beam indices in this cell
+            std::vector<size_t> ballIndices; ///< Ball indices in this cell
+        };
+
+        /// @brief Phase 2: Spatial hash grid for efficient primitive-to-voxel mapping
+        struct SpatialHashGrid
+        {
+            float cellSize;                     ///< Size of each hash cell
+            openvdb::Vec3f minBounds;           ///< Minimum bounds of the grid
+            openvdb::Vec3f maxBounds;           ///< Maximum bounds of the grid
+            openvdb::Coord gridSize;            ///< Number of cells in each dimension
+            std::vector<SpatialHashCell> cells; ///< Flattened 3D array of cells
+
+            /// @brief Convert world position to hash grid coordinates
+            openvdb::Coord worldToGrid(openvdb::Vec3f const & pos) const
+            {
+                return openvdb::Coord(static_cast<int>((pos.x() - minBounds.x()) / cellSize),
+                                      static_cast<int>((pos.y() - minBounds.y()) / cellSize),
+                                      static_cast<int>((pos.z() - minBounds.z()) / cellSize));
+            }
+
+            /// @brief Get linear index for 3D coordinates
+            size_t getLinearIndex(openvdb::Coord const & coord) const
+            {
+                return coord.x() + coord.y() * gridSize.x() +
+                       coord.z() * gridSize.x() * gridSize.y();
+            }
+
+            /// @brief Check if coordinates are valid
+            bool isValidCoord(openvdb::Coord const & coord) const
+            {
+                return coord.x() >= 0 && coord.x() < gridSize.x() && coord.y() >= 0 &&
+                       coord.y() < gridSize.y() && coord.z() >= 0 && coord.z() < gridSize.z();
+            }
         };
 
         /// @brief Calculate distance from point to beam primitive
@@ -123,6 +180,29 @@ namespace gladius
         /// @brief Build bounding box encompassing all primitives
         openvdb::BBoxd calculateBoundingBox(std::vector<BeamData> const & beams,
                                             std::vector<BallData> const & balls) const;
+
+        // Phase 2 optimization methods
+
+        /// @brief Build spatial hash grid for primitive-centric algorithm
+        SpatialHashGrid buildSpatialHashGrid(std::vector<BeamData> const & beams,
+                                             std::vector<BallData> const & balls,
+                                             float voxelSize,
+                                             float maxDistance) const;
+
+        /// @brief Phase 2: Build voxel grids using primitive-centric algorithm
+        std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
+        buildVoxelGridsPhase2(std::vector<BeamData> const & beams,
+                              std::vector<BallData> const & balls,
+                              BeamLatticeVoxelSettings const & settings);
+
+        /// @brief Process primitive influence on nearby voxels using spatial hash
+        void processPrimitiveInfluence(openvdb::Int32Grid::Ptr & primitiveIndexGrid,
+                                       openvdb::Int32Grid::Ptr & primitiveTypeGrid,
+                                       SpatialHashGrid const & spatialHash,
+                                       std::vector<BeamData> const & beams,
+                                       std::vector<BallData> const & balls,
+                                       BeamLatticeVoxelSettings const & settings,
+                                       openvdb::math::Transform::Ptr const & transform);
     };
 
     /// @brief Extended beam lattice resource with voxel acceleration option

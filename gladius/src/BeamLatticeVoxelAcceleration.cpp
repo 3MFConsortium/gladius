@@ -20,6 +20,22 @@ namespace gladius
                                              std::vector<BallData> const & balls,
                                              BeamLatticeVoxelSettings const & settings)
     {
+        // Choose optimization phase based on settings
+        if (settings.optimizationPhase >= 2)
+        {
+            return buildVoxelGridsPhase2(beams, balls, settings);
+        }
+        else
+        {
+            return buildVoxelGridsPhase1(beams, balls, settings);
+        }
+    }
+
+    std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
+    BeamLatticeVoxelBuilder::buildVoxelGridsPhase1(std::vector<BeamData> const & beams,
+                                                   std::vector<BallData> const & balls,
+                                                   BeamLatticeVoxelSettings const & settings)
+    {
         auto startTime = std::chrono::high_resolution_clock::now();
         m_lastStats = BuildStats{};
 
@@ -440,5 +456,349 @@ namespace gladius
         }
 
         return {bestIndex, bestType};
+    }
+
+    // Phase 2 Optimization: Primitive-centric algorithm with spatial hash grid
+
+    std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
+    BeamLatticeVoxelBuilder::buildVoxelGridsPhase2(std::vector<BeamData> const & beams,
+                                                   std::vector<BallData> const & balls,
+                                                   BeamLatticeVoxelSettings const & settings)
+    {
+        auto startTime = std::chrono::high_resolution_clock::now();
+        m_lastStats = BuildStats{};
+
+        if (beams.empty() && balls.empty())
+        {
+            return {nullptr, nullptr};
+        }
+
+        // Ensure OpenVDB is initialized
+        openvdb::initialize();
+
+        // Create transform for voxel grid
+        auto transform = openvdb::math::Transform::createLinearTransform(settings.voxelSize);
+
+        // Calculate bounding box for all primitives
+        openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
+
+        if (settings.enableDebugOutput)
+        {
+            std::cout << "BeamLatticeVoxelBuilder: Using Phase 2 primitive-centric optimization\n";
+            std::cout << "  Processing " << beams.size() << " beams and " << balls.size()
+                      << " balls\n";
+        }
+
+        // Phase 2: Build spatial hash grid for efficient primitive-to-voxel mapping
+        auto hashStartTime = std::chrono::high_resolution_clock::now();
+        SpatialHashGrid spatialHash =
+          buildSpatialHashGrid(beams, balls, settings.voxelSize, settings.maxDistance);
+        auto hashEndTime = std::chrono::high_resolution_clock::now();
+        auto hashDuration =
+          std::chrono::duration_cast<std::chrono::milliseconds>(hashEndTime - hashStartTime);
+        m_lastStats.hashBuildTimeSeconds = hashDuration.count() / 1000.0f;
+        m_lastStats.spatialHashCells = spatialHash.cells.size();
+
+        if (settings.enableDebugOutput)
+        {
+            std::cout << "  Built spatial hash with " << spatialHash.cells.size() << " cells in "
+                      << m_lastStats.hashBuildTimeSeconds << "s\n";
+        }
+
+        // Create grids
+        auto primitiveIndexGrid = openvdb::Int32Grid::create(0);
+        primitiveIndexGrid->setTransform(transform);
+        primitiveIndexGrid->setName("beam_lattice_primitive_indices");
+
+        openvdb::Int32Grid::Ptr primitiveTypeGrid = nullptr;
+        if (settings.separateBeamBallGrids)
+        {
+            primitiveTypeGrid = openvdb::Int32Grid::create(-1);
+            primitiveTypeGrid->setTransform(transform);
+            primitiveTypeGrid->setName("beam_lattice_primitive_types");
+        }
+
+        // Phase 2: Process primitive influence on nearby voxels
+        auto voxelStartTime = std::chrono::high_resolution_clock::now();
+        processPrimitiveInfluence(
+          primitiveIndexGrid, primitiveTypeGrid, spatialHash, beams, balls, settings, transform);
+        auto voxelEndTime = std::chrono::high_resolution_clock::now();
+        auto voxelDuration =
+          std::chrono::duration_cast<std::chrono::milliseconds>(voxelEndTime - voxelStartTime);
+        m_lastStats.voxelProcessTimeSeconds = voxelDuration.count() / 1000.0f;
+
+        primitiveIndexGrid->pruneGrid();
+        if (primitiveTypeGrid)
+        {
+            primitiveTypeGrid->pruneGrid();
+        }
+
+        m_lastStats.memoryUsageBytes = primitiveIndexGrid->memUsage();
+        if (primitiveTypeGrid)
+        {
+            m_lastStats.memoryUsageBytes += primitiveTypeGrid->memUsage();
+        }
+
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+        m_lastStats.buildTimeSeconds = duration.count() / 1000.0f;
+
+        if (settings.enableDebugOutput)
+        {
+            std::cout << "  Phase 2 total time: " << m_lastStats.buildTimeSeconds << "s\n";
+            std::cout << "  Hash build: " << m_lastStats.hashBuildTimeSeconds << "s, ";
+            std::cout << "Voxel process: " << m_lastStats.voxelProcessTimeSeconds << "s\n";
+            std::cout << "  Active voxels: " << m_lastStats.activeVoxels << "\n";
+        }
+
+        return {primitiveIndexGrid, primitiveTypeGrid};
+    }
+
+    BeamLatticeVoxelBuilder::SpatialHashGrid
+    BeamLatticeVoxelBuilder::buildSpatialHashGrid(std::vector<BeamData> const & beams,
+                                                  std::vector<BallData> const & balls,
+                                                  float voxelSize,
+                                                  float maxDistance) const
+    {
+        SpatialHashGrid grid;
+
+        // Calculate bounding box
+        openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
+
+        // Set up spatial hash grid with larger cells for efficiency
+        grid.cellSize = voxelSize * 4.0f; // Use larger cells than voxels for efficiency
+        grid.minBounds = openvdb::Vec3f(
+          bbox.min().x() - maxDistance, bbox.min().y() - maxDistance, bbox.min().z() - maxDistance);
+        grid.maxBounds = openvdb::Vec3f(
+          bbox.max().x() + maxDistance, bbox.max().y() + maxDistance, bbox.max().z() + maxDistance);
+
+        // Calculate grid dimensions
+        openvdb::Vec3f span = grid.maxBounds - grid.minBounds;
+        grid.gridSize = openvdb::Coord(static_cast<int>(std::ceil(span.x() / grid.cellSize)) + 1,
+                                       static_cast<int>(std::ceil(span.y() / grid.cellSize)) + 1,
+                                       static_cast<int>(std::ceil(span.z() / grid.cellSize)) + 1);
+
+        // Allocate cells
+        size_t totalCells =
+          static_cast<size_t>(grid.gridSize.x()) * grid.gridSize.y() * grid.gridSize.z();
+        grid.cells.resize(totalCells);
+
+        // Insert beams into spatial hash
+        for (size_t i = 0; i < beams.size(); ++i)
+        {
+            BeamData const & beam = beams[i];
+            float maxRadius = std::max(beam.startRadius, beam.endRadius);
+
+            // Calculate AABB for the beam (including radius)
+            openvdb::Vec3f minP(std::min(beam.startPos.x, beam.endPos.x) - maxRadius - maxDistance,
+                                std::min(beam.startPos.y, beam.endPos.y) - maxRadius - maxDistance,
+                                std::min(beam.startPos.z, beam.endPos.z) - maxRadius - maxDistance);
+            openvdb::Vec3f maxP(std::max(beam.startPos.x, beam.endPos.x) + maxRadius + maxDistance,
+                                std::max(beam.startPos.y, beam.endPos.y) + maxRadius + maxDistance,
+                                std::max(beam.startPos.z, beam.endPos.z) + maxRadius + maxDistance);
+
+            // Find hash cells that this beam might influence
+            openvdb::Coord minCell = grid.worldToGrid(minP);
+            openvdb::Coord maxCell = grid.worldToGrid(maxP);
+
+            // Clamp to valid range
+            minCell.x() = std::max(0, minCell.x());
+            minCell.y() = std::max(0, minCell.y());
+            minCell.z() = std::max(0, minCell.z());
+            maxCell.x() = std::min(grid.gridSize.x() - 1, maxCell.x());
+            maxCell.y() = std::min(grid.gridSize.y() - 1, maxCell.y());
+            maxCell.z() = std::min(grid.gridSize.z() - 1, maxCell.z());
+
+            // Add beam to all cells it might influence
+            for (int x = minCell.x(); x <= maxCell.x(); ++x)
+            {
+                for (int y = minCell.y(); y <= maxCell.y(); ++y)
+                {
+                    for (int z = minCell.z(); z <= maxCell.z(); ++z)
+                    {
+                        openvdb::Coord coord(x, y, z);
+                        size_t cellIndex = grid.getLinearIndex(coord);
+                        grid.cells[cellIndex].beamIndices.push_back(i);
+                    }
+                }
+            }
+        }
+
+        // Insert balls into spatial hash
+        for (size_t i = 0; i < balls.size(); ++i)
+        {
+            BallData const & ball = balls[i];
+
+            // Calculate AABB for the ball
+            openvdb::Vec3f minP(ball.position.x - ball.radius - maxDistance,
+                                ball.position.y - ball.radius - maxDistance,
+                                ball.position.z - ball.radius - maxDistance);
+            openvdb::Vec3f maxP(ball.position.x + ball.radius + maxDistance,
+                                ball.position.y + ball.radius + maxDistance,
+                                ball.position.z + ball.radius + maxDistance);
+
+            // Find hash cells that this ball might influence
+            openvdb::Coord minCell = grid.worldToGrid(minP);
+            openvdb::Coord maxCell = grid.worldToGrid(maxP);
+
+            // Clamp to valid range
+            minCell.x() = std::max(0, minCell.x());
+            minCell.y() = std::max(0, minCell.y());
+            minCell.z() = std::max(0, minCell.z());
+            maxCell.x() = std::min(grid.gridSize.x() - 1, maxCell.x());
+            maxCell.y() = std::min(grid.gridSize.y() - 1, maxCell.y());
+            maxCell.z() = std::min(grid.gridSize.z() - 1, maxCell.z());
+
+            // Add ball to all cells it might influence
+            for (int x = minCell.x(); x <= maxCell.x(); ++x)
+            {
+                for (int y = minCell.y(); y <= maxCell.y(); ++y)
+                {
+                    for (int z = minCell.z(); z <= maxCell.z(); ++z)
+                    {
+                        openvdb::Coord coord(x, y, z);
+                        size_t cellIndex = grid.getLinearIndex(coord);
+                        grid.cells[cellIndex].ballIndices.push_back(i);
+                    }
+                }
+            }
+        }
+
+        return grid;
+    }
+
+    void BeamLatticeVoxelBuilder::processPrimitiveInfluence(
+      openvdb::Int32Grid::Ptr & primitiveIndexGrid,
+      openvdb::Int32Grid::Ptr & primitiveTypeGrid,
+      SpatialHashGrid const & spatialHash,
+      std::vector<BeamData> const & beams,
+      std::vector<BallData> const & balls,
+      BeamLatticeVoxelSettings const & settings,
+      openvdb::math::Transform::Ptr const & transform)
+    {
+        auto indexAccessor = primitiveIndexGrid->getAccessor();
+        float totalDistance = 0.0f;
+
+        // Process each spatial hash cell
+        for (size_t cellIndex = 0; cellIndex < spatialHash.cells.size(); ++cellIndex)
+        {
+            SpatialHashCell const & cell = spatialHash.cells[cellIndex];
+
+            // Skip empty cells
+            if (cell.beamIndices.empty() && cell.ballIndices.empty())
+            {
+                continue;
+            }
+
+            // Convert linear cell index back to 3D coordinates
+            int z =
+              static_cast<int>(cellIndex / (spatialHash.gridSize.x() * spatialHash.gridSize.y()));
+            int y =
+              static_cast<int>((cellIndex % (spatialHash.gridSize.x() * spatialHash.gridSize.y())) /
+                               spatialHash.gridSize.x());
+            int x = static_cast<int>(cellIndex % spatialHash.gridSize.x());
+
+            // Calculate world bounds of this hash cell
+            openvdb::Vec3f cellMinWorld(spatialHash.minBounds.x() + x * spatialHash.cellSize,
+                                        spatialHash.minBounds.y() + y * spatialHash.cellSize,
+                                        spatialHash.minBounds.z() + z * spatialHash.cellSize);
+            openvdb::Vec3f cellMaxWorld(cellMinWorld.x() + spatialHash.cellSize,
+                                        cellMinWorld.y() + spatialHash.cellSize,
+                                        cellMinWorld.z() + spatialHash.cellSize);
+
+            // Convert to voxel coordinate range
+            openvdb::Coord minVoxel = transform->worldToIndexNodeCentered(
+              openvdb::Vec3d(cellMinWorld.x(), cellMinWorld.y(), cellMinWorld.z()));
+            openvdb::Coord maxVoxel = transform->worldToIndexNodeCentered(
+              openvdb::Vec3d(cellMaxWorld.x(), cellMaxWorld.y(), cellMaxWorld.z()));
+
+            // Process all voxels in this spatial hash cell
+            for (openvdb::Coord voxelCoord(minVoxel.x(), 0, 0); voxelCoord.x() <= maxVoxel.x();
+                 ++voxelCoord.x())
+            {
+                for (voxelCoord.y() = minVoxel.y(); voxelCoord.y() <= maxVoxel.y();
+                     ++voxelCoord.y())
+                {
+                    for (voxelCoord.z() = minVoxel.z(); voxelCoord.z() <= maxVoxel.z();
+                         ++voxelCoord.z())
+                    {
+                        // Skip if this voxel already has a primitive assigned
+                        if (indexAccessor.getValue(voxelCoord) != 0)
+                        {
+                            continue;
+                        }
+
+                        // Convert voxel coordinate to world space
+                        openvdb::Vec3d worldPos = transform->indexToWorld(voxelCoord);
+                        openvdb::Vec3f pos(static_cast<float>(worldPos.x()),
+                                           static_cast<float>(worldPos.y()),
+                                           static_cast<float>(worldPos.z()));
+
+                        float bestDist = settings.maxDistance;
+                        int bestIndex = -1;
+                        int bestType = -1;
+
+                        // Check all beams in this hash cell
+                        for (size_t beamIdx : cell.beamIndices)
+                        {
+                            float d = calculateBeamDistance(pos, beams[beamIdx]);
+                            if (d < bestDist)
+                            {
+                                bestDist = d;
+                                bestIndex = static_cast<int>(beamIdx);
+                                bestType = 0;
+                            }
+                            m_lastStats.primitiveVoxelPairs++;
+                        }
+
+                        // Check all balls in this hash cell
+                        for (size_t ballIdx : cell.ballIndices)
+                        {
+                            float d = calculateBallDistance(pos, balls[ballIdx]);
+                            if (d < bestDist)
+                            {
+                                bestDist = d;
+                                bestIndex = static_cast<int>(ballIdx);
+                                bestType = 1;
+                            }
+                            m_lastStats.primitiveVoxelPairs++;
+                        }
+
+                        // Assign primitive to voxel if found
+                        if (bestIndex >= 0)
+                        {
+                            if (settings.encodeTypeInIndex && !settings.separateBeamBallGrids)
+                            {
+                                int encodedIndex = bestIndex;
+                                if (bestType == 1) // ball
+                                {
+                                    encodedIndex |= (1 << 31);
+                                }
+                                indexAccessor.setValue(voxelCoord, encodedIndex);
+                            }
+                            else
+                            {
+                                indexAccessor.setValue(voxelCoord, bestIndex);
+                                if (primitiveTypeGrid)
+                                {
+                                    primitiveTypeGrid->tree().setValueOn(voxelCoord, bestType);
+                                }
+                            }
+
+                            m_lastStats.activeVoxels++;
+                            totalDistance += std::abs(bestDist);
+                            m_lastStats.maxDistance =
+                              std::max(m_lastStats.maxDistance, std::abs(bestDist));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (m_lastStats.activeVoxels > 0)
+        {
+            m_lastStats.averageDistance =
+              totalDistance / static_cast<float>(m_lastStats.activeVoxels);
+        }
     }
 }
