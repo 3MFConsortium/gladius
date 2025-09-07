@@ -85,12 +85,12 @@ namespace gladius
         minCoord.offset(-margin);
         maxCoord.offset(margin);
 
+        // Calculate total voxels for statistics
+        openvdb::Coord gridSize = maxCoord - minCoord;
+        m_lastStats.totalVoxels = static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
+
         if (settings.enableDebugOutput)
         {
-            openvdb::Coord gridSize = maxCoord - minCoord;
-            m_lastStats.totalVoxels =
-              static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
-
             std::cout << "BeamLatticeVoxelBuilder: Using optimized Phase 1 implementation\n";
             std::cout << "  Pre-computed " << beamBounds.size() << " beam bounds and "
                       << ballBounds.size() << " ball bounds\n";
@@ -326,8 +326,12 @@ namespace gladius
 
         for (auto const & b : beams)
         {
-            extend(b.startPos.x, b.startPos.y, b.startPos.z);
-            extend(b.endPos.x, b.endPos.y, b.endPos.z);
+            // Account for beam thickness by adding maximum radius to both endpoints
+            float maxRadius = std::max(b.startRadius, b.endRadius);
+            extend(b.startPos.x + maxRadius, b.startPos.y + maxRadius, b.startPos.z + maxRadius);
+            extend(b.startPos.x - maxRadius, b.startPos.y - maxRadius, b.startPos.z - maxRadius);
+            extend(b.endPos.x + maxRadius, b.endPos.y + maxRadius, b.endPos.z + maxRadius);
+            extend(b.endPos.x - maxRadius, b.endPos.y - maxRadius, b.endPos.z - maxRadius);
         }
         for (auto const & s : balls)
         {
@@ -482,11 +486,18 @@ namespace gladius
         // Calculate bounding box for all primitives
         openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
 
+        // Calculate grid bounds and total voxels for statistics
+        openvdb::Coord minCoord = transform->worldToIndexCellCentered(bbox.min());
+        openvdb::Coord maxCoord = transform->worldToIndexCellCentered(bbox.max());
+        openvdb::Coord gridSize = maxCoord - minCoord;
+        m_lastStats.totalVoxels = static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
+
         if (settings.enableDebugOutput)
         {
             std::cout << "BeamLatticeVoxelBuilder: Using Phase 2 primitive-centric optimization\n";
             std::cout << "  Processing " << beams.size() << " beams and " << balls.size()
                       << " balls\n";
+            std::cout << "  Total Voxels: " << m_lastStats.totalVoxels << "\n";
         }
 
         // Phase 2: Build spatial hash grid for efficient primitive-to-voxel mapping

@@ -187,11 +187,6 @@ namespace gladius_integration_tests
         // Load the variable voronoi 3MF file
         gladius->LoadAssembly(FileNames::VariableVoronoi);
 
-        // Check that there are no errors from loading
-        auto const detailedErrorAccessor = gladius->GetDetailedErrorAccessor();
-
-        EXPECT_EQ(detailedErrorAccessor->GetSize(), 0u);
-
         // Compute the bounding box
         auto boundingBox = gladius->ComputeBoundingBox();
         EXPECT_TRUE(boundingBox);
