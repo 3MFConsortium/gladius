@@ -1023,6 +1023,80 @@ float ballDistance(float3 pos, __global const struct BallData* ball)
     return length(pos - ball->position.xyz) - ball->radius;
 }
 
+/// @brief Distance to beam (conical cylinder with caps)
+/// @param pos World position to evaluate
+/// @param startPos Beam start position
+/// @param endPos Beam end position
+/// @param startRadius Radius at start of beam
+/// @param endRadius Radius at end of beam
+/// @param startCapStyle Cap style at start (0=hemisphere, 1=sphere, 2=butt)
+/// @param endCapStyle Cap style at end (0=hemisphere, 1=sphere, 2=butt)
+/// @return Signed distance to beam surface
+float sdToBeam(float3 pos, 
+               float3 startPos, 
+               float3 endPos, 
+               float startRadius, 
+               float endRadius, 
+               int startCapStyle, 
+               int endCapStyle)
+{
+    float3 axis = endPos - startPos;
+    float length_val = length(axis);
+    
+    // Handle degenerate beam (zero length) - treat as sphere
+    if (length_val < 1e-6f) {
+        float radius = max(startRadius, endRadius);
+        return length(pos - startPos) - radius;
+    }
+    
+    axis /= length_val;
+    
+    // Project point onto beam axis
+    float3 toPoint = pos - startPos;
+    float t_unclamped = dot(toPoint, axis);
+    float t = clamp(t_unclamped, 0.0f, length_val);
+    
+    // Interpolate radius at projection point
+    float radius = mix(startRadius, endRadius, t / length_val);
+    
+    // Calculate distance to axis
+    float3 projection = startPos + t * axis;
+    float distToAxis = length(pos - projection);
+    
+    // Distance to cylindrical surface
+    float surfaceDist = distToAxis - radius;
+    
+    // Handle caps based on cap style
+    if (t_unclamped <= 0.0f) {
+        // Near start cap
+        switch (startCapStyle) {
+            case 0: // hemisphere
+                return length(pos - startPos) - startRadius;
+            case 1: // sphere  
+                return length(pos - startPos) - startRadius;
+            case 2: // butt
+                return max(surfaceDist, -t_unclamped);
+            default:
+                return surfaceDist;
+        }
+    } else if (t_unclamped >= length_val) {
+        // Near end cap
+        float overrun = t_unclamped - length_val;
+        switch (endCapStyle) {
+            case 0: // hemisphere
+                return length(pos - endPos) - endRadius;
+            case 1: // sphere
+                return length(pos - endPos) - endRadius;
+            case 2: // butt
+                return max(surfaceDist, overrun);
+            default:
+                return surfaceDist;
+        }
+    }
+    
+    return surfaceDist;
+}
+
 
 
 /// @brief Evaluate beam lattice distance using flat data layout
@@ -1121,52 +1195,8 @@ float evaluateBeamLatticeFlat(
                         int startCapStyle = (int)data[beamDataStart + 8];
                         int endCapStyle = (int)data[beamDataStart + 9];
                         
-                        // Calculate beam distance inline
-                        float3 axis = endPos - startPos;
-                        float length_val = length(axis);
-                        
-                        if (length_val < 1e-6f) {
-                            // Degenerate beam - treat as sphere
-                            float radius = max(startRadius, endRadius);
-                            dist = length(pos - startPos) - radius;
-                        } else {
-                            axis /= length_val;
-                            
-                            // Project point onto beam axis
-                            float3 toPoint = pos - startPos;
-                            float t_unclamped = dot(toPoint, axis);
-                            float t = clamp(t_unclamped, 0.0f, length_val);
-                            
-                            // Interpolate radius at projection point
-                            float radius = mix(startRadius, endRadius, t / length_val);
-                            
-                            // Calculate distance to axis
-                            float3 projection = startPos + t * axis;
-                            float distToAxis = length(pos - projection);
-                            
-                            // Distance to cylindrical surface
-                            float surfaceDist = distToAxis - radius;
-                            
-                            // Handle caps based on cap style
-                            if (t_unclamped <= 0.0f) {
-                                // Near start cap
-                                if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
-                                    dist = length(pos - startPos) - startRadius;
-                                } else { // butt
-                                    dist = max(surfaceDist, -t_unclamped);
-                                }
-                            } else if (t_unclamped >= length_val) {
-                                // Near end cap
-                                float overrun = t_unclamped - length_val;
-                                if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
-                                    dist = length(pos - endPos) - endRadius;
-                                } else { // butt
-                                    dist = max(surfaceDist, overrun);
-                                }
-                            } else {
-                                dist = surfaceDist;
-                            }
-                        }
+                        // Use extracted beam distance function
+                        dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
                     }
                 } else if (primitiveType == 1) { // BALL
                     // Calculate ball distance
@@ -1277,52 +1307,8 @@ float evaluateBeamLatticeBVH(
                         int startCapStyle = (int)data[beamDataStart + 8];
                         int endCapStyle = (int)data[beamDataStart + 9];
                         
-                        // Calculate beam distance inline
-                        float3 axis = endPos - startPos;
-                        float length_val = length(axis);
-                        
-                        if (length_val < 1e-6f) {
-                            // Degenerate beam - treat as sphere
-                            float radius = max(startRadius, endRadius);
-                            dist = length(pos - startPos) - radius;
-                        } else {
-                            axis /= length_val;
-                            
-                            // Project point onto beam axis
-                            float3 toPoint = pos - startPos;
-                            float t_unclamped = dot(toPoint, axis);
-                            float t = clamp(t_unclamped, 0.0f, length_val);
-                            
-                            // Interpolate radius at projection point
-                            float radius = mix(startRadius, endRadius, t / length_val);
-                            
-                            // Calculate distance to axis
-                            float3 projection = startPos + t * axis;
-                            float distToAxis = length(pos - projection);
-                            
-                            // Distance to cylindrical surface
-                            float surfaceDist = distToAxis - radius;
-                            
-                            // Handle caps based on cap style
-                            if (t_unclamped <= 0.0f) {
-                                // Near start cap
-                                if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
-                                    dist = length(pos - startPos) - startRadius;
-                                } else { // butt
-                                    dist = max(surfaceDist, -t_unclamped);
-                                }
-                            } else if (t_unclamped >= length_val) {
-                                // Near end cap
-                                float overrun = t_unclamped - length_val;
-                                if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
-                                    dist = length(pos - endPos) - endRadius;
-                                } else { // butt
-                                    dist = max(surfaceDist, overrun);
-                                }
-                            } else {
-                                dist = surfaceDist;
-                            }
-                        }
+                        // Use extracted beam distance function
+                        dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
                     }
                 } else if (primitiveType == 1) { // BALL primitive
                     int ballDataStart = ballPrimitive.start + primitiveIndex * 6; // 6 floats per ball
@@ -1448,42 +1434,8 @@ float evaluateBeamLatticeVoxel(
                         int endCapStyle = (int)data[beamDataStart + 9];
                         // int materialId = (int)data[beamDataStart + 10]; // unused here
 
-                        float3 axis = endPos - startPos;
-                        float length_val = length(axis);
-                        if (length_val > 0.0f) {
-                            float3 dir = axis / length_val;
-                            float3 toPoint = pos - startPos;
-                            float t_unclamped = dot(toPoint, dir);
-                            float t = clamp(t_unclamped, 0.0f, length_val);
-                            float3 projection = startPos + t * dir;
-                            float distToAxis = length(pos - projection);
-
-                            // Interpolate radius along the beam (consistent with beamDistance)
-                            float radius = mix(startRadius, endRadius, t / length_val);
-
-                            float surfaceDist = distToAxis - radius;
-                            if (t_unclamped <= 0.0f) {
-                                // Near start cap
-                                if (startCapStyle == 0 || startCapStyle == 1) { // hemisphere or sphere
-                                    dist = length(pos - startPos) - startRadius;
-                                } else { // butt
-                                    dist = max(surfaceDist, -t_unclamped);
-                                }
-                            } else if (t_unclamped >= length_val) {
-                                float overrun = t_unclamped - length_val;
-                                if (endCapStyle == 0 || endCapStyle == 1) { // hemisphere or sphere
-                                    dist = length(pos - endPos) - endRadius;
-                                } else { // butt
-                                    dist = max(surfaceDist, overrun);
-                                }
-                            } else {
-                                dist = surfaceDist;
-                            }
-                        } else {
-                            // Degenerate beam -> treat as sphere with max radius at start
-                            float rad = fmax(startRadius, endRadius);
-                            dist = length(pos - startPos) - rad;
-                        }
+                        // Use extracted beam distance function
+                        dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
                     }
                 } else if (primitiveType == 1) { // BALL primitive
                     int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per ball
