@@ -111,7 +111,7 @@ namespace gladius
         }
         catch (OpenCLError & e)
         {
-            m_ComputeContext->invalidate();
+            m_ComputeContext->invalidate("OpenCL error during compilation in ProgramBase");
             throw e;
         }
     }

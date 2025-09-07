@@ -76,6 +76,49 @@ namespace gladius
 
         void invalidate();
 
+        /// @brief Invalidate context with reason for debugging
+        /// @param reason The reason for invalidation
+        void invalidate(const std::string & reason);
+
+        /// @brief Enable or disable OpenCL debug output
+        /// @param enabled true to enable debug output, false to disable
+        static void setDebugOutputEnabled(bool enabled)
+        {
+            s_enableDebugOutput = enabled;
+        }
+
+        /// @brief Check if OpenCL debug output is enabled
+        /// @return true if debug output is enabled, false otherwise
+        [[nodiscard]] static bool isDebugOutputEnabled()
+        {
+            return s_enableDebugOutput;
+        }
+
+        /// @brief Validate that a command queue is still valid for use
+        /// @param queue The queue to validate
+        /// @return true if the queue is valid, false otherwise
+        bool validateQueue(const cl::CommandQueue & queue) const;
+
+        /// @brief Get diagnostic information about the compute context state
+        /// @return String with detailed context information
+        std::string getDiagnosticInfo() const;
+
+        /// @brief Perform a comprehensive validation check before critical operations
+        /// @param operationName Name of the operation being performed (for logging)
+        /// @return true if everything appears valid, false otherwise
+        bool validateForOperation(const std::string & operationName) const;
+
+        /// @brief Validate OpenCL memory objects and buffers for corruption
+        /// @param operationName Name of the operation being performed
+        /// @param buffers List of OpenCL memory objects to validate
+        /// @return true if all buffers appear valid, false otherwise
+        bool validateBuffers(const std::string & operationName,
+                             const std::vector<cl::Memory> & buffers = {}) const;
+
+        /// @brief Check for potential memory layout conflicts between BVH and NanoVDB data
+        /// @param operationName Name of the operation being performed
+        void checkMemoryLayoutConflicts(const std::string & operationName) const;
+
       private:
         cl::CommandQueue createQueue() const;
         void initContext();
@@ -84,13 +127,19 @@ namespace gladius
 
         // queue per thread
         QueuePerThread m_queues;
-        std::mutex m_queuesMutex;
+        mutable std::mutex m_queuesMutex;
 
         cl::Device m_device;
 
         bool m_isValid = false;
         EnableGLOutput m_outputGL = EnableGLOutput::disabled;
         OutputMethod m_outputMethod = OutputMethod::readpixel;
+
+        // Debug tracking
+        mutable std::atomic<size_t> m_invalidationCount{0};
+
+        // Debug output control
+        static inline bool s_enableDebugOutput = false;
     };
 
     using SharedComputeContext = std::shared_ptr<ComputeContext>;

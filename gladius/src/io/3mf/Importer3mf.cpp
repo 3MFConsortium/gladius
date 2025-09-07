@@ -1676,14 +1676,14 @@ namespace gladius::io
             // Check for beam lattice first (using same pattern as loadBeamLatticeIfNecessary)
             if (mesh)
             {
+                if (mesh->GetTriangleCount() > 0)
+                {
+                    addMeshObject(model, key, mesh, trafo, doc);
+                }
                 Lib3MF::PBeamLattice beamLattice = mesh->BeamLattice();
                 if (beamLattice)
                 {
                     addBeamLatticeObject(model, key, mesh, trafo, doc);
-                }
-                else
-                {
-                    addMeshObject(model, key, mesh, trafo, doc);
                 }
             }
         }

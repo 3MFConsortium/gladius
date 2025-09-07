@@ -2,14 +2,17 @@
 
 #include "ComputeContext.h"
 #include "EventLogger.h"
+#include "exceptions.h"
 #include "gpgpu.h"
 
+#include <fmt/format.h>
 #include <future>
 #include <map>
 #include <memory>
 #include <optional>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "ImageStackOCL.h"
@@ -91,8 +94,47 @@ namespace gladius
                             const ArgumentTypes &... args)
         {
             ProfileFunction;
+
+            auto logError = [&](const std::string & stage, const std::string & details = "")
+            {
+                auto const threadId = std::this_thread::get_id();
+                auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
+                std::string msg =
+                  fmt::format("[CLProgram::runNonBlocking] {}: Method='{}', Thread={}, Valid={}",
+                              stage,
+                              methodName,
+                              threadIdStr,
+                              isValid());
+                if (!details.empty())
+                {
+                    msg += ", Details: " + details;
+                }
+                if (m_ComputeContext)
+                {
+                    // Validate the queue before including diagnostics
+                    if (m_ComputeContext->validateQueue(queue))
+                    {
+                        msg += ", QueueValid=true";
+                    }
+                    else
+                    {
+                        msg += ", QueueValid=false";
+                    }
+                    msg += "\n" + m_ComputeContext->getDiagnosticInfo();
+                }
+                if (m_logger)
+                {
+                    m_logger->logError(msg);
+                }
+                else
+                {
+                    std::cerr << msg << "\n";
+                }
+            };
+
             if (!isValid())
             {
+                logError("Program not valid - returning");
                 return;
             }
             std::scoped_lock lock(m_compilationMutex);
@@ -104,7 +146,9 @@ namespace gladius
                 m_kernels[methodName] = cl::Kernel(*m_program, methodName.c_str(), &err);
                 if (err != CL_SUCCESS)
                 {
-                    m_ComputeContext->invalidate();
+                    logError("Kernel creation failed", fmt::format("OpenCL error: {}", err));
+                    m_ComputeContext->invalidate(
+                      "Kernel creation failed in CLProgram::runNonBlocking");
                     if (m_logger)
                     {
                         m_logger->logError("OpenCL: Creating kernel '" + methodName +
@@ -161,10 +205,27 @@ namespace gladius
                 }
                 CL_ERROR(err);
             }
-            setArgument(0, m_kernels[methodName], args...);
 
-            CL_ERROR(
-              queue.enqueueNDRangeKernel(m_kernels[methodName], origin, range, cl::NullRange));
+            try
+            {
+                setArgument(0, m_kernels[methodName], args...);
+            }
+            catch (const std::exception & e)
+            {
+                logError("Setting kernel arguments failed", e.what());
+                throw;
+            }
+
+            try
+            {
+                CL_ERROR(
+                  queue.enqueueNDRangeKernel(m_kernels[methodName], origin, range, cl::NullRange));
+            }
+            catch (const OpenCLError & e)
+            {
+                logError("Kernel enqueue failed", e.what());
+                throw;
+            }
         }
 
         template <typename... ArgumentTypes>
@@ -176,13 +237,99 @@ namespace gladius
         {
 
             ProfileFunction;
-            CL_ERROR(queue.finish());
+
+            // Enhanced error logging with context information
+            auto logError = [&](const std::string & stage, const std::string & details = "")
+            {
+                auto const threadId = std::this_thread::get_id();
+                auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
+                std::string msg =
+                  fmt::format("[CLProgram::run] {}: Method='{}', Thread={}, Valid={}",
+                              stage,
+                              methodName,
+                              threadIdStr,
+                              isValid());
+                if (!details.empty())
+                {
+                    msg += ", Details: " + details;
+                }
+                if (m_ComputeContext)
+                {
+                    msg += "\n" + m_ComputeContext->getDiagnosticInfo();
+                }
+                if (m_logger)
+                {
+                    m_logger->logError(msg);
+                }
+                else
+                {
+                    std::cerr << msg << "\n";
+                }
+            };
+
+            // Collect memory objects for validation
+            std::vector<cl::Memory> buffers;
+            collectMemoryObjects(buffers, args...);
+
+            // Validate buffers before operation
+            if (m_ComputeContext && !buffers.empty() && ComputeContext::isDebugOutputEnabled())
+            {
+                if (!m_ComputeContext->validateBuffers(methodName + "_pre", buffers))
+                {
+                    logError("Buffer validation failed before operation");
+                }
+            }
+
+            try
+            {
+                CL_ERROR(queue.finish());
+            }
+            catch (const OpenCLError & e)
+            {
+                logError("Pre-finish failed", e.what());
+                throw;
+            }
+
             if (!isValid())
             {
+                logError("Program invalid");
                 return;
             }
-            runNonBlocking(queue, methodName, origin, range, args...);
-            CL_ERROR(queue.finish());
+
+            try
+            {
+                runNonBlocking(queue, methodName, origin, range, args...);
+            }
+            catch (const std::exception & e)
+            {
+                logError("RunNonBlocking failed", e.what());
+                throw;
+            }
+
+            // Validate buffers after kernel execution but before finish
+            if (m_ComputeContext && !buffers.empty() && ComputeContext::isDebugOutputEnabled())
+            {
+                if (!m_ComputeContext->validateBuffers(methodName + "_post_kernel", buffers))
+                {
+                    logError("Buffer validation failed after kernel execution");
+                }
+            }
+
+            try
+            {
+                CL_ERROR(queue.finish());
+            }
+            catch (const OpenCLError & e)
+            {
+                logError("Post-finish failed", e.what());
+
+                // Additional validation on failure
+                if (m_ComputeContext && !buffers.empty() && ComputeContext::isDebugOutputEnabled())
+                {
+                    m_ComputeContext->validateBuffers(methodName + "_post_error", buffers);
+                }
+                throw;
+            }
         }
 
         template <typename... ArgumentTypes>
@@ -231,6 +378,26 @@ namespace gladius
         [[nodiscard]] bool isCompilationInProgress() const;
 
       private:
+        template <typename T>
+        void collectMemoryObjects(std::vector<cl::Memory> & buffers, const T & arg) const
+        {
+            if constexpr (std::is_base_of_v<cl::Memory, T>)
+            {
+                buffers.push_back(arg);
+            }
+        }
+
+        template <typename T, typename... Args>
+        void collectMemoryObjects(std::vector<cl::Memory> & buffers,
+                                  const T & arg,
+                                  const Args &... args) const
+        {
+            collectMemoryObjects(buffers, arg);
+            if constexpr (sizeof...(Args) > 0)
+            {
+                collectMemoryObjects(buffers, args...);
+            }
+        }
         void compileAsLib();
         void compile(BuildCallBack & callBack);
 

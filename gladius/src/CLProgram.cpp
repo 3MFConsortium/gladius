@@ -381,7 +381,7 @@ namespace gladius
         }
         catch (const std::exception & e)
         {
-            m_ComputeContext->invalidate();
+            m_ComputeContext->invalidate("Program build/compilation failed in CLProgram");
             const auto diag = makeProgramDiagnostics(
               *m_program, m_ComputeContext->GetDevice(), arguments, "compile(build)");
             if (m_logger)
@@ -434,7 +434,7 @@ namespace gladius
             }
             catch (const std::exception & e)
             {
-                m_ComputeContext->invalidate();
+                m_ComputeContext->invalidate("Program library compilation failed in CLProgram");
                 if (m_logger)
                 {
                     m_logger->logError(std::string("OpenCL compile failed: ") + e.what());

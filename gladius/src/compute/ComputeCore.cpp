@@ -420,10 +420,46 @@ namespace gladius
         {
             logMsg(std::string("updateBoundingBoxFast: movePointsToSurface exception: ") +
                    e.what());
+
+            // Add additional diagnostic information
+            try
+            {
+                auto diagInfo = m_ComputeContext->getDiagnosticInfo();
+                logMsg("updateBoundingBoxFast: ComputeContext diagnostics:\n" + diagInfo);
+            }
+            catch (...)
+            {
+                logMsg("updateBoundingBoxFast: Failed to get ComputeContext diagnostics");
+            }
+
             return false;
         }
 
-        CL_ERROR(m_ComputeContext->GetQueue().finish());
+        // Enhanced error handling for queue finish
+        try
+        {
+            CL_ERROR(m_ComputeContext->GetQueue().finish());
+        }
+        catch (std::exception const & e)
+        {
+            logMsg(std::string("updateBoundingBoxFast: queue.finish() failed: ") + e.what());
+
+            // Add diagnostic information
+            try
+            {
+                auto diagInfo = m_ComputeContext->getDiagnosticInfo();
+                logMsg("updateBoundingBoxFast: ComputeContext diagnostics after queue.finish() "
+                       "failure:\n" +
+                       diagInfo);
+            }
+            catch (...)
+            {
+                logMsg("updateBoundingBoxFast: Failed to get ComputeContext diagnostics after "
+                       "queue.finish() failure");
+            }
+
+            return false;
+        }
         m_resources->getConvexHullVertices().read();
         for (auto const & vertex : vertices)
         {

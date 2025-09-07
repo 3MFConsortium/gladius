@@ -6,6 +6,7 @@
 #include <fmt/format.h>
 
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <utility>
 
@@ -15,8 +16,14 @@ namespace gladius
     {
         if (err != CL_SUCCESS)
         {
-            std::cerr << fmt::format(
-              "OpenCL error: {} ({}): {}\n", description, err, getOpenCLErrorDescription(err));
+            auto const threadId = std::this_thread::get_id();
+            auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
+
+            std::cerr << fmt::format("OpenCL error: {} ({}): {} [Thread: {}]\n",
+                                     description,
+                                     err,
+                                     getOpenCLErrorDescription(err),
+                                     threadIdStr);
             throw OpenCLError(err);
         }
     }
@@ -314,53 +321,79 @@ namespace gladius
         std::lock_guard<std::mutex> lock(m_queuesMutex);
 
         auto const currentThreadId = std::this_thread::get_id();
+        auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(currentThreadId));
+
+        // Enhanced logging for queue retrieval
+        auto logDiagnostics = [&](const std::string & stage)
+        {
+            std::cerr << fmt::format(
+              "[GetQueue] {}: Thread={}, ContextValid={}, NumQueues={}, ContextPtr={}\n",
+              stage,
+              threadIdStr,
+              m_isValid,
+              m_queues.size(),
+              static_cast<void *>(m_context.get()));
+        };
+
+        logDiagnostics("Entry");
 
         // Check if context is valid before attempting to create queue
         if (!m_isValid)
         {
+            logDiagnostics("Context Invalid");
             throw OpenCLQueueCreationError("ComputeContext is not valid", currentThreadId);
         }
 
         if (!m_context)
         {
+            logDiagnostics("Context Null");
             throw OpenCLQueueCreationError("OpenCL context is null", currentThreadId);
         }
 
         auto iter = m_queues.find(currentThreadId);
         if (iter == m_queues.end())
         {
+            logDiagnostics("Creating new queue");
             try
             {
                 auto newQueue = createQueue();
                 auto result = m_queues.emplace(currentThreadId, std::move(newQueue));
                 if (!result.second)
                 {
+                    logDiagnostics("Queue insertion failed");
                     throw ThreadQueueManagementError("queue insertion", currentThreadId);
                 }
+                logDiagnostics("Queue created successfully");
                 return result.first->second;
             }
             catch (OpenCLQueueCreationError const &)
             {
+                logDiagnostics("Queue creation error - rethrowing");
                 // Re-throw our specific queue creation errors
                 throw;
             }
             catch (ThreadQueueManagementError const &)
             {
+                logDiagnostics("Thread management error - rethrowing");
                 // Re-throw thread management errors
                 throw;
             }
             catch (OpenCLError const & e)
             {
+                logDiagnostics("OpenCL error during creation");
                 throw OpenCLQueueCreationError(
                   "OpenCL error during queue creation: " + std::string(e.what()), currentThreadId);
             }
             catch (std::exception const & e)
             {
+                logDiagnostics("Unexpected error during creation");
                 throw OpenCLQueueCreationError("Unexpected error during queue creation: " +
                                                  std::string(e.what()),
                                                currentThreadId);
             }
         }
+
+        logDiagnostics("Returning existing queue");
         return iter->second;
     }
 
@@ -382,7 +415,342 @@ namespace gladius
 
     void ComputeContext::invalidate()
     {
+        invalidate("unspecified reason");
+    }
+
+    void ComputeContext::invalidate(const std::string & reason)
+    {
+        std::lock_guard<std::mutex> lock(m_queuesMutex);
+        auto const threadIdStr =
+          std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+
+        m_invalidationCount++;
+
+        std::cerr << fmt::format("[ComputeContext::invalidate] Reason='{}', Thread={}, had {} "
+                                 "queues, total invalidations={}\n",
+                                 reason,
+                                 threadIdStr,
+                                 m_queues.size(),
+                                 m_invalidationCount.load());
+
+        if (m_invalidationCount > 5)
+        {
+            std::cerr
+              << "[ComputeContext::invalidate] WARNING: High number of invalidations detected! "
+                 "This may indicate a serious OpenCL context issue.\n";
+        }
+
         m_isValid = false;
+
+        // Clear all queues as they're now invalid
+        m_queues.clear();
+    }
+
+    bool ComputeContext::validateQueue(const cl::CommandQueue & queue) const
+    {
+        if (!m_isValid)
+        {
+            return false;
+        }
+
+        try
+        {
+            // Try to get queue info to check if it's still valid
+            auto context = queue.getInfo<CL_QUEUE_CONTEXT>();
+            auto device = queue.getInfo<CL_QUEUE_DEVICE>();
+            return (context() == m_context->operator()() && device() == m_device());
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
+    std::string ComputeContext::getDiagnosticInfo() const
+    {
+        std::lock_guard<std::mutex> lock(m_queuesMutex);
+        auto const threadIdStr =
+          std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+
+        std::string info = fmt::format("ComputeContext Diagnostics:\n"
+                                       "  Current Thread: {}\n"
+                                       "  Context Valid: {}\n"
+                                       "  Context Ptr: {}\n"
+                                       "  Number of Queues: {}\n"
+                                       "  Output Method: {}\n"
+                                       "  Total Invalidations: {}\n",
+                                       threadIdStr,
+                                       m_isValid,
+                                       static_cast<void *>(m_context.get()),
+                                       m_queues.size(),
+                                       static_cast<int>(m_outputMethod),
+                                       m_invalidationCount.load());
+
+        if (m_isValid && m_context)
+        {
+            try
+            {
+                auto deviceName = m_device.getInfo<CL_DEVICE_NAME>();
+                auto platformName = m_device.getInfo<CL_DEVICE_PLATFORM>();
+                cl::Platform platform(platformName);
+                auto platformNameStr = platform.getInfo<CL_PLATFORM_NAME>();
+
+                info += fmt::format("  Device: {}\n"
+                                    "  Platform: {}\n",
+                                    deviceName,
+                                    platformNameStr);
+            }
+            catch (...)
+            {
+                info += "  Device/Platform info: [Error retrieving]\n";
+            }
+        }
+
+        return info;
+    }
+
+    bool ComputeContext::validateForOperation(const std::string & operationName) const
+    {
+        std::lock_guard<std::mutex> lock(m_queuesMutex);
+        auto const threadId = std::this_thread::get_id();
+        auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
+
+        bool allValid = true;
+        std::string issues;
+
+        if (!m_isValid)
+        {
+            allValid = false;
+            issues += "Context marked invalid; ";
+        }
+
+        if (!m_context)
+        {
+            allValid = false;
+            issues += "Context pointer is null; ";
+        }
+
+        auto queueIt = m_queues.find(threadId);
+        if (queueIt != m_queues.end())
+        {
+            if (!validateQueue(queueIt->second))
+            {
+                allValid = false;
+                issues += "Queue validation failed; ";
+            }
+        }
+        else
+        {
+            // No queue exists for this thread yet - not necessarily an issue
+            issues += "No queue exists for current thread (will be created); ";
+        }
+
+        std::string logMsg =
+          fmt::format("[ComputeContext::validateForOperation] Operation='{}', Thread={}, Valid={}",
+                      operationName,
+                      threadIdStr,
+                      allValid);
+        if (!issues.empty())
+        {
+            logMsg += ", Issues: " + issues;
+        }
+
+        std::cerr << logMsg << "\n";
+
+        if (!allValid)
+        {
+            std::cerr << getDiagnosticInfo() << "\n";
+        }
+
+        return allValid;
+    }
+
+    bool ComputeContext::validateBuffers(const std::string & operationName,
+                                         const std::vector<cl::Memory> & buffers) const
+    {
+        if (!s_enableDebugOutput)
+        {
+            return true; // Skip validation when debug output is disabled
+        }
+
+        auto const threadId = std::this_thread::get_id();
+        auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
+
+        bool allValid = true;
+        std::string issues;
+
+        std::cerr << fmt::format(
+          "[ComputeContext::validateBuffers] Operation='{}', Thread={}, BufferCount={}\n",
+          operationName,
+          threadIdStr,
+          buffers.size());
+
+        // Track buffer handles and check for corruption indicators
+        std::set<cl_mem> uniqueHandles;
+        size_t totalMemory = 0;
+
+        for (size_t i = 0; i < buffers.size(); ++i)
+        {
+            try
+            {
+                // Basic buffer validity check
+                auto size = buffers[i].getInfo<CL_MEM_SIZE>();
+                auto flags = buffers[i].getInfo<CL_MEM_FLAGS>();
+                auto context = buffers[i].getInfo<CL_MEM_CONTEXT>();
+                auto handle = buffers[i]();
+
+                totalMemory += size;
+
+                // Track unique handles (reuse is normal and expected)
+                bool isReused = uniqueHandles.count(handle) > 0;
+                uniqueHandles.insert(handle);
+
+                // Verify buffer belongs to our context
+                bool contextMatch = (m_context && context() == m_context->operator()());
+                if (!contextMatch)
+                {
+                    allValid = false;
+                    issues += fmt::format("Buffer[{}] context mismatch; ", i);
+                }
+
+                // Check for signs of corruption
+                bool suspiciousSize = false;
+                if (size == 0)
+                {
+                    allValid = false;
+                    issues += fmt::format("Buffer[{}] zero size; ", i);
+                    suspiciousSize = true;
+                }
+                else if (size > (4ULL << 30))
+                { // 4GB seems excessive for most operations
+                    allValid = false;
+                    issues += fmt::format(
+                      "Buffer[{}] extremely large ({}GB); ", i, size / (1024 * 1024 * 1024));
+                    suspiciousSize = true;
+                }
+
+                // Check if buffer handle is null (clear corruption indicator)
+                if (handle == nullptr)
+                {
+                    allValid = false;
+                    issues += fmt::format("Buffer[{}] null handle; ", i);
+                }
+
+                // Try to get host pointer if available
+                std::string hostPtrInfo = "device-only";
+                if (flags & CL_MEM_USE_HOST_PTR)
+                {
+                    try
+                    {
+                        auto hostPtr = buffers[i].getInfo<CL_MEM_HOST_PTR>();
+                        hostPtrInfo =
+                          fmt::format("host:0x{:x}", reinterpret_cast<uintptr_t>(hostPtr));
+                    }
+                    catch (...)
+                    {
+                        hostPtrInfo = "host:invalid";
+                        allValid = false;
+                        issues += fmt::format("Buffer[{}] invalid host ptr; ", i);
+                    }
+                }
+
+                if (s_enableDebugOutput)
+                {
+                    std::cerr << fmt::format("  Buffer[{}]: Size={}MB, Flags=0x{:x}, Context={}, "
+                                             "Handle=0x{:x}, Memory={}, Reused={}\n",
+                                             i,
+                                             size / (1024 * 1024),
+                                             flags,
+                                             contextMatch ? "OK" : "MISMATCH",
+                                             reinterpret_cast<uintptr_t>(handle),
+                                             hostPtrInfo,
+                                             isReused ? "YES" : "NO");
+                }
+            }
+            catch (const std::exception & e)
+            {
+                allValid = false;
+                issues += fmt::format("Buffer[{}] access failed: {}; ", i, e.what());
+                if (s_enableDebugOutput)
+                {
+                    std::cerr << fmt::format("  Buffer[{}]: CORRUPTED - {}\n", i, e.what());
+                }
+            }
+        }
+
+        if (s_enableDebugOutput)
+        {
+            std::cerr << fmt::format("  Total GPU Memory: {}MB across {} unique buffers\n",
+                                     totalMemory / (1024 * 1024),
+                                     uniqueHandles.size());
+
+            if (!allValid)
+            {
+                std::cerr << fmt::format(
+                  "[ComputeContext::validateBuffers] CORRUPTION DETECTED: {}\n", issues);
+            }
+            else
+            {
+                std::cerr << "[ComputeContext::validateBuffers] All buffers appear healthy\n";
+            }
+        }
+
+        return allValid;
+    }
+
+    void ComputeContext::checkMemoryLayoutConflicts(const std::string & operationName) const
+    {
+        if (!s_enableDebugOutput)
+        {
+            return; // Skip memory layout checks when debug output is disabled
+        }
+
+        auto const threadId = std::this_thread::get_id();
+        auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
+
+        std::cerr << fmt::format(
+          "[ComputeContext::checkMemoryLayoutConflicts] Operation='{}', Thread={}\n",
+          operationName,
+          threadIdStr);
+
+        try
+        {
+            // Get context memory statistics
+            auto devices = m_context->getInfo<CL_CONTEXT_DEVICES>();
+            if (!devices.empty())
+            {
+                auto device = devices[0];
+                auto maxMemAlloc = device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
+                auto globalMemSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
+                auto localMemSize = device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+
+                std::cerr << fmt::format(
+                  "  Device Memory: Global={}MB, MaxAlloc={}MB, Local={}KB\n",
+                  globalMemSize / (1024 * 1024),
+                  maxMemAlloc / (1024 * 1024),
+                  localMemSize / 1024);
+            }
+
+            // Check for OpenCL context memory issues
+            try
+            {
+                // Try to allocate a small test buffer to verify context health
+                cl::Buffer testBuffer(*m_context, CL_MEM_READ_WRITE, 1024);
+                auto size = testBuffer.getInfo<CL_MEM_SIZE>();
+                std::cerr << fmt::format("  Test buffer allocation successful: {}B\n", size);
+            }
+            catch (const std::exception & e)
+            {
+                std::cerr << fmt::format("  WARNING: Test buffer allocation failed: {}\n",
+                                         e.what());
+            }
+        }
+        catch (const std::exception & e)
+        {
+            std::cerr << fmt::format(
+              "[ComputeContext::checkMemoryLayoutConflicts] Error getting memory info: {}\n",
+              e.what());
+        }
     }
 
     cl::CommandQueue ComputeContext::createQueue() const
@@ -438,7 +806,8 @@ namespace gladius
 
             std::stable_sort(std::begin(accelerators),
                              std::end(accelerators),
-                             [](Accelerator const & lhs, Accelerator const & rhs) {
+                             [](Accelerator const & lhs, Accelerator const & rhs)
+                             {
                                  return lhs.capabilities.performanceEstimation >
                                         rhs.capabilities.performanceEstimation;
                              });

@@ -150,6 +150,22 @@ namespace gladius
         voxelMeta.scaling = 1.0f;
         m_payloadData.meta.push_back(voxelMeta);
 
+        // Add buffer alignment padding to prevent memory corruption between NanoVDB grids and
+        // beam/ball data NanoVDB requires 32-byte alignment, so we ensure the next data region
+        // starts at a proper boundary
+        constexpr size_t BUFFER_ALIGNMENT = 32; // Match CNANOVDB_DATA_ALIGNMENT
+        size_t currentByteOffset = m_payloadData.data.size() * sizeof(float);
+        size_t paddingBytes =
+          (BUFFER_ALIGNMENT - (currentByteOffset % BUFFER_ALIGNMENT)) % BUFFER_ALIGNMENT;
+        size_t paddingFloats =
+          (paddingBytes + sizeof(float) - 1) / sizeof(float); // Round up to float boundary
+
+        // Add padding floats to ensure alignment
+        for (size_t i = 0; i < paddingFloats; ++i)
+        {
+            m_payloadData.data.push_back(0.0f);
+        }
+
         // Primitive indices mapping is still needed for evaluation details (BVH path fallbacks)
         // We create the same ordering as BVH builder would: beams first then balls
         std::vector<BeamPrimitive> ordering;
