@@ -78,7 +78,7 @@ namespace gladius
     {
         // Build voxel grids from beam/ball data
         BeamLatticeVoxelSettings settings;
-        settings.voxelSize = 1.0f; // TODO: expose as parameter
+        settings.voxelSize = 0.5f; // TODO: expose as parameter
         settings.maxDistance = 10.0f;
         settings.separateBeamBallGrids = false;
         settings.encodeTypeInIndex = true; // encode type in upper bit

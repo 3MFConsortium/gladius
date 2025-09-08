@@ -7,11 +7,18 @@
 
 #pragma once
 
+// Enable Phase 3 optimizations (temporarily disabled to bypass compile issue)
+// #define ENABLE_PHASE3_SIMD
+
 #include "BeamLatticeResource.h"
 #include "io/vdb.h"
 #include <openvdb/Grid.h>
 #include <openvdb/tools/ChangeBackground.h>
 #include <openvdb/tools/GridTransformer.h>
+#ifdef ENABLE_PHASE3_SIMD
+#include <immintrin.h> // For SIMD intrinsics
+#endif
+#include <thread> // For parallelization
 
 namespace gladius
 {
@@ -19,7 +26,7 @@ namespace gladius
     struct BeamLatticeVoxelSettings
     {
         /// @brief Voxel size in world units (smaller = more accurate but larger memory)
-        float voxelSize = 1.0f;
+        float voxelSize = 0.5f;
 
         /// @brief Maximum distance to consider for primitive assignment
         float maxDistance = 10.0f;
@@ -33,11 +40,20 @@ namespace gladius
         /// @brief Enable debug output during grid construction
         bool enableDebugOutput = false;
 
-        /// @brief Optimization phase to use (1=bounding box, 2=primitive-centric)
-        int optimizationPhase = 2;
+        /// @brief Optimization phase to use (1=bounding box, 2=primitive-centric, 3=parallel+SIMD)
+        int optimizationPhase = 3;
 
         /// @brief Spatial hash cell size multiplier (relative to voxel size)
         float spatialHashCellSizeMultiplier = 4.0f;
+
+        /// @brief Number of threads for parallel processing (0 = auto-detect)
+        unsigned int numThreads = 0;
+
+        /// @brief Enable SIMD optimizations if supported by CPU
+        bool enableSIMD = true;
+
+        /// @brief Batch size for SIMD processing
+        unsigned int simdBatchSize = 8;
     };
 
     /// @brief Creates voxel acceleration grids for beam lattice structures
@@ -58,6 +74,18 @@ namespace gladius
         std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
         buildVoxelGridsPhase1(const std::vector<BeamData> & beams,
                               const std::vector<BallData> & balls,
+                              BeamLatticeVoxelSettings const & settings);
+
+        /// @brief Phase 2: Build voxel grids using primitive-centric algorithm
+        std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
+        buildVoxelGridsPhase2(std::vector<BeamData> const & beams,
+                              std::vector<BallData> const & balls,
+                              BeamLatticeVoxelSettings const & settings);
+
+        /// @brief Phase 3: Build voxel grids using parallel + SIMD optimization
+        std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
+        buildVoxelGridsPhase3(std::vector<BeamData> const & beams,
+                              std::vector<BallData> const & balls,
                               BeamLatticeVoxelSettings const & settings);
 
         /// @brief Get statistics from last grid build
@@ -82,6 +110,20 @@ namespace gladius
             return m_lastStats;
         }
 
+#ifdef ENABLE_PHASE3_SIMD
+        /// @brief CPU capability detection for SIMD optimizations
+        struct CPUCapabilities
+        {
+            bool hasSSE41 = false;
+            bool hasAVX = false;
+            bool hasAVX2 = false;
+            bool hasAVX512F = false;
+        };
+
+        /// @brief Get CPU capabilities for SIMD optimization
+        static CPUCapabilities detectCPUCapabilities();
+#endif
+
       private:
         BuildStats m_lastStats;
 
@@ -105,6 +147,24 @@ namespace gladius
             std::vector<size_t> beamIndices; ///< Beam indices in this cell
             std::vector<size_t> ballIndices; ///< Ball indices in this cell
         };
+
+#ifdef ENABLE_PHASE3_SIMD
+        /// @brief Phase 3: SIMD-aligned beam data for vectorized operations
+        struct alignas(32) SIMDBeamData
+        {
+            float startX, startY, startZ, startRadius;
+            float endX, endY, endZ, endRadius;
+            float dirX, dirY, dirZ, length;
+            size_t originalIndex;
+        };
+
+        /// @brief Phase 3: SIMD-aligned ball data for vectorized operations
+        struct alignas(32) SIMDBallData
+        {
+            float x, y, z, radius;
+            size_t originalIndex;
+        };
+#endif
 
         /// @brief Phase 2: Spatial hash grid for efficient primitive-to-voxel mapping
         struct SpatialHashGrid
@@ -143,6 +203,20 @@ namespace gladius
 
         /// @brief Calculate distance from point to ball primitive
         float calculateBallDistance(openvdb::Vec3f const & point, BallData const & ball) const;
+
+#ifdef ENABLE_PHASE3_SIMD
+        /// @brief Phase 3: SIMD-optimized beam distance calculation (processes up to 8 beams)
+        void calculateBeamDistancesSIMD(openvdb::Vec3f const & point,
+                                        SIMDBeamData const * beams,
+                                        size_t numBeams,
+                                        float * distances) const;
+
+        /// @brief Phase 3: SIMD-optimized ball distance calculation (processes up to 8 balls)
+        void calculateBallDistancesSIMD(openvdb::Vec3f const & point,
+                                        SIMDBallData const * balls,
+                                        size_t numBalls,
+                                        float * distances) const;
+#endif
 
         /// @brief Find closest primitive to a point
         /// @param point World space position
@@ -189,12 +263,6 @@ namespace gladius
                                              float voxelSize,
                                              float maxDistance) const;
 
-        /// @brief Phase 2: Build voxel grids using primitive-centric algorithm
-        std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
-        buildVoxelGridsPhase2(std::vector<BeamData> const & beams,
-                              std::vector<BallData> const & balls,
-                              BeamLatticeVoxelSettings const & settings);
-
         /// @brief Process primitive influence on nearby voxels using spatial hash
         void processPrimitiveInfluence(openvdb::Int32Grid::Ptr & primitiveIndexGrid,
                                        openvdb::Int32Grid::Ptr & primitiveTypeGrid,
@@ -203,6 +271,64 @@ namespace gladius
                                        std::vector<BallData> const & balls,
                                        BeamLatticeVoxelSettings const & settings,
                                        openvdb::math::Transform::Ptr const & transform);
+
+        // Phase 3 optimization methods
+#ifdef ENABLE_PHASE3_SIMD
+        /// @brief Convert beam data to SIMD-aligned format
+        std::vector<SIMDBeamData> prepareSIMDBeamData(std::vector<BeamData> const & beams) const;
+
+        /// @brief Convert ball data to SIMD-aligned format
+        std::vector<SIMDBallData> prepareSIMDBallData(std::vector<BallData> const & balls) const;
+
+        /// @brief Phase 3: Process spatial hash cells in parallel with SIMD
+        void processSpatialHashCellsParallel(openvdb::Int32Grid::Ptr & primitiveIndexGrid,
+                                             openvdb::Int32Grid::Ptr & primitiveTypeGrid,
+                                             SpatialHashGrid const & spatialHash,
+                                             std::vector<SIMDBeamData> const & simdBeams,
+                                             std::vector<SIMDBallData> const & simdBalls,
+                                             BeamLatticeVoxelSettings const & settings,
+                                             openvdb::math::Transform::Ptr const & transform);
+
+        /// @brief Phase 3: Process a single spatial hash cell with SIMD optimization
+        void processSpatialHashCellSIMD(openvdb::Int32Grid::Ptr & primitiveIndexGrid,
+                                        openvdb::Int32Grid::Ptr & primitiveTypeGrid,
+                                        SpatialHashCell const & cell,
+                                        SpatialHashGrid const & spatialHash,
+                                        std::vector<SIMDBeamData> const & simdBeams,
+                                        std::vector<SIMDBallData> const & simdBalls,
+                                        BeamLatticeVoxelSettings const & settings,
+                                        openvdb::math::Transform::Ptr const & transform,
+                                        size_t cellIndex) const;
+#endif
+
+      private:
+        /// @brief Statistics from processing a spatial hash cell
+        struct CellProcessingStats
+        {
+            size_t voxelsProcessed = 0;
+            size_t primitivesProcessed = 0;
+            std::chrono::microseconds processingTime{0};
+            size_t activeVoxels = 0;
+            size_t primitiveVoxelPairs = 0;
+            float totalDistance = 0.0f;
+            float maxDistance = 0.0f;
+        };
+
+#ifdef ENABLE_PHASE3_SIMD
+        /// @brief Thread-safe version of SIMD cell processing that returns statistics
+        CellProcessingStats
+        processSpatialHashCellSIMDThreadSafe(openvdb::Int32Grid::Ptr & primitiveIndexGrid,
+                                             openvdb::Int32Grid::Ptr & primitiveTypeGrid,
+                                             SpatialHashCell const & cell,
+                                             SpatialHashGrid const & spatialHash,
+                                             std::vector<SIMDBeamData> const & simdBeams,
+                                             std::vector<SIMDBallData> const & simdBalls,
+                                             BeamLatticeVoxelSettings const & settings,
+                                             openvdb::math::Transform::Ptr const & transform,
+                                             size_t cellIndex) const;
+
+        // End of Phase 3 SIMD optimization methods
+#endif
     };
 
     /// @brief Extended beam lattice resource with voxel acceleration option

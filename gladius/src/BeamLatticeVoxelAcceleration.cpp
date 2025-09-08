@@ -6,12 +6,22 @@
 #include "BeamLatticeVoxelAcceleration.h"
 #include "Primitives.h"
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <immintrin.h> // For SIMD intrinsics
 #include <iostream>
+#include <mutex> // For thread-safe operations
 #include <openvdb/openvdb.h>
 #include <openvdb/tools/ChangeBackground.h>
 #include <openvdb/tools/Composite.h>
+#include <thread> // For parallelization
+
+#ifdef _WIN32
+#include <intrin.h>
+#else
+#include <cpuid.h>
+#endif
 
 namespace gladius
 {
@@ -20,169 +30,558 @@ namespace gladius
                                              std::vector<BallData> const & balls,
                                              BeamLatticeVoxelSettings const & settings)
     {
-        // Choose optimization phase based on settings
-        if (settings.optimizationPhase >= 2)
+#if defined(ENABLE_PHASE3_SIMD)
+        if (settings.optimizationPhase >= 3)
+        {
+            return buildVoxelGridsPhase3(beams, balls, settings);
+        }
+#endif
+        if (settings.optimizationPhase == 2 || settings.optimizationPhase >= 3)
         {
             return buildVoxelGridsPhase2(beams, balls, settings);
         }
+        return buildVoxelGridsPhase1(beams, balls, settings);
+    }
+
+#ifdef ENABLE_PHASE3_SIMD
+    gladius::BeamLatticeVoxelBuilder::CPUCapabilities
+    BeamLatticeVoxelBuilder::detectCPUCapabilities()
+    {
+        CPUCapabilities caps;
+#ifdef _WIN32
+        int cpuInfo[4];
+        __cpuid(cpuInfo, 1);
+        caps.hasSSE41 = (cpuInfo[2] & (1 << 19)) != 0;
+        caps.hasAVX = (cpuInfo[2] & (1 << 28)) != 0;
+        __cpuid(cpuInfo, 7);
+        caps.hasAVX2 = (cpuInfo[1] & (1 << 5)) != 0;
+        caps.hasAVX512F = (cpuInfo[1] & (1 << 16)) != 0;
+#else
+        unsigned int eax, ebx, ecx, edx;
+        __get_cpuid(1, &eax, &ebx, &ecx, &edx);
+        caps.hasSSE41 = (ecx & (1 << 19)) != 0;
+        caps.hasAVX = (ecx & (1 << 28)) != 0;
+        __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx);
+        caps.hasAVX2 = (ebx & (1 << 5)) != 0;
+        caps.hasAVX512F = (ebx & (1 << 16)) != 0;
+#endif
+        return caps;
+    }
+
+    std::vector<gladius::BeamLatticeVoxelBuilder::SIMDBeamData>
+    gladius::BeamLatticeVoxelBuilder::prepareSIMDBeamData(std::vector<BeamData> const & beams) const
+    {
+        std::vector<SIMDBeamData> simdBeams;
+        simdBeams.reserve(beams.size());
+        for (size_t i = 0; i < beams.size(); ++i)
+        {
+            BeamData const & beam = beams[i];
+            SIMDBeamData simdBeam;
+            simdBeam.startX = static_cast<float>(beam.startPos.x);
+            simdBeam.startY = static_cast<float>(beam.startPos.y);
+            simdBeam.startZ = static_cast<float>(beam.startPos.z);
+            simdBeam.startRadius = beam.startRadius;
+            simdBeam.endX = static_cast<float>(beam.endPos.x);
+            simdBeam.endY = static_cast<float>(beam.endPos.y);
+            simdBeam.endZ = static_cast<float>(beam.endPos.z);
+            simdBeam.endRadius = beam.endRadius;
+            float dx = simdBeam.endX - simdBeam.startX;
+            float dy = simdBeam.endY - simdBeam.startY;
+            float dz = simdBeam.endZ - simdBeam.startZ;
+            simdBeam.length = std::sqrt(dx * dx + dy * dy + dz * dz);
+            if (simdBeam.length > 1e-6f)
+            {
+                simdBeam.dirX = dx / simdBeam.length;
+                simdBeam.dirY = dy / simdBeam.length;
+                simdBeam.dirZ = dz / simdBeam.length;
+            }
+            else
+            {
+                simdBeam.dirX = simdBeam.dirY = simdBeam.dirZ = 0.0f;
+            }
+            simdBeam.originalIndex = i;
+            simdBeams.push_back(simdBeam);
+        }
+        return simdBeams;
+    }
+
+    std::vector<gladius::BeamLatticeVoxelBuilder::SIMDBallData>
+    gladius::BeamLatticeVoxelBuilder::prepareSIMDBallData(std::vector<BallData> const & balls) const
+    {
+        std::vector<SIMDBallData> simdBalls;
+        simdBalls.reserve(balls.size());
+        for (size_t i = 0; i < balls.size(); ++i)
+        {
+            BallData const & ball = balls[i];
+            SIMDBallData simdBall;
+            simdBall.x = ball.position.x;
+            simdBall.y = ball.position.y;
+            simdBall.z = ball.position.z;
+            simdBall.radius = ball.radius;
+            simdBall.originalIndex = i;
+            simdBalls.push_back(simdBall);
+        }
+        return simdBalls;
+    }
+
+    void gladius::BeamLatticeVoxelBuilder::calculateBeamDistancesSIMD(openvdb::Vec3f const & point,
+                                                                      SIMDBeamData const * beams,
+                                                                      size_t numBeams,
+                                                                      float * distances) const
+    {
+        static CPUCapabilities caps = detectCPUCapabilities();
+        if (caps.hasAVX2 && numBeams >= 8)
+        {
+            size_t simdCount = numBeams & ~7;
+#ifdef __AVX2__
+            __m256 pointX = _mm256_set1_ps(point.x());
+            __m256 pointY = _mm256_set1_ps(point.y());
+            __m256 pointZ = _mm256_set1_ps(point.z());
+            __m256 zero = _mm256_setzero_ps();
+            __m256 eps = _mm256_set1_ps(1e-6f);
+            for (size_t i = 0; i < simdCount; i += 8)
+            {
+                __m256 startX = _mm256_load_ps(&beams[i].startX);
+                __m256 startY = _mm256_load_ps(&beams[i].startY);
+                __m256 startZ = _mm256_load_ps(&beams[i].startZ);
+                __m256 startRadius = _mm256_load_ps(&beams[i].startRadius);
+                __m256 endX = _mm256_load_ps(&beams[i].endX);
+                __m256 endY = _mm256_load_ps(&beams[i].endY);
+                __m256 endZ = _mm256_load_ps(&beams[i].endZ);
+                __m256 endRadius = _mm256_load_ps(&beams[i].endRadius);
+                __m256 dirX = _mm256_load_ps(&beams[i].dirX);
+                __m256 dirY = _mm256_load_ps(&beams[i].dirY);
+                __m256 dirZ = _mm256_load_ps(&beams[i].dirZ);
+                __m256 length = _mm256_load_ps(&beams[i].length);
+                __m256 vX = _mm256_sub_ps(pointX, startX);
+                __m256 vY = _mm256_sub_ps(pointY, startY);
+                __m256 vZ = _mm256_sub_ps(pointZ, startZ);
+                __m256 t =
+                  _mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(vX, dirX), _mm256_mul_ps(vY, dirY)),
+                                _mm256_mul_ps(vZ, dirZ));
+                t = _mm256_max_ps(zero, _mm256_min_ps(length, t));
+                __m256 closestX = _mm256_add_ps(startX, _mm256_mul_ps(dirX, t));
+                __m256 closestY = _mm256_add_ps(startY, _mm256_mul_ps(dirY, t));
+                __m256 closestZ = _mm256_add_ps(startZ, _mm256_mul_ps(dirZ, t));
+                __m256 dX = _mm256_sub_ps(pointX, closestX);
+                __m256 dY = _mm256_sub_ps(pointY, closestY);
+                __m256 dZ = _mm256_sub_ps(pointZ, closestZ);
+                __m256 coreDist = _mm256_sqrt_ps(
+                  _mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(dX, dX), _mm256_mul_ps(dY, dY)),
+                                _mm256_mul_ps(dZ, dZ)));
+                __m256 tNorm = _mm256_div_ps(t, _mm256_max_ps(length, eps));
+                __m256 radiusDiff = _mm256_sub_ps(endRadius, startRadius);
+                __m256 radius = _mm256_add_ps(startRadius, _mm256_mul_ps(radiusDiff, tNorm));
+                __m256 result = _mm256_sub_ps(coreDist, radius);
+                _mm256_store_ps(&distances[i], result);
+            }
+            for (size_t i = simdCount; i < numBeams; ++i)
+            {
+                SIMDBeamData const & beam = beams[i];
+                BeamData scalarBeam;
+                scalarBeam.startPos = {beam.startX, beam.startY, beam.startZ};
+                scalarBeam.endPos = {beam.endX, beam.endY, beam.endZ};
+                scalarBeam.startRadius = beam.startRadius;
+                scalarBeam.endRadius = beam.endRadius;
+                distances[i] = calculateBeamDistance(point, scalarBeam);
+            }
+#else
+            for (size_t i = 0; i < numBeams; ++i)
+            {
+                SIMDBeamData const & beam = beams[i];
+                BeamData scalarBeam;
+                scalarBeam.startPos = {beam.startX, beam.startY, beam.startZ};
+                scalarBeam.endPos = {beam.endX, beam.endY, beam.endZ};
+                scalarBeam.startRadius = beam.startRadius;
+                scalarBeam.endRadius = beam.endRadius;
+                distances[i] = calculateBeamDistance(point, scalarBeam);
+            }
+#endif
+        }
         else
         {
-            return buildVoxelGridsPhase1(beams, balls, settings);
+            for (size_t i = 0; i < numBeams; ++i)
+            {
+                SIMDBeamData const & beam = beams[i];
+                BeamData scalarBeam;
+                scalarBeam.startPos = {beam.startX, beam.startY, beam.startZ};
+                scalarBeam.endPos = {beam.endX, beam.endY, beam.endZ};
+                scalarBeam.startRadius = beam.startRadius;
+                scalarBeam.endRadius = beam.endRadius;
+                distances[i] = calculateBeamDistance(point, scalarBeam);
+            }
+        }
+    }
+
+    void gladius::BeamLatticeVoxelBuilder::calculateBallDistancesSIMD(openvdb::Vec3f const & point,
+                                                                      SIMDBallData const * balls,
+                                                                      size_t numBalls,
+                                                                      float * distances) const
+    {
+        static CPUCapabilities caps = detectCPUCapabilities();
+        if (caps.hasAVX2 && numBalls >= 8)
+        {
+            size_t simdCount = numBalls & ~7;
+#ifdef __AVX2__
+            __m256 pointX = _mm256_set1_ps(point.x());
+            __m256 pointY = _mm256_set1_ps(point.y());
+            __m256 pointZ = _mm256_set1_ps(point.z());
+            for (size_t i = 0; i < simdCount; i += 8)
+            {
+                __m256 ballX = _mm256_load_ps(&balls[i].x);
+                __m256 ballY = _mm256_load_ps(&balls[i].y);
+                __m256 ballZ = _mm256_load_ps(&balls[i].z);
+                __m256 radius = _mm256_load_ps(&balls[i].radius);
+                __m256 dX = _mm256_sub_ps(pointX, ballX);
+                __m256 dY = _mm256_sub_ps(pointY, ballY);
+                __m256 dZ = _mm256_sub_ps(pointZ, ballZ);
+                __m256 distSq =
+                  _mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(dX, dX), _mm256_mul_ps(dY, dY)),
+                                _mm256_mul_ps(dZ, dZ));
+                __m256 dist = _mm256_sqrt_ps(distSq);
+                __m256 result = _mm256_sub_ps(dist, radius);
+                _mm256_store_ps(&distances[i], result);
+            }
+            for (size_t i = simdCount; i < numBalls; ++i)
+            {
+                SIMDBallData const & ball = balls[i];
+                BallData scalarBall;
+                scalarBall.position = {ball.x, ball.y, ball.z};
+                scalarBall.radius = ball.radius;
+                distances[i] = calculateBallDistance(point, scalarBall);
+            }
+#else
+            for (size_t i = 0; i < numBalls; ++i)
+            {
+                SIMDBallData const & ball = balls[i];
+                BallData scalarBall;
+                scalarBall.position = {ball.x, ball.y, ball.z};
+                scalarBall.radius = ball.radius;
+                distances[i] = calculateBallDistance(point, scalarBall);
+            }
+#endif
+        }
+        else
+        {
+            for (size_t i = 0; i < numBalls; ++i)
+            {
+                SIMDBallData const & ball = balls[i];
+                BallData scalarBall;
+                scalarBall.position = {ball.x, ball.y, ball.z};
+                scalarBall.radius = ball.radius;
+                distances[i] = calculateBallDistance(point, scalarBall);
+            }
         }
     }
 
     std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
-    BeamLatticeVoxelBuilder::buildVoxelGridsPhase1(std::vector<BeamData> const & beams,
-                                                   std::vector<BallData> const & balls,
-                                                   BeamLatticeVoxelSettings const & settings)
+    gladius::BeamLatticeVoxelBuilder::buildVoxelGridsPhase3(
+      std::vector<BeamData> const & beams,
+      std::vector<BallData> const & balls,
+      BeamLatticeVoxelSettings const & settings)
     {
         auto startTime = std::chrono::high_resolution_clock::now();
         m_lastStats = BuildStats{};
-
         if (beams.empty() && balls.empty())
         {
             return {nullptr, nullptr};
         }
-
-        // Ensure OpenVDB is initialized
-        openvdb::initialize();
-
-        // Create transform for voxel grid
+        // Assume OpenVDB is initialized by the application or test fixture.
+        // Avoid repeated initialize() calls here to reduce overhead.
+        CPUCapabilities caps = detectCPUCapabilities();
+        if (settings.enableDebugOutput)
+        {
+            std::cout << "BeamLatticeVoxelBuilder: Using Phase 3 parallel+SIMD optimization\n";
+            std::cout << "  CPU capabilities: AVX=" << caps.hasAVX << ", AVX2=" << caps.hasAVX2
+                      << ", AVX512F=" << caps.hasAVX512F << "\n";
+        }
+        auto hashBuildStart = std::chrono::high_resolution_clock::now();
+        std::vector<SIMDBeamData> simdBeams = prepareSIMDBeamData(beams);
+        std::vector<SIMDBallData> simdBalls = prepareSIMDBallData(balls);
+        SpatialHashGrid spatialHash =
+          buildSpatialHashGrid(beams, balls, settings.voxelSize, settings.maxDistance);
+        auto hashBuildEnd = std::chrono::high_resolution_clock::now();
+        m_lastStats.hashBuildTimeSeconds =
+          std::chrono::duration<float>(hashBuildEnd - hashBuildStart).count();
+        m_lastStats.spatialHashCells = spatialHash.cells.size();
         auto transform = openvdb::math::Transform::createLinearTransform(settings.voxelSize);
-
-        // Calculate bounding box for all primitives
-        openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
-
-        // Phase 1 Optimization: Pre-compute bounding boxes for all primitives
-        auto beamBounds = precomputeBeamBounds(beams);
-        auto ballBounds = precomputeBallBounds(balls);
-
-        // Create primitive index grid with background 0 (means no primitive)
         auto primitiveIndexGrid = openvdb::Int32Grid::create(0);
         primitiveIndexGrid->setTransform(transform);
         primitiveIndexGrid->setName("beam_lattice_primitive_indices");
-
-        // Optional type grid (if not encoding type in index)
         openvdb::Int32Grid::Ptr primitiveTypeGrid = nullptr;
         if (settings.separateBeamBallGrids)
         {
-            primitiveTypeGrid = openvdb::Int32Grid::create(-1); // Background = no type
+            primitiveTypeGrid = openvdb::Int32Grid::create(-1);
             primitiveTypeGrid->setTransform(transform);
             primitiveTypeGrid->setName("beam_lattice_primitive_types");
         }
-
-        // Accessor for index grid; for the optional type grid we'll use the grid API directly to
-        // avoid accessor lifetime issues
-        auto indexAccessor = primitiveIndexGrid->getAccessor();
-
-        // Convert bounding box to index space
+        openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
         openvdb::Coord minCoord = transform->worldToIndexNodeCentered(bbox.min());
         openvdb::Coord maxCoord = transform->worldToIndexNodeCentered(bbox.max());
-
-        // Expand by a few voxels to ensure coverage
         int const margin =
           static_cast<int>(std::ceil(settings.maxDistance / settings.voxelSize)) + 2;
         minCoord.offset(-margin);
         maxCoord.offset(margin);
-
-        // Calculate total voxels for statistics
         openvdb::Coord gridSize = maxCoord - minCoord;
         m_lastStats.totalVoxels = static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
-
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "BeamLatticeVoxelBuilder: Using optimized Phase 1 implementation\n";
-            std::cout << "  Pre-computed " << beamBounds.size() << " beam bounds and "
-                      << ballBounds.size() << " ball bounds\n";
-        }
-
-        // Process each voxel in the bounding box (triple loop; can be optimized later)
-        size_t processedVoxels = 0;
-        float totalDistance = 0.0f;
-
-        for (openvdb::Coord coord(minCoord.x(), 0, 0); coord.x() <= maxCoord.x(); ++coord.x())
-        {
-            for (coord.y() = minCoord.y(); coord.y() <= maxCoord.y(); ++coord.y())
-            {
-                for (coord.z() = minCoord.z(); coord.z() <= maxCoord.z(); ++coord.z())
-                {
-                    // Convert voxel coordinate to world space
-                    openvdb::Vec3d worldPos = transform->indexToWorld(coord);
-                    openvdb::Vec3f pos(static_cast<float>(worldPos.x()),
-                                       static_cast<float>(worldPos.y()),
-                                       static_cast<float>(worldPos.z()));
-
-                    // Phase 1 Optimization: Use optimized primitive search with cached bounds
-                    auto const [primitiveIndex, primitiveType] = findClosestPrimitiveOptimized(
-                      pos, beamBounds, ballBounds, beams, balls, settings.maxDistance);
-
-                    if (primitiveIndex >= 0)
-                    {
-                        // Store primitive index
-                        if (settings.encodeTypeInIndex && !settings.separateBeamBallGrids)
-                        {
-                            int encodedIndex = primitiveIndex;
-                            if (primitiveType == 1) // ball
-                            {
-                                encodedIndex |= (1 << 31);
-                            }
-                            indexAccessor.setValue(coord, encodedIndex);
-                        }
-                        else
-                        {
-                            indexAccessor.setValue(coord, primitiveIndex);
-                            if (primitiveTypeGrid)
-                            {
-                                // Set value in the underlying tree when type grid is enabled
-                                primitiveTypeGrid->tree().setValueOn(coord, primitiveType);
-                            }
-                        }
-
-                        m_lastStats.activeVoxels++;
-
-                        // Distance for stats (approx)
-                        float distance = (primitiveType == 0)
-                                           ? calculateBeamDistance(pos, beams[primitiveIndex])
-                                           : calculateBallDistance(pos, balls[primitiveIndex]);
-                        totalDistance += std::abs(distance);
-                        m_lastStats.maxDistance =
-                          std::max(m_lastStats.maxDistance, std::abs(distance));
-                    }
-
-                    processedVoxels++;
-                }
-            }
-        }
-
-        if (m_lastStats.activeVoxels > 0)
-        {
-            m_lastStats.averageDistance =
-              totalDistance / static_cast<float>(m_lastStats.activeVoxels);
-        }
-
-        primitiveIndexGrid->pruneGrid();
-        if (primitiveTypeGrid)
-        {
-            primitiveTypeGrid->pruneGrid();
-        }
-
+        auto voxelProcessStart = std::chrono::high_resolution_clock::now();
+        processSpatialHashCellsParallel(primitiveIndexGrid,
+                                        primitiveTypeGrid,
+                                        spatialHash,
+                                        simdBeams,
+                                        simdBalls,
+                                        settings,
+                                        transform);
+        auto voxelProcessEnd = std::chrono::high_resolution_clock::now();
+        m_lastStats.voxelProcessTimeSeconds =
+          std::chrono::duration<float>(voxelProcessEnd - voxelProcessStart).count();
         m_lastStats.memoryUsageBytes = primitiveIndexGrid->memUsage();
         if (primitiveTypeGrid)
         {
             m_lastStats.memoryUsageBytes += primitiveTypeGrid->memUsage();
         }
-
         auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-        m_lastStats.buildTimeSeconds = duration.count() / 1000.0f;
-
+        auto durationMs =
+          std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+        m_lastStats.buildTimeSeconds = durationMs.count() / 1000.0f;
+        if (settings.enableDebugOutput)
+        {
+            std::cout << "  Phase 3 total time: " << m_lastStats.buildTimeSeconds << "s\n";
+            std::cout << "  Hash build: " << m_lastStats.hashBuildTimeSeconds
+                      << "s, Voxel process: " << m_lastStats.voxelProcessTimeSeconds << "s\n";
+            std::cout << "  Active voxels: " << m_lastStats.activeVoxels << "\n";
+            std::cout << "  Primitive-voxel pairs: " << m_lastStats.primitiveVoxelPairs << "\n";
+        }
         return {primitiveIndexGrid, primitiveTypeGrid};
     }
 
+    void gladius::BeamLatticeVoxelBuilder::processSpatialHashCellsParallel(
+      openvdb::Int32Grid::Ptr & primitiveIndexGrid,
+      openvdb::Int32Grid::Ptr & primitiveTypeGrid,
+      SpatialHashGrid const & spatialHash,
+      std::vector<SIMDBeamData> const & simdBeams,
+      std::vector<SIMDBallData> const & simdBalls,
+      BeamLatticeVoxelSettings const & settings,
+      openvdb::math::Transform::Ptr const & transform)
+    {
+        unsigned int numThreads = settings.numThreads
+                                    ? settings.numThreads
+                                    : std::max(1u, std::thread::hardware_concurrency());
+        std::mutex statsMutex;
+        size_t totalActiveVoxels = 0;
+        size_t totalPrimitiveVoxelPairs = 0;
+        float totalDistance = 0.0f;
+        float maxDistance = 0.0f;
+        std::vector<std::thread> threads;
+        std::atomic<size_t> cellIndex{0};
+        for (unsigned int t = 0; t < numThreads; ++t)
+        {
+            threads.emplace_back(
+              [&]()
+              {
+                  size_t localActiveVoxels = 0;
+                  size_t localPrimitiveVoxelPairs = 0;
+                  float localTotalDistance = 0.0f;
+                  float localMaxDistance = 0.0f;
+                  size_t currentCell;
+                  while ((currentCell = cellIndex.fetch_add(1)) < spatialHash.cells.size())
+                  {
+                      SpatialHashCell const & cell = spatialHash.cells[currentCell];
+                      if (cell.beamIndices.empty() && cell.ballIndices.empty())
+                      {
+                          continue;
+                      }
+                      auto cellStats = processSpatialHashCellSIMDThreadSafe(primitiveIndexGrid,
+                                                                            primitiveTypeGrid,
+                                                                            cell,
+                                                                            spatialHash,
+                                                                            simdBeams,
+                                                                            simdBalls,
+                                                                            settings,
+                                                                            transform,
+                                                                            currentCell);
+                      localActiveVoxels += cellStats.activeVoxels;
+                      localPrimitiveVoxelPairs += cellStats.primitiveVoxelPairs;
+                      localTotalDistance += cellStats.totalDistance;
+                      localMaxDistance = std::max(localMaxDistance, cellStats.maxDistance);
+                  }
+                  std::lock_guard<std::mutex> lock(statsMutex);
+                  totalActiveVoxels += localActiveVoxels;
+                  totalPrimitiveVoxelPairs += localPrimitiveVoxelPairs;
+                  totalDistance += localTotalDistance;
+                  maxDistance = std::max(maxDistance, localMaxDistance);
+              });
+        }
+        for (auto & thread : threads)
+        {
+            thread.join();
+        }
+        m_lastStats.activeVoxels = totalActiveVoxels;
+        m_lastStats.primitiveVoxelPairs = totalPrimitiveVoxelPairs;
+        m_lastStats.maxDistance = maxDistance;
+        if (totalActiveVoxels > 0)
+        {
+            m_lastStats.averageDistance = totalDistance / static_cast<float>(totalActiveVoxels);
+        }
+    }
+
+    gladius::BeamLatticeVoxelBuilder::CellProcessingStats
+    gladius::BeamLatticeVoxelBuilder::processSpatialHashCellSIMDThreadSafe(
+      openvdb::Int32Grid::Ptr & primitiveIndexGrid,
+      openvdb::Int32Grid::Ptr & primitiveTypeGrid,
+      SpatialHashCell const & cell,
+      SpatialHashGrid const & spatialHash,
+      std::vector<SIMDBeamData> const & simdBeams,
+      std::vector<SIMDBallData> const & simdBalls,
+      BeamLatticeVoxelSettings const & settings,
+      openvdb::math::Transform::Ptr const & transform,
+      size_t cellIndex) const
+    {
+        CellProcessingStats stats;
+        int z = static_cast<int>(cellIndex / (spatialHash.gridSize.x() * spatialHash.gridSize.y()));
+        int y =
+          static_cast<int>((cellIndex % (spatialHash.gridSize.x() * spatialHash.gridSize.y())) /
+                           spatialHash.gridSize.x());
+        int x = static_cast<int>(cellIndex % spatialHash.gridSize.x());
+        openvdb::Vec3f cellMinWorld(spatialHash.minBounds.x() + x * spatialHash.cellSize,
+                                    spatialHash.minBounds.y() + y * spatialHash.cellSize,
+                                    spatialHash.minBounds.z() + z * spatialHash.cellSize);
+        openvdb::Vec3f cellMaxWorld(cellMinWorld.x() + spatialHash.cellSize,
+                                    cellMinWorld.y() + spatialHash.cellSize,
+                                    cellMinWorld.z() + spatialHash.cellSize);
+        openvdb::Coord minVoxel = transform->worldToIndexNodeCentered(
+          openvdb::Vec3d(cellMinWorld.x(), cellMinWorld.y(), cellMinWorld.z()));
+        openvdb::Coord maxVoxel = transform->worldToIndexNodeCentered(
+          openvdb::Vec3d(cellMaxWorld.x(), cellMaxWorld.y(), cellMaxWorld.z()));
+        auto indexAccessor = primitiveIndexGrid->getAccessor();
+        constexpr size_t MAX_BATCH_SIZE = 16;
+        float beamDistances[MAX_BATCH_SIZE];
+        float ballDistances[MAX_BATCH_SIZE];
+        for (openvdb::Coord voxelCoord(minVoxel.x(), 0, 0); voxelCoord.x() <= maxVoxel.x();
+             ++voxelCoord.x())
+        {
+            for (voxelCoord.y() = minVoxel.y(); voxelCoord.y() <= maxVoxel.y(); ++voxelCoord.y())
+            {
+                for (voxelCoord.z() = minVoxel.z(); voxelCoord.z() <= maxVoxel.z();
+                     ++voxelCoord.z())
+                {
+                    // Skip if this voxel was already assigned
+                    if (indexAccessor.isValueOn(voxelCoord))
+                        continue;
+                    openvdb::Vec3d worldPos = transform->indexToWorld(voxelCoord);
+                    openvdb::Vec3f pos(static_cast<float>(worldPos.x()),
+                                       static_cast<float>(worldPos.y()),
+                                       static_cast<float>(worldPos.z()));
+                    float bestDist = settings.maxDistance;
+                    int bestIndex = -1;
+                    int bestType = -1;
+                    if (!cell.beamIndices.empty())
+                    {
+                        size_t numBeams = std::min(cell.beamIndices.size(), MAX_BATCH_SIZE);
+                        std::vector<SIMDBeamData> beamBatch;
+                        beamBatch.reserve(numBeams);
+                        for (size_t i = 0; i < numBeams; ++i)
+                            beamBatch.push_back(simdBeams[cell.beamIndices[i]]);
+                        calculateBeamDistancesSIMD(pos, beamBatch.data(), numBeams, beamDistances);
+                        for (size_t i = 0; i < numBeams; ++i)
+                        {
+                            if (beamDistances[i] < bestDist)
+                            {
+                                bestDist = beamDistances[i];
+                                bestIndex = static_cast<int>(cell.beamIndices[i]);
+                                bestType = 0;
+                            }
+                            stats.primitiveVoxelPairs++;
+                        }
+                        for (size_t i = numBeams; i < cell.beamIndices.size(); ++i)
+                        {
+                            BeamData beam = {{simdBeams[cell.beamIndices[i]].startX,
+                                              simdBeams[cell.beamIndices[i]].startY,
+                                              simdBeams[cell.beamIndices[i]].startZ},
+                                             {simdBeams[cell.beamIndices[i]].endX,
+                                              simdBeams[cell.beamIndices[i]].endY,
+                                              simdBeams[cell.beamIndices[i]].endZ},
+                                             simdBeams[cell.beamIndices[i]].startRadius,
+                                             simdBeams[cell.beamIndices[i]].endRadius};
+                            float d = calculateBeamDistance(pos, beam);
+                            if (d < bestDist)
+                            {
+                                bestDist = d;
+                                bestIndex = static_cast<int>(cell.beamIndices[i]);
+                                bestType = 0;
+                            }
+                            stats.primitiveVoxelPairs++;
+                        }
+                    }
+                    if (!cell.ballIndices.empty())
+                    {
+                        size_t numBalls = std::min(cell.ballIndices.size(), MAX_BATCH_SIZE);
+                        std::vector<SIMDBallData> ballBatch;
+                        ballBatch.reserve(numBalls);
+                        for (size_t i = 0; i < numBalls; ++i)
+                            ballBatch.push_back(simdBalls[cell.ballIndices[i]]);
+                        calculateBallDistancesSIMD(pos, ballBatch.data(), numBalls, ballDistances);
+                        for (size_t i = 0; i < numBalls; ++i)
+                        {
+                            if (ballDistances[i] < bestDist)
+                            {
+                                bestDist = ballDistances[i];
+                                bestIndex = static_cast<int>(cell.ballIndices[i]);
+                                bestType = 1;
+                            }
+                            stats.primitiveVoxelPairs++;
+                        }
+                        for (size_t i = numBalls; i < cell.ballIndices.size(); ++i)
+                        {
+                            BallData ball = {{simdBalls[cell.ballIndices[i]].x,
+                                              simdBalls[cell.ballIndices[i]].y,
+                                              simdBalls[cell.ballIndices[i]].z},
+                                             simdBalls[cell.ballIndices[i]].radius};
+                            float d = calculateBallDistance(pos, ball);
+                            if (d < bestDist)
+                            {
+                                bestDist = d;
+                                bestIndex = static_cast<int>(cell.ballIndices[i]);
+                                bestType = 1;
+                            }
+                            stats.primitiveVoxelPairs++;
+                        }
+                    }
+                    if (bestIndex >= 0)
+                    {
+                        if (settings.encodeTypeInIndex && !settings.separateBeamBallGrids)
+                        {
+                            int encodedIndex = bestIndex;
+                            if (bestType == 1)
+                                encodedIndex |= (1 << 31);
+                            indexAccessor.setValue(voxelCoord, encodedIndex);
+                        }
+                        else
+                        {
+                            indexAccessor.setValue(voxelCoord, bestIndex);
+                            if (primitiveTypeGrid)
+                            {
+                                primitiveTypeGrid->tree().setValueOn(voxelCoord, bestType);
+                            }
+                        }
+                        stats.activeVoxels++;
+                        stats.totalDistance += std::abs(bestDist);
+                        stats.maxDistance = std::max(stats.maxDistance, std::abs(bestDist));
+                    }
+                }
+            }
+        }
+        return stats;
+    }
+#endif // defined(ENABLE_PHASE3_SIMD)
+} // namespace gladius
+
+namespace gladius
+{
+    // ---- Utility distance functions ----
     float BeamLatticeVoxelBuilder::calculateBeamDistance(openvdb::Vec3f const & point,
                                                          BeamData const & beam) const
     {
-        // Convert beam endpoints to Vec3f
         openvdb::Vec3f startPos(static_cast<float>(beam.startPos.x),
                                 static_cast<float>(beam.startPos.y),
                                 static_cast<float>(beam.startPos.z));
@@ -206,7 +605,7 @@ namespace gladius
         openvdb::Vec3f closest = startPos + dir * t;
         float coreDist = (point - closest).length();
 
-        // Linear radius interpolation
+        // Linear radius interpolation along the beam
         float radius = beam.startRadius + (beam.endRadius - beam.startRadius) * (t / length_val);
         return coreDist - radius;
     }
@@ -219,92 +618,6 @@ namespace gladius
         float dz = point.z() - ball.position.z;
         float dist = std::sqrt(dx * dx + dy * dy + dz * dz) - ball.radius;
         return dist;
-    }
-
-    std::pair<int, int>
-    BeamLatticeVoxelBuilder::findClosestPrimitive(openvdb::Vec3f const & point,
-                                                  std::vector<BeamData> const & beams,
-                                                  std::vector<BallData> const & balls,
-                                                  float maxDist) const
-    {
-        float bestDist = maxDist;
-        int bestIndex = -1;
-        int bestType = -1; // 0=beam, 1=ball
-
-        // Phase 1 Optimization: Check beams with bounding box pre-filtering
-        for (size_t i = 0; i < beams.size(); ++i)
-        {
-            BeamData const & beam = beams[i];
-
-            // Quick bounding box check: compute beam AABB
-            float minX =
-              std::min(beam.startPos.x, beam.endPos.x) - std::max(beam.startRadius, beam.endRadius);
-            float maxX =
-              std::max(beam.startPos.x, beam.endPos.x) + std::max(beam.startRadius, beam.endRadius);
-            float minY =
-              std::min(beam.startPos.y, beam.endPos.y) - std::max(beam.startRadius, beam.endRadius);
-            float maxY =
-              std::max(beam.startPos.y, beam.endPos.y) + std::max(beam.startRadius, beam.endRadius);
-            float minZ =
-              std::min(beam.startPos.z, beam.endPos.z) - std::max(beam.startRadius, beam.endRadius);
-            float maxZ =
-              std::max(beam.startPos.z, beam.endPos.z) + std::max(beam.startRadius, beam.endRadius);
-
-            // Skip if point is outside expanded bounding box by more than current best distance
-            if (point.x() < minX - bestDist || point.x() > maxX + bestDist ||
-                point.y() < minY - bestDist || point.y() > maxY + bestDist ||
-                point.z() < minZ - bestDist || point.z() > maxZ + bestDist)
-            {
-                continue;
-            }
-
-            float d = calculateBeamDistance(point, beam);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                bestIndex = static_cast<int>(i);
-                bestType = 0;
-
-                // Early termination: if we're inside the primitive, we found the closest
-                if (d <= 0.0f)
-                {
-                    return {bestIndex, bestType};
-                }
-            }
-        }
-
-        // Phase 1 Optimization: Check balls with bounding box pre-filtering
-        for (size_t i = 0; i < balls.size(); ++i)
-        {
-            BallData const & ball = balls[i];
-
-            // Quick bounding box check for balls (simpler case)
-            float dx = std::abs(point.x() - ball.position.x);
-            float dy = std::abs(point.y() - ball.position.y);
-            float dz = std::abs(point.z() - ball.position.z);
-
-            // Skip if point is definitely too far (use Manhattan distance as cheap upper bound)
-            if (dx + dy + dz > ball.radius + bestDist)
-            {
-                continue;
-            }
-
-            float d = calculateBallDistance(point, ball);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                bestIndex = static_cast<int>(i);
-                bestType = 1;
-
-                // Early termination: if we're inside the primitive, we found the closest
-                if (d <= 0.0f)
-                {
-                    return {bestIndex, bestType};
-                }
-            }
-        }
-
-        return {bestIndex, bestType};
     }
 
     openvdb::BBoxd
@@ -326,12 +639,8 @@ namespace gladius
 
         for (auto const & b : beams)
         {
-            // Account for beam thickness by adding maximum radius to both endpoints
-            float maxRadius = std::max(b.startRadius, b.endRadius);
-            extend(b.startPos.x + maxRadius, b.startPos.y + maxRadius, b.startPos.z + maxRadius);
-            extend(b.startPos.x - maxRadius, b.startPos.y - maxRadius, b.startPos.z - maxRadius);
-            extend(b.endPos.x + maxRadius, b.endPos.y + maxRadius, b.endPos.z + maxRadius);
-            extend(b.endPos.x - maxRadius, b.endPos.y - maxRadius, b.endPos.z - maxRadius);
+            extend(b.startPos.x, b.startPos.y, b.startPos.z);
+            extend(b.endPos.x, b.endPos.y, b.endPos.z);
         }
         for (auto const & s : balls)
         {
@@ -343,129 +652,9 @@ namespace gladius
         return {minP, maxP};
     }
 
-    std::vector<BeamLatticeVoxelBuilder::BeamBounds>
-    BeamLatticeVoxelBuilder::precomputeBeamBounds(std::vector<BeamData> const & beams) const
-    {
-        std::vector<BeamBounds> bounds;
-        bounds.reserve(beams.size());
-
-        for (size_t i = 0; i < beams.size(); ++i)
-        {
-            BeamData const & beam = beams[i];
-            float maxRadius = std::max(beam.startRadius, beam.endRadius);
-
-            BeamBounds bb;
-            bb.minX = std::min(beam.startPos.x, beam.endPos.x) - maxRadius;
-            bb.maxX = std::max(beam.startPos.x, beam.endPos.x) + maxRadius;
-            bb.minY = std::min(beam.startPos.y, beam.endPos.y) - maxRadius;
-            bb.maxY = std::max(beam.startPos.y, beam.endPos.y) + maxRadius;
-            bb.minZ = std::min(beam.startPos.z, beam.endPos.z) - maxRadius;
-            bb.maxZ = std::max(beam.startPos.z, beam.endPos.z) + maxRadius;
-            bb.beamIndex = i; // Store the index in original vector order
-
-            bounds.push_back(bb);
-        }
-
-        return bounds;
-    }
-
-    std::vector<BeamLatticeVoxelBuilder::BallBounds>
-    BeamLatticeVoxelBuilder::precomputeBallBounds(std::vector<BallData> const & balls) const
-    {
-        std::vector<BallBounds> bounds;
-        bounds.reserve(balls.size());
-
-        for (size_t i = 0; i < balls.size(); ++i)
-        {
-            BallData const & ball = balls[i];
-
-            BallBounds bb;
-            bb.centerX = ball.position.x;
-            bb.centerY = ball.position.y;
-            bb.centerZ = ball.position.z;
-            bb.radius = ball.radius;
-            bb.ballIndex = i; // Store the index in original vector order
-
-            bounds.push_back(bb);
-        }
-
-        return bounds;
-    }
-
-    std::pair<int, int> BeamLatticeVoxelBuilder::findClosestPrimitiveOptimized(
-      openvdb::Vec3f const & point,
-      std::vector<BeamBounds> const & beamBounds,
-      std::vector<BallBounds> const & ballBounds,
-      std::vector<BeamData> const & beams,
-      std::vector<BallData> const & balls,
-      float maxDist) const
-    {
-        float bestDist = maxDist;
-        int bestIndex = -1;
-        int bestType = -1; // 0=beam, 1=ball
-
-        // Phase 1 Optimization: Check beams using pre-computed data but identical logic
-        // Process in the same order as original to ensure identical tie-breaking
-        for (size_t i = 0; i < beamBounds.size(); ++i)
-        {
-            BeamBounds const & bb = beamBounds[i];
-
-            // Conservative bounding box rejection test - make it very conservative
-            // Only reject if the point is definitively outside the expanded bounds
-            const float conservativeMargin = bestDist + 1.0f; // Very conservative margin
-            if (point.x() < bb.minX - conservativeMargin ||
-                point.x() > bb.maxX + conservativeMargin ||
-                point.y() < bb.minY - conservativeMargin ||
-                point.y() > bb.maxY + conservativeMargin ||
-                point.z() < bb.minZ - conservativeMargin ||
-                point.z() > bb.maxZ + conservativeMargin)
-            {
-                continue; // Skip only obvious rejections
-            }
-
-            float d = calculateBeamDistance(point, beams[bb.beamIndex]);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                bestIndex = static_cast<int>(bb.beamIndex);
-                bestType = 0;
-            }
-        }
-
-        // Phase 1 Optimization: Check balls using pre-computed data but identical logic
-        // Process in the same order as original to ensure identical tie-breaking
-        for (size_t i = 0; i < ballBounds.size(); ++i)
-        {
-            BallBounds const & bb = ballBounds[i];
-
-            // Conservative distance check - make it very conservative
-            float dx = std::abs(point.x() - bb.centerX);
-            float dy = std::abs(point.y() - bb.centerY);
-            float dz = std::abs(point.z() - bb.centerZ);
-
-            // Only skip if obviously too far with large conservative margin
-            const float conservativeMargin = bestDist + 1.0f;
-            if (dx + dy + dz > bb.radius + conservativeMargin)
-            {
-                continue; // Skip only obvious rejections
-            }
-
-            float d = calculateBallDistance(point, balls[bb.ballIndex]);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                bestIndex = static_cast<int>(bb.ballIndex);
-                bestType = 1;
-            }
-        }
-
-        return {bestIndex, bestType};
-    }
-
-    // Phase 2 Optimization: Primitive-centric algorithm with spatial hash grid
-
+    // ---- Phase 1: Simple voxelization over full bbox ----
     std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
-    BeamLatticeVoxelBuilder::buildVoxelGridsPhase2(std::vector<BeamData> const & beams,
+    BeamLatticeVoxelBuilder::buildVoxelGridsPhase1(std::vector<BeamData> const & beams,
                                                    std::vector<BallData> const & balls,
                                                    BeamLatticeVoxelSettings const & settings)
     {
@@ -477,46 +666,12 @@ namespace gladius
             return {nullptr, nullptr};
         }
 
-        // Ensure OpenVDB is initialized
-        openvdb::initialize();
+        // Assume OpenVDB is initialized by the application or test fixture to avoid repeated
+        // initialization overhead here.
 
-        // Create transform for voxel grid
         auto transform = openvdb::math::Transform::createLinearTransform(settings.voxelSize);
-
-        // Calculate bounding box for all primitives
         openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
 
-        // Calculate grid bounds and total voxels for statistics
-        openvdb::Coord minCoord = transform->worldToIndexCellCentered(bbox.min());
-        openvdb::Coord maxCoord = transform->worldToIndexCellCentered(bbox.max());
-        openvdb::Coord gridSize = maxCoord - minCoord;
-        m_lastStats.totalVoxels = static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
-
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "BeamLatticeVoxelBuilder: Using Phase 2 primitive-centric optimization\n";
-            std::cout << "  Processing " << beams.size() << " beams and " << balls.size()
-                      << " balls\n";
-            std::cout << "  Total Voxels: " << m_lastStats.totalVoxels << "\n";
-        }
-
-        // Phase 2: Build spatial hash grid for efficient primitive-to-voxel mapping
-        auto hashStartTime = std::chrono::high_resolution_clock::now();
-        SpatialHashGrid spatialHash =
-          buildSpatialHashGrid(beams, balls, settings.voxelSize, settings.maxDistance);
-        auto hashEndTime = std::chrono::high_resolution_clock::now();
-        auto hashDuration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(hashEndTime - hashStartTime);
-        m_lastStats.hashBuildTimeSeconds = hashDuration.count() / 1000.0f;
-        m_lastStats.spatialHashCells = spatialHash.cells.size();
-
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "  Built spatial hash with " << spatialHash.cells.size() << " cells in "
-                      << m_lastStats.hashBuildTimeSeconds << "s\n";
-        }
-
-        // Create grids
         auto primitiveIndexGrid = openvdb::Int32Grid::create(0);
         primitiveIndexGrid->setTransform(transform);
         primitiveIndexGrid->setName("beam_lattice_primitive_indices");
@@ -529,14 +684,142 @@ namespace gladius
             primitiveTypeGrid->setName("beam_lattice_primitive_types");
         }
 
-        // Phase 2: Process primitive influence on nearby voxels
-        auto voxelStartTime = std::chrono::high_resolution_clock::now();
-        processPrimitiveInfluence(
-          primitiveIndexGrid, primitiveTypeGrid, spatialHash, beams, balls, settings, transform);
-        auto voxelEndTime = std::chrono::high_resolution_clock::now();
-        auto voxelDuration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(voxelEndTime - voxelStartTime);
-        m_lastStats.voxelProcessTimeSeconds = voxelDuration.count() / 1000.0f;
+        auto indexAccessor = primitiveIndexGrid->getAccessor();
+
+        openvdb::Coord minCoord = transform->worldToIndexNodeCentered(bbox.min());
+        openvdb::Coord maxCoord = transform->worldToIndexNodeCentered(bbox.max());
+        int const margin =
+          static_cast<int>(std::ceil(settings.maxDistance / settings.voxelSize)) + 2;
+        minCoord.offset(-margin);
+        maxCoord.offset(margin);
+
+        if (settings.enableDebugOutput)
+        {
+            openvdb::Coord gridSize = maxCoord - minCoord;
+            m_lastStats.totalVoxels =
+              static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
+        }
+
+        float totalDistance = 0.0f;
+
+        // Precompute beam parameters (dir and length) to avoid per-voxel normalization cost
+        struct PreBeam
+        {
+            openvdb::Vec3f start;
+            openvdb::Vec3f dir; // normalized axis (zero if degenerate)
+            float length;       // axis length
+            float r0;
+            float r1;
+        };
+        std::vector<PreBeam> preBeams;
+        preBeams.reserve(beams.size());
+        for (auto const & b : beams)
+        {
+            openvdb::Vec3f s(static_cast<float>(b.startPos.x),
+                             static_cast<float>(b.startPos.y),
+                             static_cast<float>(b.startPos.z));
+            openvdb::Vec3f e(static_cast<float>(b.endPos.x),
+                             static_cast<float>(b.endPos.y),
+                             static_cast<float>(b.endPos.z));
+            openvdb::Vec3f axis = e - s;
+            float len = axis.length();
+            openvdb::Vec3f d = (len > 1e-6f) ? (axis / len) : openvdb::Vec3f(0.0f);
+            preBeams.push_back(PreBeam{s, d, len, b.startRadius, b.endRadius});
+        }
+
+        auto distanceToPreBeam = [](openvdb::Vec3f const & p, PreBeam const & pb) -> float
+        {
+            if (pb.length < 1e-6f)
+            {
+                float core = (p - pb.start).length();
+                float r = std::max(pb.r0, pb.r1);
+                return core - r;
+            }
+            openvdb::Vec3f v = p - pb.start;
+            float t = v.dot(pb.dir);
+            t = std::max(0.0f, std::min(pb.length, t));
+            openvdb::Vec3f closest = pb.start + pb.dir * t;
+            float coreDist = (p - closest).length();
+            float radius = pb.r0 + (pb.r1 - pb.r0) * (t / pb.length);
+            return coreDist - radius;
+        };
+
+        // Precompute world-space origin for minCoord and use linear arithmetic for voxel positions
+        const double vx = static_cast<double>(settings.voxelSize);
+        const openvdb::Vec3d worldMin = transform->indexToWorld(minCoord);
+
+        for (openvdb::Coord coord(minCoord.x(), 0, 0); coord.x() <= maxCoord.x(); ++coord.x())
+        {
+            const double wx = worldMin.x() + static_cast<double>(coord.x() - minCoord.x()) * vx;
+            for (coord.y() = minCoord.y(); coord.y() <= maxCoord.y(); ++coord.y())
+            {
+                const double wy = worldMin.y() + static_cast<double>(coord.y() - minCoord.y()) * vx;
+                for (coord.z() = minCoord.z(); coord.z() <= maxCoord.z(); ++coord.z())
+                {
+                    const double wz =
+                      worldMin.z() + static_cast<double>(coord.z() - minCoord.z()) * vx;
+                    openvdb::Vec3f pos(
+                      static_cast<float>(wx), static_cast<float>(wy), static_cast<float>(wz));
+
+                    // Find closest primitive (naive)
+                    float bestDist = settings.maxDistance;
+                    int bestIndex = -1;
+                    int bestType = -1; // 0=beam, 1=ball
+
+                    for (size_t i = 0; i < beams.size(); ++i)
+                    {
+                        float d = distanceToPreBeam(pos, preBeams[i]);
+                        if (d < bestDist)
+                        {
+                            bestDist = d;
+                            bestIndex = static_cast<int>(i);
+                            bestType = 0;
+                        }
+                    }
+                    for (size_t i = 0; i < balls.size(); ++i)
+                    {
+                        float d = calculateBallDistance(pos, balls[i]);
+                        if (d < bestDist)
+                        {
+                            bestDist = d;
+                            bestIndex = static_cast<int>(i);
+                            bestType = 1;
+                        }
+                    }
+
+                    if (bestIndex >= 0)
+                    {
+                        if (settings.encodeTypeInIndex && !settings.separateBeamBallGrids)
+                        {
+                            int encodedIndex = bestIndex;
+                            if (bestType == 1)
+                                encodedIndex |= (1 << 31);
+                            indexAccessor.setValue(coord, encodedIndex);
+                        }
+                        else
+                        {
+                            indexAccessor.setValue(coord, bestIndex);
+                            if (primitiveTypeGrid)
+                            {
+                                primitiveTypeGrid->tree().setValueOn(coord, bestType);
+                            }
+                        }
+
+                        m_lastStats.activeVoxels++;
+                        // Use the already computed bestDist to avoid recomputation overhead.
+                        totalDistance += std::abs(bestDist);
+                        m_lastStats.maxDistance =
+                          std::max(m_lastStats.maxDistance, std::abs(bestDist));
+                    }
+                }
+            }
+        }
+
+        if (m_lastStats.activeVoxels > 0)
+        {
+            m_lastStats.averageDistance =
+              totalDistance / static_cast<float>(m_lastStats.activeVoxels);
+        }
 
         primitiveIndexGrid->pruneGrid();
         if (primitiveTypeGrid)
@@ -550,21 +833,10 @@ namespace gladius
             m_lastStats.memoryUsageBytes += primitiveTypeGrid->memUsage();
         }
 
-        auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-        m_lastStats.buildTimeSeconds = duration.count() / 1000.0f;
-
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "  Phase 2 total time: " << m_lastStats.buildTimeSeconds << "s\n";
-            std::cout << "  Hash build: " << m_lastStats.hashBuildTimeSeconds << "s, ";
-            std::cout << "Voxel process: " << m_lastStats.voxelProcessTimeSeconds << "s\n";
-            std::cout << "  Active voxels: " << m_lastStats.activeVoxels << "\n";
-        }
-
         return {primitiveIndexGrid, primitiveTypeGrid};
     }
 
+    // ---- Phase 2: Spatial hash assisted voxelization (scalar) ----
     BeamLatticeVoxelBuilder::SpatialHashGrid
     BeamLatticeVoxelBuilder::buildSpatialHashGrid(std::vector<BeamData> const & beams,
                                                   std::vector<BallData> const & balls,
@@ -572,108 +844,87 @@ namespace gladius
                                                   float maxDistance) const
     {
         SpatialHashGrid grid;
+        float cellSize =
+          voxelSize * 4.0f; // default multiplier; fine-tuned via settings at call site
+        grid.cellSize = cellSize;
 
-        // Calculate bounding box
+        // Compute expanded bounds
         openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
+        openvdb::Vec3f minB(static_cast<float>(bbox.min().x() - maxDistance),
+                            static_cast<float>(bbox.min().y() - maxDistance),
+                            static_cast<float>(bbox.min().z() - maxDistance));
+        openvdb::Vec3f maxB(static_cast<float>(bbox.max().x() + maxDistance),
+                            static_cast<float>(bbox.max().y() + maxDistance),
+                            static_cast<float>(bbox.max().z() + maxDistance));
+        grid.minBounds = minB;
+        grid.maxBounds = maxB;
 
-        // Set up spatial hash grid with larger cells for efficiency
-        grid.cellSize = voxelSize * 4.0f; // Use larger cells than voxels for efficiency
-        grid.minBounds = openvdb::Vec3f(
-          bbox.min().x() - maxDistance, bbox.min().y() - maxDistance, bbox.min().z() - maxDistance);
-        grid.maxBounds = openvdb::Vec3f(
-          bbox.max().x() + maxDistance, bbox.max().y() + maxDistance, bbox.max().z() + maxDistance);
-
-        // Calculate grid dimensions
-        openvdb::Vec3f span = grid.maxBounds - grid.minBounds;
-        grid.gridSize = openvdb::Coord(static_cast<int>(std::ceil(span.x() / grid.cellSize)) + 1,
-                                       static_cast<int>(std::ceil(span.y() / grid.cellSize)) + 1,
-                                       static_cast<int>(std::ceil(span.z() / grid.cellSize)) + 1);
-
-        // Allocate cells
+        auto computeGridSize = [&](openvdb::Vec3f const & minP, openvdb::Vec3f const & maxP)
+        {
+            int gx = std::max(1, static_cast<int>(std::ceil((maxP.x() - minP.x()) / cellSize)));
+            int gy = std::max(1, static_cast<int>(std::ceil((maxP.y() - minP.y()) / cellSize)));
+            int gz = std::max(1, static_cast<int>(std::ceil((maxP.z() - minP.z()) / cellSize)));
+            return openvdb::Coord(gx, gy, gz);
+        };
+        grid.gridSize = computeGridSize(minB, maxB);
         size_t totalCells =
           static_cast<size_t>(grid.gridSize.x()) * grid.gridSize.y() * grid.gridSize.z();
+        grid.cells.clear();
         grid.cells.resize(totalCells);
 
-        // Insert beams into spatial hash
+        auto addBeamToCells = [&](size_t idx, BeamData const & b)
+        {
+            float rMin = std::min(b.startRadius, b.endRadius);
+            float rMax = std::max(b.startRadius, b.endRadius);
+            float pad = std::max(rMax, maxDistance);
+            float minX = std::min(b.startPos.x, b.endPos.x) - pad;
+            float minY = std::min(b.startPos.y, b.endPos.y) - pad;
+            float minZ = std::min(b.startPos.z, b.endPos.z) - pad;
+            float maxX = std::max(b.startPos.x, b.endPos.x) + pad;
+            float maxY = std::max(b.startPos.y, b.endPos.y) + pad;
+            float maxZ = std::max(b.startPos.z, b.endPos.z) + pad;
+            openvdb::Coord cmin = grid.worldToGrid({minX, minY, minZ});
+            openvdb::Coord cmax = grid.worldToGrid({maxX, maxY, maxZ});
+            for (int z = std::max(0, cmin.z()); z <= std::min(grid.gridSize.z() - 1, cmax.z()); ++z)
+                for (int y = std::max(0, cmin.y()); y <= std::min(grid.gridSize.y() - 1, cmax.y());
+                     ++y)
+                    for (int x = std::max(0, cmin.x());
+                         x <= std::min(grid.gridSize.x() - 1, cmax.x());
+                         ++x)
+                    {
+                        size_t li =
+                          x + y * grid.gridSize.x() + z * grid.gridSize.x() * grid.gridSize.y();
+                        grid.cells[li].beamIndices.push_back(idx);
+                    }
+        };
+        auto addBallToCells = [&](size_t idx, BallData const & s)
+        {
+            float pad = std::max(s.radius, maxDistance);
+            float minX = s.position.x - pad;
+            float minY = s.position.y - pad;
+            float minZ = s.position.z - pad;
+            float maxX = s.position.x + pad;
+            float maxY = s.position.y + pad;
+            float maxZ = s.position.z + pad;
+            openvdb::Coord cmin = grid.worldToGrid({minX, minY, minZ});
+            openvdb::Coord cmax = grid.worldToGrid({maxX, maxY, maxZ});
+            for (int z = std::max(0, cmin.z()); z <= std::min(grid.gridSize.z() - 1, cmax.z()); ++z)
+                for (int y = std::max(0, cmin.y()); y <= std::min(grid.gridSize.y() - 1, cmax.y());
+                     ++y)
+                    for (int x = std::max(0, cmin.x());
+                         x <= std::min(grid.gridSize.x() - 1, cmax.x());
+                         ++x)
+                    {
+                        size_t li =
+                          x + y * grid.gridSize.x() + z * grid.gridSize.x() * grid.gridSize.y();
+                        grid.cells[li].ballIndices.push_back(idx);
+                    }
+        };
+
         for (size_t i = 0; i < beams.size(); ++i)
-        {
-            BeamData const & beam = beams[i];
-            float maxRadius = std::max(beam.startRadius, beam.endRadius);
-
-            // Calculate AABB for the beam (including radius)
-            openvdb::Vec3f minP(std::min(beam.startPos.x, beam.endPos.x) - maxRadius - maxDistance,
-                                std::min(beam.startPos.y, beam.endPos.y) - maxRadius - maxDistance,
-                                std::min(beam.startPos.z, beam.endPos.z) - maxRadius - maxDistance);
-            openvdb::Vec3f maxP(std::max(beam.startPos.x, beam.endPos.x) + maxRadius + maxDistance,
-                                std::max(beam.startPos.y, beam.endPos.y) + maxRadius + maxDistance,
-                                std::max(beam.startPos.z, beam.endPos.z) + maxRadius + maxDistance);
-
-            // Find hash cells that this beam might influence
-            openvdb::Coord minCell = grid.worldToGrid(minP);
-            openvdb::Coord maxCell = grid.worldToGrid(maxP);
-
-            // Clamp to valid range
-            minCell.x() = std::max(0, minCell.x());
-            minCell.y() = std::max(0, minCell.y());
-            minCell.z() = std::max(0, minCell.z());
-            maxCell.x() = std::min(grid.gridSize.x() - 1, maxCell.x());
-            maxCell.y() = std::min(grid.gridSize.y() - 1, maxCell.y());
-            maxCell.z() = std::min(grid.gridSize.z() - 1, maxCell.z());
-
-            // Add beam to all cells it might influence
-            for (int x = minCell.x(); x <= maxCell.x(); ++x)
-            {
-                for (int y = minCell.y(); y <= maxCell.y(); ++y)
-                {
-                    for (int z = minCell.z(); z <= maxCell.z(); ++z)
-                    {
-                        openvdb::Coord coord(x, y, z);
-                        size_t cellIndex = grid.getLinearIndex(coord);
-                        grid.cells[cellIndex].beamIndices.push_back(i);
-                    }
-                }
-            }
-        }
-
-        // Insert balls into spatial hash
+            addBeamToCells(i, beams[i]);
         for (size_t i = 0; i < balls.size(); ++i)
-        {
-            BallData const & ball = balls[i];
-
-            // Calculate AABB for the ball
-            openvdb::Vec3f minP(ball.position.x - ball.radius - maxDistance,
-                                ball.position.y - ball.radius - maxDistance,
-                                ball.position.z - ball.radius - maxDistance);
-            openvdb::Vec3f maxP(ball.position.x + ball.radius + maxDistance,
-                                ball.position.y + ball.radius + maxDistance,
-                                ball.position.z + ball.radius + maxDistance);
-
-            // Find hash cells that this ball might influence
-            openvdb::Coord minCell = grid.worldToGrid(minP);
-            openvdb::Coord maxCell = grid.worldToGrid(maxP);
-
-            // Clamp to valid range
-            minCell.x() = std::max(0, minCell.x());
-            minCell.y() = std::max(0, minCell.y());
-            minCell.z() = std::max(0, minCell.z());
-            maxCell.x() = std::min(grid.gridSize.x() - 1, maxCell.x());
-            maxCell.y() = std::min(grid.gridSize.y() - 1, maxCell.y());
-            maxCell.z() = std::min(grid.gridSize.z() - 1, maxCell.z());
-
-            // Add ball to all cells it might influence
-            for (int x = minCell.x(); x <= maxCell.x(); ++x)
-            {
-                for (int y = minCell.y(); y <= maxCell.y(); ++y)
-                {
-                    for (int z = minCell.z(); z <= maxCell.z(); ++z)
-                    {
-                        openvdb::Coord coord(x, y, z);
-                        size_t cellIndex = grid.getLinearIndex(coord);
-                        grid.cells[cellIndex].ballIndices.push_back(i);
-                    }
-                }
-            }
-        }
+            addBallToCells(i, balls[i]);
 
         return grid;
     }
@@ -688,28 +939,22 @@ namespace gladius
       openvdb::math::Transform::Ptr const & transform)
     {
         auto indexAccessor = primitiveIndexGrid->getAccessor();
+        size_t totalActive = 0;
         float totalDistance = 0.0f;
+        float maxDistance = 0.0f;
 
-        // Process each spatial hash cell
-        for (size_t cellIndex = 0; cellIndex < spatialHash.cells.size(); ++cellIndex)
+        // Iterate each cell and process its voxel region
+        for (size_t ci = 0; ci < spatialHash.cells.size(); ++ci)
         {
-            SpatialHashCell const & cell = spatialHash.cells[cellIndex];
-
-            // Skip empty cells
+            SpatialHashCell const & cell = spatialHash.cells[ci];
             if (cell.beamIndices.empty() && cell.ballIndices.empty())
-            {
                 continue;
-            }
 
-            // Convert linear cell index back to 3D coordinates
-            int z =
-              static_cast<int>(cellIndex / (spatialHash.gridSize.x() * spatialHash.gridSize.y()));
-            int y =
-              static_cast<int>((cellIndex % (spatialHash.gridSize.x() * spatialHash.gridSize.y())) /
-                               spatialHash.gridSize.x());
-            int x = static_cast<int>(cellIndex % spatialHash.gridSize.x());
+            int z = static_cast<int>(ci / (spatialHash.gridSize.x() * spatialHash.gridSize.y()));
+            int y = static_cast<int>((ci % (spatialHash.gridSize.x() * spatialHash.gridSize.y())) /
+                                     spatialHash.gridSize.x());
+            int x = static_cast<int>(ci % spatialHash.gridSize.x());
 
-            // Calculate world bounds of this hash cell
             openvdb::Vec3f cellMinWorld(spatialHash.minBounds.x() + x * spatialHash.cellSize,
                                         spatialHash.minBounds.y() + y * spatialHash.cellSize,
                                         spatialHash.minBounds.z() + z * spatialHash.cellSize);
@@ -717,13 +962,11 @@ namespace gladius
                                         cellMinWorld.y() + spatialHash.cellSize,
                                         cellMinWorld.z() + spatialHash.cellSize);
 
-            // Convert to voxel coordinate range
             openvdb::Coord minVoxel = transform->worldToIndexNodeCentered(
               openvdb::Vec3d(cellMinWorld.x(), cellMinWorld.y(), cellMinWorld.z()));
             openvdb::Coord maxVoxel = transform->worldToIndexNodeCentered(
               openvdb::Vec3d(cellMaxWorld.x(), cellMaxWorld.y(), cellMaxWorld.z()));
 
-            // Process all voxels in this spatial hash cell
             for (openvdb::Coord voxelCoord(minVoxel.x(), 0, 0); voxelCoord.x() <= maxVoxel.x();
                  ++voxelCoord.x())
             {
@@ -733,13 +976,9 @@ namespace gladius
                     for (voxelCoord.z() = minVoxel.z(); voxelCoord.z() <= maxVoxel.z();
                          ++voxelCoord.z())
                     {
-                        // Skip if this voxel already has a primitive assigned
-                        if (indexAccessor.getValue(voxelCoord) != 0)
-                        {
-                            continue;
-                        }
+                        if (indexAccessor.isValueOn(voxelCoord))
+                            continue; // already assigned
 
-                        // Convert voxel coordinate to world space
                         openvdb::Vec3d worldPos = transform->indexToWorld(voxelCoord);
                         openvdb::Vec3f pos(static_cast<float>(worldPos.x()),
                                            static_cast<float>(worldPos.y()),
@@ -749,42 +988,34 @@ namespace gladius
                         int bestIndex = -1;
                         int bestType = -1;
 
-                        // Check all beams in this hash cell
-                        for (size_t beamIdx : cell.beamIndices)
+                        for (size_t bi : cell.beamIndices)
                         {
-                            float d = calculateBeamDistance(pos, beams[beamIdx]);
+                            float d = calculateBeamDistance(pos, beams[bi]);
                             if (d < bestDist)
                             {
                                 bestDist = d;
-                                bestIndex = static_cast<int>(beamIdx);
+                                bestIndex = static_cast<int>(bi);
                                 bestType = 0;
                             }
-                            m_lastStats.primitiveVoxelPairs++;
                         }
-
-                        // Check all balls in this hash cell
-                        for (size_t ballIdx : cell.ballIndices)
+                        for (size_t si : cell.ballIndices)
                         {
-                            float d = calculateBallDistance(pos, balls[ballIdx]);
+                            float d = calculateBallDistance(pos, balls[si]);
                             if (d < bestDist)
                             {
                                 bestDist = d;
-                                bestIndex = static_cast<int>(ballIdx);
+                                bestIndex = static_cast<int>(si);
                                 bestType = 1;
                             }
-                            m_lastStats.primitiveVoxelPairs++;
                         }
 
-                        // Assign primitive to voxel if found
                         if (bestIndex >= 0)
                         {
                             if (settings.encodeTypeInIndex && !settings.separateBeamBallGrids)
                             {
                                 int encodedIndex = bestIndex;
-                                if (bestType == 1) // ball
-                                {
+                                if (bestType == 1)
                                     encodedIndex |= (1 << 31);
-                                }
                                 indexAccessor.setValue(voxelCoord, encodedIndex);
                             }
                             else
@@ -796,20 +1027,90 @@ namespace gladius
                                 }
                             }
 
-                            m_lastStats.activeVoxels++;
+                            totalActive++;
                             totalDistance += std::abs(bestDist);
-                            m_lastStats.maxDistance =
-                              std::max(m_lastStats.maxDistance, std::abs(bestDist));
+                            maxDistance = std::max(maxDistance, std::abs(bestDist));
                         }
                     }
                 }
             }
         }
 
-        if (m_lastStats.activeVoxels > 0)
+        m_lastStats.activeVoxels = totalActive;
+        if (totalActive > 0)
+            m_lastStats.averageDistance = totalDistance / static_cast<float>(totalActive);
+        m_lastStats.maxDistance = maxDistance;
+    }
+
+    std::pair<openvdb::Int32Grid::Ptr, openvdb::Int32Grid::Ptr>
+    BeamLatticeVoxelBuilder::buildVoxelGridsPhase2(std::vector<BeamData> const & beams,
+                                                   std::vector<BallData> const & balls,
+                                                   BeamLatticeVoxelSettings const & settings)
+    {
+        auto startTime = std::chrono::high_resolution_clock::now();
+        m_lastStats = BuildStats{};
+        if (beams.empty() && balls.empty())
         {
-            m_lastStats.averageDistance =
-              totalDistance / static_cast<float>(m_lastStats.activeVoxels);
+            return {nullptr, nullptr};
         }
+
+        openvdb::initialize();
+
+        // Build spatial hash
+        auto hashStart = std::chrono::high_resolution_clock::now();
+        SpatialHashGrid spatialHash =
+          buildSpatialHashGrid(beams, balls, settings.voxelSize, settings.maxDistance);
+        auto hashEnd = std::chrono::high_resolution_clock::now();
+        m_lastStats.hashBuildTimeSeconds =
+          std::chrono::duration<float>(hashEnd - hashStart).count();
+        m_lastStats.spatialHashCells = spatialHash.cells.size();
+
+        // Create grids and transform
+        auto transform = openvdb::math::Transform::createLinearTransform(settings.voxelSize);
+        auto primitiveIndexGrid = openvdb::Int32Grid::create(0);
+        primitiveIndexGrid->setTransform(transform);
+        primitiveIndexGrid->setName("beam_lattice_primitive_indices");
+        openvdb::Int32Grid::Ptr primitiveTypeGrid = nullptr;
+        if (settings.separateBeamBallGrids)
+        {
+            primitiveTypeGrid = openvdb::Int32Grid::create(-1);
+            primitiveTypeGrid->setTransform(transform);
+            primitiveTypeGrid->setName("beam_lattice_primitive_types");
+        }
+
+        // Estimate total voxels for stats using overall bbox
+        openvdb::BBoxd bbox = calculateBoundingBox(beams, balls);
+        openvdb::Coord minCoord = transform->worldToIndexNodeCentered(bbox.min());
+        openvdb::Coord maxCoord = transform->worldToIndexNodeCentered(bbox.max());
+        int const margin =
+          static_cast<int>(std::ceil(settings.maxDistance / settings.voxelSize)) + 2;
+        minCoord.offset(-margin);
+        maxCoord.offset(margin);
+        openvdb::Coord gridSize = maxCoord - minCoord;
+        m_lastStats.totalVoxels = static_cast<size_t>(gridSize.x()) * gridSize.y() * gridSize.z();
+
+        auto voxStart = std::chrono::high_resolution_clock::now();
+        processPrimitiveInfluence(
+          primitiveIndexGrid, primitiveTypeGrid, spatialHash, beams, balls, settings, transform);
+        auto voxEnd = std::chrono::high_resolution_clock::now();
+        m_lastStats.voxelProcessTimeSeconds =
+          std::chrono::duration<float>(voxEnd - voxStart).count();
+
+        primitiveIndexGrid->pruneGrid();
+        if (primitiveTypeGrid)
+        {
+            primitiveTypeGrid->pruneGrid();
+        }
+
+        m_lastStats.memoryUsageBytes = primitiveIndexGrid->memUsage();
+        if (primitiveTypeGrid)
+        {
+            m_lastStats.memoryUsageBytes += primitiveTypeGrid->memUsage();
+        }
+
+        auto endTime = std::chrono::high_resolution_clock::now();
+        m_lastStats.buildTimeSeconds = std::chrono::duration<float>(endTime - startTime).count();
+
+        return {primitiveIndexGrid, primitiveTypeGrid};
     }
 }

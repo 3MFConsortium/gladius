@@ -83,4 +83,10 @@ endif()
 target_link_libraries(${BINARY}_lib PUBLIC ${DEPENDENCIES})
 target_link_libraries(${BINARY} PUBLIC ${BINARY}_lib)
 
+# Enable AVX2 SIMD instructions for Phase 3 optimization
+if (NOT WIN32)
+    target_compile_options(${BINARY}_lib PRIVATE -mavx2 -mfma)
+    target_compile_options(${BINARY} PRIVATE -mavx2 -mfma)
+endif()
+
 install(TARGETS ${BINARY} RUNTIME DESTINATION ${INSTALL_PREFIX}/)
