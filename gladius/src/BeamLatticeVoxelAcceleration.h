@@ -8,7 +8,7 @@
 #pragma once
 
 // Enable Phase 3 optimizations (temporarily disabled to bypass compile issue)
-// #define ENABLE_PHASE3_SIMD
+#define ENABLE_PHASE3_SIMD
 
 #include "BeamLatticeResource.h"
 #include "io/vdb.h"
@@ -18,7 +18,9 @@
 #ifdef ENABLE_PHASE3_SIMD
 #include <immintrin.h> // For SIMD intrinsics
 #endif
-#include <thread> // For parallelization
+#include <Eigen/Dense> // For vectorized operations
+#include <mutex>       // For thread synchronization
+#include <thread>      // For parallelization
 
 namespace gladius
 {
@@ -325,7 +327,8 @@ namespace gladius
                                              std::vector<SIMDBallData> const & simdBalls,
                                              BeamLatticeVoxelSettings const & settings,
                                              openvdb::math::Transform::Ptr const & transform,
-                                             size_t cellIndex) const;
+                                             size_t cellIndex,
+                                             std::mutex & gridWriteMutex) const;
 
         // End of Phase 3 SIMD optimization methods
 #endif

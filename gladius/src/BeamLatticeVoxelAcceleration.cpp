@@ -129,87 +129,30 @@ namespace gladius
                                                                       size_t numBeams,
                                                                       float * distances) const
     {
-        static CPUCapabilities caps = detectCPUCapabilities();
-        if (caps.hasAVX2 && numBeams >= 8)
+        // Use Eigen for vectorized operations - simpler and more reliable than hand-written SIMD
+        Eigen::Vector3f pointVec(point.x(), point.y(), point.z());
+
+        for (size_t i = 0; i < numBeams; ++i)
         {
-            size_t simdCount = numBeams & ~7;
-#ifdef __AVX2__
-            __m256 pointX = _mm256_set1_ps(point.x());
-            __m256 pointY = _mm256_set1_ps(point.y());
-            __m256 pointZ = _mm256_set1_ps(point.z());
-            __m256 zero = _mm256_setzero_ps();
-            __m256 eps = _mm256_set1_ps(1e-6f);
-            for (size_t i = 0; i < simdCount; i += 8)
-            {
-                __m256 startX = _mm256_load_ps(&beams[i].startX);
-                __m256 startY = _mm256_load_ps(&beams[i].startY);
-                __m256 startZ = _mm256_load_ps(&beams[i].startZ);
-                __m256 startRadius = _mm256_load_ps(&beams[i].startRadius);
-                __m256 endX = _mm256_load_ps(&beams[i].endX);
-                __m256 endY = _mm256_load_ps(&beams[i].endY);
-                __m256 endZ = _mm256_load_ps(&beams[i].endZ);
-                __m256 endRadius = _mm256_load_ps(&beams[i].endRadius);
-                __m256 dirX = _mm256_load_ps(&beams[i].dirX);
-                __m256 dirY = _mm256_load_ps(&beams[i].dirY);
-                __m256 dirZ = _mm256_load_ps(&beams[i].dirZ);
-                __m256 length = _mm256_load_ps(&beams[i].length);
-                __m256 vX = _mm256_sub_ps(pointX, startX);
-                __m256 vY = _mm256_sub_ps(pointY, startY);
-                __m256 vZ = _mm256_sub_ps(pointZ, startZ);
-                __m256 t =
-                  _mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(vX, dirX), _mm256_mul_ps(vY, dirY)),
-                                _mm256_mul_ps(vZ, dirZ));
-                t = _mm256_max_ps(zero, _mm256_min_ps(length, t));
-                __m256 closestX = _mm256_add_ps(startX, _mm256_mul_ps(dirX, t));
-                __m256 closestY = _mm256_add_ps(startY, _mm256_mul_ps(dirY, t));
-                __m256 closestZ = _mm256_add_ps(startZ, _mm256_mul_ps(dirZ, t));
-                __m256 dX = _mm256_sub_ps(pointX, closestX);
-                __m256 dY = _mm256_sub_ps(pointY, closestY);
-                __m256 dZ = _mm256_sub_ps(pointZ, closestZ);
-                __m256 coreDist = _mm256_sqrt_ps(
-                  _mm256_add_ps(_mm256_add_ps(_mm256_mul_ps(dX, dX), _mm256_mul_ps(dY, dY)),
-                                _mm256_mul_ps(dZ, dZ)));
-                __m256 tNorm = _mm256_div_ps(t, _mm256_max_ps(length, eps));
-                __m256 radiusDiff = _mm256_sub_ps(endRadius, startRadius);
-                __m256 radius = _mm256_add_ps(startRadius, _mm256_mul_ps(radiusDiff, tNorm));
-                __m256 result = _mm256_sub_ps(coreDist, radius);
-                _mm256_store_ps(&distances[i], result);
-            }
-            for (size_t i = simdCount; i < numBeams; ++i)
-            {
-                SIMDBeamData const & beam = beams[i];
-                BeamData scalarBeam;
-                scalarBeam.startPos = {beam.startX, beam.startY, beam.startZ};
-                scalarBeam.endPos = {beam.endX, beam.endY, beam.endZ};
-                scalarBeam.startRadius = beam.startRadius;
-                scalarBeam.endRadius = beam.endRadius;
-                distances[i] = calculateBeamDistance(point, scalarBeam);
-            }
-#else
-            for (size_t i = 0; i < numBeams; ++i)
-            {
-                SIMDBeamData const & beam = beams[i];
-                BeamData scalarBeam;
-                scalarBeam.startPos = {beam.startX, beam.startY, beam.startZ};
-                scalarBeam.endPos = {beam.endX, beam.endY, beam.endZ};
-                scalarBeam.startRadius = beam.startRadius;
-                scalarBeam.endRadius = beam.endRadius;
-                distances[i] = calculateBeamDistance(point, scalarBeam);
-            }
-#endif
-        }
-        else
-        {
-            for (size_t i = 0; i < numBeams; ++i)
-            {
-                SIMDBeamData const & beam = beams[i];
-                BeamData scalarBeam;
-                scalarBeam.startPos = {beam.startX, beam.startY, beam.startZ};
-                scalarBeam.endPos = {beam.endX, beam.endY, beam.endZ};
-                scalarBeam.startRadius = beam.startRadius;
-                scalarBeam.endRadius = beam.endRadius;
-                distances[i] = calculateBeamDistance(point, scalarBeam);
-            }
+            SIMDBeamData const & beam = beams[i];
+
+            // Use Eigen vectors for efficient computation
+            Eigen::Vector3f start(beam.startX, beam.startY, beam.startZ);
+            Eigen::Vector3f dir(beam.dirX, beam.dirY, beam.dirZ);
+
+            // Calculate closest point on beam using vectorized operations
+            Eigen::Vector3f v = pointVec - start;
+            float t = std::max(0.0f, std::min(beam.length, v.dot(dir)));
+            Eigen::Vector3f closest = start + dir * t;
+
+            // Distance from point to beam axis
+            float distToAxis = (pointVec - closest).norm();
+
+            // Interpolate radius along beam
+            float t_norm = (beam.length > 1e-6f) ? (t / beam.length) : 0.0f;
+            float radius = beam.startRadius + t_norm * (beam.endRadius - beam.startRadius);
+
+            distances[i] = distToAxis - radius;
         }
     }
 
@@ -374,10 +317,11 @@ namespace gladius
         float maxDistance = 0.0f;
         std::vector<std::thread> threads;
         std::atomic<size_t> cellIndex{0};
+        std::mutex gridWriteMutex; // Protect concurrent writes to OpenVDB grids
         for (unsigned int t = 0; t < numThreads; ++t)
         {
             threads.emplace_back(
-              [&]()
+              [&, this]()
               {
                   size_t localActiveVoxels = 0;
                   size_t localPrimitiveVoxelPairs = 0;
@@ -399,7 +343,8 @@ namespace gladius
                                                                             simdBalls,
                                                                             settings,
                                                                             transform,
-                                                                            currentCell);
+                                                                            currentCell,
+                                                                            gridWriteMutex);
                       localActiveVoxels += cellStats.activeVoxels;
                       localPrimitiveVoxelPairs += cellStats.primitiveVoxelPairs;
                       localTotalDistance += cellStats.totalDistance;
@@ -435,7 +380,8 @@ namespace gladius
       std::vector<SIMDBallData> const & simdBalls,
       BeamLatticeVoxelSettings const & settings,
       openvdb::math::Transform::Ptr const & transform,
-      size_t cellIndex) const
+      size_t cellIndex,
+      std::mutex & gridWriteMutex) const
     {
         CellProcessingStats stats;
         int z = static_cast<int>(cellIndex / (spatialHash.gridSize.x() * spatialHash.gridSize.y()));
@@ -466,7 +412,12 @@ namespace gladius
                      ++voxelCoord.z())
                 {
                     // Skip if this voxel was already assigned
-                    if (indexAccessor.isValueOn(voxelCoord))
+                    bool voxelAlreadyAssigned;
+                    {
+                        std::lock_guard<std::mutex> lock(gridWriteMutex);
+                        voxelAlreadyAssigned = indexAccessor.isValueOn(voxelCoord);
+                    }
+                    if (voxelAlreadyAssigned)
                         continue;
                     openvdb::Vec3d worldPos = transform->indexToWorld(voxelCoord);
                     openvdb::Vec3f pos(static_cast<float>(worldPos.x()),
@@ -482,7 +433,8 @@ namespace gladius
                         beamBatch.reserve(numBeams);
                         for (size_t i = 0; i < numBeams; ++i)
                             beamBatch.push_back(simdBeams[cell.beamIndices[i]]);
-                        calculateBeamDistancesSIMD(pos, beamBatch.data(), numBeams, beamDistances);
+                        this->calculateBeamDistancesSIMD(
+                          pos, beamBatch.data(), numBeams, beamDistances);
                         for (size_t i = 0; i < numBeams; ++i)
                         {
                             if (beamDistances[i] < bestDist)
@@ -549,19 +501,22 @@ namespace gladius
                     }
                     if (bestIndex >= 0)
                     {
-                        if (settings.encodeTypeInIndex && !settings.separateBeamBallGrids)
                         {
-                            int encodedIndex = bestIndex;
-                            if (bestType == 1)
-                                encodedIndex |= (1 << 31);
-                            indexAccessor.setValue(voxelCoord, encodedIndex);
-                        }
-                        else
-                        {
-                            indexAccessor.setValue(voxelCoord, bestIndex);
-                            if (primitiveTypeGrid)
+                            std::lock_guard<std::mutex> lock(gridWriteMutex);
+                            if (settings.encodeTypeInIndex && !settings.separateBeamBallGrids)
                             {
-                                primitiveTypeGrid->tree().setValueOn(voxelCoord, bestType);
+                                int encodedIndex = bestIndex;
+                                if (bestType == 1)
+                                    encodedIndex |= (1 << 31);
+                                indexAccessor.setValue(voxelCoord, encodedIndex);
+                            }
+                            else
+                            {
+                                indexAccessor.setValue(voxelCoord, bestIndex);
+                                if (primitiveTypeGrid)
+                                {
+                                    primitiveTypeGrid->tree().setValueOn(voxelCoord, bestType);
+                                }
                             }
                         }
                         stats.activeVoxels++;

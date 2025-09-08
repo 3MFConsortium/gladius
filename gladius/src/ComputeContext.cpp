@@ -335,8 +335,6 @@ namespace gladius
               static_cast<void *>(m_context.get()));
         };
 
-        logDiagnostics("Entry");
-
         // Check if context is valid before attempting to create queue
         if (!m_isValid)
         {
@@ -353,7 +351,7 @@ namespace gladius
         auto iter = m_queues.find(currentThreadId);
         if (iter == m_queues.end())
         {
-            logDiagnostics("Creating new queue");
+
             try
             {
                 auto newQueue = createQueue();
@@ -363,7 +361,7 @@ namespace gladius
                     logDiagnostics("Queue insertion failed");
                     throw ThreadQueueManagementError("queue insertion", currentThreadId);
                 }
-                logDiagnostics("Queue created successfully");
+
                 return result.first->second;
             }
             catch (OpenCLQueueCreationError const &)
@@ -393,7 +391,6 @@ namespace gladius
             }
         }
 
-        logDiagnostics("Returning existing queue");
         return iter->second;
     }
 
