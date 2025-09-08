@@ -373,6 +373,7 @@ namespace gladius::tests
             scenario.settings.maxDistance = 3.0f;
             scenario.settings.separateBeamBallGrids = true;
             scenario.settings.enableDebugOutput = true;
+            scenario.settings.optimizationPhase = 3; // Force Phase 3 SIMD
             scenarios.push_back(scenario);
         }
 
@@ -396,6 +397,7 @@ namespace gladius::tests
             scenario.settings.maxDistance = 2.5f;
             scenario.settings.separateBeamBallGrids = true;
             scenario.settings.enableDebugOutput = true;
+            scenario.settings.optimizationPhase = 3; // Force Phase 3 SIMD
             scenarios.push_back(scenario);
         }
 
@@ -419,6 +421,7 @@ namespace gladius::tests
             scenario.settings.maxDistance = 2.0f;
             scenario.settings.separateBeamBallGrids = true;
             scenario.settings.enableDebugOutput = true;
+            scenario.settings.optimizationPhase = 3; // Force Phase 3 SIMD
             scenarios.push_back(scenario);
         }
 
