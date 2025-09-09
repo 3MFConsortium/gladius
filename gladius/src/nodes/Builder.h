@@ -39,6 +39,12 @@ namespace gladius::nodes
                                ResourceKey const & resourceKey,
                                nodes::Port & coordinateSystemPort);
 
+        void addBeamLatticeWithClipping(Model & target,
+                                        ResourceKey const & beamLatticeKey,
+                                        ResourceKey const & clippingMeshKey,
+                                        int clippingMode, // 0=none, 1=inside, 2=outside
+                                        nodes::Port & coordinateSystemPort);
+
         void addBoundingBox(Model & target,
                             BoundingBox const & boundingBox,
                             nodes::Port & coordinateSystemPort);

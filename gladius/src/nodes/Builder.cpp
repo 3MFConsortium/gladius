@@ -688,4 +688,102 @@ namespace gladius::nodes
 
         return ComponentType::SubModel;
     }
+
+    void Builder::addBeamLatticeWithClipping(Model & target,
+                                             ResourceKey const & beamLatticeKey,
+                                             ResourceKey const & clippingMeshKey,
+                                             int clippingMode,
+                                             nodes::Port & coordinateSystemPort)
+    {
+        // Create beam lattice resource node
+        nodes::Resource beamLatticeResourceNode;
+        auto beamLatticeResource = target.create(beamLatticeResourceNode);
+        beamLatticeResource->parameter().at(FieldNames::ResourceId) =
+          VariantParameter(beamLatticeKey.getResourceId().value_or(0));
+
+        // Create beam lattice SDF node
+        nodes::SignedDistanceToBeamLattice beamLatticeNode;
+        auto beamLattice = target.create(beamLatticeNode);
+        beamLattice->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
+        beamLattice->parameter()
+          .at(FieldNames::BeamLattice)
+          .setInputFromPort(beamLatticeResource->getOutputs().at(FieldNames::Value));
+
+        // Create clipping mesh resource node
+        nodes::Resource clippingMeshResourceNode;
+        auto clippingMeshResource = target.create(clippingMeshResourceNode);
+        clippingMeshResource->parameter().at(FieldNames::ResourceId) =
+          VariantParameter(clippingMeshKey.getResourceId().value_or(0));
+
+        // Create clipping mesh SDF node
+        nodes::SignedDistanceToMesh clippingMeshNode;
+        auto clippingMesh = target.create(clippingMeshNode);
+        clippingMesh->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
+        clippingMesh->parameter()
+          .at(FieldNames::Mesh)
+          .setInputFromPort(clippingMeshResource->getOutputs().at(FieldNames::Value));
+
+        // Get the beam lattice and clipping mesh output ports
+        auto & beamLatticeShapePort = beamLattice->getOutputs().at(FieldNames::Distance);
+        auto & clippingMeshShapePort = clippingMesh->getOutputs().at(FieldNames::Distance);
+
+        // Create clipping operation based on mode
+        nodes::Port * clippedShapePort = nullptr;
+
+        if (clippingMode == 1) // Inside clipping
+        {
+            // Max(beam_lattice, clipping_mesh) - keeps beam lattice inside clipping mesh
+            auto intersectionNode = target.create<nodes::Max>();
+            intersectionNode->parameter().at(FieldNames::A).setInputFromPort(beamLatticeShapePort);
+            intersectionNode->parameter().at(FieldNames::B).setInputFromPort(clippingMeshShapePort);
+            clippedShapePort = &intersectionNode->getOutputs().at(FieldNames::Result);
+        }
+        else if (clippingMode == 2) // Outside clipping
+        {
+            // Max(beam_lattice, -clipping_mesh) - keeps beam lattice outside clipping mesh
+            // First negate the clipping mesh SDF
+            auto negateNode = target.create<nodes::Multiplication>();
+            auto minusOne = target.create<nodes::ConstantScalar>();
+            minusOne->parameter().at(FieldNames::Value) = VariantParameter(-1.0f);
+
+            negateNode->parameter().at(FieldNames::A).setInputFromPort(clippingMeshShapePort);
+            negateNode->parameter()
+              .at(FieldNames::B)
+              .setInputFromPort(minusOne->getOutputs().at(FieldNames::Value));
+
+            // Then intersect with negated clipping mesh
+            auto intersectionNode = target.create<nodes::Max>();
+            intersectionNode->parameter().at(FieldNames::A).setInputFromPort(beamLatticeShapePort);
+            intersectionNode->parameter()
+              .at(FieldNames::B)
+              .setInputFromPort(negateNode->getOutputs().at(FieldNames::Result));
+            clippedShapePort = &intersectionNode->getOutputs().at(FieldNames::Result);
+        }
+        else
+        {
+            // No clipping or unknown mode - just use beam lattice
+            clippedShapePort = &beamLatticeShapePort;
+        }
+
+        // Connect to the end node
+        auto lastShapePort = getLastShape(target);
+        auto shapeSink = target.getEndNode()->getParameter(FieldNames::Shape);
+
+        if (!shapeSink)
+        {
+            throw std::runtime_error("End node is required to have a shape parameter");
+        }
+
+        if (!lastShapePort)
+        {
+            shapeSink->setInputFromPort(*clippedShapePort);
+            return;
+        }
+
+        // Union with existing shapes
+        auto uniteNode = target.create<nodes::Min>();
+        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
+        uniteNode->parameter().at(FieldNames::B).setInputFromPort(*clippedShapePort);
+        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+    }
 }

@@ -1132,6 +1132,29 @@ namespace gladius::io
                 return;
             }
 
+            // Read clipping information from beam lattice
+            Lib3MF::eBeamLatticeClipMode clippingMode = Lib3MF::eBeamLatticeClipMode::NoClipMode;
+            Lib3MF_uint32 clippingMeshResourceId = 0;
+
+            try
+            {
+                beamLattice->GetClipping(clippingMode, clippingMeshResourceId);
+            }
+            catch (const std::exception & e)
+            {
+                // If clipping info is not available, continue with no clipping
+                clippingMode = Lib3MF::eBeamLatticeClipMode::NoClipMode;
+                if (m_eventLogger)
+                {
+                    m_eventLogger->addEvent(
+                      {fmt::format(
+                         "Warning: Could not read clipping information from beam lattice {}: {}",
+                         meshObject->GetModelResourceID(),
+                         e.what()),
+                       gladius::events::Severity::Warning});
+                }
+            }
+
             // Extract beam data from lib3mf
             std::vector<BeamData> beams;
             Lib3MF_uint32 beamCount = beamLattice->GetBeamCount();
@@ -1301,9 +1324,67 @@ namespace gladius::io
                 auto coordinateSystemPort =
                   builder.addTransformationToInputCs(*doc.getAssembly()->assemblyModel(), trafo);
 
-                // Use the beam lattice-specific builder method
-                builder.addBeamLatticeRef(
-                  *doc.getAssembly()->assemblyModel(), key, coordinateSystemPort);
+                // Read clipping information from beam lattice
+                Lib3MF::eBeamLatticeClipMode clippingMode =
+                  Lib3MF::eBeamLatticeClipMode::NoClipMode;
+                Lib3MF_uint32 clippingMeshResourceId = 0;
+
+                try
+                {
+                    beamLattice->GetClipping(clippingMode, clippingMeshResourceId);
+                }
+                catch (const std::exception & e)
+                {
+                    // If clipping info is not available, continue with no clipping
+                    clippingMode = Lib3MF::eBeamLatticeClipMode::NoClipMode;
+                    if (m_eventLogger)
+                    {
+                        m_eventLogger->addEvent({fmt::format("Warning: Could not read clipping "
+                                                             "information from beam lattice {}: {}",
+                                                             meshObject->GetModelResourceID(),
+                                                             e.what()),
+                                                 gladius::events::Severity::Warning});
+                    }
+                }
+
+                // Handle clipping based on the mode
+                if (clippingMode == Lib3MF::eBeamLatticeClipMode::NoClipMode)
+                {
+                    // No clipping - use the current behavior
+                    builder.addBeamLatticeRef(
+                      *doc.getAssembly()->assemblyModel(), key, coordinateSystemPort);
+                }
+                else
+                {
+                    // Clipping required - get clipping mesh resource key
+                    auto clippingMeshKey = ResourceKey(clippingMeshResourceId, ResourceType::Mesh);
+
+                    // Check if clipping mesh resource exists
+                    if (!doc.getGeneratorContext().resourceManager.hasResource(clippingMeshKey))
+                    {
+                        if (m_eventLogger)
+                        {
+                            m_eventLogger->addEvent(
+                              {fmt::format(
+                                 "Error: Clipping mesh resource {} not found for beam lattice {}",
+                                 clippingMeshResourceId,
+                                 meshObject->GetModelResourceID()),
+                               gladius::events::Severity::Error});
+                        }
+                        // Fallback to no clipping
+                        builder.addBeamLatticeRef(
+                          *doc.getAssembly()->assemblyModel(), key, coordinateSystemPort);
+                    }
+                    else
+                    {
+                        // Apply clipping
+                        builder.addBeamLatticeWithClipping(*doc.getAssembly()->assemblyModel(),
+                                                           key,
+                                                           clippingMeshKey,
+                                                           static_cast<int>(clippingMode),
+                                                           coordinateSystemPort);
+                    }
+                }
             }
         }
     }
