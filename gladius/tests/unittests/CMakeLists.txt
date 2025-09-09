@@ -29,7 +29,7 @@ if(MSVC)
 endif()
 target_include_directories(${BINARY} PUBLIC ../../src ../../src/io ../../components/nanovdb)
 
-set(DEPENDENCIES ${CMAKE_PROJECT_NAME}_lib GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main ${FMT_LIBRARY} ${OPENMESH_LIBRARIES} Eigen3::Eigen lodepng Boost::boost unofficial::minizip::minizip)
+set(DEPENDENCIES ${CMAKE_PROJECT_NAME}_lib GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main ${FMT_LIBRARY} ${OPENMESH_LIBRARIES} Eigen3::Eigen lodepng Boost::boost unofficial::minizip::minizip OpenVDB::openvdb)
 
 if (ENABLE_TRACY)
   set(DEPENDENCIES ${DEPENDENCIES} Tracy::TracyClient)

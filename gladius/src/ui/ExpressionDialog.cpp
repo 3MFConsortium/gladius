@@ -17,7 +17,7 @@ namespace gladius::ui
         , m_output(FunctionOutput::defaultOutput())
     {
         // Initialize output name buffer
-        std::strcpy(m_outputNameBuffer, m_output.name.c_str());
+        strncpy_s(m_outputNameBuffer, sizeof(m_outputNameBuffer), m_output.name.c_str(), _TRUNCATE);
     }
 
     ExpressionDialog::~ExpressionDialog() = default;
@@ -343,8 +343,8 @@ namespace gladius::ui
             else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
             {
                 m_selectedSuggestion = m_selectedSuggestion > 0
-                                         ? m_selectedSuggestion - 1
-                                         : m_autocompleteSuggestions.size() - 1;
+                                         ? static_cast<int>(m_selectedSuggestion - 1)
+                                         : static_cast<int>(m_autocompleteSuggestions.size() - 1);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_Tab) || ImGui::IsKeyPressed(ImGuiKey_Enter))
             {
@@ -354,8 +354,7 @@ namespace gladius::ui
                     // Insert the selected suggestion
                     std::string suggestion = m_autocompleteSuggestions[m_selectedSuggestion];
                     m_expression += suggestion;
-                    strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
-                    m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+                    strncpy_s(m_expressionBuffer, sizeof(m_expressionBuffer), m_expression.c_str(), _TRUNCATE);
                     m_needsValidation = true;
                     m_showAutocomplete = false;
                 }
@@ -509,8 +508,7 @@ namespace gladius::ui
         std::string afterCursor = m_expression.substr(cursorPos);
 
         m_expression = beforeWord + suggestion + afterCursor;
-        strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
-        m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+        strncpy_s(m_expressionBuffer, sizeof(m_expressionBuffer), m_expression.c_str(), _TRUNCATE);
 
         m_needsValidation = true;
         m_needsSyntaxUpdate = true;
@@ -550,7 +548,7 @@ namespace gladius::ui
 
         // Get the last word/token from the expression
         std::string lastToken;
-        for (int i = m_expression.length() - 1; i >= 0; --i)
+        for (int i = static_cast<int>(m_expression.length()) - 1; i >= 0; --i)
         {
             char c = m_expression[i];
             if (std::isalnum(c) || c == '_')
@@ -1217,8 +1215,7 @@ namespace gladius::ui
     {
         // Replace current expression
         m_expression = templateExpr;
-        strncpy(m_expressionBuffer, m_expression.c_str(), EXPRESSION_BUFFER_SIZE - 1);
-        m_expressionBuffer[EXPRESSION_BUFFER_SIZE - 1] = '\0';
+        strncpy_s(m_expressionBuffer, sizeof(m_expressionBuffer), m_expression.c_str(), _TRUNCATE);
 
         // Auto-add expected arguments based on template
         addExpectedArgumentsForTemplate(templateExpr);

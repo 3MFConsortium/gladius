@@ -841,7 +841,6 @@ namespace gladius::tests
             std::vector<BallData> balls;
 
             // Create random lattice structure (smaller bounds)
-            std::random_device rd;
             std::mt19937 gen(42); // Fixed seed for reproducible results
             std::uniform_real_distribution<float> posDist(0.0f, 20.0f);   // Reduced from 50.0f
             std::uniform_real_distribution<float> radiusDist(0.2f, 0.8f); // Reduced range

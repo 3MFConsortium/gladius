@@ -666,7 +666,7 @@ namespace gladius
                     }
                 }
             }
-            catch (const std::exception & e)
+            catch (const std::exception & /* e */)
             {
                 // Log error but don't modify the last error message for const method
                 // This is a read-only operation, so we don't set error state

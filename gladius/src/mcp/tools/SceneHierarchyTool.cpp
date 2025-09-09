@@ -338,7 +338,7 @@ namespace gladius::mcp::tools
                 functions.push_back(functionName);
             }
         }
-        catch (const std::exception & e)
+        catch (const std::exception & /* e */)
         {
             // Log error if we had access to logging, but for now just return empty vector
             // Could potentially set an error message that could be retrieved later

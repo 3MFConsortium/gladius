@@ -10,6 +10,10 @@
 #include <sstream>
 #include <string>
 
+#ifdef _WIN32
+#include <cstdlib>
+#endif
+
 CMRC_DECLARE(gladius_resources);
 
 namespace gladius
@@ -262,11 +266,25 @@ namespace gladius
         ProfileFunction std::stringstream args;
 
         // Allow overriding build flags for debugging via environment variable
+#ifdef _WIN32
+        char* debugFlags = nullptr;
+        size_t len = 0;
+        _dupenv_s(&debugFlags, &len, "GLADIUS_OPENCL_BUILD_FLAGS");
+        if (debugFlags && std::string(debugFlags).size() > 0)
+        {
+            args << ' ' << debugFlags;
+        }
+        if (debugFlags)
+        {
+            free(debugFlags);
+        }
+#else
         const char * debugFlags = std::getenv("GLADIUS_OPENCL_BUILD_FLAGS");
         if (debugFlags && std::string(debugFlags).size() > 0)
         {
             args << ' ' << debugFlags;
         }
+#endif
         else
         {
             if (m_useFastRelaxedMath)

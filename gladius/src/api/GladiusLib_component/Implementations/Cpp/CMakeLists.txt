@@ -13,7 +13,12 @@ Interface version: 1.0.0
 
 ]]
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.21)
+
+# Set policies to avoid warnings
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)  # install() DESTINATION paths normalization
+endif()
 
 ### The implementation of the GladiusLib component
 project(GladiusLib)

@@ -2,6 +2,10 @@
  
 #include "imgui.h"
 
+#ifdef WIN32
+#include <shellapi.h>
+#endif
+
 namespace gladius::ui
 {
     void CliExportDialog::beginExport(std::filesystem::path stlFilename,

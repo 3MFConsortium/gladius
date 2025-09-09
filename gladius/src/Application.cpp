@@ -180,7 +180,7 @@ namespace gladius
 
             return success;
         }
-        catch (const std::exception & e)
+        catch (const std::exception & /* e */)
         {
             m_mcpServer.reset();
             m_mcpAdapter.reset();

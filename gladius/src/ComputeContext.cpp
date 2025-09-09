@@ -906,7 +906,7 @@ namespace gladius
 
             m_isValid = true;
         }
-        catch (std::exception const & e)
+        catch (std::exception const & /* e */)
         {
             // Handle any initialization errors
             m_isValid = false;

@@ -302,7 +302,7 @@ namespace gladius
                       quality,
                       additionalData);
                 }
-                catch (const std::exception & e)
+                catch (const std::exception & /* e */)
                 {
                     // Restore original camera settings on error
                     core->getResourceContext()->setEyePosition(originalEyePos);
