@@ -60,8 +60,7 @@ namespace gladius::tests
         createTestBall(float x = 5.0f, float y = 5.0f, float z = 5.0f, float radius = 2.0f) const
         {
             BallData ball;
-            ball.position = {x, y, z};
-            ball.radius = radius;
+            ball.positionRadius = {x, y, z, radius};
             return ball;
         }
 
@@ -94,10 +93,10 @@ namespace gladius::tests
                         if (i < 2 && j < 2)
                         {
                             BallData ball;
-                            ball.position = {static_cast<float>(i * 5 + 1.5f),
-                                             static_cast<float>(j * 5 + 1.5f),
-                                             0.0f};
-                            ball.radius = 0.8f;
+                            ball.positionRadius = {static_cast<float>(i * 5 + 1.5f),
+                                                   static_cast<float>(j * 5 + 1.5f),
+                                                   0.0f,
+                                                   0.8f};
                             balls.push_back(ball);
                         }
                     }

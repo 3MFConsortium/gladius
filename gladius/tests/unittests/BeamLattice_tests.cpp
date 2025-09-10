@@ -128,9 +128,11 @@ namespace gladius::tests
         /// @brief CPU equivalent of OpenCL ballDistance function
         float ballDistance(const float3 & pos, const BallData & ball)
         {
-            float3 diff = {
-              pos.x - ball.position.x, pos.y - ball.position.y, pos.z - ball.position.z};
-            return std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z) - ball.radius;
+            float3 diff = {pos.x - ball.positionRadius.x,
+                           pos.y - ball.positionRadius.y,
+                           pos.z - ball.positionRadius.z};
+            return std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z) -
+                   ball.positionRadius.w;
         }
 
         /// @brief CPU bounding box distance calculation
@@ -413,8 +415,7 @@ namespace gladius::tests
     TEST_F(BeamLatticeTest, BallDistance_SingleBall_CorrectDistance)
     {
         BallData ball;
-        ball.position = {0.0f, 0.0f, 0.0f, 0.0f};
-        ball.radius = 2.0f;
+        ball.positionRadius = {0.0f, 0.0f, 0.0f, 2.0f};
 
         // Test point on surface
         float3 pointOnSurface = {2.0f, 0.0f, 0.0f};
@@ -470,13 +471,11 @@ namespace gladius::tests
             beams.push_back(beam3);
 
             BallData ball1;
-            ball1.position = {15.0f, 15.0f, 15.0f, 0.0f};
-            ball1.radius = 2.0f;
+            ball1.positionRadius = {15.0f, 15.0f, 15.0f, 2.0f};
             balls.push_back(ball1);
 
             BallData ball2;
-            ball2.position = {-5.0f, -5.0f, -5.0f, 0.0f};
-            ball2.radius = 1.5f;
+            ball2.positionRadius = {-5.0f, -5.0f, -5.0f, 1.5f};
             balls.push_back(ball2);
 
             // Test points at various locations

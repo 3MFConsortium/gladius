@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BeamLatticeResource.h"
 #include "Mesh.h"
 #include "nodes/Assembly.h"
 #include "nodes/Model.h"

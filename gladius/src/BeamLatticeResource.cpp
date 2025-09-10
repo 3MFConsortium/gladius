@@ -11,18 +11,29 @@ namespace gladius
     BeamLatticeResource::BeamLatticeResource(ResourceKey key,
                                              std::vector<BeamData> && beams,
                                              std::vector<BallData> && balls,
+                                             BeamLatticeBallConfig ballConfig,
                                              bool useVoxelAcceleration)
         : ResourceBase(std::move(key))
         , m_beams(std::move(beams))
         , m_balls(std::move(balls))
+        , m_ballConfig(ballConfig)
         , m_useVoxelAcceleration(useVoxelAcceleration)
     {
+        // Validate ball configuration per 3MF specification
+        if (!m_ballConfig.isValid())
+        {
+            throw std::invalid_argument(
+              "Invalid ball configuration: ballradius required when ballmode != none");
+        }
+
         // Validate input data
         if (m_beams.empty() && m_balls.empty())
         {
             throw std::invalid_argument(
               "BeamLatticeResource: Cannot create resource with no beams or balls");
         }
+
+        // Validation completed - configuration is acceptable
 
         // Set optimized BVH build parameters for large lattices
         m_bvhParams.maxDepth = 16;

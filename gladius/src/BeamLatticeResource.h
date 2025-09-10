@@ -9,6 +9,27 @@
 
 namespace gladius
 {
+    /// @brief Ball mode enumeration matching 3MF specification
+    enum class BallMode : int
+    {
+        None = 0,  ///< No balls are created at beam vertices
+        Mixed = 1, ///< Balls are created at vertices with corresponding <ball> elements only
+        All = 2    ///< Balls are created at every vertex that maps to the end of a beam
+    };
+
+    /// @brief Ball configuration for beam lattice following 3MF specification
+    struct BeamLatticeBallConfig
+    {
+        BallMode mode = BallMode::None; ///< Ball generation mode
+        float defaultRadius = 0.0f;     ///< Default uniform radius value for balls
+
+        /// @brief Validate configuration per 3MF spec
+        /// @return True if configuration is valid
+        bool isValid() const
+        {
+            return (mode == BallMode::None) || (defaultRadius > 0.0f);
+        }
+    };
     /// @brief Resource class for managing beam lattice data and acceleration structures
     /// @details Extends ResourceBase to handle beam lattice loading, BVH construction,
     /// and GPU data transfer following the established resource management pattern
@@ -19,10 +40,12 @@ namespace gladius
         /// @param key Resource key for identification and metadata
         /// @param beams Vector of beam primitive data (moved for efficiency)
         /// @param balls Vector of ball primitive data (moved for efficiency)
+        /// @param ballConfig Ball configuration matching 3MF specification
         /// @param useVoxelAcceleration Whether to use voxel or BVH acceleration
         BeamLatticeResource(ResourceKey key,
                             std::vector<BeamData> && beams,
                             std::vector<BallData> && balls,
+                            BeamLatticeBallConfig ballConfig,
                             bool useVoxelAcceleration = false);
 
         /// @brief Get read-only access to beam data
@@ -65,6 +88,13 @@ namespace gladius
         bool hasBalls() const
         {
             return !m_balls.empty();
+        }
+
+        /// @brief Get ball configuration
+        /// @return Const reference to ball configuration
+        const BeamLatticeBallConfig & getBallConfig() const
+        {
+            return m_ballConfig;
         }
 
         /// @brief Enable or disable voxel acceleration
@@ -126,6 +156,9 @@ namespace gladius
         // Beam lattice data
         std::vector<BeamData> m_beams; ///< Beam primitive data
         std::vector<BallData> m_balls; ///< Ball primitive data (optional)
+
+        // Ball configuration from 3MF specification
+        BeamLatticeBallConfig m_ballConfig; ///< Ball mode and default radius configuration
 
         // BVH acceleration data
         std::vector<BeamBVHNode> m_bvhNodes;     ///< BVH hierarchy for efficient traversal
