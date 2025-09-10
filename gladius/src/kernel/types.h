@@ -108,8 +108,7 @@ struct PrimitiveMeta
 
 typedef float PrimitiveData;
 
-#ifdef COMPILING_FOR_HOST
-// Beam data structure for lattice beams (aligned for GPU access)
+// Beam data structure for lattice beams (shared between host and OpenCL)
 struct BeamData
 {
     float4 startPos;       // Start position (w component unused)
@@ -122,16 +121,13 @@ struct BeamData
     int padding;           // Alignment padding
 };
 
-// Ball data structure for beam lattice nodes
+// Ball data structure for beam lattice nodes (shared between host and OpenCL)
 struct BallData
 {
-    float4 position;       // Ball center (w component unused)
-    float radius;          // Ball radius
-    int materialId;        // Material/property ID
-    int padding[2];        // Alignment padding
+    float4 positionRadius; // xyz = position, w = radius
 };
 
-// BVH node structure for beam lattice spatial acceleration
+// BVH node structure for beam lattice spatial acceleration (shared between host and OpenCL)
 struct BeamBVHNode
 {
     float4 boundingBoxMin;
@@ -143,40 +139,6 @@ struct BeamBVHNode
     int depth;             // Node depth for debugging
     int padding[3];        // Alignment
 };
-#else
-// OpenCL versions of beam structures
-struct BeamData
-{
-    float4 startPos;
-    float4 endPos;
-    float startRadius;
-    float endRadius;
-    int startCapStyle;
-    int endCapStyle;
-    int materialId;
-    int padding;
-};
-
-struct BallData
-{
-    float4 position;
-    float radius;
-    int materialId;
-    int padding[2];
-};
-
-struct BeamBVHNode
-{
-    float4 boundingBoxMin;
-    float4 boundingBoxMax;
-    int leftChild;         // Index to left child (-1 if leaf)
-    int rightChild;        // Index to right child (-1 if leaf)
-    int primitiveStart;    // First primitive index (for leaves)
-    int primitiveCount;    // Number of primitives (for leaves)
-    int depth;             // Node depth for debugging
-    int padding[3];        // Alignment
-};
-#endif
 
 struct RenderingSettings // Note that the alignment has to be considered
 {

@@ -114,10 +114,10 @@ namespace gladius
         {
             BallData const & ball = balls[i];
             SIMDBallData simdBall;
-            simdBall.x = ball.position.x;
-            simdBall.y = ball.position.y;
-            simdBall.z = ball.position.z;
-            simdBall.radius = ball.radius;
+            simdBall.x = ball.positionRadius.x;
+            simdBall.y = ball.positionRadius.y;
+            simdBall.z = ball.positionRadius.z;
+            simdBall.radius = ball.positionRadius.w;
             simdBall.originalIndex = i;
             simdBalls.push_back(simdBall);
         }
@@ -189,8 +189,7 @@ namespace gladius
             {
                 SIMDBallData const & ball = balls[i];
                 BallData scalarBall;
-                scalarBall.position = {ball.x, ball.y, ball.z};
-                scalarBall.radius = ball.radius;
+                scalarBall.positionRadius = {ball.x, ball.y, ball.z, ball.radius};
                 distances[i] = calculateBallDistance(point, scalarBall);
             }
 #else
@@ -198,8 +197,7 @@ namespace gladius
             {
                 SIMDBallData const & ball = balls[i];
                 BallData scalarBall;
-                scalarBall.position = {ball.x, ball.y, ball.z};
-                scalarBall.radius = ball.radius;
+                scalarBall.positionRadius = {ball.x, ball.y, ball.z, ball.radius};
                 distances[i] = calculateBallDistance(point, scalarBall);
             }
 #endif
@@ -210,8 +208,7 @@ namespace gladius
             {
                 SIMDBallData const & ball = balls[i];
                 BallData scalarBall;
-                scalarBall.position = {ball.x, ball.y, ball.z};
-                scalarBall.radius = ball.radius;
+                scalarBall.positionRadius = {ball.x, ball.y, ball.z, ball.radius};
                 distances[i] = calculateBallDistance(point, scalarBall);
             }
         }
@@ -487,8 +484,8 @@ namespace gladius
                         {
                             BallData ball = {{simdBalls[cell.ballIndices[i]].x,
                                               simdBalls[cell.ballIndices[i]].y,
-                                              simdBalls[cell.ballIndices[i]].z},
-                                             simdBalls[cell.ballIndices[i]].radius};
+                                              simdBalls[cell.ballIndices[i]].z,
+                                              simdBalls[cell.ballIndices[i]].radius}};
                             float d = calculateBallDistance(pos, ball);
                             if (d < bestDist)
                             {
@@ -568,10 +565,10 @@ namespace gladius
     float BeamLatticeVoxelBuilder::calculateBallDistance(openvdb::Vec3f const & point,
                                                          BallData const & ball) const
     {
-        float dx = point.x() - ball.position.x;
-        float dy = point.y() - ball.position.y;
-        float dz = point.z() - ball.position.z;
-        float dist = std::sqrt(dx * dx + dy * dy + dz * dz) - ball.radius;
+        float dx = point.x() - ball.positionRadius.x;
+        float dy = point.y() - ball.positionRadius.y;
+        float dz = point.z() - ball.positionRadius.z;
+        float dist = std::sqrt(dx * dx + dy * dy + dz * dz) - ball.positionRadius.w;
         return dist;
     }
 
@@ -599,9 +596,13 @@ namespace gladius
         }
         for (auto const & s : balls)
         {
-            extend(s.position.x, s.position.y, s.position.z);
-            extend(s.position.x + s.radius, s.position.y + s.radius, s.position.z + s.radius);
-            extend(s.position.x - s.radius, s.position.y - s.radius, s.position.z - s.radius);
+            extend(s.positionRadius.x, s.positionRadius.y, s.positionRadius.z);
+            extend(s.positionRadius.x + s.positionRadius.w,
+                   s.positionRadius.y + s.positionRadius.w,
+                   s.positionRadius.z + s.positionRadius.w);
+            extend(s.positionRadius.x - s.positionRadius.w,
+                   s.positionRadius.y - s.positionRadius.w,
+                   s.positionRadius.z - s.positionRadius.w);
         }
 
         return {minP, maxP};
@@ -854,13 +855,13 @@ namespace gladius
         };
         auto addBallToCells = [&](size_t idx, BallData const & s)
         {
-            float pad = std::max(s.radius, maxDistance);
-            float minX = s.position.x - pad;
-            float minY = s.position.y - pad;
-            float minZ = s.position.z - pad;
-            float maxX = s.position.x + pad;
-            float maxY = s.position.y + pad;
-            float maxZ = s.position.z + pad;
+            float pad = std::max(s.positionRadius.w, maxDistance);
+            float minX = s.positionRadius.x - pad;
+            float minY = s.positionRadius.y - pad;
+            float minZ = s.positionRadius.z - pad;
+            float maxX = s.positionRadius.x + pad;
+            float maxY = s.positionRadius.y + pad;
+            float maxZ = s.positionRadius.z + pad;
             openvdb::Coord cmin = grid.worldToGrid({minX, minY, minZ});
             openvdb::Coord cmax = grid.worldToGrid({maxX, maxY, maxZ});
             for (int z = std::max(0, cmin.z()); z <= std::min(grid.gridSize.z() - 1, cmax.z()); ++z)

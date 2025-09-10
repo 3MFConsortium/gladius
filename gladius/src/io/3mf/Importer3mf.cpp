@@ -1211,14 +1211,10 @@ namespace gladius::io
 
                     // Get vertex position from mesh using ball's vertex index
                     auto const vertex = meshObject->GetVertex(ballInfo.m_Index);
-                    ball.position = {static_cast<float>(vertex.m_Coordinates[0]),
-                                     static_cast<float>(vertex.m_Coordinates[1]),
-                                     static_cast<float>(vertex.m_Coordinates[2]),
-                                     1.0f};
-                    ball.radius = static_cast<float>(ballInfo.m_Radius);
-                    ball.materialId = 0; // Default material
-                    ball.padding[0] = 0;
-                    ball.padding[1] = 0;
+                    ball.positionRadius = {static_cast<float>(vertex.m_Coordinates[0]),
+                                           static_cast<float>(vertex.m_Coordinates[1]),
+                                           static_cast<float>(vertex.m_Coordinates[2]),
+                                           static_cast<float>(ballInfo.m_Radius)};
                     balls.push_back(ball);
                 }
             }

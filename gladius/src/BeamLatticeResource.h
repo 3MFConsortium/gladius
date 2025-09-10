@@ -23,7 +23,7 @@ namespace gladius
         BeamLatticeResource(ResourceKey key,
                             std::vector<BeamData> && beams,
                             std::vector<BallData> && balls,
-                            bool useVoxelAcceleration = true);
+                            bool useVoxelAcceleration = false);
 
         /// @brief Get read-only access to beam data
         /// @return Const reference to beam vector

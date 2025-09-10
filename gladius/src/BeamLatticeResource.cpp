@@ -338,13 +338,11 @@ namespace gladius
         // Write ball data directly to payload data vector
         for (const auto & ball : m_balls)
         {
-            // Write ball center (3 floats)
-            m_payloadData.data.push_back(ball.position.x);
-            m_payloadData.data.push_back(ball.position.y);
-            m_payloadData.data.push_back(ball.position.z);
-
-            // Write ball radius (1 float)
-            m_payloadData.data.push_back(ball.radius);
+            // Write single float4 with position.xyz and radius in w component (4 floats total)
+            m_payloadData.data.push_back(ball.positionRadius.x);
+            m_payloadData.data.push_back(ball.positionRadius.y);
+            m_payloadData.data.push_back(ball.positionRadius.z);
+            m_payloadData.data.push_back(ball.positionRadius.w); // Store radius in w component
         }
 
         meta.end = static_cast<int>(m_payloadData.data.size());
@@ -395,14 +393,14 @@ namespace gladius
     BoundingBox BeamLatticeResource::calculateBallBounds(const BallData & ball)
     {
         BoundingBox bounds;
-        bounds.min.x = ball.position.x - ball.radius;
-        bounds.min.y = ball.position.y - ball.radius;
-        bounds.min.z = ball.position.z - ball.radius;
+        bounds.min.x = ball.positionRadius.x - ball.positionRadius.w;
+        bounds.min.y = ball.positionRadius.y - ball.positionRadius.w;
+        bounds.min.z = ball.positionRadius.z - ball.positionRadius.w;
         bounds.min.w = 0.0f;
 
-        bounds.max.x = ball.position.x + ball.radius;
-        bounds.max.y = ball.position.y + ball.radius;
-        bounds.max.z = ball.position.z + ball.radius;
+        bounds.max.x = ball.positionRadius.x + ball.positionRadius.w;
+        bounds.max.y = ball.positionRadius.y + ball.positionRadius.w;
+        bounds.max.z = ball.positionRadius.z + ball.positionRadius.w;
         bounds.max.w = 0.0f;
 
         return bounds;

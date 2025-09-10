@@ -955,72 +955,11 @@ float4 sampleImageLinear4f(float3 uvw, float3 dimensions, int start, int3 tileSt
     return color;
 }
 
-/// @brief Distance to conical beam (cylinder with different start/end radii)
-float beamDistance(float3 pos, __global const struct BeamData* beam)
-{
-    float3 start = beam->startPos.xyz;
-    float3 end = beam->endPos.xyz;
-    float3 axis = end - start;
-    float length_val = length(axis);
-    
-    // Handle degenerate beam (zero length) - treat as sphere
-    if (length_val < 1e-6f) {
-        float radius = max(beam->startRadius, beam->endRadius);
-        return length(pos - start) - radius;
-    }
-    
-    axis /= length_val;
-    
-    // Project point onto beam axis
-    float3 toPoint = pos - start;
-    float t_unclamped = dot(toPoint, axis);
-    float t = clamp(t_unclamped, 0.0f, length_val);
-    
-    // Interpolate radius at projection point
-    float radius = mix(beam->startRadius, beam->endRadius, t / length_val);
-    
-    // Calculate distance to axis
-    float3 projection = start + t * axis;
-    float distToAxis = length(pos - projection);
-    
-    // Distance to cylindrical surface
-    float surfaceDist = distToAxis - radius;
-    
-    // Handle caps based on cap style
-    if (t_unclamped <= 0.0f) {
-        // Near start cap
-        switch (beam->startCapStyle) {
-            case 0: // hemisphere
-                return length(pos - start) - beam->startRadius;
-            case 1: // sphere  
-                return length(pos - start) - beam->startRadius;
-            case 2: // butt
-                return max(surfaceDist, -t_unclamped);
-            default:
-                return surfaceDist;
-        }
-    } else if (t_unclamped >= length_val) {
-        // Near end cap
-        float overrun = t_unclamped - length_val;
-        switch (beam->endCapStyle) {
-            case 0: // hemisphere
-                return length(pos - end) - beam->endRadius;
-            case 1: // sphere
-                return length(pos - end) - beam->endRadius;
-            case 2: // butt
-                return max(surfaceDist, overrun);
-            default:
-                return surfaceDist;
-        }
-    }
-    
-    return surfaceDist;
-}
 
 /// @brief Distance to ball
 float ballDistance(float3 pos, __global const struct BallData* ball)
 {
-    return length(pos - ball->position.xyz) - ball->radius;
+    return length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
 }
 
 /// @brief Distance to beam (conical cylinder with caps) - GPU optimized
@@ -1102,128 +1041,6 @@ float sdToBeam(float3 pos,
     return surfaceDist;
 }
 
-
-
-/// @brief Evaluate beam lattice distance using flat data layout
-/// @details Works with the flattened data format as stored in the primitives payload
-float evaluateBeamLatticeFlat(
-    float3 pos,
-    int latticeIndex,
-    int primitiveIndicesIndex,
-    int beamIndex, 
-    int ballIndex,
-    PAYLOAD_ARGS)
-{
-    struct PrimitiveMeta lattice = primitives[latticeIndex];
-    
-    // Compute number of BVH nodes from data size (10 floats per node)
-    int latticeDataSize = lattice.end - lattice.start;
-    int numBVHNodes = latticeDataSize / 10;
-    
-    if (numBVHNodes <= 0) {
-        return FLT_MAX; // No BVH data
-    }
-    
-    // Get primitive indices mapping
-    struct PrimitiveMeta primitiveIndicesMeta = primitives[primitiveIndicesIndex];
-    if (primitiveIndicesMeta.primitiveType != SDF_PRIMITIVE_INDICES) {
-        return FLT_MAX; // Invalid primitive indices
-    }
-    
-    // Get beam and ball primitive metadata
-    struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
-    struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
-    
-    float minDist = FLT_MAX;
-    
-    // BVH traversal using flat data with proper primitive indices
-    int stack[32];
-    int stackPtr = 0;
-    stack[stackPtr++] = 0; // Start with root node
-    
-    while (stackPtr > 0 && stackPtr < 32) {
-        int nodeIndex = stack[--stackPtr];
-        
-        if (nodeIndex >= numBVHNodes) {
-            continue; // Invalid node index
-        }
-        
-        // Read BVH node data (10 floats per node)
-        int nodeDataStart = lattice.start + nodeIndex * 10;
-        
-        // Bounding box (6 floats)
-        float3 bbMin = (float3)(data[nodeDataStart], data[nodeDataStart + 1], data[nodeDataStart + 2]);
-        float3 bbMax = (float3)(data[nodeDataStart + 3], data[nodeDataStart + 4], data[nodeDataStart + 5]);
-        
-        // Node data (4 floats)
-        int leftChild = (int)data[nodeDataStart + 6];
-        int rightChild = (int)data[nodeDataStart + 7];
-        int primitiveStart = (int)data[nodeDataStart + 8];
-        int primitiveCount = (int)data[nodeDataStart + 9];
-        
-        // Check bounding box distance
-        float nodeBoundsDist = bbBox(pos, bbMin, bbMax);
-        if (nodeBoundsDist > minDist) {
-            continue; // Skip this subtree
-        }
-        
-        if (leftChild >= 0 || rightChild >= 0) {
-            // Internal node - add children to stack
-            if (rightChild >= 0 && stackPtr < 31) {
-                stack[stackPtr++] = rightChild;
-            }
-            if (leftChild >= 0 && stackPtr < 31) {
-                stack[stackPtr++] = leftChild;
-            }
-        } else {
-            // Leaf node - test only the primitives assigned to this node
-            for (int i = 0; i < primitiveCount; i++) {
-                int primitiveIndex = primitiveStart + i;
-                
-                // Read primitive index mapping (3 floats per entry: type, index, unused)
-                int primitiveIndicesDataStart = primitiveIndicesMeta.start + primitiveIndex * 3;
-                int primitiveType = (int)data[primitiveIndicesDataStart];     // 0 = BEAM, 1 = BALL
-                int primitiveDataIndex = (int)data[primitiveIndicesDataStart + 1]; // Index into beam/ball array
-                
-                float dist = FLT_MAX;
-                
-                if (primitiveType == 0) { // BEAM
-                    // Calculate beam distance
-                    if (beamIndex >= 0 && beamPrimitive.primitiveType == SDF_BEAM) {
-                        int beamDataStart = beamPrimitive.start + primitiveDataIndex * 11;
-                        
-                        // Read beam data directly from flat array
-                        float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
-                        float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
-                        float startRadius = data[beamDataStart + 6];
-                        float endRadius = data[beamDataStart + 7];
-                        int startCapStyle = (int)data[beamDataStart + 8];
-                        int endCapStyle = (int)data[beamDataStart + 9];
-                        
-                        // Use extracted beam distance function
-                        dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
-                    }
-                } else if (primitiveType == 1) { // BALL
-                    // Calculate ball distance
-                    if (ballIndex >= 0 && ballPrimitive.primitiveType == SDF_BALL) {
-                        int ballDataStart = ballPrimitive.start + primitiveDataIndex * 5;
-                        
-                        // Read ball data directly from flat array
-                        float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
-                        float radius = data[ballDataStart + 3];
-                        
-                        // Calculate ball distance inline
-                        dist = length(pos - ballPos) - radius;
-                    }
-                }
-                
-                minDist = min(minDist, dist);
-            }
-        }
-    }
-    
-    return minDist;
-}
 
 /// @brief Evaluate beam lattice distance using clean BVH traversal 
 /// @details Simplified and optimized BVH traversal implementation
@@ -1316,13 +1133,12 @@ float evaluateBeamLatticeBVH(
                         dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
                     }
                 } else if (primitiveType == 1) { // BALL primitive
-                    int ballDataStart = ballPrimitive.start + primitiveIndex * 6; // 6 floats per ball
-                    if (ballDataStart + 5 < ballPrimitive.end) {
-                        // Calculate ball distance directly from flat storage
-                        float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
-                        float radius = data[ballDataStart + 3];
+                    int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per BallData struct
+                    if (ballDataStart + 3 < ballPrimitive.end) {
+                        // Access ball data using optimized BallData struct layout
+                        __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
                         
-                        dist = length(pos - ballPos) - radius;
+                        dist = length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
                     }
                 }
                 
@@ -1450,12 +1266,10 @@ inline float evaluateSinglePrimitive(float3 pos, uint primitiveIndex, uint primi
             return sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
         }
     } else { // BALL primitive (primitiveType == 1)
-        int ballDataStart = ballPrimitive.start + primitiveIndex * 4;
+        int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per BallData struct
         if (ballDataStart + 3 < ballPrimitive.end) {
-            __global const float* ballData = &data[ballDataStart];
-            float3 ballPos = (float3)(ballData[0], ballData[1], ballData[2]);
-            float radius = ballData[3];
-            return length(pos - ballPos) - radius;
+            __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
+            return length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
         }
     }
     return FLT_MAX;

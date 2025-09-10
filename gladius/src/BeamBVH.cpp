@@ -30,13 +30,13 @@ namespace gladius
         BoundingBox calculateBallBounds(const BallData & ball)
         {
             BoundingBox bounds;
-            bounds.min = float4{ball.position.x - ball.radius,
-                                ball.position.y - ball.radius,
-                                ball.position.z - ball.radius,
+            bounds.min = float4{ball.positionRadius.x - ball.positionRadius.w,
+                                ball.positionRadius.y - ball.positionRadius.w,
+                                ball.positionRadius.z - ball.positionRadius.w,
                                 0.0f};
-            bounds.max = float4{ball.position.x + ball.radius,
-                                ball.position.y + ball.radius,
-                                ball.position.z + ball.radius,
+            bounds.max = float4{ball.positionRadius.x + ball.positionRadius.w,
+                                ball.positionRadius.y + ball.positionRadius.w,
+                                ball.positionRadius.z + ball.positionRadius.w,
                                 0.0f};
 
             return bounds;
