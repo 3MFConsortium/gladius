@@ -1134,11 +1134,18 @@ float evaluateBeamLatticeBVH(
                     }
                 } else if (primitiveType == 1) { // BALL primitive
                     int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per BallData struct
-                    if (ballDataStart + 3 < ballPrimitive.end) {
-                        // Access ball data using optimized BallData struct layout
-                        __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
-                        
-                        dist = length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
+                    if (ballDataStart + 3 < ballPrimitive.end && ballDataStart >= ballPrimitive.start) {
+                        // Ensure proper alignment for BallData struct access
+                        if ((ballDataStart % 4) == 0) { // Verify 16-byte alignment boundary
+                            __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
+                            
+                            dist = length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
+                        } else {
+                            // Fallback to manual access if alignment is wrong
+                            float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                            float ballRadius = data[ballDataStart + 3];
+                            dist = length(pos - ballPos) - ballRadius;
+                        }
                     }
                 }
                 
@@ -1267,9 +1274,17 @@ inline float evaluateSinglePrimitive(float3 pos, uint primitiveIndex, uint primi
         }
     } else { // BALL primitive (primitiveType == 1)
         int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per BallData struct
-        if (ballDataStart + 3 < ballPrimitive.end) {
-            __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
-            return length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
+        if (ballDataStart + 3 < ballPrimitive.end && ballDataStart >= ballPrimitive.start) {
+            // Ensure proper alignment for BallData struct access
+            if ((ballDataStart % 4) == 0) { // Verify 16-byte alignment boundary
+                __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
+                return length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
+            } else {
+                // Fallback to manual access if alignment is wrong
+                float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
+                float ballRadius = data[ballDataStart + 3];
+                return length(pos - ballPos) - ballRadius;
+            }
         }
     }
     return FLT_MAX;
