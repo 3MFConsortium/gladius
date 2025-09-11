@@ -1052,20 +1052,23 @@ float evaluateBeamLatticeBVH(
     int ballIndex,
     PAYLOAD_ARGS)
 {
-    struct PrimitiveMeta lattice = primitives[latticeIndex];
+    // Extract data ranges once at the beginning to avoid repeated PrimitiveMeta loads
+    int bvhDataStart = primitives[latticeIndex].start;
+    int bvhDataEnd = primitives[latticeIndex].end;
+    int primitiveIndicesStart = primitives[primitiveIndicesIndex].start;
+    int primitiveIndicesEnd = primitives[primitiveIndicesIndex].end;
+    int beamDataStart = primitives[beamIndex].start;
+    int beamDataEnd = primitives[beamIndex].end;
+    int ballDataStart = primitives[ballIndex].start;
+    int ballDataEnd = primitives[ballIndex].end;
     
     // Compute number of BVH nodes from data size (10 floats per node)
-    int latticeDataSize = lattice.end - lattice.start;
+    int latticeDataSize = bvhDataEnd - bvhDataStart;
     int numBVHNodes = latticeDataSize / 10;
     
     if (numBVHNodes <= 0) {
         return FLT_MAX; // No BVH data
     }
-    
-    // Get primitive indices mapping and beam/ball data
-    struct PrimitiveMeta primitiveIndicesMeta = primitives[primitiveIndicesIndex];
-    struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
-    struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
     
     float minDist = FLT_MAX;
     
@@ -1082,7 +1085,7 @@ float evaluateBeamLatticeBVH(
         }
         
         // Read BVH node data (10 floats per node)
-        int nodeDataStart = lattice.start + nodeIndex * 10;
+        int nodeDataStart = bvhDataStart + nodeIndex * 10;
         
         // Bounding box (6 floats: min.xyz, max.xyz)
         float3 bbMin = (float3)(data[nodeDataStart], data[nodeDataStart + 1], data[nodeDataStart + 2]);
@@ -1106,9 +1109,9 @@ float evaluateBeamLatticeBVH(
         if (isLeaf) {
             // Process primitives in this leaf node
             for (int i = 0; i < primitiveCount; ++i) {
-                int primitiveDataIndex = primitiveIndicesMeta.start + (primitiveStart + i) * 3;
+                int primitiveDataIndex = primitiveIndicesStart + (primitiveStart + i) * 3;
                 
-                if (primitiveDataIndex + 2 >= primitiveIndicesMeta.end) {
+                if (primitiveDataIndex + 2 >= primitiveIndicesEnd) {
                     break; // Safety check for bounds
                 }
                 
@@ -1119,31 +1122,31 @@ float evaluateBeamLatticeBVH(
                 float dist = FLT_MAX;
                 
                 if (primitiveType == 0) { // BEAM primitive
-                    int beamDataStart = beamPrimitive.start + primitiveIndex * 11; // 11 floats per beam
-                    if (beamDataStart + 10 < beamPrimitive.end) {
+                    int beamDataIndex = beamDataStart + primitiveIndex * 11; // 11 floats per beam
+                    if (beamDataIndex + 10 < beamDataEnd) {
                         // Calculate beam distance directly from flat storage
-                        float3 startPos = (float3)(data[beamDataStart], data[beamDataStart + 1], data[beamDataStart + 2]);
-                        float3 endPos = (float3)(data[beamDataStart + 3], data[beamDataStart + 4], data[beamDataStart + 5]);
-                        float startRadius = data[beamDataStart + 6];
-                        float endRadius = data[beamDataStart + 7];
-                        int startCapStyle = (int)data[beamDataStart + 8];
-                        int endCapStyle = (int)data[beamDataStart + 9];
+                        float3 startPos = (float3)(data[beamDataIndex], data[beamDataIndex + 1], data[beamDataIndex + 2]);
+                        float3 endPos = (float3)(data[beamDataIndex + 3], data[beamDataIndex + 4], data[beamDataIndex + 5]);
+                        float startRadius = data[beamDataIndex + 6];
+                        float endRadius = data[beamDataIndex + 7];
+                        int startCapStyle = (int)data[beamDataIndex + 8];
+                        int endCapStyle = (int)data[beamDataIndex + 9];
                         
                         // Use extracted beam distance function
                         dist = sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
                     }
                 } else if (primitiveType == 1) { // BALL primitive
-                    int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per BallData struct
-                    if (ballDataStart + 3 < ballPrimitive.end && ballDataStart >= ballPrimitive.start) {
+                    int ballDataIndex = ballDataStart + primitiveIndex * 4; // 4 floats per BallData struct
+                    if (ballDataIndex + 3 < ballDataEnd && ballDataIndex >= ballDataStart) {
                         // Ensure proper alignment for BallData struct access
-                        if ((ballDataStart % 4) == 0) { // Verify 16-byte alignment boundary
-                            __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
+                        if ((ballDataIndex % 4) == 0) { // Verify 16-byte alignment boundary
+                            __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataIndex];
                             
                             dist = length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
                         } else {
                             // Fallback to manual access if alignment is wrong
-                            float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
-                            float ballRadius = data[ballDataStart + 3];
+                            float3 ballPos = (float3)(data[ballDataIndex], data[ballDataIndex + 1], data[ballDataIndex + 2]);
+                            float ballRadius = data[ballDataIndex + 3];
                             dist = length(pos - ballPos) - ballRadius;
                         }
                     }
@@ -1256,33 +1259,33 @@ inline uint primitiveTypeFromVoxelGrid(uint encodedIndex)
 /// @param data Global data array
 /// @return Distance to primitive
 inline float evaluateSinglePrimitive(float3 pos, uint primitiveIndex, uint primitiveType,
-                                    struct PrimitiveMeta beamPrimitive,
-                                    struct PrimitiveMeta ballPrimitive,
+                                    int beamDataStart, int beamDataEnd,
+                                    int ballDataStart, int ballDataEnd,
                                     __global const float* data)
 {
     if (primitiveType == 0) { // BEAM primitive
-        int beamDataStart = beamPrimitive.start + primitiveIndex * 11;
+        int beamDataIndex = beamDataStart + primitiveIndex * 11;
         
         float3 startPos, endPos;
         float startRadius, endRadius;
         int startCapStyle, endCapStyle;
         
-        if (loadBeamData(beamDataStart, data, beamPrimitive.end,
+        if (loadBeamData(beamDataIndex, data, beamDataEnd,
                         &startPos, &endPos, &startRadius, &endRadius,
                         &startCapStyle, &endCapStyle)) {
             return sdToBeam(pos, startPos, endPos, startRadius, endRadius, startCapStyle, endCapStyle);
         }
     } else { // BALL primitive (primitiveType == 1)
-        int ballDataStart = ballPrimitive.start + primitiveIndex * 4; // 4 floats per BallData struct
-        if (ballDataStart + 3 < ballPrimitive.end && ballDataStart >= ballPrimitive.start) {
+        int ballDataIndex = ballDataStart + primitiveIndex * 4; // 4 floats per BallData struct
+        if (ballDataIndex + 3 < ballDataEnd && ballDataIndex >= ballDataStart) {
             // Ensure proper alignment for BallData struct access
-            if ((ballDataStart % 4) == 0) { // Verify 16-byte alignment boundary
-                __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataStart];
+            if ((ballDataIndex % 4) == 0) { // Verify 16-byte alignment boundary
+                __global const struct BallData* ball = (__global const struct BallData*)&data[ballDataIndex];
                 return length(pos - ball->positionRadius.xyz) - ball->positionRadius.w;
             } else {
                 // Fallback to manual access if alignment is wrong
-                float3 ballPos = (float3)(data[ballDataStart], data[ballDataStart + 1], data[ballDataStart + 2]);
-                float ballRadius = data[ballDataStart + 3];
+                float3 ballPos = (float3)(data[ballDataIndex], data[ballDataIndex + 1], data[ballDataIndex + 2]);
+                float ballRadius = data[ballDataIndex + 3];
                 return length(pos - ballPos) - ballRadius;
             }
         }
@@ -1300,8 +1303,11 @@ float evaluateBeamLatticeVoxel(
     int ballIndex,
     PAYLOAD_ARGS)
 {
-    struct PrimitiveMeta beamPrimitive = primitives[beamIndex];
-    struct PrimitiveMeta ballPrimitive = primitives[ballIndex];
+    // Extract data ranges once at the beginning to avoid repeated PrimitiveMeta loads
+    int beamDataStart = primitives[beamIndex].start;
+    int beamDataEnd = primitives[beamIndex].end;
+    int ballDataStart = primitives[ballIndex].start;
+    int ballDataEnd = primitives[ballIndex].end;
     
     float minDist = FLT_MAX;
     
@@ -1321,7 +1327,7 @@ float evaluateBeamLatticeVoxel(
         uint primitiveType = encodedIndex >> 31; // Upper bit (optimized vs function call)
         
         float dist = evaluateSinglePrimitive(pos, primitiveIndex, primitiveType, 
-                                           beamPrimitive, ballPrimitive, data);
+                                           beamDataStart, beamDataEnd, ballDataStart, ballDataEnd, data);
         minDist = fmin(minDist, dist);
     }
     
@@ -1368,7 +1374,7 @@ float evaluateBeamLatticeVoxel(
             uint neighborPrimitiveType = neighborEncodedIndex >> 31;
             
             float dist = evaluateSinglePrimitive(pos, neighborPrimitiveIndex, neighborPrimitiveType,
-                                               beamPrimitive, ballPrimitive, data);
+                                               beamDataStart, beamDataEnd, ballDataStart, ballDataEnd, data);
             
             minDist = fmin(minDist, dist);
             
