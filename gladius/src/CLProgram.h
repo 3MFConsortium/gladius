@@ -377,6 +377,10 @@ namespace gladius
 
         [[nodiscard]] bool isCompilationInProgress() const;
 
+        // Binary caching support
+        void setCacheDirectory(const std::filesystem::path & path);
+        void clearCache();
+
       private:
         template <typename T>
         void collectMemoryObjects(std::vector<cl::Memory> & buffers, const T & arg) const
@@ -429,5 +433,14 @@ namespace gladius
         std::atomic_size_t m_hashLastSuccessfulCompilation = 0u;
 
         SharedKernelReplacements m_kernelReplacements;
+
+        // Binary caching support
+        std::filesystem::path m_cacheDirectory;
+
+      private:
+        // Cache management helpers
+        bool loadProgramFromCache(size_t hash);
+        void saveProgramToCache(size_t hash);
+        std::string getDeviceSignature() const;
     };
 }

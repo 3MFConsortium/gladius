@@ -30,6 +30,10 @@ namespace gladius
 
         void dumpSource(std::filesystem::path const & path) const;
 
+        // Binary caching support
+        void setCacheDirectory(const std::filesystem::path & path);
+        void clearCache();
+
       protected:
         void swapProgramsIfNeeded();
         static void noOp()

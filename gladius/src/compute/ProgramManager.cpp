@@ -57,6 +57,11 @@ namespace gladius
             m_optimizedRenderProgram->setLogger(m_eventLogger);
         }
 
+        // Set up binary caching
+        auto cacheDir = std::filesystem::temp_directory_path() / "gladius_opencl_cache";
+        m_slicerProgram->setCacheDirectory(cacheDir);
+        m_optimizedRenderProgram->setCacheDirectory(cacheDir);
+
         m_optimizedRenderProgram->buildKernelLib();
         recompileIfRequired();
         LOG_LOCATION

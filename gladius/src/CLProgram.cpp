@@ -2,6 +2,7 @@
 #include "Profiling.h"
 #include "TimeMeasurement.h"
 #include "gpgpu.h"
+#include <boost/functional/hash.hpp>
 #include <cmrc/cmrc.hpp>
 #include <filesystem>
 #include <fstream>
@@ -267,7 +268,7 @@ namespace gladius
 
         // Allow overriding build flags for debugging via environment variable
 #ifdef _WIN32
-        char* debugFlags = nullptr;
+        char * debugFlags = nullptr;
         size_t len = 0;
         _dupenv_s(&debugFlags, &len, "GLADIUS_OPENCL_BUILD_FLAGS");
         if (debugFlags && std::string(debugFlags).size() > 0)
@@ -322,12 +323,12 @@ namespace gladius
         // Calculate the hash of the source, device name and additional defines
         for (const auto & source : m_sources)
         {
-            hash_combine(hash, std::hash<std::string>{}(source));
+            boost::hash_combine(hash, std::hash<std::string>{}(source));
         }
 
-        hash_combine(
+        boost::hash_combine(
           hash, std::hash<std::string>{}(m_ComputeContext->GetDevice().getInfo<CL_DEVICE_NAME>()));
-        hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
+        boost::hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
 
         // kernel replacements
         if (m_kernelReplacements)
@@ -335,8 +336,8 @@ namespace gladius
             for (const auto & replacement : *m_kernelReplacements)
             {
                 const auto & [search, replace] = replacement;
-                hash_combine(hash, std::hash<std::string>{}(search));
-                hash_combine(hash, std::hash<std::string>{}(replace));
+                boost::hash_combine(hash, std::hash<std::string>{}(search));
+                boost::hash_combine(hash, std::hash<std::string>{}(replace));
             }
         }
 
@@ -361,8 +362,28 @@ namespace gladius
 
         applyAllKernelReplacements();
 
-        if (m_hashLastSuccessfulCompilation != 0 &&
-            m_hashLastSuccessfulCompilation == computeHash())
+        auto currentHash = computeHash();
+
+        // Check if we can load from binary cache first
+        if (!m_cacheDirectory.empty() && loadProgramFromCache(currentHash))
+        {
+            std::cout << "CLProgram: Loaded program from binary cache (hash: " << currentHash << ")"
+                      << std::endl;
+            m_hashLastSuccessfulCompilation = currentHash;
+            m_valid = true;
+            m_isCompilationInProgress = false;
+
+            // Set up callback user data properly for cached program
+            m_callBackUserData.computeContext = m_ComputeContext.get();
+            m_callBackUserData.callBack = &callBack;
+            m_callBackUserData.sender = this;
+            m_callBackUserData.program = m_program.get();
+
+            callBackDispatcher(nullptr, &m_callBackUserData);
+            return;
+        }
+
+        if (m_hashLastSuccessfulCompilation != 0 && m_hashLastSuccessfulCompilation == currentHash)
         {
             m_valid = true;
             m_isCompilationInProgress = false;
@@ -392,7 +413,15 @@ namespace gladius
             // write to file for debugging
             // dumpSource("debug.cl");
             m_program->build({m_ComputeContext->GetDevice()}, arguments.c_str(), nullptr, nullptr);
-            m_hashLastSuccessfulCompilation = computeHash();
+            m_hashLastSuccessfulCompilation = currentHash;
+
+            // Save to binary cache if compilation succeeded
+            if (!m_cacheDirectory.empty())
+            {
+                saveProgramToCache(currentHash);
+                std::cout << "CLProgram: Saved program to binary cache (hash: " << currentHash
+                          << ")" << std::endl;
+            }
 
             // Always print build status (and logs on failure)
             logBuildStatusIfFailed(*m_program, m_ComputeContext->GetDevice(), m_logger);
@@ -578,6 +607,163 @@ namespace gladius
                 source.replace(pos, search.length(), replace);
                 pos += replace.length();
             }
+        }
+    }
+
+    void CLProgram::setCacheDirectory(const std::filesystem::path & path)
+    {
+        std::cout << "CLProgram::setCacheDirectory called with path: " << path << std::endl;
+        m_cacheDirectory = path;
+        if (!path.empty() && !std::filesystem::exists(path))
+        {
+            std::filesystem::create_directories(path);
+            std::cout << "CLProgram: Created cache directory: " << path << std::endl;
+        }
+    }
+
+    void CLProgram::clearCache()
+    {
+        if (m_cacheDirectory.empty())
+            return;
+
+        try
+        {
+            for (const auto & entry : std::filesystem::directory_iterator(m_cacheDirectory))
+            {
+                if (entry.path().extension() == ".clcache")
+                {
+                    std::filesystem::remove(entry.path());
+                }
+            }
+            std::cout << "CLProgram: Cleared cache directory: " << m_cacheDirectory << std::endl;
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to clear cache: " + std::string(e.what()));
+            }
+        }
+    }
+
+    bool CLProgram::loadProgramFromCache(size_t hash)
+    {
+        if (m_cacheDirectory.empty())
+            return false;
+
+        auto cachePath = m_cacheDirectory / (std::to_string(hash) + ".clcache");
+        if (!std::filesystem::exists(cachePath))
+            return false;
+
+        try
+        {
+            std::ifstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return false;
+
+            // Read device signature
+            size_t deviceSigSize;
+            file.read(reinterpret_cast<char *>(&deviceSigSize), sizeof(deviceSigSize));
+            std::string cachedDeviceSignature(deviceSigSize, '\0');
+            file.read(cachedDeviceSignature.data(), deviceSigSize);
+
+            // Verify device signature matches
+            if (cachedDeviceSignature != getDeviceSignature())
+            {
+                std::cout << "CLProgram: Cache device signature mismatch, ignoring cache"
+                          << std::endl;
+                return false;
+            }
+
+            // Read binary data
+            size_t binarySize;
+            file.read(reinterpret_cast<char *>(&binarySize), sizeof(binarySize));
+            std::vector<unsigned char> binary(binarySize);
+            file.read(reinterpret_cast<char *>(binary.data()), binarySize);
+
+            // Create program from binary
+            m_program =
+              std::make_unique<cl::Program>(m_ComputeContext->GetContext(),
+                                            std::vector<cl::Device>{m_ComputeContext->GetDevice()},
+                                            std::vector<std::vector<unsigned char>>{binary});
+
+            // Build the program (required even when loading from binary)
+            try
+            {
+                m_program->build({m_ComputeContext->GetDevice()});
+                std::cout << "CLProgram: Successfully loaded and built program from cache"
+                          << std::endl;
+                return true;
+            }
+            catch (const std::exception & e)
+            {
+                std::cout << "CLProgram: Failed to build cached program: " << e.what() << std::endl;
+                return false;
+            }
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to load from cache: " + std::string(e.what()));
+            }
+            return false;
+        }
+    }
+
+    void CLProgram::saveProgramToCache(size_t hash)
+    {
+        if (m_cacheDirectory.empty() || !m_program)
+            return;
+
+        try
+        {
+            // Get program binaries
+            auto binaries = m_program->getInfo<CL_PROGRAM_BINARIES>();
+            if (binaries.empty() || binaries[0].empty())
+                return;
+
+            auto cachePath = m_cacheDirectory / (std::to_string(hash) + ".clcache");
+            std::ofstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return;
+
+            // Write device signature
+            std::string deviceSig = getDeviceSignature();
+            size_t deviceSigSize = deviceSig.size();
+            file.write(reinterpret_cast<const char *>(&deviceSigSize), sizeof(deviceSigSize));
+            file.write(deviceSig.data(), deviceSigSize);
+
+            // Write binary data
+            size_t binarySize = binaries[0].size();
+            file.write(reinterpret_cast<const char *>(&binarySize), sizeof(binarySize));
+            file.write(reinterpret_cast<const char *>(binaries[0].data()), binarySize);
+
+            std::cout << "CLProgram: Saved program binary to cache: " << cachePath << std::endl;
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to save to cache: " + std::string(e.what()));
+            }
+        }
+    }
+
+    std::string CLProgram::getDeviceSignature() const
+    {
+        try
+        {
+            auto device = m_ComputeContext->GetDevice();
+            std::string deviceName = device.getInfo<CL_DEVICE_NAME>();
+            std::string driverVersion = device.getInfo<CL_DRIVER_VERSION>();
+            std::string deviceVersion = device.getInfo<CL_DEVICE_VERSION>();
+
+            return deviceName + "|" + driverVersion + "|" + deviceVersion;
+        }
+        catch (...)
+        {
+            return "unknown_device";
         }
     }
 }
