@@ -17,7 +17,9 @@ namespace gladius::ui
         , m_output(FunctionOutput::defaultOutput())
     {
         // Initialize output name buffer
-        strncpy_s(m_outputNameBuffer, sizeof(m_outputNameBuffer), m_output.name.c_str(), _TRUNCATE);
+        size_t copySize = std::min(m_output.name.length(), OUTPUT_NAME_BUFFER_SIZE - 1);
+        std::copy(m_output.name.begin(), m_output.name.begin() + copySize, m_outputNameBuffer);
+        m_outputNameBuffer[copySize] = '\0';
     }
 
     ExpressionDialog::~ExpressionDialog() = default;
@@ -354,7 +356,10 @@ namespace gladius::ui
                     // Insert the selected suggestion
                     std::string suggestion = m_autocompleteSuggestions[m_selectedSuggestion];
                     m_expression += suggestion;
-                    strncpy_s(m_expressionBuffer, sizeof(m_expressionBuffer), m_expression.c_str(), _TRUNCATE);
+                    size_t copySize = std::min(m_expression.length(), EXPRESSION_BUFFER_SIZE - 1);
+                    std::copy(
+                      m_expression.begin(), m_expression.begin() + copySize, m_expressionBuffer);
+                    m_expressionBuffer[copySize] = '\0';
                     m_needsValidation = true;
                     m_showAutocomplete = false;
                 }
@@ -508,7 +513,9 @@ namespace gladius::ui
         std::string afterCursor = m_expression.substr(cursorPos);
 
         m_expression = beforeWord + suggestion + afterCursor;
-        strncpy_s(m_expressionBuffer, sizeof(m_expressionBuffer), m_expression.c_str(), _TRUNCATE);
+        size_t copySize = std::min(m_expression.length(), EXPRESSION_BUFFER_SIZE - 1);
+        std::copy(m_expression.begin(), m_expression.begin() + copySize, m_expressionBuffer);
+        m_expressionBuffer[copySize] = '\0';
 
         m_needsValidation = true;
         m_needsSyntaxUpdate = true;
@@ -1215,7 +1222,9 @@ namespace gladius::ui
     {
         // Replace current expression
         m_expression = templateExpr;
-        strncpy_s(m_expressionBuffer, sizeof(m_expressionBuffer), m_expression.c_str(), _TRUNCATE);
+        size_t copySize = std::min(m_expression.length(), EXPRESSION_BUFFER_SIZE - 1);
+        std::copy(m_expression.begin(), m_expression.begin() + copySize, m_expressionBuffer);
+        m_expressionBuffer[copySize] = '\0';
 
         // Auto-add expected arguments based on template
         addExpectedArgumentsForTemplate(templateExpr);
@@ -1264,11 +1273,11 @@ namespace gladius::ui
         for (auto const & expectedArg : expectedArgs)
         {
             // Check if argument already exists
-            bool exists = std::find_if(m_arguments.begin(),
-                                       m_arguments.end(),
-                                       [&expectedArg](FunctionArgument const & arg) {
-                                           return arg.name == expectedArg.name;
-                                       }) != m_arguments.end();
+            bool exists =
+              std::find_if(m_arguments.begin(),
+                           m_arguments.end(),
+                           [&expectedArg](FunctionArgument const & arg)
+                           { return arg.name == expectedArg.name; }) != m_arguments.end();
 
             if (!exists)
             {

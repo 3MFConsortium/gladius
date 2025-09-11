@@ -1,9 +1,11 @@
 #include "Importer3mf.h"
+#include "BeamLatticeImporter.h"
 
 #include <fmt/format.h>
 #include <lib3mf_abi.hpp>
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
+#include <map>
 #include <set>
 #include <vector>
 
@@ -1114,13 +1116,6 @@ namespace gladius::io
 
         try
         {
-            // Check if mesh object has a beam lattice by trying to get it
-            Lib3MF::PBeamLattice beamLattice = meshObject->BeamLattice();
-            if (!beamLattice)
-            {
-                return; // No beam lattice in this mesh object
-            }
-
             // Create resource key for beam lattice (use same resource ID but different type)
             auto key = ResourceKey(static_cast<uint32_t>(meshObject->GetModelResourceID()),
                                    ResourceType::BeamLattice);
@@ -1132,13 +1127,40 @@ namespace gladius::io
                 return;
             }
 
-            // Read clipping information from beam lattice
+            // Use the new BeamLatticeImporter for unified processing
+            BeamLatticeImporter importer(m_eventLogger);
+            if (!importer.process(meshObject))
+            {
+                return; // No beam lattice or processing failed
+            }
+
+            // Get processed data from importer
+            const auto & beams = importer.getBeams();
+            const auto & balls = importer.getBalls();
+            const auto & ballConfig = importer.getBallConfig();
+
+            if (beams.empty())
+            {
+                if (m_eventLogger)
+                {
+                    m_eventLogger->addEvent(
+                      {fmt::format("BeamLattice {} has no beams", meshObject->GetModelResourceID()),
+                       gladius::events::Severity::Warning});
+                }
+                return;
+            }
+
+            // Read clipping information from beam lattice (separate from main processing)
             Lib3MF::eBeamLatticeClipMode clippingMode = Lib3MF::eBeamLatticeClipMode::NoClipMode;
             Lib3MF_uint32 clippingMeshResourceId = 0;
 
             try
             {
-                beamLattice->GetClipping(clippingMode, clippingMeshResourceId);
+                Lib3MF::PBeamLattice beamLattice = meshObject->BeamLattice();
+                if (beamLattice)
+                {
+                    beamLattice->GetClipping(clippingMode, clippingMeshResourceId);
+                }
             }
             catch (const std::exception & e)
             {
@@ -1155,93 +1177,43 @@ namespace gladius::io
                 }
             }
 
-            // Extract beam data from lib3mf
-            std::vector<BeamData> beams;
-            Lib3MF_uint32 beamCount = beamLattice->GetBeamCount();
+            // Create beam lattice resource with processed data
+            auto beamLatticeResource =
+              std::make_unique<BeamLatticeResource>(key,
+                                                    std::move(std::vector<BeamData>(beams)),
+                                                    std::move(std::vector<BallData>(balls)),
+                                                    ballConfig);
 
-            // Use bulk API to get all beams efficiently
-            if (beamCount > 0)
+            // Update display name to include ball information
+            std::string displayName = meshObject->GetName() + "_BeamLattice";
+            if (!balls.empty())
             {
-                std::vector<Lib3MF::sBeam> lib3mfBeams;
-                beamLattice->GetBeams(lib3mfBeams);
-
-                for (const auto & beamInfo : lib3mfBeams)
-                {
-                    BeamData beam;
-
-                    // Beams reference vertices by index - resolve the actual vertex positions
-                    auto startVertex = meshObject->GetVertex(beamInfo.m_Indices[0]);
-                    auto endVertex = meshObject->GetVertex(beamInfo.m_Indices[1]);
-
-                    beam.startPos = {static_cast<float>(startVertex.m_Coordinates[0]),
-                                     static_cast<float>(startVertex.m_Coordinates[1]),
-                                     static_cast<float>(startVertex.m_Coordinates[2]),
-                                     1.0f};
-                    beam.endPos = {static_cast<float>(endVertex.m_Coordinates[0]),
-                                   static_cast<float>(endVertex.m_Coordinates[1]),
-                                   static_cast<float>(endVertex.m_Coordinates[2]),
-                                   1.0f};
-
-                    beam.startRadius = static_cast<float>(beamInfo.m_Radii[0]);
-                    beam.endRadius = static_cast<float>(beamInfo.m_Radii[1]);
-
-                    // Cap styles: convert from 3MF to internal representation
-                    beam.startCapStyle = static_cast<int>(beamInfo.m_CapModes[0]);
-                    beam.endCapStyle = static_cast<int>(beamInfo.m_CapModes[1]);
-                    beam.materialId = 0; // Default material
-                    beam.padding = 0;
-
-                    beams.push_back(beam);
-                }
+                displayName += fmt::format(" ({} balls)", balls.size());
             }
+            key.setDisplayName(displayName);
 
-            // Extract balls from beam lattice (not from mesh vertices)
-            std::vector<BallData> balls;
-            Lib3MF_uint32 ballCount = beamLattice->GetBallCount();
+            // Add the resource to the manager
+            doc.getGeneratorContext().resourceManager.addResource(key,
+                                                                  std::move(beamLatticeResource));
 
-            // Use bulk API to get all balls efficiently
-            if (ballCount > 0)
+            if (m_eventLogger)
             {
-                std::vector<Lib3MF::sBall> lib3mfBalls;
-                beamLattice->GetBalls(lib3mfBalls);
-
-                for (const auto & ballInfo : lib3mfBalls)
-                {
-                    BallData ball;
-
-                    // Get vertex position from mesh using ball's vertex index
-                    auto const vertex = meshObject->GetVertex(ballInfo.m_Index);
-                    ball.positionRadius = {static_cast<float>(vertex.m_Coordinates[0]),
-                                           static_cast<float>(vertex.m_Coordinates[1]),
-                                           static_cast<float>(vertex.m_Coordinates[2]),
-                                           static_cast<float>(ballInfo.m_Radius)};
-                    balls.push_back(ball);
-                }
-            }
-
-            // Create and add beam lattice resource when either beams or balls exist
-            if (beams.size() > 0 || balls.size() > 0)
-            {
-                auto beamLatticeResource =
-                  std::make_unique<BeamLatticeResource>(key, std::move(beams), std::move(balls));
-                doc.getGeneratorContext().resourceManager.addResource(
-                  key, std::move(beamLatticeResource));
-            }
-            else
-            {
-                // No beams or balls to create resource for
+                m_eventLogger->addEvent(
+                  {fmt::format("Successfully loaded beam lattice {} with {} beams and {} balls",
+                               meshObject->GetModelResourceID(),
+                               beams.size(),
+                               balls.size()),
+                   gladius::events::Severity::Info});
             }
         }
         catch (const std::exception & e)
         {
-            // Log error but don't throw - let processing continue
             if (m_eventLogger)
             {
-                m_eventLogger->addEvent(
-                  {fmt::format("Error loading beam lattice from mesh object {}: {}",
-                               meshObject->GetModelResourceID(),
-                               e.what()),
-                   gladius::events::Severity::Error});
+                m_eventLogger->addEvent({fmt::format("Error loading beam lattice from mesh {}: {}",
+                                                     meshObject->GetModelResourceID(),
+                                                     e.what()),
+                                         gladius::events::Severity::Error});
             }
         }
     }
@@ -1510,13 +1482,12 @@ namespace gladius::io
             }
             else
             {
-                // For full mesh, we still use bounding box for domain intersection
+
                 bbox = computeBoundingBox(mesh);
                 // Also load the mesh reference if needed
                 auto referencedMeshKey =
                   ResourceKey(mesh->GetModelResourceID(), ResourceType::Mesh);
                 loadMeshIfNecessary(model, mesh, doc);
-                // TODO: Handle full mesh geometry intersection if needed
             }
 
             // Use the new method that creates a complete level set operation:
@@ -1936,4 +1907,4 @@ namespace gladius::io
         ProfileFunction Importer3mf importer{doc.getSharedLogger()};
         importer.merge(filename, doc);
     }
-}
+} // namespace gladius::io

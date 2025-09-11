@@ -192,10 +192,10 @@ namespace gladius
     float BeamLatticeVoxelBuilderReference::calculateBallDistance(openvdb::Vec3f const & point,
                                                                   BallData const & ball) const
     {
-        float dx = point.x() - ball.position.x;
-        float dy = point.y() - ball.position.y;
-        float dz = point.z() - ball.position.z;
-        float dist = std::sqrt(dx * dx + dy * dy + dz * dz) - ball.radius;
+        float dx = point.x() - ball.positionRadius.x;
+        float dy = point.y() - ball.positionRadius.y;
+        float dz = point.z() - ball.positionRadius.z;
+        float dist = std::sqrt(dx * dx + dy * dy + dz * dz) - ball.positionRadius.w;
         return dist;
     }
 
@@ -258,9 +258,13 @@ namespace gladius
         }
         for (auto const & s : balls)
         {
-            extend(s.position.x, s.position.y, s.position.z);
-            extend(s.position.x + s.radius, s.position.y + s.radius, s.position.z + s.radius);
-            extend(s.position.x - s.radius, s.position.y - s.radius, s.position.z - s.radius);
+            extend(s.positionRadius.x, s.positionRadius.y, s.positionRadius.z);
+            extend(s.positionRadius.x + s.positionRadius.w,
+                   s.positionRadius.y + s.positionRadius.w,
+                   s.positionRadius.z + s.positionRadius.w);
+            extend(s.positionRadius.x - s.positionRadius.w,
+                   s.positionRadius.y - s.positionRadius.w,
+                   s.positionRadius.z - s.positionRadius.w);
         }
 
         return {minP, maxP};

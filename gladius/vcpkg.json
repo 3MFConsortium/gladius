@@ -44,7 +44,14 @@
     "lodepng",
     "minizip",
     "pugixml",
-    "lib3mf",
+    {
+      "name": "lib3mf",
+      "platform": "windows"
+    },
+    {
+      "name": "lib3mflinux",
+      "platform": "!windows"
+    },
     "pkgconf",
     "minizip",
     "tracy",
