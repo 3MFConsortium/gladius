@@ -562,45 +562,32 @@ namespace gladius
                 // Synthetic interface: only forward declarations & prototypes actually used
                 // Avoids pulling full implementations a second time (which would cause
                 // duplicate symbol definitions when linking with static library).
-                static char const * kDynamicInterface = R"(
-#ifndef GLADIUS_DYNAMIC_IFACE_GUARD
-#define GLADIUS_DYNAMIC_IFACE_GUARD
-// Synthetic dynamic interface:
-//  - Minimal forward declarations mirroring a subset of types.h needed by generated dynamic kernels
-//  - Function prototypes (no bodies) for utility functions referenced directly by generated code
-//  - PAYLOAD_ARGS / PASS_PAYLOAD_ARGS macro pair (mirrors arguments.h) so that calls using
-//    payload(..., PASS_PAYLOAD_ARGS) compile without including full headers (avoids duplicate symbols)
-//  - Prototype for payload() itself (implemented in static library SDF sources)
-//  - Keep this list minimal; if new unresolved identifiers appear, add ONLY their prototypes here
-//    instead of including entire headers.
-struct BoundingBox { float4 min; float4 max; };
-enum PrimitiveType { SDF_OUTER_POLYGON, SDF_INNER_POLYGON, SDF_BEAMS, SDF_MESH_TRIANGLES, SDF_MESH_KD_ROOT_NODE, SDF_MESH_KD_NODE, SDF_LINES, SDF_VDB, SDF_VDB_BINARY, SDF_VDB_FACE_INDICES, SDF_VDB_GRAYSCALE_8BIT, SDF_IMAGESTACK, SDF_BEAM_LATTICE, SDF_BEAM, SDF_BALL, SDF_BEAM_BVH_NODE, SDF_PRIMITIVE_INDICES, SDF_BEAM_LATTICE_VOXEL_INDEX, SDF_BEAM_LATTICE_VOXEL_TYPE};
-struct PrimitiveMeta { float4 center; int start; int end; float scaling; enum PrimitiveType primitiveType; struct BoundingBox boundingBox; float4 approximationTop; float4 approximationBottom; };
-struct RenderingSettings { float time_s; float z_mm; int flags; int approximation; float quality; float weightDistToNb; float weightMidPoint; float normalOffset; };
-struct Command { int type; int id; int placeholder0; int placeholder1; int args[32]; int output[32]; };
-// Function prototypes referenced from generated model kernels
-float3 matrixVectorMul3f(float16 matrix, float3 vector);
-float glsl_mod1f(float a, float b);
-float bbBox(float3 pos, float3 bbmin, float3 bbmax);
-float payload(float3 pos, int startIndex, int endIndex, \
-    float4 buildArea, __global struct PrimitiveMeta *primitives, int primitivesSize, \
-    __global float *data, int dataSize, struct RenderingSettings renderingSettings, \
-    __read_only image3d_t preCompSdf, __global float *parameter, __global struct Command *cmds, \
-    int sizeOfCmds, struct BoundingBox preCompSdfBBox);
-// Payload macros (mirrors arguments.h)
-#ifndef PAYLOAD_ARGS
-#define PAYLOAD_ARGS \
-    float4 buildArea, __global struct PrimitiveMeta *primitives, int primitivesSize, \
-      __global float *data, int dataSize, struct RenderingSettings renderingSettings, \
-      __read_only image3d_t preCompSdf, __global float *parameter, __global struct Command *cmds, \
-      int sizeOfCmds, struct BoundingBox preCompSdfBBox
-#define PASS_PAYLOAD_ARGS \
-    buildArea, primitives, primitivesSize, data, dataSize, renderingSettings, preCompSdf, \
-      parameter, cmds, sizeOfCmds, preCompSdfBBox
-#endif
-#endif // GLADIUS_DYNAMIC_IFACE_GUARD
-)";
-                dynamicSourcesCombined.emplace_back(kDynamicInterface);
+                std::string dynamicInterfaceSource;
+                try
+                {
+                    // Load header from embedded resources (preferred maintenance path)
+                    auto const fs = cmrc::gladius_resources::get_filesystem();
+                    auto const headerPath = std::string("src/kernel/dynamic_interface.h");
+                    if (fs.exists(headerPath) && fs.is_file(headerPath))
+                    {
+                        auto file = fs.open(headerPath);
+                        dynamicInterfaceSource.assign(file.begin(), file.end());
+                    }
+                    else
+                    {
+                        throw std::runtime_error("dynamic_interface.h not found in resources");
+                    }
+                }
+                catch (const std::exception & e)
+                {
+
+                    if (m_logger)
+                    {
+                        m_logger->logError(std::string("Failed to load dynamic interface: ") +
+                                           e.what());
+                    }
+                }
+                dynamicSourcesCombined.emplace_back(dynamicInterfaceSource);
                 dynamicSourcesCombined.insert(
                   dynamicSourcesCombined.end(), m_dynamicSources.begin(), m_dynamicSources.end());
 
