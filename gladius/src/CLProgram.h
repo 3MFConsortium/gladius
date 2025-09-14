@@ -76,6 +76,7 @@ namespace gladius
         void loadSourceFromFile(const FileNames & filenames);
 
         void addSource(const std::string & source);
+        void addDynamicSource(const std::string & source);
 
         void compileNonBlocking(BuildCallBack & callBack);
 
@@ -437,10 +438,22 @@ namespace gladius
         // Binary caching support
         std::filesystem::path m_cacheDirectory;
 
+        // Static vs Dynamic source tracking
+        cl::Program::Sources m_staticSources;  // Static kernel files (.cl files from resources)
+        cl::Program::Sources m_dynamicSources; // Dynamic model-specific source code
+
       private:
         // Cache management helpers
         bool loadProgramFromCache(size_t hash);
         void saveProgramToCache(size_t hash);
         std::string getDeviceSignature() const;
+
+        // Two-level caching helpers
+        size_t computeStaticHash() const;
+        size_t computeDynamicHash() const;
+        bool loadStaticLibraryFromCache(size_t staticHash, cl::Program & staticLibrary);
+        void saveStaticLibraryToCache(size_t staticHash, const cl::Program & staticLibrary);
+        bool loadLinkedProgramFromCache(size_t staticHash, size_t dynamicHash);
+        void saveLinkedProgramToCache(size_t staticHash, size_t dynamicHash);
     };
 }

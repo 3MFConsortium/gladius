@@ -58,7 +58,7 @@ namespace gladius
         }
 
         // Set up binary caching
-        auto cacheDir = std::filesystem::temp_directory_path() / "gladius_opencl_cache";
+        auto cacheDir = std::filesystem::temp_directory_path() / "gladius" / "opencl_cache";
         m_slicerProgram->setCacheDirectory(cacheDir);
         m_optimizedRenderProgram->setCacheDirectory(cacheDir);
 
