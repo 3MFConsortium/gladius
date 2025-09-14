@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <future>
-#include <iostream>
+#include <iostream> // TODO: Remove if no other translation units rely on side-effects; kept temporarily for potential error output fallbacks
 #include <sstream>
 #include <string>
 
@@ -130,11 +130,8 @@ namespace gladius
                             logger->logError(std::string("Build log:\n") + buildLog);
                         }
                     }
-                    else
-                    {
-                        std::cerr << "Build failed\n";
-                        std::cerr << "\n\n Kernel build info: \n" << buildLog << std::endl;
-                    }
+                    // Without logger we suppress direct stderr output to keep stdio clean in MCP
+                    // mode
                 }
             }
             catch (...)
@@ -164,10 +161,7 @@ namespace gladius
                 {
                     logger->logError(errorMsg);
                 }
-                else
-                {
-                    std::cerr << errorMsg << "\n";
-                }
+                // Suppress direct stderr output when logger unavailable (MCP stdio cleanliness)
 
                 throw std::runtime_error(errorMsg);
             }
@@ -233,10 +227,7 @@ namespace gladius
                     m_logger->logError(std::string("Missing file in resources: ") +
                                        resourceFilename);
                 }
-                else
-                {
-                    std::cerr << "missing file in resources: " << resourceFilename << "\n";
-                }
+                // Suppress direct stderr output when logger unavailable
                 throw std::runtime_error("missing file in resources: " + resourceFilename);
             }
 
@@ -470,8 +461,12 @@ namespace gladius
         if (!m_cacheDirectory.empty() && !m_staticSources.empty() && !m_dynamicSources.empty() &&
             loadLinkedProgramFromCache(staticHash, dynamicHash))
         {
-            std::cout << "CLProgram: Loaded linked program from cache (static: " << staticHash
-                      << ", dynamic: " << dynamicHash << ")" << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Loaded linked program from cache (static: " +
+                                  std::to_string(staticHash) +
+                                  ", dynamic: " + std::to_string(dynamicHash) + ")");
+            }
             m_hashLastSuccessfulCompilation = currentHash;
             m_valid = true;
             m_isCompilationInProgress = false;
@@ -490,8 +485,12 @@ namespace gladius
         // Fallback: Check if we can load from old single-level binary cache
         if (!m_cacheDirectory.empty() && loadProgramFromCache(currentHash))
         {
-            std::cout << "CLProgram: Loaded program from single-level binary cache (hash: "
-                      << currentHash << ")" << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo(
+                  "CLProgram: Loaded program from single-level binary cache (hash: " +
+                  std::to_string(currentHash) + ")");
+            }
             m_hashLastSuccessfulCompilation = currentHash;
             m_valid = true;
             m_isCompilationInProgress = false;
@@ -528,7 +527,10 @@ namespace gladius
             if (!staticLoaded)
             {
                 // Compile static library from source
-                std::cout << "CLProgram: Compiling static library from source" << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Compiling static library from source");
+                }
                 try
                 {
                     staticLibrary = cl::Program(m_ComputeContext->GetContext(), m_staticSources);
@@ -537,21 +539,30 @@ namespace gladius
 
                     // Save compiled static library to cache
                     saveStaticLibraryToCache(staticHash, staticLibrary);
-                    std::cout << "CLProgram: Compiled and cached static library (hash: "
-                              << staticHash << ")" << std::endl;
+                    if (m_logger)
+                    {
+                        m_logger->logInfo("CLProgram: Compiled and cached static library (hash: " +
+                                          std::to_string(staticHash) + ")");
+                    }
                 }
                 catch (const std::exception & e)
                 {
-                    std::cout << "CLProgram: Failed to compile static library: " << e.what()
-                              << std::endl;
+                    if (m_logger)
+                    {
+                        m_logger->logError("CLProgram: Failed to compile static library: " +
+                                           std::string(e.what()));
+                    }
                     // Fall back to single-level compilation
                     goto single_level_compile;
                 }
             }
             else
             {
-                std::cout << "CLProgram: Loaded static library from cache (hash: " << staticHash
-                          << ")" << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Loaded static library from cache (hash: " +
+                                      std::to_string(staticHash) + ")");
+                }
             }
 
             // Compile dynamic source and link with static library
@@ -601,12 +612,18 @@ namespace gladius
                 m_program = std::make_unique<cl::Program>(cl::linkProgram(programs, ""));
                 validateBuildStatus(*m_program, m_ComputeContext->GetDevice(), m_logger);
 
-                std::cout << "CLProgram: Successfully linked static library with dynamic program"
-                          << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Successfully linked static library with dynamic program");
+                }
 
                 // Save linked program to cache
                 saveLinkedProgramToCache(staticHash, dynamicHash);
-                std::cout << "CLProgram: Saved linked program to cache" << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Saved linked program to cache");
+                }
 
                 m_hashLastSuccessfulCompilation = currentHash;
                 m_valid = true;
@@ -624,8 +641,11 @@ namespace gladius
             }
             catch (const std::exception & e)
             {
-                std::cout << "CLProgram: Failed to compile/link dynamic program: " << e.what()
-                          << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logError("CLProgram: Failed to compile/link dynamic program: " +
+                                       std::string(e.what()));
+                }
                 // Fall back to single-level compilation
                 goto single_level_compile;
             }
@@ -659,8 +679,11 @@ namespace gladius
             if (!m_cacheDirectory.empty())
             {
                 saveProgramToCache(currentHash);
-                std::cout << "CLProgram: Saved program to binary cache (hash: " << currentHash
-                          << ")" << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Saved program to binary cache (hash: " +
+                                      std::to_string(currentHash) + ")");
+                }
             }
 
             // Always print build status (and logs on failure)
@@ -676,10 +699,7 @@ namespace gladius
                 m_logger->logError(std::string("OpenCL build failed: ") + e.what());
                 m_logger->logError(diag);
             }
-            else
-            {
-                std::cerr << e.what() << '\n' << diag << '\n';
-            }
+            // Suppress direct stderr output when logger unavailable
         }
 
         m_isCompilationInProgress = false;
@@ -729,10 +749,7 @@ namespace gladius
                       prog, m_ComputeContext->GetDevice(), arguments, "compile(lib)");
                     m_logger->logError(diag);
                 }
-                else
-                {
-                    std::cerr << e.what() << '\n';
-                }
+                // Suppress direct stderr output when logger unavailable
             }
 
             logBuildStatusIfFailed(prog, m_ComputeContext->GetDevice(), m_logger);
@@ -876,12 +893,18 @@ namespace gladius
 
     void CLProgram::setCacheDirectory(const std::filesystem::path & path)
     {
-        std::cout << "CLProgram::setCacheDirectory called with path: " << path << std::endl;
+        if (m_logger)
+        {
+            m_logger->logInfo("CLProgram::setCacheDirectory called with path: " + path.string());
+        }
         m_cacheDirectory = path;
         if (!path.empty() && !std::filesystem::exists(path))
         {
             std::filesystem::create_directories(path);
-            std::cout << "CLProgram: Created cache directory: " << path << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Created cache directory: " + path.string());
+            }
         }
     }
 
@@ -899,7 +922,11 @@ namespace gladius
                     std::filesystem::remove(entry.path());
                 }
             }
-            std::cout << "CLProgram: Cleared cache directory: " << m_cacheDirectory << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Cleared cache directory: " +
+                                  m_cacheDirectory.string());
+            }
         }
         catch (const std::exception & e)
         {
@@ -934,8 +961,10 @@ namespace gladius
             // Verify device signature matches
             if (cachedDeviceSignature != getDeviceSignature())
             {
-                std::cout << "CLProgram: Cache device signature mismatch, ignoring cache"
-                          << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Cache device signature mismatch, ignoring cache");
+                }
                 return false;
             }
 
@@ -959,13 +988,20 @@ namespace gladius
                 // Ensure program is marked as valid and kernels cache is cleared
                 m_valid = true;
                 m_kernels.clear();
-                std::cout << "CLProgram: Successfully loaded and built program from cache"
-                          << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Successfully loaded and built program from cache");
+                }
                 return true;
             }
             catch (const std::exception & e)
             {
-                std::cout << "CLProgram: Failed to build cached program: " << e.what() << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logError("CLProgram: Failed to build cached program: " +
+                                       std::string(e.what()));
+                }
                 return false;
             }
         }
@@ -1007,7 +1043,11 @@ namespace gladius
             file.write(reinterpret_cast<const char *>(&binarySize), sizeof(binarySize));
             file.write(reinterpret_cast<const char *>(binaries[0].data()), binarySize);
 
-            std::cout << "CLProgram: Saved program binary to cache: " << cachePath << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Saved program binary to cache: " +
+                                  cachePath.string());
+            }
         }
         catch (const std::exception & e)
         {
@@ -1059,9 +1099,11 @@ namespace gladius
             // Verify device signature matches
             if (cachedDeviceSignature != getDeviceSignature())
             {
-                std::cout
-                  << "CLProgram: Static library cache device signature mismatch, ignoring cache"
-                  << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Static library cache device signature mismatch, ignoring cache");
+                }
                 return false;
             }
 
@@ -1076,7 +1118,10 @@ namespace gladius
                                         std::vector<cl::Device>{m_ComputeContext->GetDevice()},
                                         std::vector<std::vector<unsigned char>>{binary});
 
-            std::cout << "CLProgram: Successfully loaded static library from cache" << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Successfully loaded static library from cache");
+            }
             return true;
         }
         catch (const std::exception & e)
@@ -1120,7 +1165,10 @@ namespace gladius
             file.write(reinterpret_cast<const char *>(&binarySize), sizeof(binarySize));
             file.write(reinterpret_cast<const char *>(binary.data()), binarySize);
 
-            std::cout << "CLProgram: Saved static library to cache" << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Saved static library to cache");
+            }
         }
         catch (const std::exception & e)
         {
@@ -1157,9 +1205,11 @@ namespace gladius
             // Verify device signature matches
             if (cachedDeviceSignature != getDeviceSignature())
             {
-                std::cout
-                  << "CLProgram: Linked program cache device signature mismatch, ignoring cache"
-                  << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Linked program cache device signature mismatch, ignoring cache");
+                }
                 return false;
             }
 
@@ -1183,14 +1233,20 @@ namespace gladius
                 // Ensure program is marked as valid and kernels cache is cleared
                 m_valid = true;
                 m_kernels.clear();
-                std::cout << "CLProgram: Successfully loaded and built linked program from cache"
-                          << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Successfully loaded and built linked program from cache");
+                }
                 return true;
             }
             catch (const std::exception & e)
             {
-                std::cout << "CLProgram: Failed to build cached linked program: " << e.what()
-                          << std::endl;
+                if (m_logger)
+                {
+                    m_logger->logError("CLProgram: Failed to build cached linked program: " +
+                                       std::string(e.what()));
+                }
                 return false;
             }
         }
@@ -1235,7 +1291,10 @@ namespace gladius
             file.write(reinterpret_cast<const char *>(&binarySize), sizeof(binarySize));
             file.write(reinterpret_cast<const char *>(binary.data()), binarySize);
 
-            std::cout << "CLProgram: Saved linked program to cache" << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Saved linked program to cache");
+            }
         }
         catch (const std::exception & e)
         {

@@ -229,12 +229,7 @@ namespace gladius
         // Assume OpenVDB is initialized by the application or test fixture.
         // Avoid repeated initialize() calls here to reduce overhead.
         CPUCapabilities caps = detectCPUCapabilities();
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "BeamLatticeVoxelBuilder: Using Phase 3 parallel+SIMD optimization\n";
-            std::cout << "  CPU capabilities: AVX=" << caps.hasAVX << ", AVX2=" << caps.hasAVX2
-                      << ", AVX512F=" << caps.hasAVX512F << "\n";
-        }
+        // Suppressed verbose stdout logging (was conditional on enableDebugOutput)
         auto hashBuildStart = std::chrono::high_resolution_clock::now();
         std::vector<SIMDBeamData> simdBeams = prepareSIMDBeamData(beams);
         std::vector<SIMDBallData> simdBalls = prepareSIMDBallData(balls);
@@ -284,14 +279,7 @@ namespace gladius
         auto durationMs =
           std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
         m_lastStats.buildTimeSeconds = durationMs.count() / 1000.0f;
-        if (settings.enableDebugOutput)
-        {
-            std::cout << "  Phase 3 total time: " << m_lastStats.buildTimeSeconds << "s\n";
-            std::cout << "  Hash build: " << m_lastStats.hashBuildTimeSeconds
-                      << "s, Voxel process: " << m_lastStats.voxelProcessTimeSeconds << "s\n";
-            std::cout << "  Active voxels: " << m_lastStats.activeVoxels << "\n";
-            std::cout << "  Primitive-voxel pairs: " << m_lastStats.primitiveVoxelPairs << "\n";
-        }
+        // Suppressed verbose stdout logging (was conditional on enableDebugOutput)
         return {primitiveIndexGrid, primitiveTypeGrid};
     }
 

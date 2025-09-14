@@ -21,19 +21,15 @@ namespace gladius::mcp
         }
 
         // Create thread pools for different operation types
-        m_backgroundPool = coro::thread_pool::make_shared(coro::thread_pool::options{
-          .thread_count = static_cast<uint32_t>(backgroundThreads),
-          .on_thread_start_functor = [](std::size_t worker_idx) -> void
-          { std::cout << "MCP background worker " << worker_idx << " starting\n"; },
-          .on_thread_stop_functor = [](std::size_t worker_idx) -> void
-          { std::cout << "MCP background worker " << worker_idx << " stopping\n"; }});
+        m_backgroundPool = coro::thread_pool::make_shared(
+          coro::thread_pool::options{.thread_count = static_cast<uint32_t>(backgroundThreads),
+                                     .on_thread_start_functor = [](std::size_t) -> void {},
+                                     .on_thread_stop_functor = [](std::size_t) -> void {}});
 
-        m_computePool = coro::thread_pool::make_shared(coro::thread_pool::options{
-          .thread_count = static_cast<uint32_t>(computeThreads),
-          .on_thread_start_functor = [](std::size_t worker_idx) -> void
-          { std::cout << "MCP compute worker " << worker_idx << " starting\n"; },
-          .on_thread_stop_functor = [](std::size_t worker_idx) -> void
-          { std::cout << "MCP compute worker " << worker_idx << " stopping\n"; }});
+        m_computePool = coro::thread_pool::make_shared(
+          coro::thread_pool::options{.thread_count = static_cast<uint32_t>(computeThreads),
+                                     .on_thread_start_functor = [](std::size_t) -> void {},
+                                     .on_thread_stop_functor = [](std::size_t) -> void {}});
     }
 
     CoroMCPAdapter::~CoroMCPAdapter()

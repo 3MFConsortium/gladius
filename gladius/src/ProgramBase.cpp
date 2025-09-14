@@ -196,15 +196,21 @@ namespace gladius
 
     void ProgramBase::setCacheDirectory(const std::filesystem::path & path)
     {
-        std::cout << "ProgramBase::setCacheDirectory called with path: " << path << std::endl;
+        if (m_logger)
+        {
+            m_logger->logInfo("ProgramBase::setCacheDirectory called with path: " + path.string());
+        }
         if (m_programFront)
         {
-            std::cout << "ProgramBase: Calling CLProgram setCacheDirectory" << std::endl;
+            if (m_logger)
+            {
+                m_logger->logInfo("ProgramBase: Calling CLProgram setCacheDirectory");
+            }
             m_programFront->setCacheDirectory(path);
         }
-        else
+        else if (m_logger)
         {
-            std::cout << "ProgramBase: m_programFront is null!" << std::endl;
+            m_logger->logWarning("ProgramBase: m_programFront is null!");
         }
     }
 
