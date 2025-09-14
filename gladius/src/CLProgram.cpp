@@ -557,7 +557,40 @@ namespace gladius
             // Compile dynamic source and link with static library
             try
             {
-                cl::Program dynamicProgram(m_ComputeContext->GetContext(), m_dynamicSources);
+                cl::Program::Sources dynamicSourcesCombined;
+
+                // Synthetic interface: only forward declarations & prototypes actually used
+                // Avoids pulling full implementations a second time (which would cause
+                // duplicate symbol definitions when linking with static library).
+                static char const * kDynamicInterface = R"(
+#ifndef GLADIUS_DYNAMIC_IFACE_GUARD
+#define GLADIUS_DYNAMIC_IFACE_GUARD
+// Forward declarations (must match layout from types.h) kept minimal but complete for usage sites
+struct BoundingBox { float4 min; float4 max; };
+enum PrimitiveType { SDF_OUTER_POLYGON, SDF_INNER_POLYGON, SDF_BEAMS, SDF_MESH_TRIANGLES, SDF_MESH_KD_ROOT_NODE, SDF_MESH_KD_NODE, SDF_LINES, SDF_VDB, SDF_VDB_BINARY, SDF_VDB_FACE_INDICES, SDF_VDB_GRAYSCALE_8BIT, SDF_IMAGESTACK, SDF_BEAM_LATTICE, SDF_BEAM, SDF_BALL, SDF_BEAM_BVH_NODE, SDF_PRIMITIVE_INDICES, SDF_BEAM_LATTICE_VOXEL_INDEX, SDF_BEAM_LATTICE_VOXEL_TYPE};
+struct PrimitiveMeta { float4 center; int start; int end; float scaling; enum PrimitiveType primitiveType; struct BoundingBox boundingBox; float4 approximationTop; float4 approximationBottom; };
+struct RenderingSettings { float time_s; float z_mm; int flags; int approximation; float quality; float weightDistToNb; float weightMidPoint; float normalOffset; };
+struct Command { int type; int id; int placeholder0; int placeholder1; int args[32]; int output[32]; };
+// Function prototypes referenced from generated model kernels
+float3 matrixVectorMul3f(float16 matrix, float3 vector);
+float glsl_mod1f(float a, float b);
+float bbBox(float3 pos, float3 bbmin, float3 bbmax);
+// Payload macro (matches arguments.h)
+#ifndef PAYLOAD_ARGS
+#define PAYLOAD_ARGS \
+    float4 buildArea, __global struct PrimitiveMeta *primitives, int primitivesSize, \
+    __global float *data, int dataSize, struct RenderingSettings renderingSettings, \
+    __read_only image3d_t preCompSdf, __global float *parameter, __global struct Command *cmds, \
+    int sizeOfCmds, struct BoundingBox preCompSdfBBox
+#endif
+#endif // GLADIUS_DYNAMIC_IFACE_GUARD
+)";
+
+                dynamicSourcesCombined.emplace_back(kDynamicInterface);
+                dynamicSourcesCombined.insert(
+                  dynamicSourcesCombined.end(), m_dynamicSources.begin(), m_dynamicSources.end());
+
+                cl::Program dynamicProgram(m_ComputeContext->GetContext(), dynamicSourcesCombined);
                 const auto arguments = generateDefineSymbol();
                 dynamicProgram.compile(arguments.c_str());
                 validateBuildStatus(dynamicProgram, m_ComputeContext->GetDevice(), m_logger);
