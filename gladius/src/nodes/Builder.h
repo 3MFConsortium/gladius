@@ -49,18 +49,33 @@ namespace gladius::nodes
                             BoundingBox const & boundingBox,
                             nodes::Port & coordinateSystemPort);
 
-        nodes::Port & addTransformationToInputCs(Model & target, Matrix4x4 const & transformation);
+        // Creates a coordinate system port by transforming the input position by the provided
+        // transformation. If unitScaleToModel != 1, a scaling (multiplication) node is inserted
+        // before the transformation so that positions (assumed in mm) are converted into the
+        // 3MF model's unit.
+        // unitScaleToModel = units_per_mm = 1 / (mm_per_unit)
+        nodes::Port & addTransformationToInputCs(Model & target,
+                                                 Matrix4x4 const & transformation,
+                                                 float unitScaleToModel = 1.0f);
 
+        // Inserts a transformation node on top of the provided input port. If unitScaleToModel != 1
+        // a scaling is applied before the matrix transformation.
         nodes::Port & insertTransformation(Model & target,
                                            nodes::Port & inputPort,
-                                           Matrix4x4 const & transformation);
+                                           Matrix4x4 const & transformation,
+                                           float unitScaleToModel = 1.0f);
 
         nodes::Port * getLastShape(Model & target);
 
-        void addCompositeModel(Document & doc, ResourceId modelId, Components const & componentIds);
+        void addCompositeModel(Document & doc,
+                               ResourceId modelId,
+                               Components const & componentIds,
+                               float unitScaleToModel = 1.0f);
 
-        void
-        addComponentRef(Model & target, Model & referencedModel, Matrix4x4 const & transformation);
+        void addComponentRef(Model & target,
+                             Model & referencedModel,
+                             Matrix4x4 const & transformation,
+                             float unitScaleToModel = 1.0f);
 
         void appendIntersectionWithFunction(Model & target,
                                             Model & referencedModel,

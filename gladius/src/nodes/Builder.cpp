@@ -132,10 +132,11 @@ namespace gladius::nodes
 
     void Builder::addComponentRef(Model & target,
                                   Model & referencedModel,
-                                  Matrix4x4 const & transformation)
+                                  Matrix4x4 const & transformation,
+                                  float unitScaleToModel)
     {
-
-        auto coordinateSystemPort = addTransformationToInputCs(target, transformation);
+        auto coordinateSystemPort =
+          addTransformationToInputCs(target, transformation, unitScaleToModel);
 
         nodes::Resource resourceNodeType;
         auto resourceNode = target.create(resourceNodeType);
@@ -601,31 +602,84 @@ namespace gladius::nodes
         assembly.updateInputsAndOutputs();
     }
 
+    static nodes::Port &
+    addScaleIfNeeded(Model & target, nodes::Port & inputPort, float unitScaleToModel)
+    {
+        // If scale is identity, return the input as-is
+        if (unitScaleToModel == 1.0f)
+        {
+            return inputPort;
+        }
+
+        // mm_per_unit = 1 / units_per_mm
+        const float mm_per_unit = (unitScaleToModel != 0.0f) ? (1.0f / unitScaleToModel) : 1.0f;
+
+        // One constant
+        auto one = target.create<nodes::ConstantScalar>();
+        one->parameter().at(FieldNames::Value) = VariantParameter(1.0f);
+        one->setDisplayName("One");
+
+        // mm_per_unit constant (visible)
+        auto mmPerUnit = target.create<nodes::ConstantScalar>();
+        mmPerUnit->parameter().at(FieldNames::Value) = VariantParameter(mm_per_unit);
+        mmPerUnit->setDisplayName("mm_per_unit");
+
+        // Division: units_per_mm = One / mm_per_unit
+        auto division = target.create<nodes::Division>();
+        division->setDisplayName("Division");
+        division->parameter()
+          .at(FieldNames::A)
+          .setInputFromPort(one->getOutputs().at(FieldNames::Value));
+        division->parameter()
+          .at(FieldNames::B)
+          .setInputFromPort(mmPerUnit->getOutputs().at(FieldNames::Value));
+
+        // VectorFromScalar: make a (s,s,s) vector from units_per_mm scalar
+        auto toVec = target.create<nodes::VectorFromScalar>();
+        toVec->parameter()
+          .at(FieldNames::A)
+          .setInputFromPort(division->getOutputs().at(FieldNames::Result));
+
+        // UnitScaling multiply: pos * (s,s,s)
+        auto mul = target.create<nodes::Multiplication>();
+        mul->setDisplayName("UnitScaling");
+        mul->parameter().at(FieldNames::A).setInputFromPort(inputPort);
+        mul->parameter()
+          .at(FieldNames::B)
+          .setInputFromPort(toVec->getOutputs().at(FieldNames::Result));
+
+        return mul->getOutputs().at(FieldNames::Result);
+    }
+
     nodes::Port & Builder::addTransformationToInputCs(Model & target,
-                                                      Matrix4x4 const & transformation)
+                                                      Matrix4x4 const & transformation,
+                                                      float unitScaleToModel)
     {
         auto const transformationNode = target.create<nodes::Transformation>();
 
         transformationNode->parameter().at(nodes::FieldNames::Transformation) =
           VariantParameter(transformation, ContentType::Transformation);
 
-        transformationNode->parameter()
-          .at(nodes::FieldNames::Pos)
-          .setInputFromPort(target.getBeginNode()->getOutputs().at(FieldNames::Pos));
+        // Start with begin position in mm, scale to model units if required
+        auto & beginPos = target.getBeginNode()->getOutputs().at(FieldNames::Pos);
+        auto & scaledPos = addScaleIfNeeded(target, beginPos, unitScaleToModel);
+        transformationNode->parameter().at(nodes::FieldNames::Pos).setInputFromPort(scaledPos);
 
         return transformationNode->getOutputs().at(FieldNames::Pos);
     }
 
     nodes::Port & Builder::insertTransformation(Model & target,
                                                 nodes::Port & inputPort,
-                                                Matrix4x4 const & transformation)
+                                                Matrix4x4 const & transformation,
+                                                float unitScaleToModel)
     {
         auto const transformationNode = target.create<nodes::Transformation>();
 
         transformationNode->parameter().at(nodes::FieldNames::Transformation) =
           VariantParameter(transformation, ContentType::Transformation);
 
-        transformationNode->parameter().at(nodes::FieldNames::Pos).setInputFromPort(inputPort);
+        auto & scaledPort = addScaleIfNeeded(target, inputPort, unitScaleToModel);
+        transformationNode->parameter().at(nodes::FieldNames::Pos).setInputFromPort(scaledPort);
 
         return transformationNode->getOutputs().at(FieldNames::Pos);
     }
@@ -651,8 +705,10 @@ namespace gladius::nodes
         return portIter->second;
     }
 
-    void
-    Builder::addCompositeModel(Document & doc, ResourceId modelId, Components const & componentIds)
+    void Builder::addCompositeModel(Document & doc,
+                                    ResourceId modelId,
+                                    Components const & componentIds,
+                                    float unitScaleToModel)
     {
         if (doc.getAssembly()->findModel(modelId))
         {
@@ -668,13 +724,14 @@ namespace gladius::nodes
         {
             if (getComponentType(doc, component.id) == ComponentType::GeometryResource)
             {
-                auto posPort = addTransformationToInputCs(*model, component.transform);
+                auto posPort =
+                  addTransformationToInputCs(*model, component.transform, unitScaleToModel);
                 addResourceRef(*model, ResourceKey{component.id}, posPort);
             }
             else if (getComponentType(doc, component.id) == ComponentType::SubModel)
             {
                 auto & referencedModel = doc.getAssembly()->getFunctions().at(component.id);
-                addComponentRef(*model, *referencedModel, component.transform);
+                addComponentRef(*model, *referencedModel, component.transform, unitScaleToModel);
             }
         }
     }
