@@ -31,6 +31,14 @@ namespace gladius::nodes
     {
 
       public:
+        // Ensure a visible ConstantScalar with given display name exists and returns its Value port
+        static nodes::Port &
+        ensureConstantScalar(Model & target, const std::string & displayName, float value);
+
+        // Apply distance normalization at the end node: shape *= mm_per_unit
+        // units_per_mm -> mm_per_unit = 1 / units_per_mm
+        static void applyDistanceNormalization(Model & target, float units_per_mm);
+
         void addResourceRef(Model & target,
                             ResourceKey const & resourceKey,
                             nodes::Port & coordinateSystemPort);

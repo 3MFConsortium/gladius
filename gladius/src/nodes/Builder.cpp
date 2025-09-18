@@ -4,6 +4,81 @@
 
 namespace gladius::nodes
 {
+    // Find a node by display name (simple linear search)
+    static NodeBase * findNodeByDisplayName(Model & target, const std::string & displayName)
+    {
+        for (auto & it : target)
+        {
+            auto * node = it.second.get();
+            if (node && node->getDisplayName() == displayName)
+            {
+                return node;
+            }
+        }
+        return nullptr;
+    }
+
+    nodes::Port &
+    Builder::ensureConstantScalar(Model & target, const std::string & displayName, float value)
+    {
+        if (auto * existing = findNodeByDisplayName(target, displayName))
+        {
+            // Reuse existing node's value output port
+            auto * valPort = existing->findOutputPort(FieldNames::Value);
+            if (valPort)
+            {
+                return *valPort;
+            }
+        }
+
+        auto node = target.create<nodes::ConstantScalar>();
+        node->parameter().at(FieldNames::Value) = VariantParameter(value);
+        node->setDisplayName(displayName);
+        return node->getOutputs().at(FieldNames::Value);
+    }
+
+    void Builder::applyDistanceNormalization(Model & target, float units_per_mm)
+    {
+        if (units_per_mm == 1.0f)
+        {
+            return; // No-op
+        }
+
+        float const mm_per_unit = (units_per_mm != 0.0f) ? (1.0f / units_per_mm) : 1.0f;
+
+        // Ensure a shared mm_per_unit constant exists
+        auto & mmPerUnitPort = ensureConstantScalar(target, "mm_per_unit", mm_per_unit);
+
+        // If outputs.shape has a source, insert (shape * mm_per_unit) => outputs.shape
+        auto shapeSink = target.getEndNode()->getParameter(FieldNames::Shape);
+        if (!shapeSink || !shapeSink->getSource().has_value())
+        {
+            return;
+        }
+
+        auto * srcPort = target.getPort(shapeSink->getSource()->portId);
+        if (!srcPort)
+        {
+            return;
+        }
+
+        // Reuse existing ScaleDistance multiply if already present
+        if (auto * existing = findNodeByDisplayName(target, "ScaleDistance"))
+        {
+            auto * out = existing->findOutputPort(FieldNames::Result);
+            if (out)
+            {
+                shapeSink->setInputFromPort(*out);
+                return;
+            }
+        }
+
+        auto mul = target.create<nodes::Multiplication>();
+        mul->setDisplayName("ScaleDistance");
+        mul->parameter().at(FieldNames::A).setInputFromPort(*srcPort);
+        mul->parameter().at(FieldNames::B).setInputFromPort(mmPerUnitPort);
+        shapeSink->setInputFromPort(mul->getOutputs().at(FieldNames::Result));
+    }
     void Builder::addBeamLatticeRef(Model & target,
                                     ResourceKey const & resourceKey,
                                     nodes::Port & coordinateSystemPort)
@@ -525,6 +600,7 @@ namespace gladius::nodes
         scaleNode->setDisplayName("scale");
 
         auto scaleAsVectorNode = function->create<nodes::VectorFromScalar>();
+
         scaleAsVectorNode->parameter()
           .at(FieldNames::A)
           .setInputFromPort(scaleNode->getOutputs().at(FieldNames::Value));
@@ -611,43 +687,56 @@ namespace gladius::nodes
             return inputPort;
         }
 
-        // mm_per_unit = 1 / units_per_mm
+        // Build the visible scaling chain with a single shared mm_per_unit constant
+        // One
+        auto & one = Builder::ensureConstantScalar(target, "One", 1.0f);
+        // mm_per_unit (shared)
         const float mm_per_unit = (unitScaleToModel != 0.0f) ? (1.0f / unitScaleToModel) : 1.0f;
-
-        // One constant
-        auto one = target.create<nodes::ConstantScalar>();
-        one->parameter().at(FieldNames::Value) = VariantParameter(1.0f);
-        one->setDisplayName("One");
-
-        // mm_per_unit constant (visible)
-        auto mmPerUnit = target.create<nodes::ConstantScalar>();
-        mmPerUnit->parameter().at(FieldNames::Value) = VariantParameter(mm_per_unit);
-        mmPerUnit->setDisplayName("mm_per_unit");
+        auto & mmPerUnit = Builder::ensureConstantScalar(target, "mm_per_unit", mm_per_unit);
 
         // Division: units_per_mm = One / mm_per_unit
-        auto division = target.create<nodes::Division>();
-        division->setDisplayName("Division");
-        division->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(one->getOutputs().at(FieldNames::Value));
-        division->parameter()
-          .at(FieldNames::B)
-          .setInputFromPort(mmPerUnit->getOutputs().at(FieldNames::Value));
+        NodeBase * existingDivision = findNodeByDisplayName(target, "Division");
+        nodes::Port * unitsPerMmPort = nullptr;
+        if (existingDivision)
+        {
+            unitsPerMmPort = existingDivision->findOutputPort(FieldNames::Result);
+        }
+        if (!unitsPerMmPort)
+        {
+            auto division = target.create<nodes::Division>();
+            division->setDisplayName("Division");
+            division->parameter().at(FieldNames::A).setInputFromPort(one);
+            division->parameter().at(FieldNames::B).setInputFromPort(mmPerUnit);
+            unitsPerMmPort = &division->getOutputs().at(FieldNames::Result);
+        }
 
-        // VectorFromScalar: make a (s,s,s) vector from units_per_mm scalar
-        auto toVec = target.create<nodes::VectorFromScalar>();
-        toVec->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(division->getOutputs().at(FieldNames::Result));
+        // VectorFromScalar: make a (s,s,s) vector
+        NodeBase * existingVec = findNodeByDisplayName(target, "VectorFromScalar");
+        nodes::Port * vecPort = nullptr;
+        if (existingVec)
+        {
+            vecPort = existingVec->findOutputPort(FieldNames::Result);
+        }
+        if (!vecPort)
+        {
+            auto toVec = target.create<nodes::VectorFromScalar>();
+            toVec->setDisplayName("VectorFromScalar");
+            toVec->parameter().at(FieldNames::A).setInputFromPort(*unitsPerMmPort);
+            vecPort = &toVec->getOutputs().at(FieldNames::Result);
+        }
 
-        // UnitScaling multiply: pos * (s,s,s)
+        // UnitScaling multiply: pos * (s,s,s), reuse if present
+        if (auto * existingMul = findNodeByDisplayName(target, "UnitScaling"))
+        {
+            existingMul->parameter().at(FieldNames::A).setInputFromPort(inputPort);
+            existingMul->parameter().at(FieldNames::B).setInputFromPort(*vecPort);
+            return existingMul->getOutputs().at(FieldNames::Result);
+        }
+
         auto mul = target.create<nodes::Multiplication>();
         mul->setDisplayName("UnitScaling");
         mul->parameter().at(FieldNames::A).setInputFromPort(inputPort);
-        mul->parameter()
-          .at(FieldNames::B)
-          .setInputFromPort(toVec->getOutputs().at(FieldNames::Result));
-
+        mul->parameter().at(FieldNames::B).setInputFromPort(*vecPort);
         return mul->getOutputs().at(FieldNames::Result);
     }
 

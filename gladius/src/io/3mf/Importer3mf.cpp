@@ -1756,41 +1756,9 @@ namespace gladius::io
             }
         }
 
-        // After assembling all shapes, normalize the resulting distance back to millimeters.
-        // We scaled the coordinate system by units_per_mm so SDF outputs are in model units.
-        // Convert distance to mm by multiplying by mm_per_unit (the reciprocal).
-        float const units_per_mm = computeUnitsPerMM(model);
-        if (units_per_mm != 1.0f)
-        {
-            float const mm_per_unit = (units_per_mm != 0.0f) ? (1.0f / units_per_mm) : 1.0f;
-            auto assemblyModel = doc.getAssembly()->assemblyModel();
-            auto shapeSink = assemblyModel->getEndNode()->getParameter(nodes::FieldNames::Shape);
-            if (shapeSink && shapeSink->getSource().has_value())
-            {
-                auto const srcPortId = shapeSink->getSource()->portId;
-                auto * srcPort = assemblyModel->getPort(srcPortId);
-                if (srcPort)
-                {
-                    // Create constant mm_per_unit
-                    auto mmPerUnitNode = assemblyModel->create<nodes::ConstantScalar>();
-                    mmPerUnitNode->parameter().at(nodes::FieldNames::Value) =
-                      nodes::VariantParameter(mm_per_unit);
-                    mmPerUnitNode->setDisplayName("mm_per_unit");
-
-                    // Multiply distance by mm_per_unit
-                    auto scaleDistance = assemblyModel->create<nodes::Multiplication>();
-                    scaleDistance->setDisplayName("ScaleDistance");
-                    scaleDistance->parameter().at(nodes::FieldNames::A).setInputFromPort(*srcPort);
-                    scaleDistance->parameter()
-                      .at(nodes::FieldNames::B)
-                      .setInputFromPort(mmPerUnitNode->getOutputs().at(nodes::FieldNames::Value));
-
-                    // Rewire sink to new result
-                    shapeSink->setInputFromPort(
-                      scaleDistance->getOutputs().at(nodes::FieldNames::Result));
-                }
-            }
-        }
+        // Normalize distances to mm via Builder helper
+        nodes::Builder::applyDistanceNormalization(*doc.getAssembly()->assemblyModel(),
+                                                   computeUnitsPerMM(model));
     }
 
     void Importer3mf::createObject(Lib3MF::CObject & objectRes,
