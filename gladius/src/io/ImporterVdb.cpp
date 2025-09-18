@@ -93,7 +93,7 @@ namespace gladius::io
 
         imageSamplerNode->parameter()
           .at(FieldNames::ResourceId)
-          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(resourceNode->getOutputValue());
         imageSamplerNode->parameter()
           .at(FieldNames::UVW)
           .setInputFromPort(toUVWSpaceNode->getOutputs().at(FieldNames::Result));

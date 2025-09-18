@@ -1365,7 +1365,7 @@ namespace gladius::ui
 
                 auto signedDistanceToMesh = m_currentModel->create<nodes::SignedDistanceToMesh>();
                 ImVec2 const posOnCanvasWithOffset = ImVec2(posOnCanvas.x + 400, posOnCanvas.y);
-                m_currentModel->addLink(createdNode->outputs().at("value").getId(),
+                m_currentModel->addLink(createdNode->getOutputValue().getId(),
                                         signedDistanceToMesh->parameter().at("mesh").getId());
 
                 signedDistanceToMesh->setDisplayName("SD to " + key.getDisplayName());

@@ -210,7 +210,7 @@ namespace gladius::nodes
         }
 
         m_definition << fmt::format("float const {0} = {1};\n",
-                                    constantScalar.getOutputs()["value"].getUniqueName(),
+                                    constantScalar.getValueOutputPort().getUniqueName(),
                                     constantScalar.parameter()["value"].toString());
     }
 
@@ -222,7 +222,7 @@ namespace gladius::nodes
         }
 
         m_definition << fmt::format("float3 const {0} = (float3)({1}, {2}, {3} );\n",
-                                    constantVector.getOutputs()["vector"].getUniqueName(),
+                                    constantVector.getVectorOutputPort().getUniqueName(),
                                     constantVector.parameter()["x"].toString(),
                                     constantVector.parameter()["y"].toString(),
                                     constantVector.parameter()["z"].toString());
@@ -237,7 +237,7 @@ namespace gladius::nodes
 
         m_definition << fmt::format("float16 const {0} = (float16)({1}, {2}, {3}, {4}, {5}, {6}, "
                                     "{7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}, {16});\n",
-                                    constantMatrix.getOutputs()["matrix"].getUniqueName(),
+                                    constantMatrix.getMatrixOutputPort().getUniqueName(),
                                     constantMatrix.parameter()[FieldNames::M00].toString(),
                                     constantMatrix.parameter()[FieldNames::M01].toString(),
                                     constantMatrix.parameter()[FieldNames::M02].toString(),
@@ -263,7 +263,7 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format("float3 const {0} = (float3)({1}, {2}, {3} );\n",
+        m_definition << fmt::format(fmt::runtime("float3 const {0} = (float3)({1}, {2}, {3});\n"),
                                     composeVector.getOutputs()[FieldNames::Result].getUniqueName(),
                                     composeVector.parameter()[FieldNames::X].toString(),
                                     composeVector.parameter()[FieldNames::Y].toString(),
@@ -277,25 +277,26 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format("float16 const {0} = (float16)({1}, {2}, {3}, {4}, {5}, {6}, "
-                                    "{7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}, {16});\n",
-                                    composeMatrix.getOutputs()["matrix"].getUniqueName(),
-                                    composeMatrix.parameter()[FieldNames::M00].toString(),
-                                    composeMatrix.parameter()[FieldNames::M01].toString(),
-                                    composeMatrix.parameter()[FieldNames::M02].toString(),
-                                    composeMatrix.parameter()[FieldNames::M03].toString(),
-                                    composeMatrix.parameter()[FieldNames::M10].toString(),
-                                    composeMatrix.parameter()[FieldNames::M11].toString(),
-                                    composeMatrix.parameter()[FieldNames::M12].toString(),
-                                    composeMatrix.parameter()[FieldNames::M13].toString(),
-                                    composeMatrix.parameter()[FieldNames::M20].toString(),
-                                    composeMatrix.parameter()[FieldNames::M21].toString(),
-                                    composeMatrix.parameter()[FieldNames::M22].toString(),
-                                    composeMatrix.parameter()[FieldNames::M23].toString(),
-                                    composeMatrix.parameter()[FieldNames::M30].toString(),
-                                    composeMatrix.parameter()[FieldNames::M31].toString(),
-                                    composeMatrix.parameter()[FieldNames::M32].toString(),
-                                    composeMatrix.parameter()[FieldNames::M33].toString());
+        m_definition << fmt::format(
+          fmt::runtime("float16 const {0} = (float16)({1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, "
+                       "{10}, {11}, {12}, {13}, {14}, {15}, {16});\n"),
+          composeMatrix.getOutputs()[FieldNames::Matrix].getUniqueName(),
+          composeMatrix.parameter()[FieldNames::M00].toString(),
+          composeMatrix.parameter()[FieldNames::M01].toString(),
+          composeMatrix.parameter()[FieldNames::M02].toString(),
+          composeMatrix.parameter()[FieldNames::M03].toString(),
+          composeMatrix.parameter()[FieldNames::M10].toString(),
+          composeMatrix.parameter()[FieldNames::M11].toString(),
+          composeMatrix.parameter()[FieldNames::M12].toString(),
+          composeMatrix.parameter()[FieldNames::M13].toString(),
+          composeMatrix.parameter()[FieldNames::M20].toString(),
+          composeMatrix.parameter()[FieldNames::M21].toString(),
+          composeMatrix.parameter()[FieldNames::M22].toString(),
+          composeMatrix.parameter()[FieldNames::M23].toString(),
+          composeMatrix.parameter()[FieldNames::M30].toString(),
+          composeMatrix.parameter()[FieldNames::M31].toString(),
+          composeMatrix.parameter()[FieldNames::M32].toString(),
+          composeMatrix.parameter()[FieldNames::M33].toString());
     }
 
     void ToOclVisitor::visit(ComposeMatrixFromColumns & composeMatrixFromColumns)
@@ -306,13 +307,9 @@ namespace gladius::nodes
         }
 
         m_definition << fmt::format(
-          "float16 const {0} = (float16)("
-          "{1}.x, {2}.x, {3}.x, {4}.x,"
-          "{1}.y, {2}.y, {3}.y, {4}.y,"
-          "{1}.z, {2}.z, {3}.z, {4}.z,"
-          "0.f, 0.f, 0.f, 1.f"
-          ");\n",
-          composeMatrixFromColumns.getOutputs()["matrix"].getUniqueName(),
+          fmt::runtime("float16 const {0} = (float16)({1}.x, {2}.x, {3}.x, {4}.x, {1}.y, {2}.y, "
+                       "{3}.y, {4}.y, {1}.z, {2}.z, {3}.z, {4}.z, 0.f, 0.f, 0.f, 1.f);\n"),
+          composeMatrixFromColumns.getOutputs()[FieldNames::Matrix].getUniqueName(),
           composeMatrixFromColumns.parameter()[FieldNames::Col0].toString(),
           composeMatrixFromColumns.parameter()[FieldNames::Col1].toString(),
           composeMatrixFromColumns.parameter()[FieldNames::Col2].toString(),
@@ -326,17 +323,14 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format("float16 const {0} = (float16)("
-                                    "{1}.x, {1}.y, {1}.z, 0.f,"
-                                    "{2}.x, {2}.y, {2}.z, 0.f,"
-                                    "{3}.x, {3}.y, {3}.z, 0.f,"
-                                    "{4}.x, {4}.y, {4}.z, 1.f"
-                                    ");\n",
-                                    composeMatrixFromRows.getOutputs()["matrix"].getUniqueName(),
-                                    composeMatrixFromRows.parameter()[FieldNames::Row0].toString(),
-                                    composeMatrixFromRows.parameter()[FieldNames::Row1].toString(),
-                                    composeMatrixFromRows.parameter()[FieldNames::Row2].toString(),
-                                    composeMatrixFromRows.parameter()[FieldNames::Row3].toString());
+        m_definition << fmt::format(
+          fmt::runtime("float16 const {0} = (float16)({1}.x, {1}.y, {1}.z, 0.f, {2}.x, {2}.y, "
+                       "{2}.z, 0.f, {3}.x, {3}.y, {3}.z, 0.f, {4}.x, {4}.y, {4}.z, 1.f);\n"),
+          composeMatrixFromRows.getOutputs()[FieldNames::Matrix].getUniqueName(),
+          composeMatrixFromRows.parameter()[FieldNames::Row0].toString(),
+          composeMatrixFromRows.parameter()[FieldNames::Row1].toString(),
+          composeMatrixFromRows.parameter()[FieldNames::Row2].toString(),
+          composeMatrixFromRows.parameter()[FieldNames::Row3].toString());
     }
 
     void ToOclVisitor::visit(DecomposeVector & decomposeVector)
@@ -474,23 +468,19 @@ namespace gladius::nodes
             return;
         }
 
-        if (addition.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-            ParameterTypeIndex::Float)
+        if (addition.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format(
-              "float const {0} = {1} + {2};\n",
-              addition.getOutputs().at(FieldNames::Result).getUniqueName(),
-              addition.parameter().at(FieldNames::A).toString(),
-              addition.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float const {0} = {1} + {2};\n",
+                                        addition.getResultOutputPort().getUniqueName(),
+                                        addition.parameter().at(FieldNames::A).toString(),
+                                        addition.parameter().at(FieldNames::B).toString());
         }
-        else if (addition.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-                 ParameterTypeIndex::Float3)
+        else if (addition.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format(
-              "float3 const {0} = (float3)({1}) + (float3)({2});\n",
-              addition.getOutputs().at(FieldNames::Result).getUniqueName(),
-              addition.parameter().at(FieldNames::A).toString(),
-              addition.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float3 const {0} = (float3)({1}) + (float3)({2});\n",
+                                        addition.getResultOutputPort().getUniqueName(),
+                                        addition.parameter().at(FieldNames::A).toString(),
+                                        addition.parameter().at(FieldNames::B).toString());
         }
     }
 
@@ -500,23 +490,19 @@ namespace gladius::nodes
         {
             return;
         }
-        if (subtraction.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-            ParameterTypeIndex::Float)
+        if (subtraction.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format(
-              "float const {0} = {1} - {2};\n",
-              subtraction.getOutputs().at(FieldNames::Result).getUniqueName(),
-              subtraction.parameter().at(FieldNames::A).toString(),
-              subtraction.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float const {0} = {1} - {2};\n",
+                                        subtraction.getResultOutputPort().getUniqueName(),
+                                        subtraction.parameter().at(FieldNames::A).toString(),
+                                        subtraction.parameter().at(FieldNames::B).toString());
         }
-        else if (subtraction.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-                 ParameterTypeIndex::Float3)
+        else if (subtraction.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format(
-              "float3 const {0} = (float3)({1}) - (float3)({2});\n",
-              subtraction.getOutputs().at(FieldNames::Result).getUniqueName(),
-              subtraction.parameter().at(FieldNames::A).toString(),
-              subtraction.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float3 const {0} = (float3)({1}) - (float3)({2});\n",
+                                        subtraction.getResultOutputPort().getUniqueName(),
+                                        subtraction.parameter().at(FieldNames::A).toString(),
+                                        subtraction.parameter().at(FieldNames::B).toString());
         }
     }
 
@@ -526,23 +512,19 @@ namespace gladius::nodes
         {
             return;
         }
-        if (multiplication.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-            ParameterTypeIndex::Float)
+        if (multiplication.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format(
-              "float const {0} = {1} * {2};\n",
-              multiplication.getOutputs().at(FieldNames::Result).getUniqueName(),
-              multiplication.parameter().at(FieldNames::A).toString(),
-              multiplication.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float const {0} = {1} * {2};\n",
+                                        multiplication.getResultOutputPort().getUniqueName(),
+                                        multiplication.parameter().at(FieldNames::A).toString(),
+                                        multiplication.parameter().at(FieldNames::B).toString());
         }
-        else if (multiplication.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-                 ParameterTypeIndex::Float3)
+        else if (multiplication.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format(
-              "float3 const {0} = (float3)({1}) * (float3)({2});\n",
-              multiplication.getOutputs().at(FieldNames::Result).getUniqueName(),
-              multiplication.parameter().at(FieldNames::A).toString(),
-              multiplication.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float3 const {0} = (float3)({1}) * (float3)({2});\n",
+                                        multiplication.getResultOutputPort().getUniqueName(),
+                                        multiplication.parameter().at(FieldNames::A).toString(),
+                                        multiplication.parameter().at(FieldNames::B).toString());
         }
     }
 
@@ -552,23 +534,19 @@ namespace gladius::nodes
         {
             return;
         }
-        if (division.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-            ParameterTypeIndex::Float)
+        if (division.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format(
-              "float const {0} = {1} / {2};\n",
-              division.getOutputs().at(FieldNames::Result).getUniqueName(),
-              division.parameter().at(FieldNames::A).toString(),
-              division.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float const {0} = {1} / {2};\n",
+                                        division.getResultOutputPort().getUniqueName(),
+                                        division.parameter().at(FieldNames::A).toString(),
+                                        division.parameter().at(FieldNames::B).toString());
         }
-        else if (division.getOutputs().at(FieldNames::Result).getTypeIndex() ==
-                 ParameterTypeIndex::Float3)
+        else if (division.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format(
-              "float3 const {0} = (float3)({1}) / (float3)({2});\n",
-              division.getOutputs().at(FieldNames::Result).getUniqueName(),
-              division.parameter().at(FieldNames::A).toString(),
-              division.parameter().at(FieldNames::B).toString());
+            m_definition << fmt::format("float3 const {0} = (float3)({1}) / (float3)({2});\n",
+                                        division.getResultOutputPort().getUniqueName(),
+                                        division.parameter().at(FieldNames::A).toString(),
+                                        division.parameter().at(FieldNames::B).toString());
         }
     }
 
@@ -579,7 +557,7 @@ namespace gladius::nodes
             return;
         }
         m_definition << fmt::format("float const {0} = dot({1}, {2});\n",
-                                    dotProduct.getOutputs()[FieldNames::Result].getUniqueName(),
+                                    dotProduct.getResultOutputPort().getUniqueName(),
                                     dotProduct.parameter()[FieldNames::A].toString(),
                                     dotProduct.parameter()[FieldNames::B].toString());
     }
@@ -591,7 +569,7 @@ namespace gladius::nodes
             return;
         }
         m_definition << fmt::format("float3 const {0} = cross({1}, {2});\n",
-                                    crossProduct.getOutputs()[FieldNames::Result].getUniqueName(),
+                                    crossProduct.getResultOutputPort().getUniqueName(),
                                     crossProduct.parameter()[FieldNames::A].toString(),
                                     crossProduct.parameter()[FieldNames::B].toString());
     }
@@ -604,7 +582,7 @@ namespace gladius::nodes
         }
         m_definition << fmt::format(
           "float3 const {0} = matrixVectorMul3f((float16)({1}), {2});\n",
-          matrixVectorMultiplication.getOutputs()[FieldNames::Result].getUniqueName(),
+          matrixVectorMultiplication.getResultOutputPort().getUniqueName(),
           matrixVectorMultiplication.parameter().at(FieldNames::A).toString(),
           matrixVectorMultiplication.parameter().at(FieldNames::B).toString());
     }
@@ -615,9 +593,10 @@ namespace gladius::nodes
         {
             return;
         }
-        m_definition << fmt::format("float16 const {0} = transpose((float16)({1}));\n",
-                                    transpose.getOutputs()[FieldNames::Result].getUniqueName(),
-                                    transpose.parameter()[FieldNames::Matrix].toString());
+        m_definition << fmt::format(
+          fmt::runtime("float16 const {0} = transpose((float16)({1}));\n"),
+          transpose.getOutputs()[FieldNames::Matrix].getUniqueName(),
+          transpose.parameter()[FieldNames::Matrix].toString());
     }
 
     void ToOclVisitor::visit(Sine & sine)
@@ -627,11 +606,10 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = sin({2});\n",
-          typeIndexToOpenCl(sine.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          sine.getOutputs().at(FieldNames::Result).getUniqueName(),
-          sine.parameter().at(FieldNames::A).toString());
+        m_definition << fmt::format("{0} const {1} = sin({2});\n",
+                                    typeIndexToOpenCl(sine.getResultOutputPort().getTypeIndex()),
+                                    sine.getResultOutputPort().getUniqueName(),
+                                    sine.parameter().at(FieldNames::A).toString());
     }
 
     void ToOclVisitor::visit(Cosine & cosine)
@@ -641,11 +619,10 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = cos({2});\n",
-          typeIndexToOpenCl(cosine.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          cosine.getOutputs().at(FieldNames::Result).getUniqueName(),
-          cosine.parameter().at(FieldNames::A).toString());
+        m_definition << fmt::format("{0} const {1} = cos({2});\n",
+                                    typeIndexToOpenCl(cosine.getResultOutputPort().getTypeIndex()),
+                                    cosine.getResultOutputPort().getUniqueName(),
+                                    cosine.parameter().at(FieldNames::A).toString());
     }
 
     void ToOclVisitor::visit(Tangent & tangent)
@@ -655,11 +632,10 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = tan({2});\n",
-          typeIndexToOpenCl(tangent.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          tangent.getOutputs().at(FieldNames::Result).getUniqueName(),
-          tangent.parameter().at(FieldNames::A).toString());
+        m_definition << fmt::format("{0} const {1} = tan({2});\n",
+                                    typeIndexToOpenCl(tangent.getResultOutputPort().getTypeIndex()),
+                                    tangent.getResultOutputPort().getUniqueName(),
+                                    tangent.parameter().at(FieldNames::A).toString());
     }
 
     void ToOclVisitor::visit(ArcSin & arcSin)
@@ -669,11 +645,10 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = asin({2});\n",
-          typeIndexToOpenCl(arcSin.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          arcSin.getOutputs().at(FieldNames::Result).getUniqueName(),
-          arcSin.parameter().at(FieldNames::A).toString());
+        m_definition << fmt::format("{0} const {1} = asin({2});\n",
+                                    typeIndexToOpenCl(arcSin.getResultOutputPort().getTypeIndex()),
+                                    arcSin.getResultOutputPort().getUniqueName(),
+                                    arcSin.parameter().at(FieldNames::A).toString());
     }
 
     void ToOclVisitor::visit(ArcCos & arcCos)
@@ -683,11 +658,10 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = acos({2});\n",
-          typeIndexToOpenCl(arcCos.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          arcCos.getOutputs().at(FieldNames::Result).getUniqueName(),
-          arcCos.parameter().at(FieldNames::A).toString());
+        m_definition << fmt::format("{0} const {1} = acos({2});\n",
+                                    typeIndexToOpenCl(arcCos.getResultOutputPort().getTypeIndex()),
+                                    arcCos.getResultOutputPort().getUniqueName(),
+                                    arcCos.parameter().at(FieldNames::A).toString());
     }
 
     void ToOclVisitor::visit(ArcTan & arcTan)
@@ -697,11 +671,10 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = atan({2});\n",
-          typeIndexToOpenCl(arcTan.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          arcTan.getOutputs().at(FieldNames::Result).getUniqueName(),
-          arcTan.parameter().at(FieldNames::A).toString());
+        m_definition << fmt::format("{0} const {1} = atan({2});\n",
+                                    typeIndexToOpenCl(arcTan.getResultOutputPort().getTypeIndex()),
+                                    arcTan.getResultOutputPort().getUniqueName(),
+                                    arcTan.parameter().at(FieldNames::A).toString());
     }
 
     void ToOclVisitor::visit(Pow & power)
@@ -712,11 +685,11 @@ namespace gladius::nodes
         }
 
         m_definition << fmt::format(
-          "{0} const {1} = pow(({0})({2}), ({0})({3}));\n",
-          typeIndexToOpenCl(power.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          power.getOutputs().at(FieldNames::Result).getUniqueName(),
-          power.parameter().at(FieldNames::A).toString(),
-          power.parameter().at(FieldNames::B).toString());
+          fmt::runtime("{0} const {1} = pow(({0})({2}), ({0})({3}));\n"),
+          typeIndexToOpenCl(power.getOutputs().at(FieldNames::Value).getTypeIndex()),
+          power.getOutputs().at(FieldNames::Value).getUniqueName(),
+          power.parameter().at(FieldNames::Base).toString(),
+          power.parameter().at(FieldNames::Exponent).toString());
     }
 
     void ToOclVisitor::visit(Sqrt & sqrtNode)
@@ -740,12 +713,11 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = fmod(({0})({2}), ({0})({3}));\n",
-          typeIndexToOpenCl(modulus.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          modulus.getOutputs().at(FieldNames::Result).getUniqueName(),
-          modulus.parameter().at(FieldNames::A).toString(),
-          modulus.parameter().at(FieldNames::B).toString());
+        m_definition << fmt::format("{0} const {1} = fmod(({0})({2}), ({0})({3}));\n",
+                                    typeIndexToOpenCl(modulus.getResultOutputPort().getTypeIndex()),
+                                    modulus.getResultOutputPort().getUniqueName(),
+                                    modulus.parameter().at(FieldNames::A).toString(),
+                                    modulus.parameter().at(FieldNames::B).toString());
     }
 
     void ToOclVisitor::visit(Mod & modulus)
@@ -757,13 +729,12 @@ namespace gladius::nodes
 
         auto const numCopmonents = modulus.parameter().at(FieldNames::A).getSize();
 
-        m_definition << fmt::format(
-          "{0} const {1} = glsl_mod{4}f(({0})({2}), ({0})({3}));\n",
-          typeIndexToOpenCl(modulus.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          modulus.getOutputs().at(FieldNames::Result).getUniqueName(),
-          modulus.parameter().at(FieldNames::A).toString(),
-          modulus.parameter().at(FieldNames::B).toString(),
-          numCopmonents);
+        m_definition << fmt::format("{0} const {1} = glsl_mod{4}f(({0})({2}), ({0})({3}));\n",
+                                    typeIndexToOpenCl(modulus.getResultOutputPort().getTypeIndex()),
+                                    modulus.getResultOutputPort().getUniqueName(),
+                                    modulus.parameter().at(FieldNames::A).toString(),
+                                    modulus.parameter().at(FieldNames::B).toString(),
+                                    numCopmonents);
     }
 
     void ToOclVisitor::visit(Max & maxNode)
@@ -773,12 +744,11 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = max(({0})({2}), ({0})({3}));\n",
-          typeIndexToOpenCl(maxNode.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          maxNode.getOutputs().at(FieldNames::Result).getUniqueName(),
-          maxNode.parameter().at(FieldNames::A).toString(),
-          maxNode.parameter().at(FieldNames::B).toString());
+        m_definition << fmt::format("{0} const {1} = max(({0})({2}), ({0})({3}));\n",
+                                    typeIndexToOpenCl(maxNode.getResultOutputPort().getTypeIndex()),
+                                    maxNode.getResultOutputPort().getUniqueName(),
+                                    maxNode.parameter().at(FieldNames::A).toString(),
+                                    maxNode.parameter().at(FieldNames::B).toString());
     }
 
     void ToOclVisitor::visit(Min & minNode)
@@ -788,12 +758,11 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = min(({0})({2}), ({0})({3}));\n",
-          typeIndexToOpenCl(minNode.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          minNode.getOutputs().at(FieldNames::Result).getUniqueName(),
-          minNode.parameter().at(FieldNames::A).toString(),
-          minNode.parameter().at(FieldNames::B).toString());
+        m_definition << fmt::format("{0} const {1} = min(({0})({2}), ({0})({3}));\n",
+                                    typeIndexToOpenCl(minNode.getResultOutputPort().getTypeIndex()),
+                                    minNode.getResultOutputPort().getUniqueName(),
+                                    minNode.parameter().at(FieldNames::A).toString(),
+                                    minNode.parameter().at(FieldNames::B).toString());
     }
 
     void ToOclVisitor::visit(Abs & absNode)
@@ -803,11 +772,10 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = fabs(({0})({2}));\n",
-          typeIndexToOpenCl(absNode.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          absNode.getOutputs().at(FieldNames::Result).getUniqueName(),
-          absNode.parameter().at(FieldNames::A).toString());
+        m_definition << fmt::format("{0} const {1} = fabs(({0})({2}));\n",
+                                    typeIndexToOpenCl(absNode.getResultOutputPort().getTypeIndex()),
+                                    absNode.getResultOutputPort().getUniqueName(),
+                                    absNode.parameter().at(FieldNames::A).toString());
     }
 
     void ToOclVisitor::visit(Length & lengthNode)
@@ -817,7 +785,7 @@ namespace gladius::nodes
             return;
         }
         m_definition << fmt::format("float const {0} = length((float3)({1}));\n",
-                                    lengthNode.getOutputs().at(FieldNames::Result).getUniqueName(),
+                                    lengthNode.getResultOutputPort().getUniqueName(),
                                     lengthNode.parameter().at(FieldNames::A).toString());
     }
 
@@ -828,13 +796,12 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          "{0} const {1} = mix(({0})({2}), ({0})({3}), ({0})({4}));\n",
-          typeIndexToOpenCl(mixNode.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          mixNode.getOutputs().at(FieldNames::Result).getUniqueName(),
-          mixNode.parameter().at(FieldNames::A).toString(),
-          mixNode.parameter().at(FieldNames::B).toString(),
-          mixNode.parameter().at(FieldNames::Ratio).toString());
+        m_definition << fmt::format("{0} const {1} = mix(({0})({2}), ({0})({3}), ({0})({4}));\n",
+                                    typeIndexToOpenCl(mixNode.getResultOutputPort().getTypeIndex()),
+                                    mixNode.getResultOutputPort().getUniqueName(),
+                                    mixNode.parameter().at(FieldNames::A).toString(),
+                                    mixNode.parameter().at(FieldNames::B).toString(),
+                                    mixNode.parameter().at(FieldNames::Ratio).toString());
     }
 
     void ToOclVisitor::visit(Transformation & transformation)

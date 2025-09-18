@@ -34,7 +34,7 @@ namespace gladius::nodes
         auto node = target.create<nodes::ConstantScalar>();
         node->parameter().at(FieldNames::Value) = VariantParameter(value);
         node->setDisplayName(displayName);
-        return node->getOutputs().at(FieldNames::Value);
+        return node->getValueOutputPort();
     }
 
     void Builder::applyDistanceNormalization(Model & target, float units_per_mm)
@@ -75,9 +75,9 @@ namespace gladius::nodes
 
         auto mul = target.create<nodes::Multiplication>();
         mul->setDisplayName("ScaleDistance");
-        mul->parameter().at(FieldNames::A).setInputFromPort(*srcPort);
-        mul->parameter().at(FieldNames::B).setInputFromPort(mmPerUnitPort);
-        shapeSink->setInputFromPort(mul->getOutputs().at(FieldNames::Result));
+        mul->setInputA(*srcPort);
+        mul->setInputB(mmPerUnitPort);
+        shapeSink->setInputFromPort(mul->getResultOutputPort());
     }
     void Builder::addBeamLatticeRef(Model & target,
                                     ResourceKey const & resourceKey,
@@ -94,7 +94,7 @@ namespace gladius::nodes
         importNode->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
 
         auto & beamLatticeInput = importNode->parameter().at(FieldNames::BeamLattice);
-        beamLatticeInput.setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+        beamLatticeInput.setInputFromPort(resourceNode->getOutputValue());
 
         auto & resourceShapePort = importNode->getOutputs().at(FieldNames::Distance);
         auto lastShapePort = getLastShape(target);
@@ -111,10 +111,10 @@ namespace gladius::nodes
         }
         auto uniteNode = target.create<nodes::Min>();
 
-        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        uniteNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+        uniteNode->setInputA(*lastShapePort);
+        uniteNode->setInputB(resourceShapePort);
 
-        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+        shapeSink->setInputFromPort(uniteNode->getResultOutputPort());
     }
 
     void Builder::addResourceRef(Model & target,
@@ -132,7 +132,7 @@ namespace gladius::nodes
         importNode->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
 
         auto & meshInput = importNode->parameter().at(FieldNames::Mesh);
-        meshInput.setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+        meshInput.setInputFromPort(resourceNode->getOutputValue());
 
         auto & resourceShapePort = importNode->getOutputs().at(FieldNames::Distance);
         auto lastShapePort = getLastShape(target);
@@ -149,10 +149,10 @@ namespace gladius::nodes
         }
         auto uniteNode = target.create<nodes::Min>();
 
-        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        uniteNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+        uniteNode->setInputA(*lastShapePort);
+        uniteNode->setInputB(resourceShapePort);
 
-        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+        shapeSink->setInputFromPort(uniteNode->getResultOutputPort());
     }
 
     void Builder::addBoundingBox(Model & target,
@@ -175,10 +175,10 @@ namespace gladius::nodes
 
         boxNode->parameter()
           .at(FieldNames::Min)
-          .setInputFromPort(minVecNode->getOutputs().at(FieldNames::Vector));
+          .setInputFromPort(minVecNode->getVectorOutputPort());
         boxNode->parameter()
           .at(FieldNames::Max)
-          .setInputFromPort(maxVecNode->getOutputs().at(FieldNames::Vector));
+          .setInputFromPort(maxVecNode->getVectorOutputPort());
 
         auto lastShapePort = getLastShape(target);
         auto shapeSink = target.getEndNode()->getParameter(FieldNames::Shape);
@@ -197,12 +197,10 @@ namespace gladius::nodes
         // Union the bounding box with existing shapes using Min node (for SDFs, Min = union)
         auto uniteNode = target.create<nodes::Min>();
 
-        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        uniteNode->parameter()
-          .at(FieldNames::B)
-          .setInputFromPort(boxNode->getOutputs().at(FieldNames::Shape));
+        uniteNode->setInputA(*lastShapePort);
+        uniteNode->setInputB(boxNode->getOutputs().at(FieldNames::Shape));
 
-        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+        shapeSink->setInputFromPort(uniteNode->getResultOutputPort());
     }
 
     void Builder::addComponentRef(Model & target,
@@ -226,7 +224,7 @@ namespace gladius::nodes
 
         functionCallNode->parameter()
           .at(FieldNames::FunctionId)
-          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(resourceNode->getOutputValue());
 
         functionCallNode->updateInputsAndOutputs(referencedModel);
         target.registerInputs(*functionCallNode);
@@ -248,10 +246,10 @@ namespace gladius::nodes
 
         auto uniteNode = target.create<nodes::Min>();
 
-        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        uniteNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+        uniteNode->setInputA(*lastShapePort);
+        uniteNode->setInputB(resourceShapePort);
 
-        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+        shapeSink->setInputFromPort(uniteNode->getResultOutputPort());
     }
 
     void Builder::appendIntersectionWithFunction(Model & target,
@@ -269,7 +267,7 @@ namespace gladius::nodes
 
         functionCallNode->parameter()
           .at(FieldNames::FunctionId)
-          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(resourceNode->getOutputValue());
 
         functionCallNode->updateInputsAndOutputs(referencedModel);
         target.registerInputs(*functionCallNode);
@@ -315,10 +313,10 @@ namespace gladius::nodes
         nodes::Min unionType;
         auto unionNode = target.create(unionType);
 
-        unionNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        unionNode->parameter().at(FieldNames::B).setInputFromPort(resourceShapePort);
+        unionNode->setInputA(*lastShapePort);
+        unionNode->setInputB(resourceShapePort);
 
-        shapeSink->setInputFromPort(unionNode->getOutputs().at(FieldNames::Result));
+        shapeSink->setInputFromPort(unionNode->getResultOutputPort());
     }
 
     void Builder::intersectFunctionWithDomain(Model & target,
@@ -336,7 +334,7 @@ namespace gladius::nodes
 
         functionCallNode->parameter()
           .at(FieldNames::FunctionId)
-          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(resourceNode->getOutputValue());
 
         functionCallNode->updateInputsAndOutputs(referencedModel);
         target.registerInputs(*functionCallNode);
@@ -386,10 +384,10 @@ namespace gladius::nodes
         nodes::Max intersectionType;
         auto intersectionNode = target.create(intersectionType);
 
-        intersectionNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        intersectionNode->parameter().at(FieldNames::B).setInputFromPort(functionShapePort);
+        intersectionNode->setInputA(*lastShapePort);
+        intersectionNode->setInputB(functionShapePort);
 
-        shapeSink->setInputFromPort(intersectionNode->getOutputs().at(FieldNames::Result));
+        shapeSink->setInputFromPort(intersectionNode->getResultOutputPort());
     }
 
     void Builder::addLevelSetWithDomain(Model & target,
@@ -420,10 +418,10 @@ namespace gladius::nodes
         // Connect min/max vectors to bounding box
         boundingBoxNode->parameter()
           .at(FieldNames::Min)
-          .setInputFromPort(minVecNode->getOutputs().at(FieldNames::Vector));
+          .setInputFromPort(minVecNode->getVectorOutputPort());
         boundingBoxNode->parameter()
           .at(FieldNames::Max)
-          .setInputFromPort(maxVecNode->getOutputs().at(FieldNames::Vector));
+          .setInputFromPort(maxVecNode->getVectorOutputPort());
 
         // Create the function call for this level set
         nodes::Resource resourceNodeType;
@@ -436,7 +434,7 @@ namespace gladius::nodes
 
         functionCallNode->parameter()
           .at(FieldNames::FunctionId)
-          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(resourceNode->getOutputValue());
 
         functionCallNode->updateInputsAndOutputs(referencedModel);
         target.registerInputs(*functionCallNode);
@@ -466,10 +464,8 @@ namespace gladius::nodes
         // Intersect the function with its bounding box (Max operation for SDF intersection)
         nodes::Max intersectionType;
         auto intersectionNode = target.create(intersectionType);
-        intersectionNode->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(boundingBoxNode->getOutputs().at(FieldNames::Shape));
-        intersectionNode->parameter().at(FieldNames::B).setInputFromPort(functionShapePort);
+        intersectionNode->setInputA(boundingBoxNode->getOutputs().at(FieldNames::Shape));
+        intersectionNode->setInputB(functionShapePort);
 
         // Now union this result with any existing shapes (Min operation for SDF union)
         auto lastShapePort = getLastShape(target);
@@ -482,18 +478,16 @@ namespace gladius::nodes
         if (!lastShapePort)
         {
             // First level set - just set the intersection result directly
-            shapeSink->setInputFromPort(intersectionNode->getOutputs().at(FieldNames::Result));
+            shapeSink->setInputFromPort(intersectionNode->getResultOutputPort());
         }
         else
         {
             // Union this intersection with existing shapes using Min operation
             nodes::Min unionType;
             auto unionNode = target.create(unionType);
-            unionNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-            unionNode->parameter()
-              .at(FieldNames::B)
-              .setInputFromPort(intersectionNode->getOutputs().at(FieldNames::Result));
-            shapeSink->setInputFromPort(unionNode->getOutputs().at(FieldNames::Result));
+            unionNode->setInputA(*lastShapePort);
+            unionNode->setInputB(intersectionNode->getResultOutputPort());
+            shapeSink->setInputFromPort(unionNode->getResultOutputPort());
         }
     }
 
@@ -587,7 +581,7 @@ namespace gladius::nodes
 
         imageSamplerNode->parameter()
           .at(FieldNames::ResourceId)
-          .setInputFromPort(resourceNode->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(resourceNode->getOutputValue());
         imageSamplerNode->parameter()
           .at(FieldNames::UVW)
           .setInputFromPort(function->getBeginNode()->getOutputs().at(FieldNames::Pos));
@@ -601,9 +595,7 @@ namespace gladius::nodes
 
         auto scaleAsVectorNode = function->create<nodes::VectorFromScalar>();
 
-        scaleAsVectorNode->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(scaleNode->getOutputs().at(FieldNames::Value));
+        scaleAsVectorNode->setInputA(scaleNode->getValueOutputPort());
 
         // Create constant node for offset
         auto offsetNode = function->create<nodes::ConstantScalar>();
@@ -611,55 +603,37 @@ namespace gladius::nodes
         offsetNode->setDisplayName("offset");
 
         auto offsetAsVectorNode = function->create<nodes::VectorFromScalar>();
-        offsetAsVectorNode->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(offsetNode->getOutputs().at(FieldNames::Value));
+        offsetAsVectorNode->setInputA(offsetNode->getValueOutputPort());
 
         // Create multiplication node for the color
         auto multiplyNode = function->create<nodes::Multiplication>();
-        multiplyNode->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(imageSamplerNode->getOutputs().at(FieldNames::Color));
-        multiplyNode->parameter()
-          .at(FieldNames::B)
-          .setInputFromPort(scaleAsVectorNode->getOutputs().at(FieldNames::Result));
+        multiplyNode->setInputA(imageSamplerNode->getOutputs().at(FieldNames::Color));
+        multiplyNode->setInputB(scaleAsVectorNode->getResultOutputPort());
 
         // Create addition node for the color
         auto additionNode = function->create<nodes::Addition>();
-        additionNode->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(multiplyNode->getOutputs().at(FieldNames::Result));
-        additionNode->parameter()
-          .at(FieldNames::B)
-          .setInputFromPort(offsetAsVectorNode->getOutputs().at(FieldNames::Result));
+        additionNode->setInputA(multiplyNode->getResultOutputPort());
+        additionNode->setInputB(offsetAsVectorNode->getResultOutputPort());
 
         // Multiply node for alpha
         auto alphaMultiplyNode = function->create<nodes::Multiplication>();
-        alphaMultiplyNode->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(imageSamplerNode->getOutputs().at(FieldNames::Alpha));
-        alphaMultiplyNode->parameter()
-          .at(FieldNames::B)
-          .setInputFromPort(scaleNode->getOutputs().at(FieldNames::Value));
+        alphaMultiplyNode->setInputA(imageSamplerNode->getOutputs().at(FieldNames::Alpha));
+        alphaMultiplyNode->setInputB(scaleNode->getValueOutputPort());
 
         // Addition node for alpha
         auto alphaAdditionNode = function->create<nodes::Addition>();
-        alphaAdditionNode->parameter()
-          .at(FieldNames::A)
-          .setInputFromPort(alphaMultiplyNode->getOutputs().at(FieldNames::Result));
-        alphaAdditionNode->parameter()
-          .at(FieldNames::B)
-          .setInputFromPort(offsetNode->getOutputs().at(FieldNames::Value));
+        alphaAdditionNode->setInputA(alphaMultiplyNode->getResultOutputPort());
+        alphaAdditionNode->setInputB(offsetNode->getValueOutputPort());
 
         // Decompose color to provide separate outputs for red, green and blue
         auto decomposeColorNode = function->create<nodes::DecomposeVector>();
         decomposeColorNode->parameter()
           .at(FieldNames::A)
-          .setInputFromPort(additionNode->getOutputs().at(FieldNames::Result));
+          .setInputFromPort(additionNode->getResultOutputPort());
 
         function->getEndNode()
           ->getParameter(FieldNames::Color)
-          ->setInputFromPort(additionNode->getOutputs().at(FieldNames::Result));
+          ->setInputFromPort(additionNode->getResultOutputPort());
 
         function->getEndNode()
           ->getParameter(FieldNames::Red)
@@ -673,7 +647,7 @@ namespace gladius::nodes
 
         function->getEndNode()
           ->getParameter(FieldNames::Alpha)
-          ->setInputFromPort(alphaAdditionNode->getOutputs().at(FieldNames::Result));
+          ->setInputFromPort(alphaAdditionNode->getResultOutputPort());
 
         assembly.updateInputsAndOutputs();
     }
@@ -705,9 +679,9 @@ namespace gladius::nodes
         {
             auto division = target.create<nodes::Division>();
             division->setDisplayName("Division");
-            division->parameter().at(FieldNames::A).setInputFromPort(one);
-            division->parameter().at(FieldNames::B).setInputFromPort(mmPerUnit);
-            unitsPerMmPort = &division->getOutputs().at(FieldNames::Result);
+            division->setInputA(one);
+            division->setInputB(mmPerUnit);
+            unitsPerMmPort = &division->getResultOutputPort();
         }
 
         // VectorFromScalar: make a (s,s,s) vector
@@ -721,13 +695,14 @@ namespace gladius::nodes
         {
             auto toVec = target.create<nodes::VectorFromScalar>();
             toVec->setDisplayName("VectorFromScalar");
-            toVec->parameter().at(FieldNames::A).setInputFromPort(*unitsPerMmPort);
-            vecPort = &toVec->getOutputs().at(FieldNames::Result);
+            toVec->setInputA(*unitsPerMmPort);
+            vecPort = &toVec->getResultOutputPort();
         }
 
         // UnitScaling multiply: pos * (s,s,s), reuse if present
         if (auto * existingMul = findNodeByDisplayName(target, "UnitScaling"))
         {
+            // Can't use typed setters on generic NodeBase pointer, keep map access here
             existingMul->parameter().at(FieldNames::A).setInputFromPort(inputPort);
             existingMul->parameter().at(FieldNames::B).setInputFromPort(*vecPort);
             return existingMul->getOutputs().at(FieldNames::Result);
@@ -735,9 +710,9 @@ namespace gladius::nodes
 
         auto mul = target.create<nodes::Multiplication>();
         mul->setDisplayName("UnitScaling");
-        mul->parameter().at(FieldNames::A).setInputFromPort(inputPort);
-        mul->parameter().at(FieldNames::B).setInputFromPort(*vecPort);
-        return mul->getOutputs().at(FieldNames::Result);
+        mul->setInputA(inputPort);
+        mul->setInputB(*vecPort);
+        return mul->getResultOutputPort();
     }
 
     nodes::Port & Builder::addTransformationToInputCs(Model & target,
@@ -853,7 +828,7 @@ namespace gladius::nodes
         beamLattice->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
         beamLattice->parameter()
           .at(FieldNames::BeamLattice)
-          .setInputFromPort(beamLatticeResource->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(beamLatticeResource->getOutputValue());
 
         // Create clipping mesh resource node
         nodes::Resource clippingMeshResourceNode;
@@ -867,7 +842,7 @@ namespace gladius::nodes
         clippingMesh->parameter().at(FieldNames::Pos).setInputFromPort(coordinateSystemPort);
         clippingMesh->parameter()
           .at(FieldNames::Mesh)
-          .setInputFromPort(clippingMeshResource->getOutputs().at(FieldNames::Value));
+          .setInputFromPort(clippingMeshResource->getOutputValue());
 
         // Get the beam lattice and clipping mesh output ports
         auto & beamLatticeShapePort = beamLattice->getOutputs().at(FieldNames::Distance);
@@ -880,9 +855,9 @@ namespace gladius::nodes
         {
             // Max(beam_lattice, clipping_mesh) - keeps beam lattice inside clipping mesh
             auto intersectionNode = target.create<nodes::Max>();
-            intersectionNode->parameter().at(FieldNames::A).setInputFromPort(beamLatticeShapePort);
-            intersectionNode->parameter().at(FieldNames::B).setInputFromPort(clippingMeshShapePort);
-            clippedShapePort = &intersectionNode->getOutputs().at(FieldNames::Result);
+            intersectionNode->setInputA(beamLatticeShapePort);
+            intersectionNode->setInputB(clippingMeshShapePort);
+            clippedShapePort = &intersectionNode->getResultOutputPort();
         }
         else if (clippingMode == 2) // Outside clipping
         {
@@ -892,18 +867,16 @@ namespace gladius::nodes
             auto minusOne = target.create<nodes::ConstantScalar>();
             minusOne->parameter().at(FieldNames::Value) = VariantParameter(-1.0f);
 
-            negateNode->parameter().at(FieldNames::A).setInputFromPort(clippingMeshShapePort);
+            negateNode->setInputA(clippingMeshShapePort);
             negateNode->parameter()
               .at(FieldNames::B)
-              .setInputFromPort(minusOne->getOutputs().at(FieldNames::Value));
+              .setInputFromPort(minusOne->getValueOutputPort());
 
             // Then intersect with negated clipping mesh
             auto intersectionNode = target.create<nodes::Max>();
-            intersectionNode->parameter().at(FieldNames::A).setInputFromPort(beamLatticeShapePort);
-            intersectionNode->parameter()
-              .at(FieldNames::B)
-              .setInputFromPort(negateNode->getOutputs().at(FieldNames::Result));
-            clippedShapePort = &intersectionNode->getOutputs().at(FieldNames::Result);
+            intersectionNode->setInputA(beamLatticeShapePort);
+            intersectionNode->setInputB(negateNode->getResultOutputPort());
+            clippedShapePort = &intersectionNode->getResultOutputPort();
         }
         else
         {
@@ -928,8 +901,8 @@ namespace gladius::nodes
 
         // Union with existing shapes
         auto uniteNode = target.create<nodes::Min>();
-        uniteNode->parameter().at(FieldNames::A).setInputFromPort(*lastShapePort);
-        uniteNode->parameter().at(FieldNames::B).setInputFromPort(*clippedShapePort);
-        shapeSink->setInputFromPort(uniteNode->getOutputs().at(FieldNames::Result));
+        uniteNode->setInputA(*lastShapePort);
+        uniteNode->setInputB(*clippedShapePort);
+        shapeSink->setInputFromPort(uniteNode->getResultOutputPort());
     }
 }
