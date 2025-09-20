@@ -184,12 +184,15 @@ namespace gladius::ui
                                    0.1f,
                                    20.0f);
 
-                bool enableSdfRendering =
-                  m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
+                // Toggle SDF visualization using rendering flags
+                auto & rs = m_core->getResourceContext()->getRenderingSettings();
+                bool enableSdfRendering = (rs.flags & RF_SHOW_FIELD) != 0u;
                 if (ImGui::Checkbox("Show Distance field", &enableSdfRendering))
                 {
-                    m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(
-                      enableSdfRendering);
+                    if (enableSdfRendering)
+                        rs.flags |= RF_SHOW_FIELD;
+                    else
+                        rs.flags &= ~RF_SHOW_FIELD;
                     refreshModel();
                 }
             }
@@ -2754,8 +2757,7 @@ namespace gladius::ui
         // Create JSON object for render settings
         nlohmann::json renderJson;
         renderJson["quality"] = renderSettings.quality;
-        renderJson["sdfVisEnabled"] =
-          m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
+        renderJson["sdfVisEnabled"] = (renderSettings.flags & RF_SHOW_FIELD) != 0u;
 
         // Save to config
         m_configManager->setValue("rendering", "settings", renderJson);
@@ -2804,8 +2806,11 @@ namespace gladius::ui
 
         if (renderJson.contains("sdfVisEnabled"))
         {
-            m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(
-              renderJson["sdfVisEnabled"].get<bool>());
+            bool const en = renderJson["sdfVisEnabled"].get<bool>();
+            if (en)
+                renderSettings.flags |= RF_SHOW_FIELD;
+            else
+                renderSettings.flags &= ~RF_SHOW_FIELD;
         }
 
         // Load shortcuts too (this happens automatically when m_shortcutManager is created)

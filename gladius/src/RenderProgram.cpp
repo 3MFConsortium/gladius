@@ -118,8 +118,5 @@ namespace gladius
           "resample", origin, range, targetImage.getBuffer(), sourceImage.getBuffer());
     }
 
-    bool RenderProgram::isSdfVisualizationEnabled() const
-    {
-        return m_enableSdfVisualization;
-    }
+    // SDF visualization state is managed through ResourceContext::RenderingSettings.flags
 }

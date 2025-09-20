@@ -386,6 +386,23 @@ namespace gladius
 
         boost::hash_combine(
           hash, std::hash<std::string>{}(m_ComputeContext->GetDevice().getInfo<CL_DEVICE_NAME>()));
+
+        // DEBUG: Log what's included in static hash (now uses unified define symbols)
+        if (m_logger)
+        {
+            auto defineSymbol = generateDefineSymbol();
+            m_logger->logInfo("CLProgram: Static hash defineSymbol: '" + defineSymbol + "'");
+            m_logger->logInfo("CLProgram: Static hash symbols count: " +
+                              std::to_string(m_symbols.size()));
+            for (const auto & symbol : m_symbols)
+            {
+                m_logger->logInfo("CLProgram: Static hash symbol: '" + symbol + "'");
+            }
+            m_logger->logInfo("CLProgram: Static hash additionalDefine: '" + m_additionalDefine +
+                              "'");
+        }
+
+        // Use unified defines for static hash computation to guarantee consistency
         boost::hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
 
         // kernel replacements
@@ -413,6 +430,30 @@ namespace gladius
         {
             boost::hash_combine(hash, std::hash<std::string>{}(source));
         }
+        // Ensure dynamic hash also reflects the same compile-time defines and replacements
+        boost::hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
+        if (m_kernelReplacements)
+        {
+            for (const auto & replacement : *m_kernelReplacements)
+            {
+                const auto & [search, replace] = replacement;
+                boost::hash_combine(hash, std::hash<std::string>{}(search));
+                boost::hash_combine(hash, std::hash<std::string>{}(replace));
+            }
+        }
+
+        // DEBUG: Log dynamic hash content
+        if (m_logger)
+        {
+            m_logger->logInfo("CLProgram: Dynamic hash sources count: " +
+                              std::to_string(m_dynamicSources.size()));
+            for (size_t i = 0; i < m_dynamicSources.size(); ++i)
+            {
+                auto preview = m_dynamicSources[i].substr(0, 100);
+                m_logger->logInfo("CLProgram: Dynamic source " + std::to_string(i) + " preview: '" +
+                                  preview + "...'");
+            }
+        }
 
         return hash;
     }
@@ -439,6 +480,15 @@ namespace gladius
         auto staticHash = computeStaticHash();
         auto dynamicHash = computeDynamicHash();
         auto currentHash = computeHash(); // Keep for fallback
+
+        // DEBUG: Always log hash values for analysis
+        if (m_logger)
+        {
+            m_logger->logInfo(
+              "CLProgram: Hash computation - static: " + std::to_string(staticHash) +
+              ", dynamic: " + std::to_string(dynamicHash) +
+              ", combined: " + std::to_string(currentHash));
+        }
 
         // Check if we can load complete linked program from cache first
         if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
@@ -518,6 +568,8 @@ namespace gladius
                 try
                 {
                     staticLibrary = cl::Program(m_ComputeContext->GetContext(), m_staticSources);
+                    // CRITICAL FIX: Use FULL symbols for compilation, not just static ones
+                    // The cache key separation is handled in computeStaticHash(), not here
                     const auto arguments = generateDefineSymbol();
                     staticLibrary.compile(arguments.c_str());
 
@@ -526,7 +578,7 @@ namespace gladius
                     if (m_logger)
                     {
                         m_logger->logInfo("CLProgram: Compiled and cached static library (hash: " +
-                                          std::to_string(staticHash) + ")");
+                                          std::to_string(staticHash) + ") with args: " + arguments);
                     }
                 }
                 catch (const std::exception & e)
