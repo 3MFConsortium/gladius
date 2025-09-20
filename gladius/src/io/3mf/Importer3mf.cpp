@@ -313,8 +313,13 @@ namespace gladius::io
         {
             if (duplicate.duplicateFunction)
             {
-                std::cout << "Duplicate function found with ID: "
-                          << duplicate.duplicateFunction->GetUniqueResourceID() << std::endl;
+                if (m_eventLogger)
+                {
+                    m_eventLogger->addEvent(
+                      {fmt::format("Duplicate function detected with ID: {}",
+                                   duplicate.duplicateFunction->GetUniqueResourceID()),
+                       events::Severity::Info});
+                }
             }
         }
 
