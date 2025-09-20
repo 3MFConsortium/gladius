@@ -13,8 +13,8 @@ namespace gladius
     RenderProgram::RenderProgram(SharedComputeContext context, const SharedResources & resources)
         : ProgramBase(context, resources)
     {
-        m_sourceFiles = {"arguments.h",
-                         "types.h",
+        m_sourceFiles = {"types.h",
+                         "arguments.h",
                          "sdf.h",
                          "sampler.h",
                          "rendering.h",
@@ -115,6 +115,4 @@ namespace gladius
         m_programFront->run(
           "resample", origin, range, targetImage.getBuffer(), sourceImage.getBuffer());
     }
-
-    // SDF visualization state is managed through ResourceContext::RenderingSettings.flags
 }

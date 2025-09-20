@@ -33,8 +33,8 @@ namespace gladius
                                           const SharedResources & resources)
         : ProgramBase(context, resources)
     {
-        m_sourceFiles = {"arguments.h",
-                         "types.h",
+        m_sourceFiles = {"types.h",
+                         "arguments.h",
                          "sdf.h",
                          "sampler.h",
                          "rendering.h",

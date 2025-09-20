@@ -590,7 +590,10 @@ namespace gladius
     {
         ProfileFunction
 
-          std::scoped_lock lock(m_compilationMutex);
+            std::cout
+          << "CLProgram::compile() called" << std::endl;
+
+        std::scoped_lock lock(m_compilationMutex);
 
         applyAllKernelReplacements();
 
@@ -681,6 +684,18 @@ namespace gladius
         m_isCompilationInProgress = true;
 
         // Two-level compilation: try to load/compile static library, then link with dynamic
+        std::cout << "CLProgram: Two-level compilation check - cacheEnabled: " << m_cacheEnabled
+                  << ", cacheDirectory: '" << m_cacheDirectory.string() << "'"
+                  << ", staticSources: " << m_staticSources.size()
+                  << ", dynamicSources: " << m_dynamicSources.size() << std::endl;
+        if (m_logger)
+        {
+            m_logger->logInfo("CLProgram: Two-level compilation check - cacheEnabled: " +
+                              std::to_string(m_cacheEnabled) + ", cacheDirectory: '" +
+                              m_cacheDirectory.string() + "'" +
+                              ", staticSources: " + std::to_string(m_staticSources.size()) +
+                              ", dynamicSources: " + std::to_string(m_dynamicSources.size()));
+        }
         if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
             !m_dynamicSources.empty())
         {
@@ -689,14 +704,36 @@ namespace gladius
 
             if (!staticLoaded)
             {
-                // Compile static library from source
+                // Compile static library from source - include ALL files (headers +
+                // implementations)
                 if (m_logger)
                 {
                     m_logger->logInfo("CLProgram: Compiling static library from source");
                 }
                 try
                 {
-                    staticLibrary = cl::Program(m_ComputeContext->GetContext(), m_staticSources);
+                    // Create static library sources with headers + implementations
+                    cl::Program::Sources staticLibrarySources;
+                    const auto fs = cmrc::gladius_resources::get_filesystem();
+
+                    // Include ALL files (headers + implementations) in static library
+                    for (const auto & filename : m_sourceFilenames)
+                    {
+                        const auto resourceFilename = std::string("src/kernel/" + filename);
+                        if (fs.exists(resourceFilename) && fs.is_file(resourceFilename))
+                        {
+                            auto file = fs.open(resourceFilename);
+                            std::string source(file.begin(), file.end());
+                            if (m_kernelReplacements)
+                            {
+                                applyKernelReplacements(source, *m_kernelReplacements);
+                            }
+                            staticLibrarySources.emplace_back(source);
+                        }
+                    }
+
+                    staticLibrary =
+                      cl::Program(m_ComputeContext->GetContext(), staticLibrarySources);
                     // CRITICAL FIX: Use FULL symbols for compilation, not just static ones
                     // The cache key separation is handled in computeStaticHash(), not here
                     const auto arguments = generateDefineSymbol();
@@ -735,40 +772,30 @@ namespace gladius
             {
                 cl::Program::Sources dynamicSourcesCombined;
 
-                // Synthetic interface: only forward declarations & prototypes actually used
-                // Avoids pulling full implementations a second time (which would cause
-                // duplicate symbol definitions when linking with static library).
-                std::string dynamicInterfaceSource;
-                try
-                {
-                    // Load header from embedded resources (preferred maintenance path)
-                    auto const fs = cmrc::gladius_resources::get_filesystem();
-                    auto const headerPath = std::string("src/kernel/dynamic_interface.h");
-                    if (fs.exists(headerPath) && fs.is_file(headerPath))
-                    {
-                        auto file = fs.open(headerPath);
-                        dynamicInterfaceSource.assign(file.begin(), file.end());
-                    }
-                    else
-                    {
-                        throw std::runtime_error("dynamic_interface.h not found in resources");
-                    }
-                }
-                catch (const std::exception & e)
-                {
+                // Include all header files (.h) in dynamic compilation for full type/macro access
+                // Only .cl files (implementations) should be excluded to avoid duplicate symbols
+                const auto fs = cmrc::gladius_resources::get_filesystem();
 
-                    if (m_logger)
+                // Re-load and include all header files from the filenames list
+                for (const auto & filename : m_sourceFilenames)
+                {
+                    if (filename.ends_with(".h"))
                     {
-                        m_logger->logError(std::string("Failed to load dynamic interface: ") +
-                                           e.what());
+                        const auto resourceFilename = std::string("src/kernel/" + filename);
+                        if (fs.exists(resourceFilename) && fs.is_file(resourceFilename))
+                        {
+                            auto file = fs.open(resourceFilename);
+                            std::string headerSource(file.begin(), file.end());
+                            if (m_kernelReplacements)
+                            {
+                                applyKernelReplacements(headerSource, *m_kernelReplacements);
+                            }
+                            dynamicSourcesCombined.emplace_back(headerSource);
+                        }
                     }
                 }
-                // Apply kernel replacements to the interface header for consistency
-                if (m_kernelReplacements)
-                {
-                    applyKernelReplacements(dynamicInterfaceSource, *m_kernelReplacements);
-                }
-                dynamicSourcesCombined.emplace_back(dynamicInterfaceSource);
+
+                // Add the generated model code
                 dynamicSourcesCombined.insert(
                   dynamicSourcesCombined.end(), m_dynamicSources.begin(), m_dynamicSources.end());
 
@@ -923,7 +950,10 @@ namespace gladius
     {
         ProfileFunction
 
-          std::scoped_lock lock(m_compilationMutex);
+            std::cout
+          << "CLProgram::buildWithLib() called" << std::endl;
+
+        std::scoped_lock lock(m_compilationMutex);
         applyAllKernelReplacements();
 
         auto const currentHash = computeHash();
@@ -1008,17 +1038,7 @@ namespace gladius
                                                              BuildCallBack & callBack)
     {
         ProfileFunction;
-
-        m_valid = false;
-
-        // Clear all sources to start fresh
-        m_staticSources.clear();
-        m_dynamicSources.clear();
-        m_sources.clear();
-
-        loadSourceFromFile(filenames);
-        addSource(dynamicSource);
-        compileNonBlocking(callBack);
+        buildFromSourceAndLinkWithLibImpl(filenames, dynamicSource, callBack, true);
     }
 
     void CLProgram::buildFromSourceAndLinkWithLib(const FileNames & filenames,
@@ -1026,7 +1046,14 @@ namespace gladius
                                                   BuildCallBack & callBack)
     {
         ProfileFunction;
+        buildFromSourceAndLinkWithLibImpl(filenames, dynamicSource, callBack, false);
+    }
 
+    void CLProgram::buildFromSourceAndLinkWithLibImpl(const FileNames & filenames,
+                                                      const std::string & dynamicSource,
+                                                      BuildCallBack & callBack,
+                                                      bool nonBlocking)
+    {
         m_valid = false;
 
         // Clear all sources to start fresh
@@ -1034,9 +1061,21 @@ namespace gladius
         m_dynamicSources.clear();
         m_sources.clear();
 
+        // Store filenames for use in compile() function
+        m_sourceFilenames = filenames;
+
         loadSourceFromFile(filenames);
-        addSource(dynamicSource);
-        compile(callBack);
+        // Add as dynamic source to enable proper two-level compilation and hashing
+        addDynamicSource(dynamicSource);
+
+        if (nonBlocking)
+        {
+            compileNonBlocking(callBack);
+        }
+        else
+        {
+            compile(callBack);
+        }
     }
 
     void CLProgram::loadAndCompileLib(const FileNames & filenames)

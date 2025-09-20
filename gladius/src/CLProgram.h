@@ -414,6 +414,12 @@ namespace gladius
 
         size_t computeHash() const;
 
+        // Shared implementation for build methods to eliminate code duplication
+        void buildFromSourceAndLinkWithLibImpl(const FileNames & filenames,
+                                               const std::string & dynamicSource,
+                                               BuildCallBack & callBack,
+                                               bool nonBlocking);
+
         std::unique_ptr<cl::Program> m_program;
         std::unique_ptr<cl::Program> m_lib;
         cl::Program::Sources m_sources;
@@ -444,6 +450,8 @@ namespace gladius
         // Static vs Dynamic source tracking
         cl::Program::Sources m_staticSources;  // Static kernel files (.cl files from resources)
         cl::Program::Sources m_dynamicSources; // Dynamic model-specific source code
+        FileNames
+          m_sourceFilenames; // Track original filenames for header/implementation separation
 
       private:
         // Cache management helpers

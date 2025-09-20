@@ -9,6 +9,8 @@ float4 matrixVectorMul4f(float16 matrix, float4 vector);
 
 float3 matrixVectorMul3f(float16 matrix, float3 vector);
 
+float glsl_mod1f(float a, float b);
+
 float2 matrixVectorMul2f(float4 matrix, float2 vector);
 
 float sqLength(float3 vector);
@@ -66,6 +68,37 @@ float polygonPrimitive(float3 pos, struct PrimitiveMeta primitive, global float 
 float payloadPrimitives(float3 pos, bool useApproximation, PAYLOAD_ARGS);
 float payload(float3 pos, int startIndex, int endIndex, PAYLOAD_ARGS);
 
+// Image sampling helpers (needed by ImageSampler nodes)
+float4 sampleImageNearest4f(float3 uvw,
+                            float3 dimensions,
+                            int start,
+                            int3 tileStyle,
+                            PAYLOAD_ARGS);
+
+float4 sampleImageLinear4f(float3 uvw,
+                           float3 dimensions,
+                           int start,
+                           int3 tileStyle,
+                           PAYLOAD_ARGS);
+
+// VDB-backed sampling helpers (enabled when ENABLE_VDB is defined)
+float4 sampleImageNearest4fvdb(float3 uvw,
+                               float3 dimensions,
+                               int start,
+                               int3 tileStyle,
+                               PAYLOAD_ARGS);
+
+float4 sampleImageLinear4fvdb(float3 uvw,
+                              float3 dimensions,
+                              int start,
+                              int3 tileStyle,
+                              PAYLOAD_ARGS);
+
+// VDB evaluation helpers
+float vdbModel(float3 pos, int index, PAYLOAD_ARGS);
+float vdbModelSimple(float3 pos, int index, PAYLOAD_ARGS);
+float vdbValue(int3 coord, int index, PAYLOAD_ARGS);
+
 float3 closestPointOnClyinder(float3 pos, float height, float radius);
 
 // Library
@@ -86,4 +119,3 @@ float16 inverse(float16 matrixToBeInverted);
 /// Calculates the transpose of a 4x4 matrix represented by a float16.
 float16 transpose(float16 matrix);
 
-float4 model(float3 Begin_1_cs, PAYLOAD_ARGS);
