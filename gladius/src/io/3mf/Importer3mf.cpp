@@ -1141,11 +1141,13 @@ namespace gladius::io
 
             if (beams.empty())
             {
+                // Having a beam lattice without beams is permitted by the 3MF spec
+                // and should not be treated as a warning. Log as informational and skip.
                 if (m_eventLogger)
                 {
-                    m_eventLogger->addEvent(
-                      {fmt::format("BeamLattice {} has no beams", meshObject->GetModelResourceID()),
-                       gladius::events::Severity::Warning});
+                    m_eventLogger->addEvent({fmt::format("BeamLattice {} has no beams — skipping",
+                                                         meshObject->GetModelResourceID()),
+                                             gladius::events::Severity::Info});
                 }
                 return;
             }
