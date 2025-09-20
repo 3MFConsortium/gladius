@@ -221,4 +221,26 @@ namespace gladius
             m_programFront->clearCache();
         }
     }
+
+    void ProgramBase::setCacheEnabled(bool enabled)
+    {
+        if (m_programFront)
+        {
+            m_programFront->setCacheEnabled(enabled);
+        }
+        else if (m_logger)
+        {
+            m_logger->logWarning(
+              "ProgramBase: m_programFront is null, cannot set cache enabled state!");
+        }
+    }
+
+    bool ProgramBase::isCacheEnabled() const
+    {
+        if (m_programFront)
+        {
+            return m_programFront->isCacheEnabled();
+        }
+        return true; // Default value when program is not available
+    }
 }

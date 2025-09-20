@@ -130,8 +130,14 @@ namespace gladius
                             logger->logError(std::string("Build log:\n") + buildLog);
                         }
                     }
-                    // Without logger we suppress direct stderr output to keep stdio clean in MCP
-                    // mode
+                    else
+                    {
+                        std::cerr << "OpenCL: Build failed\n";
+                        if (!buildLog.empty())
+                        {
+                            std::cerr << "Build log:\n" << buildLog << "\n";
+                        }
+                    }
                 }
             }
             catch (...)
@@ -311,32 +317,9 @@ namespace gladius
     {
         ProfileFunction std::stringstream args;
 
-        // Allow overriding build flags for debugging via environment variable
-#ifdef _WIN32
-        char * debugFlags = nullptr;
-        size_t len = 0;
-        _dupenv_s(&debugFlags, &len, "GLADIUS_OPENCL_BUILD_FLAGS");
-        if (debugFlags && std::string(debugFlags).size() > 0)
+        if (m_useFastRelaxedMath)
         {
-            args << ' ' << debugFlags;
-        }
-        if (debugFlags)
-        {
-            free(debugFlags);
-        }
-#else
-        const char * debugFlags = std::getenv("GLADIUS_OPENCL_BUILD_FLAGS");
-        if (debugFlags && std::string(debugFlags).size() > 0)
-        {
-            args << ' ' << debugFlags;
-        }
-#endif
-        else
-        {
-            if (m_useFastRelaxedMath)
-            {
-                args << " -cl-fast-relaxed-math";
-            }
+            args << " -cl-fast-relaxed-math";
         }
 
         for (const auto & symbol : m_symbols)
@@ -458,8 +441,8 @@ namespace gladius
         auto currentHash = computeHash(); // Keep for fallback
 
         // Check if we can load complete linked program from cache first
-        if (!m_cacheDirectory.empty() && !m_staticSources.empty() && !m_dynamicSources.empty() &&
-            loadLinkedProgramFromCache(staticHash, dynamicHash))
+        if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
+            !m_dynamicSources.empty() && loadLinkedProgramFromCache(staticHash, dynamicHash))
         {
             if (m_logger)
             {
@@ -483,7 +466,7 @@ namespace gladius
         }
 
         // Fallback: Check if we can load from old single-level binary cache
-        if (!m_cacheDirectory.empty() && loadProgramFromCache(currentHash))
+        if (m_cacheEnabled && !m_cacheDirectory.empty() && loadProgramFromCache(currentHash))
         {
             if (m_logger)
             {
@@ -519,7 +502,8 @@ namespace gladius
         m_isCompilationInProgress = true;
 
         // Two-level compilation: try to load/compile static library, then link with dynamic
-        if (!m_cacheDirectory.empty() && !m_staticSources.empty() && !m_dynamicSources.empty())
+        if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
+            !m_dynamicSources.empty())
         {
             cl::Program staticLibrary;
             bool staticLoaded = loadStaticLibraryFromCache(staticHash, staticLibrary);
@@ -676,7 +660,7 @@ namespace gladius
             m_hashLastSuccessfulCompilation = currentHash;
 
             // Save to binary cache if compilation succeeded
-            if (!m_cacheDirectory.empty())
+            if (m_cacheEnabled && !m_cacheDirectory.empty())
             {
                 saveProgramToCache(currentHash);
                 if (m_logger)
@@ -937,9 +921,23 @@ namespace gladius
         }
     }
 
+    void CLProgram::setCacheEnabled(bool enabled)
+    {
+        m_cacheEnabled = enabled;
+        if (m_logger)
+        {
+            m_logger->logInfo("CLProgram: Cache " + std::string(enabled ? "enabled" : "disabled"));
+        }
+    }
+
+    bool CLProgram::isCacheEnabled() const
+    {
+        return m_cacheEnabled;
+    }
+
     bool CLProgram::loadProgramFromCache(size_t hash)
     {
-        if (m_cacheDirectory.empty())
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
             return false;
 
         auto cachePath = m_cacheDirectory / (std::to_string(hash) + ".clcache");
@@ -1017,7 +1015,7 @@ namespace gladius
 
     void CLProgram::saveProgramToCache(size_t hash)
     {
-        if (m_cacheDirectory.empty() || !m_program)
+        if (!m_cacheEnabled || m_cacheDirectory.empty() || !m_program)
             return;
 
         try
@@ -1077,7 +1075,7 @@ namespace gladius
 
     bool CLProgram::loadStaticLibraryFromCache(size_t staticHash, cl::Program & staticLibrary)
     {
-        if (m_cacheDirectory.empty())
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
             return false;
 
         auto cachePath = m_cacheDirectory / ("static_" + std::to_string(staticHash) + ".clcache");
@@ -1137,7 +1135,7 @@ namespace gladius
 
     void CLProgram::saveStaticLibraryToCache(size_t staticHash, const cl::Program & staticLibrary)
     {
-        if (m_cacheDirectory.empty())
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
             return;
 
         try
@@ -1182,7 +1180,7 @@ namespace gladius
 
     bool CLProgram::loadLinkedProgramFromCache(size_t staticHash, size_t dynamicHash)
     {
-        if (m_cacheDirectory.empty())
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
             return false;
 
         auto cachePath = m_cacheDirectory / ("linked_" + std::to_string(staticHash) + "_" +
@@ -1263,7 +1261,7 @@ namespace gladius
 
     void CLProgram::saveLinkedProgramToCache(size_t staticHash, size_t dynamicHash)
     {
-        if (m_cacheDirectory.empty() || !m_program)
+        if (!m_cacheEnabled || m_cacheDirectory.empty() || !m_program)
             return;
 
         try

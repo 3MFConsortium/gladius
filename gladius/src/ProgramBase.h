@@ -33,6 +33,8 @@ namespace gladius
         // Binary caching support
         void setCacheDirectory(const std::filesystem::path & path);
         void clearCache();
+        void setCacheEnabled(bool enabled);
+        [[nodiscard]] bool isCacheEnabled() const;
 
       protected:
         void swapProgramsIfNeeded();
