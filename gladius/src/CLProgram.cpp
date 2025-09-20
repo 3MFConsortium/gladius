@@ -25,15 +25,17 @@ namespace gladius
         // --- Diagnostic helpers (OpenCL source/options dump) ---
         inline bool isOclDumpEnabled()
         {
-            // try
-            // {
-            //     if (auto const * env = std::getenv("GLADIUS_OCL_DUMP"))
-            //     {
-            //         std::string v(env);
-            //         return !v.empty() && v != "0" && v != "false" && v != "False";
-            //     }
-            // }
-            // catch (...) {}
+            try
+            {
+                if (auto const * env = std::getenv("GLADIUS_OCL_DUMP"))
+                {
+                    std::string v(env);
+                    return !v.empty() && v != "0" && v != "false" && v != "False";
+                }
+            }
+            catch (...)
+            {
+            }
             return true;
         }
 
@@ -635,10 +637,7 @@ namespace gladius
     {
         ProfileFunction
 
-            std::cout
-          << "CLProgram::compile() called" << std::endl;
-
-        std::scoped_lock lock(m_compilationMutex);
+          std::scoped_lock lock(m_compilationMutex);
 
         applyAllKernelReplacements();
 
@@ -729,10 +728,6 @@ namespace gladius
         m_isCompilationInProgress = true;
 
         // Two-level compilation: try to load/compile static library, then link with dynamic
-        std::cout << "CLProgram: Two-level compilation check - cacheEnabled: " << m_cacheEnabled
-                  << ", cacheDirectory: '" << m_cacheDirectory.string() << "'"
-                  << ", staticSources: " << m_staticSources.size()
-                  << ", dynamicSources: " << m_dynamicSources.size() << std::endl;
         if (m_logger)
         {
             m_logger->logInfo("CLProgram: Two-level compilation check - cacheEnabled: " +
@@ -1136,10 +1131,7 @@ namespace gladius
     {
         ProfileFunction
 
-            std::cout
-          << "CLProgram::buildWithLib() called" << std::endl;
-
-        std::scoped_lock lock(m_compilationMutex);
+          std::scoped_lock lock(m_compilationMutex);
         applyAllKernelReplacements();
 
         auto const currentHash = computeHash();

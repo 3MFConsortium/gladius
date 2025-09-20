@@ -429,12 +429,6 @@ namespace gladius::io
             return;
         }
 
-        if (m_eventLogger)
-        {
-            m_eventLogger->addEvent({fmt::format("Creating model: {}", func->GetUniqueResourceID()),
-                                     events::Severity::Info});
-        }
-
         assembly.addModelIfNotExisting(func->GetModelResourceID());
 
         auto & idToNode = m_nodeMaps[func->GetModelResourceID()];
