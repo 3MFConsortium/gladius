@@ -37,3 +37,4 @@ gladius/src/api/GladiusLib_component/Examples/CSharp/obj/*
 build/
 gladius/vcpkg_installed/*
 gladius/.serena/cache/
+gladius/compile_commands.json
