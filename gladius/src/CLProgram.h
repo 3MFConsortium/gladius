@@ -513,7 +513,7 @@ namespace gladius
 
         // Binary caching support
         std::filesystem::path m_cacheDirectory;
-        bool m_cacheEnabled = true; // Cache enabled by default
+        bool m_cacheEnabled = false; // Cache disabled by default
 
         // Static vs Dynamic source tracking
         cl::Program::Sources m_staticSources;  // Static kernel files (.cl files from resources)
