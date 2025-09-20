@@ -4,6 +4,7 @@
 #include "gpgpu.h"
 #include <boost/functional/hash.hpp>
 #include <cmrc/cmrc.hpp>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -21,6 +22,91 @@ namespace gladius
 {
     namespace
     {
+        // --- Diagnostic helpers (OpenCL source/options dump) ---
+        inline bool isOclDumpEnabled()
+        {
+            // try
+            // {
+            //     if (auto const * env = std::getenv("GLADIUS_OCL_DUMP"))
+            //     {
+            //         std::string v(env);
+            //         return !v.empty() && v != "0" && v != "false" && v != "False";
+            //     }
+            // }
+            // catch (...) {}
+            return true;
+        }
+
+        inline std::filesystem::path ensureDumpDir(std::filesystem::path const & cacheDir)
+        {
+            std::filesystem::path dir = cacheDir.empty()
+                                          ? (std::filesystem::current_path() / "ocl_dumps")
+                                          : (cacheDir / "ocl_dumps");
+            try
+            {
+                if (!std::filesystem::exists(dir))
+                {
+                    std::filesystem::create_directories(dir);
+                }
+            }
+            catch (...)
+            {
+            }
+            return dir;
+        }
+
+        inline void dumpTextFile(std::filesystem::path const & dir,
+                                 std::string const & filename,
+                                 std::string const & content)
+        {
+            try
+            {
+                std::ofstream f(dir / filename, std::ios::out | std::ios::trunc);
+                if (!f.is_open())
+                    return;
+                f << content;
+            }
+            catch (...)
+            {
+            }
+        }
+
+        inline void dumpSources(std::filesystem::path const & dir,
+                                std::string const & filename,
+                                std::vector<std::string> const & sources)
+        {
+            try
+            {
+                std::ofstream f(dir / filename, std::ios::out | std::ios::trunc);
+                if (!f.is_open())
+                    return;
+                // Add small header for readability
+                f << "// OpenCL source dump (" << filename << ")\n";
+                for (size_t i = 0; i < sources.size(); ++i)
+                {
+                    f << "\n// ---- Source chunk " << i << " ----\n\n";
+                    f << sources[i];
+                    if (!sources[i].empty() && sources[i].back() != '\n')
+                        f << '\n';
+                }
+            }
+            catch (...)
+            {
+            }
+        }
+
+        inline void dumpBuildOptions(std::filesystem::path const & dir,
+                                     std::string const & filename,
+                                     std::string const & options,
+                                     std::string const & deviceSignature)
+        {
+            std::ostringstream ss;
+            ss << "# Build Options\n"
+               << (options.empty() ? std::string("<none>") : options) << "\n\n# Device\n"
+               << deviceSignature << "\n";
+            dumpTextFile(dir, filename, ss.str());
+        }
+
         // Print detailed program diagnostics for the current device
         std::string makeProgramDiagnostics(const cl::Program & program,
                                            const cl::Device & device,
@@ -513,6 +599,26 @@ namespace gladius
         auto dynamicHash = computeDynamicHash();
         auto currentHash = computeHash(); // Keep for fallback
 
+        // Dump prepared static/dynamic inputs (post-replacements) and options if requested
+        if (isOclDumpEnabled())
+        {
+            auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+            try
+            {
+                dumpSources(
+                  dumpDir, "static_" + std::to_string(staticHash) + ".cl", m_staticSources);
+                // dynamic will be dumped later when we build the combined dynamic vector
+                dumpBuildOptions(dumpDir,
+                                 "options_common_" + std::to_string(staticHash) + "_" +
+                                   std::to_string(dynamicHash) + ".txt",
+                                 generateDefineSymbol(),
+                                 getDeviceSignature());
+            }
+            catch (...)
+            {
+            }
+        }
+
         // Check if we can load complete linked program from cache first
         if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
             !m_dynamicSources.empty() && loadLinkedProgramFromCache(staticHash, dynamicHash))
@@ -666,6 +772,25 @@ namespace gladius
                 dynamicSourcesCombined.insert(
                   dynamicSourcesCombined.end(), m_dynamicSources.begin(), m_dynamicSources.end());
 
+                // Dump dynamic phase inputs if requested
+                if (isOclDumpEnabled())
+                {
+                    auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                    try
+                    {
+                        dumpSources(dumpDir,
+                                    "dynamic_" + std::to_string(dynamicHash) + ".cl",
+                                    dynamicSourcesCombined);
+                        dumpBuildOptions(dumpDir,
+                                         "options_dynamic_" + std::to_string(dynamicHash) + ".txt",
+                                         generateDefineSymbol(),
+                                         getDeviceSignature());
+                    }
+                    catch (...)
+                    {
+                    }
+                }
+
                 cl::Program dynamicProgram(m_ComputeContext->GetContext(), dynamicSourcesCombined);
                 const auto arguments = generateDefineSymbol();
                 dynamicProgram.compile(arguments.c_str());
@@ -732,6 +857,24 @@ namespace gladius
         m_callBackUserData.callBack = &callBack;
         m_callBackUserData.sender = this;
         m_callBackUserData.program = m_program.get();
+        // Dump single-level inputs if requested
+        if (isOclDumpEnabled())
+        {
+            auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+            try
+            {
+                dumpSources(
+                  dumpDir, "singlelevel_" + std::to_string(currentHash) + ".cl", m_sources);
+                dumpBuildOptions(dumpDir,
+                                 "options_singlelevel_" + std::to_string(currentHash) + ".txt",
+                                 arguments,
+                                 getDeviceSignature());
+            }
+            catch (...)
+            {
+            }
+        }
+
         try
         {
             // write to file for debugging
@@ -892,7 +1035,7 @@ namespace gladius
         m_sources.clear();
 
         loadSourceFromFile(filenames);
-        addDynamicSource(dynamicSource);
+        addSource(dynamicSource);
         compile(callBack);
     }
 
