@@ -54,8 +54,7 @@ namespace gladius
 
         bool m_enableVdb = false;
 
-        FileNames m_sourceFilesProgram;
-        FileNames m_sourceFilesLib;
+        FileNames m_sourceFiles;
 
         events::SharedLogger m_logger{};
     };

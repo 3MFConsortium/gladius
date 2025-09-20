@@ -1,6 +1,6 @@
 #include "SlicerProgram.h"
-#include "gpgpu.h"
 #include "ProgramBase.h"
+#include "gpgpu.h"
 
 #include <algorithm>
 #include <utility>
@@ -33,33 +33,22 @@ namespace gladius
                                           const SharedResources & resources)
         : ProgramBase(context, resources)
     {
-        m_sourceFilesProgram = {"arguments.h",
-                                "types.h",
-                                "sdf.h",
-                                "sampler.h",
-                                "rendering.h",
-                                "sdf_generator.h",
-                                "CNanoVDB.h",
-                                "sdf.cl",
-                                "rendering.cl",
-                                "distanceUpDown.cl",
-                                "sdf_generator.cl"};
-
-        m_sourceFilesLib = {"arguments.h",
-                            "types.h",
-                            "CNanoVDB.h",
-                            "sdf.h",
-                            "sdf_generator.h",
-                            "sampler.h",
-                            "compensator.cl",
-                            "distanceUpDown.cl"};
-
+        m_sourceFiles = {"arguments.h",
+                         "types.h",
+                         "sdf.h",
+                         "sampler.h",
+                         "rendering.h",
+                         "sdf_generator.h",
+                         "CNanoVDB.h",
+                         "sdf.cl",
+                         "rendering.cl",
+                         "distanceUpDown.cl",
+                         "sdf_generator.cl"};
     }
-
 
     void SlicerProgram::readBuffer() const
     {
-        
+
         m_resoures->getContourVertexPos().read();
     }
 

@@ -17,25 +17,16 @@ namespace gladius
         {
             m_programFront->setLogger(m_logger);
         }
-        m_sourceFilesProgram = {"arguments.h",
-                                "types.h",
-                                "sdf.h",
-                                "sampler.h",
-                                "rendering.h",
-                                "sdf_generator.h",
-                                "CNanoVDB.h",
-                                "sdf.cl",
-                                "rendering.cl",
-                                "sdf_generator.cl"};
-
-        m_sourceFilesLib = {
-          "arguments.h",
-          "types.h",
-          "CNanoVDB.h",
-          "sdf.h",
-          "sdf_generator.h",
-          "sampler.h",
-        };
+        m_sourceFiles = {"arguments.h",
+                         "types.h",
+                         "sdf.h",
+                         "sampler.h",
+                         "rendering.h",
+                         "sdf_generator.h",
+                         "CNanoVDB.h",
+                         "sdf.cl",
+                         "rendering.cl",
+                         "sdf_generator.cl"};
     }
 
     void ProgramBase::swapProgramsIfNeeded()
@@ -100,13 +91,13 @@ namespace gladius
                 swapProgramsIfNeeded();
 
                 m_programFront->buildFromSourceAndLinkWithLib(
-                  m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
+                  m_sourceFiles, m_modelKernel, m_buildFinishedCallBack);
                 m_programSwapRequired = true;
             }
             else
             {
                 m_programFront->buildFromSourceAndLinkWithLibNonBlocking(
-                  m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
+                  m_sourceFiles, m_modelKernel, m_buildFinishedCallBack);
             }
         }
         catch (OpenCLError & e)
@@ -142,7 +133,7 @@ namespace gladius
 
         m_programFront->clearSources();
         m_programFront->buildFromSourceAndLinkWithLib(
-          m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
+          m_sourceFiles, m_modelKernel, m_buildFinishedCallBack);
         m_programSwapRequired = true;
         swapProgramsIfNeeded();
         m_isFirstBuild = false;
@@ -152,7 +143,7 @@ namespace gladius
     {
         ProfileFunction m_programFront->clearSources();
 
-        m_programFront->loadAndCompileLib(m_sourceFilesLib);
+        m_programFront->loadAndCompileLib(m_sourceFiles);
     }
 
     void ProgramBase::setOnProgramSwapCallBack(const std::function<void()> & callBack)

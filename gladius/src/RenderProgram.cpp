@@ -13,17 +13,15 @@ namespace gladius
     RenderProgram::RenderProgram(SharedComputeContext context, const SharedResources & resources)
         : ProgramBase(context, resources)
     {
-        m_sourceFilesProgram = {"arguments.h",
-                                "types.h",
-                                "sdf.h",
-                                "sampler.h",
-                                "rendering.h",
-                                "CNanoVDB.h",
-                                "sdf.cl",
-                                "rendering.cl",
-                                "renderer.cl"};
-
-        m_sourceFilesLib = {"arguments.h", "types.h", "CNanoVDB.h", "sdf.h", "sampler.h"};
+        m_sourceFiles = {"arguments.h",
+                         "types.h",
+                         "sdf.h",
+                         "sampler.h",
+                         "rendering.h",
+                         "CNanoVDB.h",
+                         "sdf.cl",
+                         "rendering.cl",
+                         "renderer.cl"};
     }
 
     void RenderProgram::renderScene(const Primitives & lines,

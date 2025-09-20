@@ -336,10 +336,22 @@ namespace gladius
         {
             return;
         }
-        for (auto & source : m_sources)
+
+        // Apply replacements to the actual source vectors that will be used
+        // for the two-level compilation and hashing.
+        for (auto & source : m_staticSources)
         {
             applyKernelReplacements(source, *m_kernelReplacements);
         }
+        for (auto & source : m_dynamicSources)
+        {
+            applyKernelReplacements(source, *m_kernelReplacements);
+        }
+
+        // Rebuild the combined sources for single-level fallback and other code paths
+        m_sources.clear();
+        m_sources.insert(m_sources.end(), m_staticSources.begin(), m_staticSources.end());
+        m_sources.insert(m_sources.end(), m_dynamicSources.begin(), m_dynamicSources.end());
     }
 
     size_t CLProgram::computeHash() const
@@ -352,6 +364,30 @@ namespace gladius
         for (const auto & source : m_sources)
         {
             boost::hash_combine(hash, std::hash<std::string>{}(source));
+        }
+
+        // Include the dynamic interface header content in the hash as it is
+        // compiled together with dynamic sources during linking
+        try
+        {
+            auto const fs = cmrc::gladius_resources::get_filesystem();
+            auto const headerPath = std::string("src/kernel/dynamic_interface.h");
+            if (fs.exists(headerPath) && fs.is_file(headerPath))
+            {
+                auto file = fs.open(headerPath);
+                std::string ifaceSrc(file.begin(), file.end());
+                if (m_kernelReplacements)
+                {
+                    auto tmp = ifaceSrc; // applyKernelReplacements works in-place; keep ifaceSrc
+                    applyKernelReplacements(tmp, *m_kernelReplacements);
+                    ifaceSrc.swap(tmp);
+                }
+                boost::hash_combine(hash, std::hash<std::string>{}(ifaceSrc));
+            }
+        }
+        catch (...)
+        {
+            // best effort; if we cannot load the header, skip adding it
         }
 
         boost::hash_combine(
@@ -386,6 +422,30 @@ namespace gladius
 
         boost::hash_combine(
           hash, std::hash<std::string>{}(m_ComputeContext->GetDevice().getInfo<CL_DEVICE_NAME>()));
+
+        // Also include the dynamic interface header in the static hash to tie the
+        // cached static library to the interface/ABI used by the dynamic part.
+        try
+        {
+            auto const fs = cmrc::gladius_resources::get_filesystem();
+            auto const headerPath = std::string("src/kernel/dynamic_interface.h");
+            if (fs.exists(headerPath) && fs.is_file(headerPath))
+            {
+                auto file = fs.open(headerPath);
+                std::string ifaceSrc(file.begin(), file.end());
+                if (m_kernelReplacements)
+                {
+                    auto tmp = ifaceSrc;
+                    applyKernelReplacements(tmp, *m_kernelReplacements);
+                    ifaceSrc.swap(tmp);
+                }
+                boost::hash_combine(hash, std::hash<std::string>{}(ifaceSrc));
+            }
+        }
+        catch (...)
+        {
+            // best effort; if we cannot load the header, skip adding it
+        }
 
         // DEBUG: Log what's included in static hash (now uses unified define symbols)
         if (m_logger)
@@ -633,6 +693,11 @@ namespace gladius
                         m_logger->logError(std::string("Failed to load dynamic interface: ") +
                                            e.what());
                     }
+                }
+                // Apply kernel replacements to the interface header for consistency
+                if (m_kernelReplacements)
+                {
+                    applyKernelReplacements(dynamicInterfaceSource, *m_kernelReplacements);
                 }
                 dynamicSourcesCombined.emplace_back(dynamicInterfaceSource);
                 dynamicSourcesCombined.insert(
