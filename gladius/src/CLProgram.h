@@ -197,6 +197,74 @@ namespace gladius
                             {
                                 // ignore
                             }
+
+                            // Additional build diagnostics
+                            try
+                            {
+                                cl_program_binary_type binType{};
+                                m_program->getBuildInfo(device, CL_PROGRAM_BINARY_TYPE, &binType);
+                                const char * typeStr =
+                                  (binType == CL_PROGRAM_BINARY_TYPE_NONE) ? "NONE"
+                                  : (binType == CL_PROGRAM_BINARY_TYPE_COMPILED_OBJECT)
+                                    ? "COMPILED_OBJECT"
+                                  : (binType == CL_PROGRAM_BINARY_TYPE_LIBRARY)    ? "LIBRARY"
+                                  : (binType == CL_PROGRAM_BINARY_TYPE_EXECUTABLE) ? "EXECUTABLE"
+                                                                                   : "UNKNOWN";
+                                if (m_logger)
+                                {
+                                    m_logger->logError(std::string("  Binary type : ") + typeStr);
+                                }
+                                else
+                                {
+                                    std::cerr << "  Binary type : " << typeStr << "\n";
+                                }
+                            }
+                            catch (...)
+                            {
+                            }
+
+                            try
+                            {
+                                auto const status =
+                                  m_program->getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+                                std::string statusStr = (status == CL_BUILD_NONE)      ? "NONE"
+                                                        : (status == CL_BUILD_ERROR)   ? "ERROR"
+                                                        : (status == CL_BUILD_SUCCESS) ? "SUCCESS"
+                                                        : (status == CL_BUILD_IN_PROGRESS)
+                                                          ? "IN_PROGRESS"
+                                                          : "UNKNOWN";
+                                if (m_logger)
+                                {
+                                    m_logger->logError(std::string("  Build status: ") + statusStr);
+                                }
+                                else
+                                {
+                                    std::cerr << "  Build status: " << statusStr << "\n";
+                                }
+                            }
+                            catch (...)
+                            {
+                            }
+
+                            try
+                            {
+                                auto const log =
+                                  m_program->getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+                                if (!log.empty())
+                                {
+                                    if (m_logger)
+                                    {
+                                        m_logger->logError(std::string("  Build log  :\n") + log);
+                                    }
+                                    else
+                                    {
+                                        std::cerr << "  Build log  :\n" << log << "\n";
+                                    }
+                                }
+                            }
+                            catch (...)
+                            {
+                            }
                         }
                     }
                     catch (...)

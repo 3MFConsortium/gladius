@@ -107,6 +107,26 @@ namespace gladius
             dumpTextFile(dir, filename, ss.str());
         }
 
+        // Dump the OpenCL build log to a file if available
+        inline void dumpBuildLog(std::filesystem::path const & dir,
+                                 std::string const & filename,
+                                 cl::Program const & program,
+                                 cl::Device const & device)
+        {
+            try
+            {
+                std::string const log = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+                if (!log.empty())
+                {
+                    dumpTextFile(dir, filename, log);
+                }
+            }
+            catch (...)
+            {
+                // Ignore logging failures
+            }
+        }
+
         // Print detailed program diagnostics for the current device
         std::string makeProgramDiagnostics(const cl::Program & program,
                                            const cl::Device & device,
@@ -219,7 +239,7 @@ namespace gladius
                     else
                     {
                         std::cerr << "OpenCL: Build failed\n";
-                        if (!buildLog.empty())
+                        // --- Diagnostic helpers (OpenCL source/options + build logs dump) ---
                         {
                             std::cerr << "Build log:\n" << buildLog << "\n";
                         }
@@ -240,20 +260,30 @@ namespace gladius
         try
         {
             auto const status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+            std::string const buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+
+            // Always show build log if it contains warnings or errors
+            if (!buildLog.empty())
+            {
+                std::cerr << "OPENCL_BUILD_LOG: " << buildLog << std::endl;
+            }
+
             if (status != CL_BUILD_SUCCESS)
             {
-                std::string const buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
-                std::string errorMsg = "OpenCL program build failed";
+                std::string errorMsg =
+                  "OpenCL program build failed (status: " + std::to_string(status) + ")";
                 if (!buildLog.empty())
                 {
                     errorMsg += ": " + buildLog;
                 }
 
+                // Always output detailed error to stderr for debugging
+                std::cerr << "OPENCL_BUILD_ERROR: " << errorMsg << std::endl;
+
                 if (logger)
                 {
                     logger->logError(errorMsg);
                 }
-                // Suppress direct stderr output when logger unavailable (MCP stdio cleanliness)
 
                 throw std::runtime_error(errorMsg);
             }
@@ -413,6 +443,21 @@ namespace gladius
             args << " -D " << symbol;
         }
         args << m_additionalDefine;
+
+        // Allow users to inject extra build flags for debugging (e.g., -cl-nv-verbose, -save-temps)
+        try
+        {
+            if (auto const * extra = std::getenv("GLADIUS_OCL_BUILD_FLAGS"))
+            {
+                if (extra && *extra)
+                {
+                    args << " " << extra;
+                }
+            }
+        }
+        catch (...)
+        {
+        }
         return args.str();
     }
 
@@ -732,12 +777,26 @@ namespace gladius
                         }
                     }
 
-                    staticLibrary =
-                      cl::Program(m_ComputeContext->GetContext(), staticLibrarySources);
-                    // CRITICAL FIX: Use FULL symbols for compilation, not just static ones
-                    // The cache key separation is handled in computeStaticHash(), not here
+                    // Compile objects for the static library
+                    cl::Program staticObjects(m_ComputeContext->GetContext(), staticLibrarySources);
                     const auto arguments = generateDefineSymbol();
-                    staticLibrary.compile(arguments.c_str());
+                    staticObjects.compile(arguments.c_str());
+
+                    // Link into an OpenCL static library
+                    cl::Program lib =
+                      cl::linkProgram({staticObjects}, "-create-library -enable-link-options");
+
+                    if (isOclDumpEnabled())
+                    {
+                        auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                        dumpBuildLog(dumpDir,
+                                     "buildlog_static_" + std::to_string(staticHash) + ".txt",
+                                     lib,
+                                     m_ComputeContext->GetDevice());
+                    }
+
+                    // Use the library for subsequent final link
+                    staticLibrary = lib;
 
                     // Save compiled static library to cache
                     saveStaticLibraryToCache(staticHash, staticLibrary);
@@ -821,12 +880,104 @@ namespace gladius
                 cl::Program dynamicProgram(m_ComputeContext->GetContext(), dynamicSourcesCombined);
                 const auto arguments = generateDefineSymbol();
                 dynamicProgram.compile(arguments.c_str());
+                if (isOclDumpEnabled())
+                {
+                    auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                    dumpBuildLog(dumpDir,
+                                 "buildlog_dynamic_" + std::to_string(dynamicHash) + ".txt",
+                                 dynamicProgram,
+                                 m_ComputeContext->GetDevice());
+                }
                 validateBuildStatus(dynamicProgram, m_ComputeContext->GetDevice(), m_logger);
 
                 // Link static library with dynamic program
                 std::vector<cl::Program> programs = {staticLibrary, dynamicProgram};
-                m_program = std::make_unique<cl::Program>(cl::linkProgram(programs, ""));
+                const auto linkOptions = generateDefineSymbol();
+                m_program =
+                  std::make_unique<cl::Program>(cl::linkProgram(programs, linkOptions.c_str()));
+
+                // Some drivers require an explicit build() after link() to materialize kernels
+                try
+                {
+                    m_program->build({m_ComputeContext->GetDevice()});
+                }
+                catch (const std::exception &)
+                {
+                    // build() can be a no-op after link() on some drivers; continue to validate
+                }
+
+                if (isOclDumpEnabled())
+                {
+                    auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                    dumpBuildLog(dumpDir,
+                                 "buildlog_linked_" + std::to_string(dynamicHash) + "_" +
+                                   std::to_string(staticHash) + ".txt",
+                                 *m_program,
+                                 m_ComputeContext->GetDevice());
+                }
+
+                // Validate and log detailed diagnostics of the linked program
                 validateBuildStatus(*m_program, m_ComputeContext->GetDevice(), m_logger);
+                if (m_logger)
+                {
+                    m_logger->logInfo(makeProgramDiagnostics(*m_program,
+                                                             m_ComputeContext->GetDevice(),
+                                                             generateDefineSymbol(),
+                                                             "link(executable)"));
+                }
+
+                // Guard: some drivers may produce an empty executable when linking only a library
+                // with a header-only dynamic part Be strict here: require an EXECUTABLE binary with
+                // at least one kernel, otherwise force fallback.
+                try
+                {
+                    // Check for kernels
+                    auto const numKernels = m_program->getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    // Check kernel names (can be empty on some drivers when no kernels are present)
+                    std::string kernelNames;
+                    try
+                    {
+                        kernelNames = m_program->getInfo<CL_PROGRAM_KERNEL_NAMES>();
+                    }
+                    catch (...)
+                    {
+                        // ignore, keep empty
+                    }
+                    // Check binary type
+                    cl_program_binary_type binType{};
+                    try
+                    {
+                        m_program->getBuildInfo(
+                          m_ComputeContext->GetDevice(), CL_PROGRAM_BINARY_TYPE, &binType);
+                    }
+                    catch (...)
+                    {
+                        binType = CL_PROGRAM_BINARY_TYPE_NONE;
+                    }
+
+                    bool const hasKernels = (numKernels > 0) || (!kernelNames.empty());
+                    bool const isExecutable = (binType == CL_PROGRAM_BINARY_TYPE_EXECUTABLE);
+                    if (!hasKernels || !isExecutable)
+                    {
+                        if (m_logger)
+                        {
+                            m_logger->logWarning(
+                              std::string("CLProgram: Linked program validation failed (kernels=") +
+                              std::to_string(numKernels) +
+                              ", executable=" + (isExecutable ? "true" : "false") +
+                              "). Falling back to single-level build.");
+                        }
+                        // Force fallback by throwing to the outer catch which already routes to
+                        // single_level_compile
+                        throw std::runtime_error(
+                          "Linked program invalid: no kernels or non-executable binary");
+                    }
+                }
+                catch (const std::exception &)
+                {
+                    // Re-throw to be handled by the outer catch which falls back to single-level
+                    throw;
+                }
 
                 if (m_logger)
                 {
@@ -834,8 +985,31 @@ namespace gladius
                       "CLProgram: Successfully linked static library with dynamic program");
                 }
 
-                // Save linked program to cache
-                saveLinkedProgramToCache(staticHash, dynamicHash);
+                // Extra safety: ensure the program is executable and has kernels before caching
+                try
+                {
+                    cl_program_binary_type binType{};
+                    m_program->getBuildInfo(
+                      m_ComputeContext->GetDevice(), CL_PROGRAM_BINARY_TYPE, &binType);
+                    auto const numKernels = m_program->getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    if (binType != CL_PROGRAM_BINARY_TYPE_EXECUTABLE || numKernels == 0)
+                    {
+                        if (m_logger)
+                        {
+                            m_logger->logWarning("CLProgram: Not caching linked program (invalid: "
+                                                 "no kernels or non-executable)");
+                        }
+                    }
+                    else
+                    {
+                        // Save linked program to cache (validated)
+                        saveLinkedProgramToCache(staticHash, dynamicHash);
+                    }
+                }
+                catch (...)
+                {
+                    // On diagnostics failure, avoid caching to be safe
+                }
                 if (m_logger)
                 {
                     m_logger->logInfo("CLProgram: Saved linked program to cache");
@@ -857,11 +1031,14 @@ namespace gladius
             }
             catch (const std::exception & e)
             {
+                std::string errorDetails =
+                  "CLProgram: Failed to compile/link dynamic program: " + std::string(e.what());
                 if (m_logger)
                 {
-                    m_logger->logError("CLProgram: Failed to compile/link dynamic program: " +
-                                       std::string(e.what()));
+                    m_logger->logError(errorDetails);
                 }
+                // Also output to stderr for debugging visibility
+                std::cerr << "OPENCL_ERROR: " << errorDetails << std::endl;
                 // Fall back to single-level compilation
                 goto single_level_compile;
             }
@@ -905,8 +1082,17 @@ namespace gladius
         try
         {
             // write to file for debugging
-            // dumpSource("debug.cl");
+            dumpSource("debug.cl");
             m_program->build({m_ComputeContext->GetDevice()}, arguments.c_str(), nullptr, nullptr);
+            if (isOclDumpEnabled())
+            {
+                auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                dumpBuildLog(dumpDir,
+                             std::string("buildlog_singlelevel_") + std::to_string(currentHash) +
+                               ".txt",
+                             *m_program,
+                             m_ComputeContext->GetDevice());
+            }
             m_hashLastSuccessfulCompilation = currentHash;
 
             // Save to binary cache if compilation succeeded
@@ -1497,6 +1683,28 @@ namespace gladius
                 {
                     m_logger->logInfo(
                       "CLProgram: Successfully loaded and built linked program from cache");
+                    // Emit detailed diagnostics for the linked program
+                    m_logger->logInfo(makeProgramDiagnostics(*m_program,
+                                                             m_ComputeContext->GetDevice(),
+                                                             generateDefineSymbol(),
+                                                             "load(linked_cache)"));
+                }
+                // Reject cached binaries that contain zero kernels
+                try
+                {
+                    auto const numKernels = m_program->getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    if (numKernels == 0)
+                    {
+                        if (m_logger)
+                        {
+                            m_logger->logWarning("CLProgram: Cached linked program has zero "
+                                                 "kernels, recompile required");
+                        }
+                        return false;
+                    }
+                }
+                catch (...)
+                {
                 }
                 return true;
             }
