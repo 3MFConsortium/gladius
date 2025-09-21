@@ -45,12 +45,7 @@
     "minizip",
     "pugixml",
     {
-      "name": "lib3mf",
-      "platform": "windows"
-    },
-    {
-      "name": "lib3mflinux",
-      "platform": "!windows"
+      "name": "lib3mf"
     },
     "pkgconf",
     "minizip",
