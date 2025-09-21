@@ -1750,15 +1750,36 @@ namespace gladius::nodes
 
             auto imageResourceId = getImageResourceId();
 
-            auto key = ResourceKey{imageResourceId};
-
             try
             {
                 auto & resMan = generatorContext.resourceManager;
-                auto & res = resMan.getResource(key);
-                res.setInUse(true);
-                ImageStackResource * imageStack = dynamic_cast<ImageStackResource *>(&res);
-                VdbResource * vdbResource = dynamic_cast<VdbResource *>(&res);
+
+                // Resolve resource using typed keys (ResourceKey now includes type)
+                // Try ImageStack first
+                IResource * resPtr =
+                  resMan.getResourcePtr(ResourceKey{imageResourceId, ResourceType::ImageStack});
+                bool isImageStack = resPtr != nullptr;
+                bool isVdb = false;
+                if (!resPtr)
+                {
+                    // Fallback: VDB resource
+                    resPtr = resMan.getResourcePtr(ResourceKey{imageResourceId, ResourceType::Vdb});
+                    isVdb = (resPtr != nullptr);
+                }
+
+                if (!resPtr)
+                {
+                    throw std::runtime_error(
+                      fmt::format("The resource referenced by ResourceId of the ImageSampler node "
+                                  "{} was not found as ImageStack or Vdb",
+                                  getDisplayName()));
+                }
+
+                // Mark in use and dispatch based on actual type
+                resPtr->setInUse(true);
+                ImageStackResource * imageStack =
+                  isImageStack ? dynamic_cast<ImageStackResource *>(resPtr) : nullptr;
+                VdbResource * vdbResource = isVdb ? dynamic_cast<VdbResource *>(resPtr) : nullptr;
 
                 if (imageStack)
                 {
@@ -1791,8 +1812,9 @@ namespace gladius::nodes
                                   getDisplayName()));
                 }
 
-                m_parameter.at(FieldNames::Start).setValue(res.getStartIndex());
-                m_parameter.at(FieldNames::End).setValue(res.getEndIndex());
+                // Also set generic start/end from base resource
+                m_parameter.at(FieldNames::Start).setValue(resPtr->getStartIndex());
+                m_parameter.at(FieldNames::End).setValue(resPtr->getEndIndex());
             }
             catch (...)
             {
