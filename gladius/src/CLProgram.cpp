@@ -25,18 +25,7 @@ namespace gladius
         // --- Diagnostic helpers (OpenCL source/options dump) ---
         inline bool isOclDumpEnabled()
         {
-            try
-            {
-                if (auto const * env = std::getenv("GLADIUS_OCL_DUMP"))
-                {
-                    std::string v(env);
-                    return !v.empty() && v != "0" && v != "false" && v != "False";
-                }
-            }
-            catch (...)
-            {
-            }
-            return true;
+            return false;
         }
 
         inline std::filesystem::path ensureDumpDir(std::filesystem::path const & cacheDir)
@@ -446,20 +435,6 @@ namespace gladius
         }
         args << m_additionalDefine;
 
-        // Allow users to inject extra build flags for debugging (e.g., -cl-nv-verbose, -save-temps)
-        try
-        {
-            if (auto const * extra = std::getenv("GLADIUS_OCL_BUILD_FLAGS"))
-            {
-                if (extra && *extra)
-                {
-                    args << " " << extra;
-                }
-            }
-        }
-        catch (...)
-        {
-        }
         return args.str();
     }
 
