@@ -1,6 +1,8 @@
 #include "Application.h"
+#if defined(GLADIUS_ENABLE_MCP)
 #include "mcp/ApplicationMCPAdapter.h"
 #include "mcp/MCPServer.h"
+#endif
 #include "ui/MainWindow.h"
 
 #include <filesystem>
@@ -13,7 +15,9 @@ namespace gladius
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
         , m_mcpServer(nullptr)
+#if defined(GLADIUS_ENABLE_MCP)
         , m_mcpAdapter(nullptr)
+#endif
     {
         m_mainWindow.setConfigManager(m_configManager);
         if (!m_headlessMode)
@@ -28,7 +32,9 @@ namespace gladius
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
         , m_mcpServer(nullptr)
+#if defined(GLADIUS_ENABLE_MCP)
         , m_mcpAdapter(nullptr)
+#endif
     {
         m_headlessMode = headlessMode;
         m_mainWindow.setConfigManager(m_configManager);
@@ -48,7 +54,9 @@ namespace gladius
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
         , m_mcpServer(nullptr)
+#if defined(GLADIUS_ENABLE_MCP)
         , m_mcpAdapter(nullptr)
+#endif
     {
         m_mainWindow.setConfigManager(m_configManager);
         m_mainWindow.setup();
@@ -80,7 +88,9 @@ namespace gladius
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
         , m_mcpServer(nullptr)
+#if defined(GLADIUS_ENABLE_MCP)
         , m_mcpAdapter(nullptr)
+#endif
     {
         m_mainWindow.setConfigManager(m_configManager);
         m_mainWindow.setup();
@@ -116,6 +126,7 @@ namespace gladius
         }
     }
 
+#if defined(GLADIUS_ENABLE_MCP)
     bool Application::enableMCPServer(int port)
     {
         if (m_mcpServer && m_mcpServer->isRunning())
@@ -203,6 +214,7 @@ namespace gladius
     {
         return m_mcpServer && m_mcpServer->isRunning();
     }
+#endif // GLADIUS_ENABLE_MCP
 
     events::SharedLogger Application::getGlobalLogger() const
     {

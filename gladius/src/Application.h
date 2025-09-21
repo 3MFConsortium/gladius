@@ -14,12 +14,16 @@ namespace gladius
 
 namespace gladius::mcp
 {
+#if defined(GLADIUS_ENABLE_MCP)
     class MCPServer;
+#endif
 }
 
 namespace gladius
 {
+#if defined(GLADIUS_ENABLE_MCP)
     class ApplicationMCPAdapter; // Forward declaration
+#endif
 }
 
 namespace gladius
@@ -59,13 +63,17 @@ namespace gladius
          * @param port Port to listen on (default: 8080)
          * @return true if server started successfully
          */
+#if defined(GLADIUS_ENABLE_MCP)
         bool enableMCPServer(int port = 8080);
+#endif
 
         /**
          * @brief Enable MCP server with stdio transport (for VS Code)
          * @return true if server started successfully
          */
+#if defined(GLADIUS_ENABLE_MCP)
         bool enableMCPServerStdio();
+#endif
 
         /**
          * @brief Enable headless mode (no GUI initialization)
@@ -81,13 +89,17 @@ namespace gladius
         /**
          * @brief Disable MCP server
          */
+#if defined(GLADIUS_ENABLE_MCP)
         void disableMCPServer();
+#endif
 
         /**
          * @brief Check if MCP server is enabled and running
          * @return true if MCP server is running
          */
+#if defined(GLADIUS_ENABLE_MCP)
         bool isMCPServerEnabled() const;
+#endif
 
         /**
          * @brief Get the global logger instance
@@ -142,8 +154,11 @@ namespace gladius
         ConfigManager m_configManager;
         ui::MainWindow m_mainWindow;
         events::SharedLogger m_globalLogger;
+
+#if defined(GLADIUS_ENABLE_MCP)
         std::unique_ptr<mcp::MCPServer> m_mcpServer;
         std::unique_ptr<ApplicationMCPAdapter> m_mcpAdapter;
+#endif
         bool m_headlessMode{false};
         std::atomic<bool> m_uiRunning{false};
         std::thread m_uiThread;

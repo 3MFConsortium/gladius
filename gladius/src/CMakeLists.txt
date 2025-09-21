@@ -1,11 +1,11 @@
 set(BINARY ${CMAKE_PROJECT_NAME})
 file(GLOB SOURCES LIST_DIRECTORIES true *.h *.cpp)
 
-# Add MCP sources
+# MCP sources are intentionally NOT part of the core targets (gladius, gladius_lib)
+# They will be added to the dedicated gladiusmcp target below
 file(GLOB MCP_SOURCES LIST_DIRECTORIES true mcp/*.h mcp/*.cpp)
 # Add MCP tools sources
 file(GLOB MCP_TOOLS_SOURCES LIST_DIRECTORIES true mcp/tools/*.h mcp/tools/*.cpp)
-set(SOURCES ${SOURCES} ${MCP_SOURCES} ${MCP_TOOLS_SOURCES})
 
 
 
@@ -41,7 +41,8 @@ set (INCLUDE_PATHS
 target_include_directories(${BINARY}_lib PUBLIC ${INCLUDE_PATHS})
 target_include_directories(${BINARY} PUBLIC ${INCLUDE_PATHS})
 
-set(DEPENDENCIES
+# Core dependencies (shared by gladius and gladiusmcp)
+set(DEPENDENCIES_CORE
     OpenCL::OpenCL
     ${X11_LIBRARIES}
     ${OPENGL_LIBRARIES}
@@ -64,23 +65,27 @@ set(DEPENDENCIES
     unofficial::imgui-node-editor::imgui-node-editor
     PkgConfig::Clipper2
     muparser::muparser
-    httplib::httplib
-    nlohmann_json::nlohmann_json
     PkgConfig::libcoro
 )
 
+# MCP-only dependencies
+set(DEPENDENCIES_MCP
+    httplib::httplib
+    nlohmann_json::nlohmann_json
+)
+
 if (WIN32)
-    set(DEPENDENCIES ${DEPENDENCIES} blosc_shared)
+    set(DEPENDENCIES_CORE ${DEPENDENCIES_CORE} blosc_shared)
 else()
-    set(DEPENDENCIES ${DEPENDENCIES} blosc_static)
+    set(DEPENDENCIES_CORE ${DEPENDENCIES_CORE} blosc_static)
 endif()
 
 if (ENABLE_TRACY)
-    set(DEPENDENCIES ${DEPENDENCIES} Tracy::TracyClient)
+    set(DEPENDENCIES_CORE ${DEPENDENCIES_CORE} Tracy::TracyClient)
 endif()
 
 
-target_link_libraries(${BINARY}_lib PUBLIC ${DEPENDENCIES})
+target_link_libraries(${BINARY}_lib PUBLIC ${DEPENDENCIES_CORE})
 target_link_libraries(${BINARY} PUBLIC ${BINARY}_lib)
 
 # Enable AVX2 SIMD instructions for Phase 3 optimization
@@ -90,3 +95,15 @@ if (NOT WIN32)
 endif()
 
 install(TARGETS ${BINARY} RUNTIME DESTINATION ${INSTALL_PREFIX}/)
+
+#
+# gladiusmcp: gladius with MCP server support
+#
+add_executable(gladiusmcp ${SOURCES} ${MCP_SOURCES} ${MCP_TOOLS_SOURCES})
+target_include_directories(gladiusmcp PUBLIC ${INCLUDE_PATHS})
+target_compile_definitions(gladiusmcp PRIVATE GLADIUS_ENABLE_MCP)
+target_link_libraries(gladiusmcp PUBLIC ${DEPENDENCIES_CORE} ${DEPENDENCIES_MCP})
+if (NOT WIN32)
+    target_compile_options(gladiusmcp PRIVATE -mavx2 -mfma)
+endif()
+install(TARGETS gladiusmcp RUNTIME DESTINATION ${INSTALL_PREFIX}/)

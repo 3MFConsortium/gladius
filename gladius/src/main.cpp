@@ -12,9 +12,11 @@ void printUsage()
 {
     std::cout << "Usage: gladius [options] [file]\n";
     std::cout << "Options:\n";
+#if defined(GLADIUS_ENABLE_MCP)
     std::cout
       << "  --mcp-server [port]  Enable MCP server with HTTP transport (default port: 8080)\n";
     std::cout << "  --mcp-stdio          Enable MCP server with stdio transport (for VS Code)\n";
+#endif
     std::cout << "  --headless          Run without starting the UI (headless mode)\n";
     std::cout
       << "  --debug-opencl      Enable OpenCL debug output (kernel validation, buffer checks)\n";
@@ -22,10 +24,12 @@ void printUsage()
     std::cout << "Examples:\n";
     std::cout << "  gladius                           # Start with welcome screen\n";
     std::cout << "  gladius model.3mf                # Open specific file\n";
+#if defined(GLADIUS_ENABLE_MCP)
     std::cout << "  gladius --mcp-server              # Start with MCP server on port 8080\n";
     std::cout << "  gladius --mcp-server 8081         # Start with MCP server on port 8081\n";
     std::cout
       << "  gladius --mcp-stdio               # Start with MCP server using stdio (VS Code mode)\n";
+#endif
     std::cout << "  gladius --test-beam-bvh           # Run beam BVH tests\n";
 }
 
@@ -50,6 +54,7 @@ int main(int argc, char ** argv)
 
         if (arg == "--mcp-server")
         {
+#if defined(GLADIUS_ENABLE_MCP)
             enableMCP = true;
             mcpStdio = false;
             // Check if next argument is a port number
@@ -70,11 +75,20 @@ int main(int argc, char ** argv)
                     return 1;
                 }
             }
+#else
+            std::cerr << "This build does not include MCP support. Use gladiusmcp.\n";
+            return 1;
+#endif
         }
         else if (arg == "--mcp-stdio")
         {
+#if defined(GLADIUS_ENABLE_MCP)
             enableMCP = true;
             mcpStdio = true;
+#else
+            std::cerr << "This build does not include MCP support. Use gladiusmcp.\n";
+            return 1;
+#endif
         }
         else if (arg == "--headless")
         {
@@ -110,6 +124,7 @@ int main(int argc, char ** argv)
     // Enable MCP server if requested (before starting main loop)
     if (enableMCP)
     {
+#if defined(GLADIUS_ENABLE_MCP)
         bool success;
         if (mcpStdio)
         {
@@ -151,6 +166,9 @@ int main(int argc, char ** argv)
                 return 1;
             }
         }
+#else
+        (void) app; // silence unused in non-MCP builds
+#endif
     }
 
     // Open file if specified and exists
@@ -190,7 +208,9 @@ int main(int argc, char ** argv)
         // Clean up MCP server before exit
         if (enableMCP)
         {
+#if defined(GLADIUS_ENABLE_MCP)
             app.disableMCPServer();
+#endif
         }
     }
     else
@@ -215,7 +235,9 @@ int main(int argc, char ** argv)
         // Clean up MCP server before exit (HTTP or stdio)
         if (enableMCP && app.isMCPServerEnabled())
         {
+#if defined(GLADIUS_ENABLE_MCP)
             app.disableMCPServer();
+#endif
         }
     }
 
