@@ -1562,6 +1562,11 @@ namespace gladius::nodes
             return NodeBase::m_outputs.at(FieldNames::Value);
         }
 
+        Port & getOutputValue()
+        {
+            return NodeBase::m_outputs.at(FieldNames::Value);
+        }
+
         void setResourceId(ResourceId resId)
         {
             m_resourceId = resId;

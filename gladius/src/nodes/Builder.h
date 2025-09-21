@@ -31,6 +31,14 @@ namespace gladius::nodes
     {
 
       public:
+        // Ensure a visible ConstantScalar with given display name exists and returns its Value port
+        static nodes::Port &
+        ensureConstantScalar(Model & target, const std::string & displayName, float value);
+
+        // Apply distance normalization at the end node: shape *= mm_per_unit
+        // units_per_mm -> mm_per_unit = 1 / units_per_mm
+        static void applyDistanceNormalization(Model & target, float units_per_mm);
+
         void addResourceRef(Model & target,
                             ResourceKey const & resourceKey,
                             nodes::Port & coordinateSystemPort);
@@ -49,18 +57,33 @@ namespace gladius::nodes
                             BoundingBox const & boundingBox,
                             nodes::Port & coordinateSystemPort);
 
-        nodes::Port & addTransformationToInputCs(Model & target, Matrix4x4 const & transformation);
+        // Creates a coordinate system port by transforming the input position by the provided
+        // transformation. If unitScaleToModel != 1, a scaling (multiplication) node is inserted
+        // before the transformation so that positions (assumed in mm) are converted into the
+        // 3MF model's unit.
+        // unitScaleToModel = units_per_mm = 1 / (mm_per_unit)
+        nodes::Port & addTransformationToInputCs(Model & target,
+                                                 Matrix4x4 const & transformation,
+                                                 float unitScaleToModel = 1.0f);
 
+        // Inserts a transformation node on top of the provided input port. If unitScaleToModel != 1
+        // a scaling is applied before the matrix transformation.
         nodes::Port & insertTransformation(Model & target,
                                            nodes::Port & inputPort,
-                                           Matrix4x4 const & transformation);
+                                           Matrix4x4 const & transformation,
+                                           float unitScaleToModel = 1.0f);
 
         nodes::Port * getLastShape(Model & target);
 
-        void addCompositeModel(Document & doc, ResourceId modelId, Components const & componentIds);
+        void addCompositeModel(Document & doc,
+                               ResourceId modelId,
+                               Components const & componentIds,
+                               float unitScaleToModel = 1.0f);
 
-        void
-        addComponentRef(Model & target, Model & referencedModel, Matrix4x4 const & transformation);
+        void addComponentRef(Model & target,
+                             Model & referencedModel,
+                             Matrix4x4 const & transformation,
+                             float unitScaleToModel = 1.0f);
 
         void appendIntersectionWithFunction(Model & target,
                                             Model & referencedModel,

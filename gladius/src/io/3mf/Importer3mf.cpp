@@ -33,6 +33,46 @@ namespace gladius
 namespace gladius::io
 {
 
+    // Convert 3MF model unit to scaling from millimeters to model units
+    // Returns units_per_mm so that: position_in_model_units = position_in_mm * units_per_mm
+    static float computeUnitsPerMM(Lib3MF::PModel const & model)
+    {
+        if (!model)
+        {
+            return 1.0f;
+        }
+        Lib3MF::eModelUnit unit = model->GetUnit();
+        // mm per unit
+        double mm_per_unit = 1.0;
+        switch (unit)
+        {
+        case Lib3MF::eModelUnit::MicroMeter:
+            mm_per_unit = 0.001; // 1 µm = 0.001 mm
+            break;
+        case Lib3MF::eModelUnit::MilliMeter:
+            mm_per_unit = 1.0;
+            break;
+        case Lib3MF::eModelUnit::CentiMeter:
+            mm_per_unit = 10.0;
+            break;
+        case Lib3MF::eModelUnit::Meter:
+            mm_per_unit = 1000.0;
+            break;
+        case Lib3MF::eModelUnit::Inch:
+            mm_per_unit = 25.4;
+            break;
+        case Lib3MF::eModelUnit::Foot:
+            mm_per_unit = 304.8;
+            break;
+        default:
+            mm_per_unit = 1.0; // Default/fallback to millimeters
+            break;
+        }
+        // units per mm
+        double units_per_mm = 1.0 / mm_per_unit;
+        return static_cast<float>(units_per_mm);
+    }
+
     Importer3mf::Importer3mf(events::SharedLogger logger)
         : m_eventLogger(logger)
     {
@@ -1048,6 +1088,7 @@ namespace gladius::io
     {
         ProfileFunction auto objectIterator = model->GetObjects();
         nodes::Builder builder;
+        float const units_per_mm = computeUnitsPerMM(model);
         while (objectIterator->MoveNext())
         {
             auto const object = objectIterator->GetCurrentObject();
@@ -1064,7 +1105,7 @@ namespace gladius::io
                                           matrix4x4From3mfTransform(component->GetTransform())});
                 }
 
-                builder.addCompositeModel(doc, object->GetResourceID(), components);
+                builder.addCompositeModel(doc, object->GetResourceID(), components, units_per_mm);
             }
         }
     }
@@ -1257,9 +1298,9 @@ namespace gladius::io
         if (mesh)
         {
             auto volume = mesh->GetVolumeData();
-
-            auto coordinateSystemPort =
-              builder.addTransformationToInputCs(*doc.getAssembly()->assemblyModel(), trafo);
+            float const units_per_mm = computeUnitsPerMM(model);
+            auto coordinateSystemPort = builder.addTransformationToInputCs(
+              *doc.getAssembly()->assemblyModel(), trafo, units_per_mm);
 
             if (requiresMesh)
             {
@@ -1290,8 +1331,9 @@ namespace gladius::io
             Lib3MF::PBeamLattice beamLattice = meshObject->BeamLattice();
             if (beamLattice)
             {
-                auto coordinateSystemPort =
-                  builder.addTransformationToInputCs(*doc.getAssembly()->assemblyModel(), trafo);
+                float const units_per_mm = computeUnitsPerMM(model);
+                auto coordinateSystemPort = builder.addTransformationToInputCs(
+                  *doc.getAssembly()->assemblyModel(), trafo, units_per_mm);
 
                 // Read clipping information from beam lattice
                 Lib3MF::eBeamLatticeClipMode clippingMode =
@@ -1455,14 +1497,18 @@ namespace gladius::io
                 channelName = "shape";
             }
 
-            auto buildItemCoordinateSystemPort =
-              builder.addTransformationToInputCs(*doc.getAssembly()->assemblyModel(), trafo);
+            float const units_per_mm = computeUnitsPerMM(model);
+            auto buildItemCoordinateSystemPort = builder.addTransformationToInputCs(
+              *doc.getAssembly()->assemblyModel(), trafo, units_per_mm);
 
             auto levelSetTransform = levelSet->GetTransform();
             auto levelSetTrafo = matrix4x4From3mfTransform(levelSetTransform);
 
-            auto levelSetCoordinateSystemPort = builder.insertTransformation(
-              *doc.getAssembly()->assemblyModel(), buildItemCoordinateSystemPort, levelSetTrafo);
+            auto levelSetCoordinateSystemPort =
+              builder.insertTransformation(*doc.getAssembly()->assemblyModel(),
+                                           buildItemCoordinateSystemPort,
+                                           levelSetTrafo,
+                                           1.0f);
 
             auto mesh = levelSet->GetMesh();
             if (!mesh)
@@ -1742,6 +1788,10 @@ namespace gladius::io
                 createObject(*objectRes, model, key, trafo, doc);
             }
         }
+
+        // Normalize distances to mm via Builder helper
+        nodes::Builder::applyDistanceNormalization(*doc.getAssembly()->assemblyModel(),
+                                                   computeUnitsPerMM(model));
     }
 
     void Importer3mf::createObject(Lib3MF::CObject & objectRes,
