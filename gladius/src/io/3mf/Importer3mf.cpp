@@ -1566,11 +1566,27 @@ namespace gladius::io
                     }
 
                     key.setDisplayName(image3d->GetName());
+                    if (m_eventLogger)
+                    {
+                        m_eventLogger->addEvent(
+                          {fmt::format("Creating Image3D resource key id={}, type={}, name=\"{}\"",
+                                       image3d->GetModelResourceID(),
+                                       static_cast<int>(resourceType),
+                                       image3d->GetName()),
+                           events::Severity::Info});
+                    }
                     if (useVdb)
                     {
                         auto grid = extractor.loadAsVdbGrid(fileList, FileLoaderType::Archive);
-
                         resMan.addResource(key, std::move(grid));
+                        if (m_eventLogger)
+                        {
+                            m_eventLogger->addEvent(
+                              {fmt::format("Added VDB resource id={} (sheets: {})",
+                                           image3d->GetModelResourceID(),
+                                           imageStack3mf->GetSheetCount()),
+                               events::Severity::Info});
+                        }
                     }
                     else
                     {
@@ -1579,6 +1595,14 @@ namespace gladius::io
                         imageStack.setResourceId(image3d->GetModelResourceID());
 
                         resMan.addResource(key, std::move(imageStack));
+                        if (m_eventLogger)
+                        {
+                            m_eventLogger->addEvent(
+                              {fmt::format("Added ImageStack resource id={} (sheets: {})",
+                                           image3d->GetModelResourceID(),
+                                           imageStack3mf->GetSheetCount()),
+                               events::Severity::Info});
+                        }
                     }
                 }
             }
@@ -1667,21 +1691,29 @@ namespace gladius::io
 
                     buildItemIter->addComponent(
                       {componentObj->GetModelResourceID(), componentTrafo});
-                    auto key = ResourceKey{componentObj->GetModelResourceID()};
+                    // Create a typed ResourceKey for components
+                    ResourceKey key{componentObj->GetModelResourceID()};
                     key.setDisplayName(componentObj->GetName());
 
-                    // Check if this component has a beam lattice to determine the correct resource
-                    // type
+                    // Determine the correct resource type for mesh components (Mesh vs BeamLattice)
                     if (componentObj->IsMeshObject())
                     {
                         auto mesh = model->GetMeshObjectByID(componentObj->GetUniqueResourceID());
                         if (mesh && mesh->BeamLattice())
                         {
-                            // This is a beam lattice component - create key with BeamLattice type
+                            // Beam lattice component
                             key =
                               ResourceKey{static_cast<uint32_t>(componentObj->GetModelResourceID()),
                                           ResourceType::BeamLattice};
                             key.setDisplayName(componentObj->GetName() + "_BeamLattice");
+                        }
+                        else
+                        {
+                            // Regular mesh component
+                            key =
+                              ResourceKey{static_cast<uint32_t>(componentObj->GetModelResourceID()),
+                                          ResourceType::Mesh};
+                            key.setDisplayName(componentObj->GetName());
                         }
                     }
 
