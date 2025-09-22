@@ -34,7 +34,14 @@ target_compile_definitions(${BINARY} PRIVATE GLADIUS_ENABLE_MCP)
 if(MSVC)
  target_compile_options(${BINARY} PRIVATE  /W3 /WX /D_USE_MATH_DEFINES)
  set_property(TARGET ${BINARY} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+ # Override project-level Windows subsystem setting for test executables that need console I/O
+ set_target_properties(${BINARY} PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 endif()
+
+# Ensure C++20 standard is explicitly set for tests (required for structured bindings and other features)
+set_property(TARGET ${BINARY} PROPERTY CXX_STANDARD 20)
+set_property(TARGET ${BINARY} PROPERTY CXX_STANDARD_REQUIRED ON)
+
 target_include_directories(${BINARY} PUBLIC ../../src ../../src/io ../../components/nanovdb)
 
 set(DEPENDENCIES ${CMAKE_PROJECT_NAME}_lib GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main ${FMT_LIBRARY} ${OPENMESH_LIBRARIES} Eigen3::Eigen lodepng Boost::boost unofficial::minizip::minizip OpenVDB::openvdb)
