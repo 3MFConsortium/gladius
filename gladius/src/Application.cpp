@@ -14,8 +14,8 @@ namespace gladius
         : m_configManager()
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
-        , m_mcpServer(nullptr)
 #if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
         , m_mcpAdapter(nullptr)
 #endif
     {
@@ -31,8 +31,8 @@ namespace gladius
         : m_configManager()
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
-        , m_mcpServer(nullptr)
 #if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
         , m_mcpAdapter(nullptr)
 #endif
     {
@@ -53,8 +53,8 @@ namespace gladius
         : m_configManager()
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
-        , m_mcpServer(nullptr)
 #if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
         , m_mcpAdapter(nullptr)
 #endif
     {
@@ -87,8 +87,8 @@ namespace gladius
         : m_configManager()
         , m_mainWindow()
         , m_globalLogger(std::make_shared<events::Logger>())
-        , m_mcpServer(nullptr)
 #if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
         , m_mcpAdapter(nullptr)
 #endif
     {

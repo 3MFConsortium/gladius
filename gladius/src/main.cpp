@@ -224,21 +224,23 @@ int main(int argc, char ** argv)
             {
                 break;
             }
-            // If server has stopped externally, exit the loop
+// If server has stopped externally, exit the loop
+#if defined(GLADIUS_ENABLE_MCP)
             if (!app.isMCPServerEnabled())
             {
                 break;
             }
+#endif
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
 
-        // Clean up MCP server before exit (HTTP or stdio)
+// Clean up MCP server before exit (HTTP or stdio)
+#if defined(GLADIUS_ENABLE_MCP)
         if (enableMCP && app.isMCPServerEnabled())
         {
-#if defined(GLADIUS_ENABLE_MCP)
             app.disableMCPServer();
-#endif
         }
+#endif
     }
 
     return 0;

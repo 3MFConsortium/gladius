@@ -23,6 +23,14 @@ endif()
 set(SOURCES ${TEST_SOURCES})
 add_executable(${BINARY} ${TEST_SOURCES})
 
+# Include MCP sources for tests that validate MCP behavior
+file(GLOB TEST_MCP_SOURCES CONFIGURE_DEPENDS
+  "${CMAKE_SOURCE_DIR}/src/mcp/*.h" "${CMAKE_SOURCE_DIR}/src/mcp/*.cpp"
+  "${CMAKE_SOURCE_DIR}/src/mcp/tools/*.h" "${CMAKE_SOURCE_DIR}/src/mcp/tools/*.cpp"
+)
+target_sources(${BINARY} PRIVATE ${TEST_MCP_SOURCES})
+target_compile_definitions(${BINARY} PRIVATE GLADIUS_ENABLE_MCP)
+
 if(MSVC)
  target_compile_options(${BINARY} PRIVATE  /W3 /WX /D_USE_MATH_DEFINES)
  set_property(TARGET ${BINARY} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -30,6 +38,9 @@ endif()
 target_include_directories(${BINARY} PUBLIC ../../src ../../src/io ../../components/nanovdb)
 
 set(DEPENDENCIES ${CMAKE_PROJECT_NAME}_lib GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main ${FMT_LIBRARY} ${OPENMESH_LIBRARIES} Eigen3::Eigen lodepng Boost::boost unofficial::minizip::minizip OpenVDB::openvdb)
+
+# Add MCP-only dependencies for tests that use MCP
+list(APPEND DEPENDENCIES httplib::httplib nlohmann_json::nlohmann_json)
 
 if (ENABLE_TRACY)
   set(DEPENDENCIES ${DEPENDENCIES} Tracy::TracyClient)

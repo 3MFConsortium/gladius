@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "../FunctionArgument.h"
+#include "../../FunctionArgument.h"
 #include "MCPToolBase.h"
 
 namespace gladius
