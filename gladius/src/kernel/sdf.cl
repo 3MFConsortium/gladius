@@ -23,7 +23,7 @@ bool equal(float3 a, float3 b)
 float modImpl(float a, float b)
 {
     return mod(uintBitsToFloat(floatBitsToUint(a) + 1u),
-               b); // T ODO: Implement uintBitsToFloat and floatBitsToUint
+               b); // TODO: Implement uintBitsToFloat and floatBitsToUint
 }
 #endif
 
@@ -1077,17 +1077,10 @@ float evaluateBeamLatticeBVH(
     int stackPtr = 0;
     stack[stackPtr++] = 0; // Start with root node (index 0)
     
-    // Pre-calculate frequently used values
-    const float earlyExitThreshold = 0.01f; // Exit early if we get very close
-    
+   
     while (stackPtr > 0) {
         int nodeIndex = stack[--stackPtr];
-        
-        // Early exit if we found a very close surface
-        if (minDist < earlyExitThreshold) {
-            break;
-        }
-        
+                
         // Bounds check with branch prediction optimization
         if (nodeIndex >= numBVHNodes || nodeIndex < 0) {
             continue; // Skip invalid nodes
