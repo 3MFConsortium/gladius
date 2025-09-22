@@ -57,7 +57,9 @@ if(WIN32)
   else()
     # Set MSVC runtime to MultiThreaded (/MT)
     cmake_policy(SET CMP0091 NEW)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    # Use the dynamic runtime (/MD) to match vcpkg-built third-party libraries
+    # and avoid RuntimeLibrary mismatches during linking.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
   endif()
 endif()
 

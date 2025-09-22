@@ -159,8 +159,8 @@ namespace gladius::tests
 
         auto [indexGrid, typeGrid] = builder.buildVoxelGrids(emptyBeams, emptyBalls, settings);
 
-        EXPECT_EQ(indexGrid, nullptr);
-        EXPECT_EQ(typeGrid, nullptr);
+        EXPECT_FALSE(static_cast<bool>(indexGrid));
+        EXPECT_FALSE(static_cast<bool>(typeGrid));
     }
 
     /// @brief Test voxel grid creation with single beam
@@ -178,8 +178,8 @@ namespace gladius::tests
 
         auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
 
-        EXPECT_NE(indexGrid, nullptr);
-        EXPECT_NE(typeGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(indexGrid));
+        ASSERT_TRUE(static_cast<bool>(typeGrid));
         EXPECT_GT(indexGrid->activeVoxelCount(), 0);
 
         auto const & stats = builder.getLastBuildStats();
@@ -203,8 +203,8 @@ namespace gladius::tests
 
         auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
 
-        EXPECT_NE(indexGrid, nullptr);
-        EXPECT_NE(typeGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(indexGrid));
+        ASSERT_TRUE(static_cast<bool>(typeGrid));
         EXPECT_GT(indexGrid->activeVoxelCount(), 0);
 
         auto const & stats = builder.getLastBuildStats();
@@ -228,8 +228,8 @@ namespace gladius::tests
         auto [indexGrid, typeGrid] =
           builder.buildVoxelGrids(testData.beams, testData.balls, settings);
 
-        EXPECT_NE(indexGrid, nullptr);
-        EXPECT_NE(typeGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(indexGrid));
+        ASSERT_TRUE(static_cast<bool>(typeGrid));
         EXPECT_GT(indexGrid->activeVoxelCount(), 0);
 
         auto const & stats = builder.getLastBuildStats();
@@ -266,8 +266,9 @@ namespace gladius::tests
 
             auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
 
-            EXPECT_NE(indexGrid, nullptr);
-            EXPECT_EQ(typeGrid, nullptr); // Should be null when not using separate grids
+            ASSERT_TRUE(static_cast<bool>(indexGrid));
+            EXPECT_FALSE(
+              static_cast<bool>(typeGrid)); // Should be null when not using separate grids
         }
 
         // Test with different voxel size
@@ -279,8 +280,8 @@ namespace gladius::tests
 
             auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
 
-            EXPECT_NE(indexGrid, nullptr);
-            EXPECT_NE(typeGrid, nullptr);
+            ASSERT_TRUE(static_cast<bool>(indexGrid));
+            ASSERT_TRUE(static_cast<bool>(typeGrid));
 
             // Smaller voxels should produce more active voxels
             auto const & stats = builder.getLastBuildStats();
@@ -305,8 +306,8 @@ namespace gladius::tests
 
         auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
 
-        ASSERT_NE(indexGrid, nullptr);
-        ASSERT_NE(typeGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(indexGrid));
+        ASSERT_TRUE(static_cast<bool>(typeGrid));
 
         auto indexAccessor = indexGrid->getAccessor();
         auto typeAccessor = typeGrid->getAccessor();
@@ -434,8 +435,8 @@ namespace gladius::tests
               {
                   auto [indexGrid, typeGrid] =
                     builder.buildVoxelGrids(scenario.beams, scenario.balls, scenario.settings);
-                  EXPECT_NE(indexGrid, nullptr);
-                  EXPECT_NE(typeGrid, nullptr);
+                  ASSERT_TRUE(static_cast<bool>(indexGrid));
+                  ASSERT_TRUE(static_cast<bool>(typeGrid));
               });
 
             auto const & stats = builder.getLastBuildStats();
@@ -490,8 +491,8 @@ namespace gladius::tests
               {
                   auto [indexGrid, typeGrid] =
                     builder.buildVoxelGrids(testData.beams, testData.balls, settings);
-                  EXPECT_NE(indexGrid, nullptr);
-                  EXPECT_NE(typeGrid, nullptr);
+                  ASSERT_TRUE(static_cast<bool>(indexGrid));
+                  ASSERT_TRUE(static_cast<bool>(typeGrid));
               });
 
             auto const & stats = builder.getLastBuildStats();
@@ -526,7 +527,7 @@ namespace gladius::tests
             settings.separateBeamBallGrids = false; // Save memory
 
             auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
-            EXPECT_NE(indexGrid, nullptr);
+            ASSERT_TRUE(static_cast<bool>(indexGrid));
 
             auto const & stats = builder.getLastBuildStats();
             EXPECT_GT(stats.activeVoxels, 0);
@@ -545,7 +546,7 @@ namespace gladius::tests
             settings.enableDebugOutput = true;
 
             auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
-            EXPECT_NE(indexGrid, nullptr);
+            ASSERT_TRUE(static_cast<bool>(indexGrid));
 
             auto const & stats = builder.getLastBuildStats();
             EXPECT_GT(stats.totalVoxels, 0);
@@ -566,7 +567,7 @@ namespace gladius::tests
             settings.separateBeamBallGrids = false;
 
             auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
-            EXPECT_NE(indexGrid, nullptr);
+            ASSERT_TRUE(static_cast<bool>(indexGrid));
 
             // Should still create voxels around the degenerate beam
             auto const & stats = builder.getLastBuildStats();
@@ -597,8 +598,8 @@ namespace gladius::tests
           builder.buildVoxelGrids(testData.beams, testData.balls, settings);
         auto currentStats = builder.getLastBuildStats();
 
-        EXPECT_NE(indexGrid, nullptr);
-        EXPECT_NE(typeGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(indexGrid));
+        ASSERT_TRUE(static_cast<bool>(typeGrid));
         EXPECT_GT(currentStats.activeVoxels, 0);
 
         // Store baseline results for comparison in future optimization tests
@@ -645,10 +646,10 @@ namespace gladius::tests
         auto refStats = referenceBuilder.getLastBuildStats();
 
         // Verify both produce valid grids
-        ASSERT_NE(currentIndexGrid, nullptr);
-        ASSERT_NE(currentTypeGrid, nullptr);
-        ASSERT_NE(refIndexGrid, nullptr);
-        ASSERT_NE(refTypeGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(currentIndexGrid));
+        ASSERT_TRUE(static_cast<bool>(currentTypeGrid));
+        ASSERT_TRUE(static_cast<bool>(refIndexGrid));
+        ASSERT_TRUE(static_cast<bool>(refTypeGrid));
 
         // Use tolerance-based comparison for optimization validation
         // The optimized implementation may have slight boundary differences due to conservative
@@ -764,11 +765,11 @@ namespace gladius::tests
               {
                   auto [indexGrid, typeGrid] = currentBuilder.buildVoxelGrids(
                     scenario.beams, scenario.balls, scenario.settings);
-                  EXPECT_NE(indexGrid, nullptr);
+                  ASSERT_TRUE(static_cast<bool>(indexGrid));
                   // Type grid may be null if separateBeamBallGrids is false
                   if (scenario.settings.separateBeamBallGrids)
                   {
-                      EXPECT_NE(typeGrid, nullptr);
+                      ASSERT_TRUE(static_cast<bool>(typeGrid));
                   }
               });
             auto currentStats = currentBuilder.getLastBuildStats();
@@ -786,11 +787,11 @@ namespace gladius::tests
 
                   auto [indexGrid, typeGrid] =
                     referenceBuilder.buildVoxelGrids(scenario.beams, scenario.balls, refSettings);
-                  EXPECT_NE(indexGrid, nullptr);
+                  ASSERT_TRUE(static_cast<bool>(indexGrid));
                   // Type grid may be null if separateBeamBallGrids is false
                   if (refSettings.separateBeamBallGrids)
                   {
-                      EXPECT_NE(typeGrid, nullptr);
+                      ASSERT_TRUE(static_cast<bool>(typeGrid));
                   }
               });
             auto refStats = referenceBuilder.getLastBuildStats();
@@ -878,11 +879,11 @@ namespace gladius::tests
               [&]()
               {
                   auto [indexGrid, typeGrid] = builder.buildVoxelGrids(beams, balls, settings);
-                  EXPECT_NE(indexGrid, nullptr);
+                  ASSERT_TRUE(static_cast<bool>(indexGrid));
                   // Type grid may be null if separateBeamBallGrids is false
                   if (settings.separateBeamBallGrids)
                   {
-                      EXPECT_NE(typeGrid, nullptr);
+                      ASSERT_TRUE(static_cast<bool>(typeGrid));
                   }
               });
 
@@ -978,7 +979,7 @@ namespace gladius::tests
         double buildTimeMs = duration.count();
 
         // Verify results
-        ASSERT_NE(indexGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(indexGrid));
         auto stats = builder.getLastBuildStats();
 
         // Calculate performance metrics
@@ -1049,8 +1050,8 @@ namespace gladius::tests
           referenceBuilder.buildVoxelGrids(beams, balls, refSettings);
         auto refStats = referenceBuilder.getLastBuildStats();
 
-        ASSERT_NE(currentIndexGrid, nullptr);
-        ASSERT_NE(refIndexGrid, nullptr);
+        ASSERT_TRUE(static_cast<bool>(currentIndexGrid));
+        ASSERT_TRUE(static_cast<bool>(refIndexGrid));
 
         std::cout << "\n=== Grid Comparison Summary ===\n";
         std::cout << "Current - Active Voxels: " << currentStats.activeVoxels
