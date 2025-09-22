@@ -1,8 +1,8 @@
 #include "ResourceContext.h"
-#include "ResourceManager.h"
-#include "gpgpu.h"
 #include "ImageRGBA.h"
 #include "Profiling.h"
+#include "ResourceManager.h"
+#include "gpgpu.h"
 
 #include <algorithm>
 #include <cassert>
@@ -21,7 +21,8 @@ namespace gladius
         m_renderingSettings = {};
         m_renderingSettings.z_mm = 1000.0f;
         m_renderingSettings.time_s = 0.0f;
-        m_renderingSettings.flags = RF_SHOW_BUILDPLATE | RF_SHOW_FIELD | RF_CUT_OFF_OBJECT | RF_SHOW_COORDINATE_SYSTEM;
+        m_renderingSettings.flags =
+          RF_SHOW_BUILDPLATE | RF_SHOW_FIELD | RF_CUT_OFF_OBJECT | RF_SHOW_COORDINATE_SYSTEM;
         m_renderingSettings.quality = 1.0f; // Default quality value (range: 0.1-2.0)
         m_renderingSettings.weightDistToNb = 1000.0f;
         m_renderingSettings.weightMidPoint = 1.f;
@@ -319,7 +320,7 @@ namespace gladius
         auto const y_mm = extendedBoundingBox.max.y - extendedBoundingBox.min.y;
         auto const z_mm = extendedBoundingBox.max.z - extendedBoundingBox.min.z;
 
-        size_t constexpr numPerAxis = 128;
+        size_t constexpr numPerAxis = 256;
 
         auto const x_dist = x_mm / numPerAxis;
         auto const y_dist = y_mm / numPerAxis;
