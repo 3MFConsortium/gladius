@@ -1570,8 +1570,7 @@ namespace gladius::io
         {
             throw std::runtime_error(fmt::format("Could not open file {}", filename.string()));
         }
-        extractor.printAllFiles();
-
+        
         try
         {
             while (image3dIterator->MoveNext())
