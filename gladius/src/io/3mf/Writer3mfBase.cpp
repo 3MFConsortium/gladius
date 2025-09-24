@@ -9,6 +9,7 @@
 #include "EventLogger.h"
 
 #include <lib3mf_abi.hpp>
+#include "Lib3mfLoader.h"
 
 #include <chrono>
 #include <iomanip>
@@ -22,7 +23,7 @@ namespace gladius::io
     {
         try
         {
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
+            m_wrapper = gladius::io::loadLib3mfScoped();
         }
         catch (std::exception const & e)
         {

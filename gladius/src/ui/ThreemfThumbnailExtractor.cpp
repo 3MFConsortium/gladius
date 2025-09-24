@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <fmt/format.h>
 #include <lodepng.h>
+#include "io/3mf/Lib3mfLoader.h"
 
 namespace gladius::ui
 {
@@ -11,7 +12,7 @@ namespace gladius::ui
     {
         try
         {
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
+            m_wrapper = gladius::io::loadLib3mfScoped();
         }
         catch (const std::exception & e)
         {
