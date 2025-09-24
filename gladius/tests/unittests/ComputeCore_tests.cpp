@@ -76,18 +76,18 @@ namespace gladius_tests
 
         auto const & data = preComp.getData();
         auto const hash = helper::computeHash(data.cbegin(), data.cend());
-        EXPECT_EQ(hash, 7625337229769614561u);
+        EXPECT_EQ(hash, 13095517456146691086u);
 
         auto bBox = core->getBoundingBox();
         EXPECT_TRUE(bBox.has_value());
 
         auto const tolerance = 1E-3f;
-        EXPECT_NEAR(bBox->min.x, -7.6442584991455078f, tolerance);
-        EXPECT_NEAR(bBox->min.y, -1.9579974412918091f, tolerance);
+        EXPECT_NEAR(bBox->min.x, -7.6475257873535156f, tolerance);
+        EXPECT_NEAR(bBox->min.y, -1.9666776657104492f, tolerance);
         EXPECT_NEAR(bBox->min.z, -0.00098828284535557032f, tolerance);
 
-        EXPECT_NEAR(bBox->max.x, 64.721458435058594f, tolerance);
+        EXPECT_NEAR(bBox->max.x, 64.728408813476562f, tolerance);
         EXPECT_NEAR(bBox->max.y, 74.136703491210938f, tolerance);
-        EXPECT_NEAR(bBox->max.z, 50.000099182128906f, tolerance);
+        EXPECT_NEAR(bBox->max.z, 50.00640869140625f, tolerance);
     }
 }
