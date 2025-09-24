@@ -336,19 +336,6 @@ namespace gladius
                 }
             };
 
-            // Collect memory objects for validation
-            std::vector<cl::Memory> buffers;
-            collectMemoryObjects(buffers, args...);
-
-            // Validate buffers before operation
-            if (m_ComputeContext && !buffers.empty() && ComputeContext::isDebugOutputEnabled())
-            {
-                if (!m_ComputeContext->validateBuffers(methodName + "_pre", buffers))
-                {
-                    logError("Buffer validation failed before operation");
-                }
-            }
-
             try
             {
                 CL_ERROR(queue.finish());
@@ -375,28 +362,14 @@ namespace gladius
                 throw;
             }
 
-            // Validate buffers after kernel execution but before finish
-            if (m_ComputeContext && !buffers.empty() && ComputeContext::isDebugOutputEnabled())
-            {
-                if (!m_ComputeContext->validateBuffers(methodName + "_post_kernel", buffers))
-                {
-                    logError("Buffer validation failed after kernel execution");
-                }
-            }
-
             try
             {
                 CL_ERROR(queue.finish());
             }
             catch (const OpenCLError & e)
             {
-                logError("Post-finish failed", e.what());
+                logError("Queue finish failed", e.what());
 
-                // Additional validation on failure
-                if (m_ComputeContext && !buffers.empty() && ComputeContext::isDebugOutputEnabled())
-                {
-                    m_ComputeContext->validateBuffers(methodName + "_post_error", buffers);
-                }
                 throw;
             }
         }

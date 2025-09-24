@@ -69,7 +69,7 @@ int main(int argc, char ** argv)
                         return 1;
                     }
                 }
-                catch (const std::exception &)
+                catch (const std::exception &) bool openclDebug = false;
                 {
                     std::cerr << "Invalid port number: " << argv[i] << std::endl;
                     return 1;
@@ -96,7 +96,8 @@ int main(int argc, char ** argv)
         }
         else if (arg == "--debug-opencl")
         {
-            gladius::ComputeContext::setDebugOutputEnabled(true);
+            // handled after app construction via MainWindow propagation
+            headless = headless; // no-op, flag handled later
         }
         else if (arg == "--help")
         {
@@ -120,6 +121,15 @@ int main(int argc, char ** argv)
 
     // Create application based on arguments
     gladius::Application app(headless);
+    // Propagate OpenCL debug flag to UI/MainWindow before setup
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::string(argv[i]) == "--debug-opencl")
+        {
+            app.getMainWindow().setOpenCLDebugEnabled(true);
+            break;
+        }
+    }
 
     // Enable MCP server if requested (before starting main loop)
     if (enableMCP)
@@ -140,7 +150,7 @@ int main(int argc, char ** argv)
 
             // Restore stdout for MCP protocol
             std::cout.rdbuf(orig_cout);
-
+            gladius::Application app(headless, openclDebug);
             if (!success)
             {
                 // Use stderr for error since stdout is reserved for MCP protocol

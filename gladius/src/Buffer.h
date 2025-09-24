@@ -3,6 +3,7 @@
 #include "ComputeContext.h"
 #include <cmath>
 #include <iostream>
+#include <typeinfo>
 #include <vector>
 
 namespace gladius
@@ -16,7 +17,14 @@ namespace gladius
         {
         }
 
-        ~Buffer() = default;
+        ~Buffer()
+        {
+            // Release tracked bytes when buffer goes out of scope
+            if (m_buffer && m_size > 0)
+            {
+                m_ComputeContext.onBufferReleased(sizeof(T) * m_size);
+            }
+        }
         Buffer(Buffer const & other)
             : m_ComputeContext(other.m_ComputeContext)
             , m_data(other.m_data)
@@ -26,7 +34,7 @@ namespace gladius
 
         // copying would require copying the buffer, which is not allowed
         Buffer(Buffer && other) = delete;
-        
+
         Buffer & operator=(Buffer && other) = delete;
         Buffer & operator=(const Buffer & other) = delete;
 
@@ -42,26 +50,31 @@ namespace gladius
             CL_ERROR(m_ComputeContext.GetQueue().finish());
         }
 
-        
         void create()
         {
             if (m_data.empty())
             {
                 m_data.push_back({});
             }
-            cl_int error = 0;
-            m_buffer = std::make_unique<cl::Buffer>(cl::Buffer(m_ComputeContext.GetContext(),
-                                                               CL_MEM_READ_WRITE,
-                                                               sizeof(T) * m_data.size(),
-                                                               nullptr,
-                                                               &error));
-            CL_ERROR(error);
+            // If there was a previous allocation, release its accounting first
+            if (m_buffer && m_size > 0)
+            {
+                m_ComputeContext.onBufferReleased(sizeof(T) * m_size);
+            }
+
+            const size_t bytes = sizeof(T) * m_data.size();
+            m_buffer = m_ComputeContext.createBufferChecked(
+              CL_MEM_READ_WRITE, bytes, nullptr, typeid(T).name());
             m_size = m_data.size();
         }
 
         void clear()
         {
             m_data.clear();
+            if (m_buffer && m_size > 0)
+            {
+                m_ComputeContext.onBufferReleased(sizeof(T) * m_size);
+            }
             m_size = 0;
             m_buffer.reset();
         }

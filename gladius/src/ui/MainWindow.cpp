@@ -258,6 +258,9 @@ namespace gladius::ui
         try
         {
             auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+            context->setLogger(m_logger);
+            gladius::setGlobalLogger(m_logger);
+            context->setDebugOutputEnabled(m_openclDebugEnabled);
             if (!context->isValid())
             {
                 throw OpenCLContextCreationError("Context invalid after initialization");
@@ -336,6 +339,9 @@ namespace gladius::ui
         try
         {
             auto context = std::make_shared<ComputeContext>(EnableGLOutput::disabled);
+            context->setLogger(m_logger);
+            gladius::setGlobalLogger(m_logger);
+            context->setDebugOutputEnabled(m_openclDebugEnabled);
             if (!context->isValid())
             {
                 throw OpenCLContextCreationError("Context invalid after initialization (headless)");
@@ -408,6 +414,9 @@ namespace gladius::ui
                     {
                         const auto context =
                           std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+                        context->setLogger(m_logger);
+                        gladius::setGlobalLogger(m_logger);
+                        context->setDebugOutputEnabled(m_openclDebugEnabled);
                         if (!context->isValid())
                         {
                             throw OpenCLContextCreationError("Context invalid after reinit");
@@ -1617,6 +1626,9 @@ namespace gladius::ui
                     {
                         const auto context =
                           std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+                        context->setLogger(m_logger);
+                        gladius::setGlobalLogger(m_logger);
+                        context->setDebugOutputEnabled(m_openclDebugEnabled);
                         if (!context->isValid())
                         {
                             throw OpenCLContextCreationError("Context invalid after retry");

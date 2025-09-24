@@ -10,8 +10,30 @@
 #include <sstream>
 #include <utility>
 
+#if defined(__has_include)
+#if __has_include(<CL/cl_ext.h>)
+#include <CL/cl_ext.h>
+#endif
+#endif
+
 namespace gladius
 {
+    namespace
+    {
+        // Global weak logger holder for low-level logging paths
+        std::weak_ptr<events::Logger> g_loggerWeak;
+    }
+
+    void setGlobalLogger(events::SharedLogger logger)
+    {
+        g_loggerWeak = logger;
+    }
+
+    events::SharedLogger getGlobalLogger()
+    {
+        return g_loggerWeak.lock();
+    }
+
     void checkError(cl_int err, const std::string & description)
     {
         if (err != CL_SUCCESS)
@@ -19,11 +41,19 @@ namespace gladius
             auto const threadId = std::this_thread::get_id();
             auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
 
-            std::cerr << fmt::format("OpenCL error: {} ({}): {} [Thread: {}]\n",
-                                     description,
-                                     err,
-                                     getOpenCLErrorDescription(err),
-                                     threadIdStr);
+            auto const msg = fmt::format("OpenCL error: {} ({}): {} [Thread: {}]",
+                                         description,
+                                         err,
+                                         getOpenCLErrorDescription(err),
+                                         threadIdStr);
+            if (auto logger = getGlobalLogger())
+            {
+                logger->logError(msg);
+            }
+            else
+            {
+                std::cerr << msg << "\n";
+            }
             throw OpenCLError(err);
         }
     }
@@ -475,13 +505,19 @@ namespace gladius
                                        "  Context Ptr: {}\n"
                                        "  Number of Queues: {}\n"
                                        "  Output Method: {}\n"
-                                       "  Total Invalidations: {}\n",
+                                       "  Total Invalidations: {}\n"
+                                       "  Device Global Mem: {} MB\n"
+                                       "  Device Max Alloc: {} MB\n"
+                                       "  Tracked Allocated: {} MB\n",
                                        threadIdStr,
                                        m_isValid,
                                        static_cast<void *>(m_context.get()),
                                        m_queues.size(),
                                        static_cast<int>(m_outputMethod),
-                                       m_invalidationCount.load());
+                                       m_invalidationCount.load(),
+                                       m_deviceGlobalMemBytes / (1024 * 1024),
+                                       m_deviceMaxAllocBytes / (1024 * 1024),
+                                       m_trackedAllocatedBytes.load() / (1024 * 1024));
 
         if (m_isValid && m_context)
         {
@@ -565,7 +601,7 @@ namespace gladius
     bool ComputeContext::validateBuffers(const std::string & operationName,
                                          const std::vector<cl::Memory> & buffers) const
     {
-        if (!s_enableDebugOutput)
+        if (!m_debugOutputEnabled)
         {
             return true; // Skip validation when debug output is disabled
         }
@@ -651,7 +687,7 @@ namespace gladius
                     }
                 }
 
-                if (s_enableDebugOutput)
+                if (m_debugOutputEnabled)
                 {
                     std::cerr << fmt::format("  Buffer[{}]: Size={}MB, Flags=0x{:x}, Context={}, "
                                              "Handle=0x{:x}, Memory={}, Reused={}\n",
@@ -668,14 +704,14 @@ namespace gladius
             {
                 allValid = false;
                 issues += fmt::format("Buffer[{}] access failed: {}; ", i, e.what());
-                if (s_enableDebugOutput)
+                if (m_debugOutputEnabled)
                 {
                     std::cerr << fmt::format("  Buffer[{}]: CORRUPTED - {}\n", i, e.what());
                 }
             }
         }
 
-        if (s_enableDebugOutput)
+        if (m_debugOutputEnabled)
         {
             std::cerr << fmt::format("  Total GPU Memory: {}MB across {} unique buffers\n",
                                      totalMemory / (1024 * 1024),
@@ -697,7 +733,7 @@ namespace gladius
 
     void ComputeContext::checkMemoryLayoutConflicts(const std::string & operationName) const
     {
-        if (!s_enableDebugOutput)
+        if (!m_debugOutputEnabled)
         {
             return; // Skip memory layout checks when debug output is disabled
         }
@@ -818,6 +854,8 @@ namespace gladius
                 {
                     m_context = std::make_unique<cl::Context>(cl::Context({m_device}));
                     m_outputMethod = OutputMethod::disabled;
+                    // Query memory capability limits now that device/context are set
+                    queryDeviceMemoryCaps();
                 }
                 catch (std::exception const & e)
                 {
@@ -836,7 +874,7 @@ namespace gladius
                         auto const currentContext = wglGetCurrentContext();
                         auto const currentDC = wglGetCurrentDC();
 
-                        if (currentContext == nullptr || currentDC == nullptr)
+                        if (m_outputGL == EnableGLOutput::disabled)
                         {
                             throw OpenGLInteropError(
                               "No active OpenGL context found for Windows interop");
@@ -895,11 +933,15 @@ namespace gladius
                 if (err == CL_SUCCESS)
                 {
                     // OpenGL sharing enabled using interop method
+                    // Query memory capability limits now that device/context are set
+                    queryDeviceMemoryCaps();
                 }
                 else
                 {
                     m_context = std::make_unique<cl::Context>(cl::Context({m_device}));
                     m_outputMethod = OutputMethod::readpixel;
+                    // Query memory capability limits now that device/context are set
+                    queryDeviceMemoryCaps();
                     // OpenGL sharing enabled using the readpixel method
                 }
             }
@@ -922,6 +964,421 @@ namespace gladius
     void ComputeContext::setOutputMethod(const OutputMethod & outputMethod)
     {
         m_outputMethod = outputMethod;
+    }
+
+    void ComputeContext::queryDeviceMemoryCaps()
+    {
+        try
+        {
+            m_deviceGlobalMemBytes = m_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
+            m_deviceMaxAllocBytes = m_device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>();
+
+            // Clamp safety utilization against reported caps
+            if (m_deviceMaxAllocBytes >
+                static_cast<size_t>(m_deviceGlobalMemBytes * kSingleAllocSafetyUtilization))
+            {
+                // Some drivers report large max alloc; keep our own conservative cap
+                m_deviceMaxAllocBytes =
+                  static_cast<size_t>(m_deviceGlobalMemBytes * kSingleAllocSafetyUtilization);
+            }
+
+            if (m_debugOutputEnabled)
+            {
+                std::cerr << fmt::format(
+                  "[ComputeContext] Device memory caps: Global={} MB, MaxAlloc={} MB\n",
+                  m_deviceGlobalMemBytes / (1024 * 1024),
+                  m_deviceMaxAllocBytes / (1024 * 1024));
+            }
+        }
+        catch (const std::exception & e)
+        {
+            std::cerr << fmt::format(
+              "[ComputeContext] WARNING: Failed to query device memory caps: {}\n", e.what());
+            m_deviceGlobalMemBytes = 0;
+            m_deviceMaxAllocBytes = 0;
+        }
+    }
+
+    bool ComputeContext::tryQueryVendorFreeMem(size_t & freeBytesOut) const
+    {
+        freeBytesOut = 0;
+        // OpenCL core does not expose free VRAM. Some vendors have extensions:
+        // - AMD: CL_DEVICE_GLOBAL_FREE_MEMORY_AMD (returns kB) via clGetDeviceInfo
+        // - NVIDIA: No direct free mem query; can use clGetMemObjectInfo? not applicable
+        // We'll attempt AMD query if the header symbol is available.
+#ifdef CL_DEVICE_GLOBAL_FREE_MEMORY_AMD
+        try
+        {
+            // The AMD extension is queried via raw C API; returns two size_t values: free/total in
+            // KB
+            size_t memInfoKB[2] = {0, 0};
+            cl_device_id devId = m_device();
+            cl_int status = clGetDeviceInfo(
+              devId, CL_DEVICE_GLOBAL_FREE_MEMORY_AMD, sizeof(memInfoKB), memInfoKB, nullptr);
+            if (status == CL_SUCCESS)
+            {
+                // memInfoKB[0] is free memory in KB according to docs
+                freeBytesOut = memInfoKB[0] * 1024ULL;
+                return true;
+            }
+        }
+        catch (...)
+        {
+            // ignore and report failure
+        }
+#endif
+        return false;
+    }
+
+    size_t ComputeContext::getApproxFreeMemBytes() const
+    {
+        size_t vendorFree = 0;
+        if (tryQueryVendorFreeMem(vendorFree) && vendorFree > 0)
+        {
+            return vendorFree;
+        }
+        // Fallback to conservative accounting: total - trackedAllocated
+        if (m_deviceGlobalMemBytes == 0)
+        {
+            return 0; // unknown
+        }
+        size_t accounted = m_trackedAllocatedBytes.load(std::memory_order_relaxed);
+        if (accounted > m_deviceGlobalMemBytes)
+        {
+            return 0;
+        }
+        return m_deviceGlobalMemBytes - accounted;
+    }
+
+    void ComputeContext::onBufferAllocated(size_t bytes)
+    {
+        m_trackedAllocatedBytes.fetch_add(bytes, std::memory_order_relaxed);
+    }
+
+    void ComputeContext::onBufferReleased(size_t bytes)
+    {
+        m_trackedAllocatedBytes.fetch_sub(bytes, std::memory_order_relaxed);
+    }
+
+    std::unique_ptr<cl::Buffer> ComputeContext::createBufferChecked(cl_mem_flags flags,
+                                                                    size_t bytes,
+                                                                    void * hostPtr,
+                                                                    const char * debugTag)
+    {
+        if (!m_isValid || !m_context)
+        {
+            throw OpenCLContextCreationError("Context invalid while creating buffer");
+        }
+
+        if (bytes == 0)
+        {
+            // Normalize to 1 byte minimal allocation to avoid zero-sized undefined behavior
+            bytes = 1;
+        }
+
+        // Enforce single-allocation limit
+        if (m_deviceMaxAllocBytes != 0 && bytes > m_deviceMaxAllocBytes)
+        {
+            auto msg = fmt::format("Requested allocation exceeds device max: {} MB > {} MB{}",
+                                   bytes / (1024 * 1024),
+                                   m_deviceMaxAllocBytes / (1024 * 1024),
+                                   debugTag ? fmt::format(" [{}]", debugTag) : std::string());
+            if (m_logger)
+                m_logger->logError(msg);
+            throw GladiusException(msg);
+        }
+
+        // Enforce total utilization safety budget
+        if (m_deviceGlobalMemBytes != 0)
+        {
+            size_t approxFree = getApproxFreeMemBytes();
+            // If unknown (0) we skip this check; otherwise ensure we keep
+            // kTotalMemSafetyUtilization
+            if (approxFree != 0)
+            {
+                // Don't exceed safety fraction of total memory
+                size_t targetCap =
+                  static_cast<size_t>(m_deviceGlobalMemBytes * kTotalMemSafetyUtilization);
+                size_t currentlyAllocated = m_trackedAllocatedBytes.load(std::memory_order_relaxed);
+                if (currentlyAllocated + bytes > targetCap)
+                {
+                    auto msg = fmt::format(
+                      "Allocation would exceed safety cap: need {} MB, used {} MB, cap {} MB{}",
+                      bytes / (1024 * 1024),
+                      currentlyAllocated / (1024 * 1024),
+                      targetCap / (1024 * 1024),
+                      debugTag ? fmt::format(" [{}]", debugTag) : std::string());
+                    if (m_logger)
+                        m_logger->logError(msg);
+                    throw GladiusException(msg);
+                }
+                // Optional extra guard: if vendor reported free < requested, warn/throw
+                if (approxFree < bytes)
+                {
+                    auto msg = fmt::format(
+                      "Vendor-reported free VRAM too low: free {} MB, requested {} MB{}",
+                      approxFree / (1024 * 1024),
+                      bytes / (1024 * 1024),
+                      debugTag ? fmt::format(" [{}]", debugTag) : std::string());
+                    if (m_logger)
+                        m_logger->logWarning(msg);
+                    throw GladiusException(msg);
+                }
+            }
+        }
+
+        cl_int err = CL_SUCCESS;
+        std::unique_ptr<cl::Buffer> buf;
+        try
+        {
+            buf = std::make_unique<cl::Buffer>(*m_context, flags, bytes, hostPtr, &err);
+            checkError(err, "createBufferChecked: cl::Buffer ctor");
+        }
+        catch (const OpenCLError &)
+        {
+            throw; // already descriptive
+        }
+        catch (const std::exception & e)
+        {
+            auto msg = std::string("Failed to allocate OpenCL buffer: ") + e.what();
+            if (m_logger)
+                m_logger->logError(msg);
+            throw GladiusException(msg);
+        }
+
+        // Track accounted bytes on success
+        onBufferAllocated(bytes);
+        if (m_logger && m_debugOutputEnabled)
+        {
+            m_logger->logInfo(
+              fmt::format("Allocated {} MB (tag: {}). In-use: {} MB of {} MB (max single {} MB)",
+                          bytes / (1024 * 1024),
+                          debugTag ? debugTag : "-",
+                          m_trackedAllocatedBytes.load() / (1024 * 1024),
+                          m_deviceGlobalMemBytes / (1024 * 1024),
+                          m_deviceMaxAllocBytes / (1024 * 1024)));
+        }
+        return buf;
+    }
+
+    size_t ComputeContext::estimateImageSizeBytes(const cl::ImageFormat & format,
+                                                  size_t width,
+                                                  size_t height,
+                                                  size_t depth)
+    {
+        // Rough estimation based on channel order and type; sufficient for safety checks
+        auto channels = [&]() -> size_t
+        {
+            switch (format.image_channel_order)
+            {
+            case CL_R:
+            case CL_A:
+                return 1;
+            case CL_RG:
+            case CL_RA:
+                return 2;
+            case CL_RGB:
+                return 3;
+            case CL_RGBA:
+            case CL_BGRA:
+            case CL_ARGB:
+                return 4;
+            default:
+                return 4; // assume worst-case
+            }
+        }();
+
+        auto bytesPerChannel = [&]() -> size_t
+        {
+            switch (format.image_channel_data_type)
+            {
+            case CL_SNORM_INT8:
+            case CL_UNORM_INT8:
+            case CL_SIGNED_INT8:
+            case CL_UNSIGNED_INT8:
+                return 1;
+            case CL_SNORM_INT16:
+            case CL_UNORM_INT16:
+            case CL_SIGNED_INT16:
+            case CL_UNSIGNED_INT16:
+            case CL_HALF_FLOAT:
+                return 2;
+            case CL_SIGNED_INT32:
+            case CL_UNSIGNED_INT32:
+            case CL_FLOAT:
+                return 4;
+            default:
+                return 4; // conservative
+            }
+        }();
+
+        // Guard against overflow
+        if (width == 0 || height == 0 || depth == 0)
+            return 0;
+        double pixels =
+          static_cast<double>(width) * static_cast<double>(height) * static_cast<double>(depth);
+        double bpc = static_cast<double>(channels * bytesPerChannel);
+        double total = pixels * bpc;
+        if (total < 0 || total > static_cast<double>(std::numeric_limits<size_t>::max()))
+            return std::numeric_limits<size_t>::max();
+        return static_cast<size_t>(total);
+    }
+
+    std::unique_ptr<cl::Image2D>
+    ComputeContext::createImage2DChecked(const cl::ImageFormat & format,
+                                         size_t width,
+                                         size_t height,
+                                         cl_mem_flags flags,
+                                         size_t rowPitch,
+                                         void * hostPtr,
+                                         const char * debugTag)
+    {
+        const size_t estBytes = estimateImageSizeBytes(format, width, height, 1);
+        // Reuse buffer-checked logic for limits using estimated bytes
+        if (estBytes == 0)
+        {
+            throw GladiusException("Image2D size is zero");
+        }
+        if (m_deviceMaxAllocBytes != 0 && estBytes > m_deviceMaxAllocBytes)
+        {
+            auto msg = fmt::format("Image2D exceeds device max: {} MB > {} MB{}",
+                                   estBytes / (1024 * 1024),
+                                   m_deviceMaxAllocBytes / (1024 * 1024),
+                                   debugTag ? fmt::format(" [{}]", debugTag) : std::string());
+            if (m_logger)
+                m_logger->logError(msg);
+            throw GladiusException(msg);
+        }
+        // Enforce total budget based on accounting
+        if (m_deviceGlobalMemBytes != 0)
+        {
+            size_t cap = static_cast<size_t>(m_deviceGlobalMemBytes * kTotalMemSafetyUtilization);
+            size_t used = m_trackedAllocatedBytes.load(std::memory_order_relaxed);
+            if (used + estBytes > cap)
+            {
+                auto msg = fmt::format(
+                  "Image2D allocation exceeds safety cap: need {} MB, used {} MB, cap {} MB{}",
+                  estBytes / (1024 * 1024),
+                  used / (1024 * 1024),
+                  cap / (1024 * 1024),
+                  debugTag ? fmt::format(" [{}]", debugTag) : std::string());
+                if (m_logger)
+                    m_logger->logError(msg);
+                throw GladiusException(msg);
+            }
+        }
+
+        cl_int err = CL_SUCCESS;
+        std::unique_ptr<cl::Image2D> img;
+        try
+        {
+            img = std::make_unique<cl::Image2D>(
+              *m_context, flags, format, width, height, rowPitch, hostPtr, &err);
+            checkError(err, "createImage2DChecked: cl::Image2D ctor");
+        }
+        catch (const std::exception & e)
+        {
+            auto msg = std::string("Failed to allocate Image2D: ") + e.what();
+            if (m_logger)
+                m_logger->logError(msg);
+            throw GladiusException(msg);
+        }
+        onBufferAllocated(estBytes);
+        return img;
+    }
+
+    std::unique_ptr<cl::Image3D>
+    ComputeContext::createImage3DChecked(const cl::ImageFormat & format,
+                                         size_t width,
+                                         size_t height,
+                                         size_t depth,
+                                         cl_mem_flags flags,
+                                         size_t rowPitch,
+                                         size_t slicePitch,
+                                         void * hostPtr,
+                                         const char * debugTag)
+    {
+        const size_t estBytes = estimateImageSizeBytes(format, width, height, depth);
+        if (estBytes == 0)
+        {
+            throw GladiusException("Image3D size is zero");
+        }
+        if (m_deviceMaxAllocBytes != 0 && estBytes > m_deviceMaxAllocBytes)
+        {
+            auto msg = fmt::format("Image3D exceeds device max: {} MB > {} MB{}",
+                                   estBytes / (1024 * 1024),
+                                   m_deviceMaxAllocBytes / (1024 * 1024),
+                                   debugTag ? fmt::format(" [{}]", debugTag) : std::string());
+            if (m_logger)
+                m_logger->logError(msg);
+            throw GladiusException(msg);
+        }
+        if (m_deviceGlobalMemBytes != 0)
+        {
+            size_t cap = static_cast<size_t>(m_deviceGlobalMemBytes * kTotalMemSafetyUtilization);
+            size_t used = m_trackedAllocatedBytes.load(std::memory_order_relaxed);
+            if (used + estBytes > cap)
+            {
+                auto msg = fmt::format(
+                  "Image3D allocation exceeds safety cap: need {} MB, used {} MB, cap {} MB{}",
+                  estBytes / (1024 * 1024),
+                  used / (1024 * 1024),
+                  cap / (1024 * 1024),
+                  debugTag ? fmt::format(" [{}]", debugTag) : std::string());
+                if (m_logger)
+                    m_logger->logError(msg);
+                throw GladiusException(msg);
+            }
+        }
+
+        cl_int err = CL_SUCCESS;
+        std::unique_ptr<cl::Image3D> img;
+        try
+        {
+            img = std::make_unique<cl::Image3D>(
+              *m_context, flags, format, width, height, depth, rowPitch, slicePitch, hostPtr, &err);
+            checkError(err, "createImage3DChecked: cl::Image3D ctor");
+        }
+        catch (const std::exception & e)
+        {
+            auto msg = std::string("Failed to allocate Image3D: ") + e.what();
+            if (m_logger)
+                m_logger->logError(msg);
+            throw GladiusException(msg);
+        }
+        onBufferAllocated(estBytes);
+        return img;
+    }
+
+    std::unique_ptr<cl::ImageGL> ComputeContext::createImageGLInteropChecked(GLenum target,
+                                                                             GLint miplevel,
+                                                                             GLuint texture,
+                                                                             cl_mem_flags flags,
+                                                                             const char * debugTag)
+    {
+        // Interop images alias GL memory; do not track as OpenCL allocation, but still create
+        // safely
+        cl_int err = CL_SUCCESS;
+        std::unique_ptr<cl::ImageGL> img;
+        try
+        {
+            img = std::make_unique<cl::ImageGL>(*m_context, flags, target, miplevel, texture, &err);
+            checkError(err, "createImageGLInteropChecked: cl::ImageGL ctor");
+        }
+        catch (const std::exception & e)
+        {
+            auto msg = std::string("Failed to create ImageGL interop: ") + e.what();
+            if (m_logger)
+                m_logger->logError(msg);
+            throw GladiusException(msg);
+        }
+        if (m_logger && m_debugOutputEnabled)
+        {
+            m_logger->logInfo(fmt::format("Created GL interop image (target={}, tag={})",
+                                          static_cast<int>(target),
+                                          debugTag ? debugTag : "-"));
+        }
+        return img;
     }
 
 }

@@ -34,6 +34,8 @@ namespace gladius
         Application();
         /// Construct application with explicit headless mode (pre-setup)
         explicit Application(bool headlessMode);
+        // Construct application with explicit headless mode and OpenCL debug flag propagation
+        Application(bool headlessMode, bool openclDebugEnabled);
         Application(int argc, char ** argv);
         Application(std::filesystem ::path const & filename);
 

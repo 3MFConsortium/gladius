@@ -59,6 +59,12 @@ namespace gladius::ui
         void startMainLoop();
         void setup();
 
+        // Enable or disable verbose OpenCL debug checks/output for any contexts created here
+        void setOpenCLDebugEnabled(bool enabled)
+        {
+            m_openclDebugEnabled = enabled;
+        }
+
         /**
          * @brief Minimal setup for headless operation (no UI/GL windows).
          * Initializes ComputeCore and Document so document operations work in headless mode.
@@ -251,5 +257,8 @@ namespace gladius::ui
         std::string m_computeErrorMessage;
         // Controls visibility of the compute error details modal
         bool m_showComputeErrorModal{false};
+
+        // Instance-level flag to propagate OpenCL debug verbosity to contexts we create
+        bool m_openclDebugEnabled{false};
     };
 }

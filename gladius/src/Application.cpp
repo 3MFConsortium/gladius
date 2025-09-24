@@ -49,6 +49,28 @@ namespace gladius
         }
     }
 
+    Application::Application(bool headlessMode, bool openclDebugEnabled)
+        : m_configManager()
+        , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
+#if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
+        , m_mcpAdapter(nullptr)
+#endif
+    {
+        m_headlessMode = headlessMode;
+        m_mainWindow.setConfigManager(m_configManager);
+        m_mainWindow.setOpenCLDebugEnabled(openclDebugEnabled);
+        if (!m_headlessMode)
+        {
+            m_mainWindow.setup();
+        }
+        else
+        {
+            m_mainWindow.setupHeadless(m_globalLogger);
+        }
+    }
+
     Application::Application(int argc, char ** argv)
         : m_configManager()
         , m_mainWindow()
