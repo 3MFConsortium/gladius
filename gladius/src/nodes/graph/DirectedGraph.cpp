@@ -5,11 +5,11 @@
 
 namespace gladius::nodes::graph
 {
-    DirectedGraph::DirectedGraph(size_t const size) :
-        IDirectedGraph(size),
-        m_graphData(size * size, false),
-        m_size(size),
-        m_predecessors(size)
+    DirectedGraph::DirectedGraph(size_t const size)
+        : IDirectedGraph(size)
+        , m_graphData(size * size, false)
+        , m_size(size)
+        , m_predecessors(size)
     {
     }
 
@@ -37,12 +37,13 @@ namespace gladius::nodes::graph
         if (m_graphData[index])
         {
             m_graphData[index] = false;
-            auto& preds = m_predecessors[id];
+            auto & preds = m_predecessors[id];
             preds.erase(std::remove(preds.begin(), preds.end(), idOfDependency), preds.end());
         }
     }
 
-    auto DirectedGraph::isDirectlyDependingOn(Identifier id, Identifier dependencyInQuestion) const -> bool
+    auto DirectedGraph::isDirectlyDependingOn(Identifier id, Identifier dependencyInQuestion) const
+      -> bool
     {
         auto const index = id * m_size + dependencyInQuestion;
         return m_graphData[index];
@@ -74,7 +75,7 @@ namespace gladius::nodes::graph
         }
     }
 
-    auto DirectedGraph::getVertices() const -> const DependencySet&
+    auto DirectedGraph::getVertices() const -> const DependencySet &
     {
         return m_vertices;
     }

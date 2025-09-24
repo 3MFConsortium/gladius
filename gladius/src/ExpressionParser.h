@@ -1,24 +1,24 @@
 #pragma once
 
-#include <string>
-#include <memory>
-#include <vector>
 #include <map>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace gladius
 {
     /**
      * @brief Parser for mathematical expressions using muParser
-     * 
+     *
      * This class handles the parsing of mathematical expressions into an internal
      * representation, which can then be converted to Gladius node graphs.
      */
     class ExpressionParser
     {
-    public:
+      public:
         /// Constructor
         ExpressionParser();
-        
+
         /// Destructor
         ~ExpressionParser();
 
@@ -27,7 +27,7 @@ namespace gladius
          * @param expression The mathematical expression as a string (e.g., "x + y*2")
          * @return true if parsing was successful, false otherwise
          */
-        bool parseExpression(std::string const& expression);
+        bool parseExpression(std::string const & expression);
 
         /**
          * @brief Get the last error message from parsing
@@ -58,9 +58,9 @@ namespace gladius
          * @param variables Map of variable names to their values
          * @return The evaluated result
          */
-        double evaluate(std::map<std::string, double> const& variables);
+        double evaluate(std::map<std::string, double> const & variables);
 
-    private:
+      private:
         class Impl;
         std::unique_ptr<Impl> m_impl;
     };

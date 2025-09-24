@@ -80,9 +80,9 @@ namespace gladius
         {
             m_file.open(fileName);
         }
-        catch (const std::exception & e)
+        catch (...)
         {
-            std::cerr << e.what() << '\n';
+            throw; // Surface error to caller rather than printing to console
         }
         writeHeader();
         generator.updateBBoxOrThrow();

@@ -37,7 +37,7 @@ namespace gladius::nodes
           std::find(std::begin(m_visitedNodes), std::end(m_visitedNodes), node.getId());
         if (visitedIter != std::end(m_visitedNodes))
         {
-            std::cerr << "Warning: Visiting already visited node " << node.getUniqueName() << "\n";
+            // Already visited, skip without noisy console output
             return false;
         }
         m_visitedNodes.insert(node.getId());

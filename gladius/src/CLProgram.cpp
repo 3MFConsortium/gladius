@@ -253,10 +253,10 @@ namespace gladius
             auto const status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
             std::string const buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
 
-            // Always show build log if it contains warnings or errors
-            if (!buildLog.empty())
+            // Forward build log to logger if available; avoid noisy stderr
+            if (!buildLog.empty() && logger)
             {
-                std::cerr << "OPENCL_BUILD_LOG: " << buildLog << std::endl;
+                logger->logWarning(std::string("OpenCL build log:\n") + buildLog);
             }
 
             if (status != CL_BUILD_SUCCESS)
@@ -1005,8 +1005,7 @@ namespace gladius
                 {
                     m_logger->logError(errorDetails);
                 }
-                // Also output to stderr for debugging visibility
-                std::cerr << "OPENCL_ERROR: " << errorDetails << std::endl;
+                // Avoid extra stderr noise; logger already captured details
                 // Fall back to single-level compilation
                 compileSingleLevel(callBack, currentHash);
                 return;

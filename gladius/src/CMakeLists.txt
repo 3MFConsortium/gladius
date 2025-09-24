@@ -120,6 +120,8 @@ target_include_directories(gladiusmcp PUBLIC ${INCLUDE_PATHS}
 )
 target_compile_definitions(gladiusmcp PRIVATE GLADIUS_ENABLE_MCP)
 target_link_libraries(gladiusmcp PUBLIC ${BINARY}_lib_mcp ${DEPENDENCIES_MCP})
+# Ensure the MCP-enabled static library is built before linking the executable
+add_dependencies(gladiusmcp ${BINARY}_lib_mcp)
 if (NOT WIN32)
     target_compile_options(gladiusmcp PRIVATE -mavx2 -mfma)
 endif()

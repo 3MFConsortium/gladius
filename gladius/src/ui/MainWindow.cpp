@@ -2107,8 +2107,7 @@ namespace gladius::ui
         // Get recent files list from config
         nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>(
           "recentFiles", "files", nlohmann::json::array());
-        // print size of recentFiles
-        std::cerr << "Size of recentFiles: " << recentFiles.size() << std::endl;
+        //
         // Process each entry
         for (auto & entry : recentFiles)
         {

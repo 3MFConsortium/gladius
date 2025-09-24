@@ -13,11 +13,10 @@ Abstract: This is a stub class definition of CBoundingBox
 
 // Include custom headers here.
 
-
 using namespace GladiusLib::Impl;
 
 /*************************************************************************************************************************
- Class definition of CBoundingBox 
+ Class definition of CBoundingBox
 **************************************************************************************************************************/
 
 GladiusLib::sVector3f CBoundingBox::GetMin()

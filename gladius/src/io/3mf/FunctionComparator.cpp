@@ -212,9 +212,6 @@ namespace gladius::io
                     return false;
                 }
             }
-
-           
-
         }
 
         // Compare function inputs

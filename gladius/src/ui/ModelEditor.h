@@ -185,7 +185,7 @@ namespace gladius::ui
         nodes::SharedAssembly m_assembly;
         nodes::SharedModel m_currentModel;
 
-        static void noOp(){};
+        static void noOp() {};
         PopupMenuFunction m_popupMenuFunction = noOp;
         NodeView m_nodeViewVisitor;
 

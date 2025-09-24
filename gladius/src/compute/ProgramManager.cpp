@@ -209,10 +209,7 @@ namespace gladius
         {
             getLogger().addEvent({msg, events::Severity::Info});
         }
-        else
-        {
-            std::cerr << msg << "\n";
-        }
+        // If no logger, remain silent to avoid console noise
     }
 
     events::Logger & ProgramManager::getLogger() const

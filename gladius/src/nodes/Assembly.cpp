@@ -22,18 +22,15 @@ namespace gladius::nodes
         return m_subModels.at(m_assemblyModelId);
     }
 
-
     void Assembly::deleteModel(ResourceId id)
     {
-       
+
         auto modelToDeleteIter = m_subModels.find(id);
         if (modelToDeleteIter == std::end(m_subModels))
         {
             return;
         }
         m_subModels.erase(modelToDeleteIter);
-
-        
     }
 
     bool Assembly::equals(Assembly const & other)
@@ -56,7 +53,8 @@ namespace gladius::nodes
             {
                 return false;
             }
-            if (subModel.second->getGraph().getVertices() != otherSubModel->getGraph().getVertices())
+            if (subModel.second->getGraph().getVertices() !=
+                otherSubModel->getGraph().getVertices())
             {
                 return false;
             }
@@ -96,7 +94,7 @@ namespace gladius::nodes
     }
 
     Assembly::Assembly(Assembly const & other)
-    {   
+    {
         // copy submodel instances (not the shared_ptr)
         for (auto & [id, model] : other.m_subModels)
         {
@@ -172,13 +170,13 @@ namespace gladius::nodes
             3. Find the referenced model
             4. Update the inputs and outputs
         */
-        
+
         // for (auto & [id, model] : m_subModels)
         for (auto & elem : m_subModels)
         {
             auto & model = elem.second;
             model->updateTypes();
-            
+
             auto visitor = OnTypeVisitor<nodes::FunctionCall>(
               [&](auto & functionCall)
               {
@@ -187,13 +185,15 @@ namespace gladius::nodes
                   auto referencedModel = findModel(referencedId);
                   if (!referencedModel)
                   {
-                      throw std::runtime_error(
-                        fmt::format("{} references a function with the fucntion id {}, that could not be found", functionCall.getDisplayName(), referencedId));
+                      throw std::runtime_error(fmt::format(
+                        "{} references a function with the fucntion id {}, that could not be found",
+                        functionCall.getDisplayName(),
+                        referencedId));
                   }
 
                   functionCall.updateInputsAndOutputs(*referencedModel);
                   model->registerInputs(functionCall);
-                  model->registerOutputs(functionCall);                  
+                  model->registerOutputs(functionCall);
               });
             model->visitNodes(visitor);
 

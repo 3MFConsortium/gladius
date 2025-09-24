@@ -356,13 +356,16 @@ namespace gladius
         // Enhanced logging for queue retrieval
         auto logDiagnostics = [&](const std::string & stage)
         {
-            std::cerr << fmt::format(
-              "[GetQueue] {}: Thread={}, ContextValid={}, NumQueues={}, ContextPtr={}\n",
-              stage,
-              threadIdStr,
-              m_isValid,
-              m_queues.size(),
-              static_cast<void *>(m_context.get()));
+            if (m_debugOutputEnabled)
+            {
+                std::cerr << fmt::format(
+                  "[GetQueue] {}: Thread={}, ContextValid={}, NumQueues={}, ContextPtr={}\n",
+                  stage,
+                  threadIdStr,
+                  m_isValid,
+                  m_queues.size(),
+                  static_cast<void *>(m_context.get()));
+            }
         };
 
         // Check if context is valid before attempting to create queue
@@ -452,19 +455,21 @@ namespace gladius
           std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
         m_invalidationCount++;
-
-        std::cerr << fmt::format("[ComputeContext::invalidate] Reason='{}', Thread={}, had {} "
-                                 "queues, total invalidations={}\n",
-                                 reason,
-                                 threadIdStr,
-                                 m_queues.size(),
-                                 m_invalidationCount.load());
-
-        if (m_invalidationCount > 5)
+        if (m_debugOutputEnabled)
         {
-            std::cerr
-              << "[ComputeContext::invalidate] WARNING: High number of invalidations detected! "
-                 "This may indicate a serious OpenCL context issue.\n";
+            std::cerr << fmt::format("[ComputeContext::invalidate] Reason='{}', Thread={}, had {} "
+                                     "queues, total invalidations={}\n",
+                                     reason,
+                                     threadIdStr,
+                                     m_queues.size(),
+                                     m_invalidationCount.load());
+
+            if (m_invalidationCount > 5)
+            {
+                std::cerr
+                  << "[ComputeContext::invalidate] WARNING: High number of invalidations detected! "
+                     "This may indicate a serious OpenCL context issue.\n";
+            }
         }
 
         m_isValid = false;
@@ -578,21 +583,24 @@ namespace gladius
             issues += "No queue exists for current thread (will be created); ";
         }
 
-        std::string logMsg =
-          fmt::format("[ComputeContext::validateForOperation] Operation='{}', Thread={}, Valid={}",
-                      operationName,
-                      threadIdStr,
-                      allValid);
-        if (!issues.empty())
+        if (m_debugOutputEnabled)
         {
-            logMsg += ", Issues: " + issues;
-        }
+            std::string logMsg = fmt::format(
+              "[ComputeContext::validateForOperation] Operation='{}', Thread={}, Valid={}",
+              operationName,
+              threadIdStr,
+              allValid);
+            if (!issues.empty())
+            {
+                logMsg += ", Issues: " + issues;
+            }
 
-        std::cerr << logMsg << "\n";
+            std::cerr << logMsg << "\n";
 
-        if (!allValid)
-        {
-            std::cerr << getDiagnosticInfo() << "\n";
+            if (!allValid)
+            {
+                std::cerr << getDiagnosticInfo() << "\n";
+            }
         }
 
         return allValid;
@@ -612,11 +620,14 @@ namespace gladius
         bool allValid = true;
         std::string issues;
 
-        std::cerr << fmt::format(
-          "[ComputeContext::validateBuffers] Operation='{}', Thread={}, BufferCount={}\n",
-          operationName,
-          threadIdStr,
-          buffers.size());
+        if (m_debugOutputEnabled)
+        {
+            std::cerr << fmt::format(
+              "[ComputeContext::validateBuffers] Operation='{}', Thread={}, BufferCount={}\n",
+              operationName,
+              threadIdStr,
+              buffers.size());
+        }
 
         // Track buffer handles and check for corruption indicators
         std::set<cl_mem> uniqueHandles;
@@ -741,10 +752,13 @@ namespace gladius
         auto const threadId = std::this_thread::get_id();
         auto const threadIdStr = std::to_string(std::hash<std::thread::id>{}(threadId));
 
-        std::cerr << fmt::format(
-          "[ComputeContext::checkMemoryLayoutConflicts] Operation='{}', Thread={}\n",
-          operationName,
-          threadIdStr);
+        if (m_debugOutputEnabled)
+        {
+            std::cerr << fmt::format(
+              "[ComputeContext::checkMemoryLayoutConflicts] Operation='{}', Thread={}\n",
+              operationName,
+              threadIdStr);
+        }
 
         try
         {
@@ -757,11 +771,14 @@ namespace gladius
                 auto globalMemSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
                 auto localMemSize = device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
 
-                std::cerr << fmt::format(
-                  "  Device Memory: Global={}MB, MaxAlloc={}MB, Local={}KB\n",
-                  globalMemSize / (1024 * 1024),
-                  maxMemAlloc / (1024 * 1024),
-                  localMemSize / 1024);
+                if (m_debugOutputEnabled)
+                {
+                    std::cerr << fmt::format(
+                      "  Device Memory: Global={}MB, MaxAlloc={}MB, Local={}KB\n",
+                      globalMemSize / (1024 * 1024),
+                      maxMemAlloc / (1024 * 1024),
+                      localMemSize / 1024);
+                }
             }
 
             // Check for OpenCL context memory issues
@@ -770,19 +787,28 @@ namespace gladius
                 // Try to allocate a small test buffer to verify context health
                 cl::Buffer testBuffer(*m_context, CL_MEM_READ_WRITE, 1024);
                 auto size = testBuffer.getInfo<CL_MEM_SIZE>();
-                std::cerr << fmt::format("  Test buffer allocation successful: {}B\n", size);
+                if (m_debugOutputEnabled)
+                {
+                    std::cerr << fmt::format("  Test buffer allocation successful: {}B\n", size);
+                }
             }
             catch (const std::exception & e)
             {
-                std::cerr << fmt::format("  WARNING: Test buffer allocation failed: {}\n",
-                                         e.what());
+                if (m_debugOutputEnabled)
+                {
+                    std::cerr << fmt::format("  WARNING: Test buffer allocation failed: {}\n",
+                                             e.what());
+                }
             }
         }
         catch (const std::exception & e)
         {
-            std::cerr << fmt::format(
-              "[ComputeContext::checkMemoryLayoutConflicts] Error getting memory info: {}\n",
-              e.what());
+            if (m_debugOutputEnabled)
+            {
+                std::cerr << fmt::format(
+                  "[ComputeContext::checkMemoryLayoutConflicts] Error getting memory info: {}\n",
+                  e.what());
+            }
         }
     }
 
@@ -992,8 +1018,11 @@ namespace gladius
         }
         catch (const std::exception & e)
         {
-            std::cerr << fmt::format(
-              "[ComputeContext] WARNING: Failed to query device memory caps: {}\n", e.what());
+            if (m_debugOutputEnabled)
+            {
+                std::cerr << fmt::format(
+                  "[ComputeContext] WARNING: Failed to query device memory caps: {}\n", e.what());
+            }
             m_deviceGlobalMemBytes = 0;
             m_deviceMaxAllocBytes = 0;
         }

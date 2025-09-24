@@ -169,10 +169,10 @@ namespace gladius::contour
 
     void QuadTree::insert(PointWithNormal const & point)
     {
-       if (!m_rootQuad.insert(point))
-       {
-           throw std::domain_error("cannot insert point outside of domain");
-       }
+        if (!m_rootQuad.insert(point))
+        {
+            throw std::domain_error("cannot insert point outside of domain");
+        }
     }
 
     std::optional<Quad *> QuadTree::find(Vector2 const & position) const
@@ -207,7 +207,8 @@ namespace gladius::contour
         auto const closestPoint = std::min_element(
           otherPoints.begin(),
           otherPoints.end(),
-          [&position](auto const & a, auto const & b) {
+          [&position](auto const & a, auto const & b)
+          {
               return (a.position - position).squaredNorm() < (b.position - position).squaredNorm();
           });
 

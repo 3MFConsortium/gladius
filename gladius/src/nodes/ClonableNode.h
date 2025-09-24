@@ -22,6 +22,7 @@ namespace gladius::nodes
         {
             visitor.visit(static_cast<Derived &>(*this));
         }
+
       private:
         ClonableNode * cloneImpl() const override
         {

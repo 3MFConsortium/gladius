@@ -4,15 +4,12 @@
 
 #include "../Contour.h"
 
-
 namespace gladius::contour
 {
     struct ValidationResult
     {
         bool intersectionFree = false;
     };
-
-    
 
     bool endCrossesStart(PolyLine & polyLine);
 

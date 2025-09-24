@@ -13,31 +13,29 @@ Interface version: 1.0.0
 
 */
 
-#include <iostream>
 #include <filesystem>
+#include <iostream>
 
 #include "gladius_implicit.hpp"
-
 
 int main()
 {
     std::cout << "Welcome to the GladiusLib (CppDynamic) Example\n";
 
-	try
-	{
-		auto wrapper = GladiusLib::CWrapper::loadLibrary();
-		GladiusLib_uint32 nMajor, nMinor, nMicro;
-		wrapper->GetVersion(nMajor, nMinor, nMicro);
-		std::cout << "GladiusLib.Version = " << nMajor << "." << nMinor << "." << nMicro;
-		std::cout << std::endl;
-		auto gladius = wrapper->CreateGladius();
-		gladius->LoadAssembly("D:/gladiusModels/brioMirandaTrack/BrioMirandaTrack_144_mm_M_F.json");
-	}
-	catch (std::exception &e)
-	{
-		std::cout << e.what() << std::endl;
-		return 1;
-	}
-	return 0;
+    try
+    {
+        auto wrapper = GladiusLib::CWrapper::loadLibrary();
+        GladiusLib_uint32 nMajor, nMinor, nMicro;
+        wrapper->GetVersion(nMajor, nMinor, nMicro);
+        std::cout << "GladiusLib.Version = " << nMajor << "." << nMinor << "." << nMicro;
+        std::cout << std::endl;
+        auto gladius = wrapper->CreateGladius();
+        gladius->LoadAssembly("D:/gladiusModels/brioMirandaTrack/BrioMirandaTrack_144_mm_M_F.json");
+    }
+    catch (std::exception & e)
+    {
+        std::cout << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
 }
-

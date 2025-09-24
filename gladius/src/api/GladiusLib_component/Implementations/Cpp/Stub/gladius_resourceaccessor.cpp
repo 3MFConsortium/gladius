@@ -13,11 +13,10 @@ Abstract: This is a stub class definition of CResourceAccessor
 
 // Include custom headers here.
 
-
 using namespace GladiusLib::Impl;
 
 /*************************************************************************************************************************
- Class definition of CResourceAccessor 
+ Class definition of CResourceAccessor
 **************************************************************************************************************************/
 
 GladiusLib_uint64 CResourceAccessor::GetSize()
@@ -39,4 +38,3 @@ void CResourceAccessor::Begin()
 {
     throw EGladiusLibInterfaceException(GLADIUSLIB_ERROR_NOTIMPLEMENTED);
 }
-

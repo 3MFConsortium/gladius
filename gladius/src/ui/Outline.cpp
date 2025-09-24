@@ -40,11 +40,11 @@ namespace gladius::ui
             ImGui::TreePop();
         }
         ImGui::EndGroup();
-        frameOverlay(ImVec4(0.9f, 0.6f, 0.3f, 0.1f), 
-                    "Document Information\n\n"
-                    "Add title, author, and other details about your design here.\n"
-                    "This information helps identify your model when sharing with others or\n"
-                    "when sending to manufacturing services.");
+        frameOverlay(ImVec4(0.9f, 0.6f, 0.3f, 0.1f),
+                     "Document Information\n\n"
+                     "Add title, author, and other details about your design here.\n"
+                     "This information helps identify your model when sharing with others or\n"
+                     "when sending to manufacturing services.");
 
         ImGui::BeginGroup();
         // Build Items section

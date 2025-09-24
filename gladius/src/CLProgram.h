@@ -127,10 +127,7 @@ namespace gladius
                 {
                     m_logger->logError(msg);
                 }
-                else
-                {
-                    std::cerr << msg << "\n";
-                }
+                // Avoid noisy stderr fallback; rely on logger when available
             };
 
             if (!isValid())
@@ -155,11 +152,6 @@ namespace gladius
                         m_logger->logError("OpenCL: Creating kernel '" + methodName +
                                            "' failed (error: " + std::to_string(err) + ")");
                     }
-                    else
-                    {
-                        std::cerr << "OpenCL: Creating kernel '" << methodName
-                                  << "' failed (error: " << err << ")\n";
-                    }
                     try
                     {
                         // Provide diagnostics about the program and attempted kernel
@@ -168,10 +160,6 @@ namespace gladius
                         if (m_logger)
                         {
                             m_logger->logError(std::string("  Device      : ") + devName);
-                        }
-                        else
-                        {
-                            std::cerr << "  Device      : " << devName << "\n";
                         }
                         if (m_program)
                         {
@@ -186,10 +174,6 @@ namespace gladius
                                     {
                                         m_logger->logError(std::string("  Program kernels: ") +
                                                            kernelNames);
-                                    }
-                                    else
-                                    {
-                                        std::cerr << "  Program kernels: " << kernelNames << "\n";
                                     }
                                 }
                             }
@@ -214,10 +198,6 @@ namespace gladius
                                 {
                                     m_logger->logError(std::string("  Binary type : ") + typeStr);
                                 }
-                                else
-                                {
-                                    std::cerr << "  Binary type : " << typeStr << "\n";
-                                }
                             }
                             catch (...)
                             {
@@ -237,10 +217,6 @@ namespace gladius
                                 {
                                     m_logger->logError(std::string("  Build status: ") + statusStr);
                                 }
-                                else
-                                {
-                                    std::cerr << "  Build status: " << statusStr << "\n";
-                                }
                             }
                             catch (...)
                             {
@@ -255,10 +231,6 @@ namespace gladius
                                     if (m_logger)
                                     {
                                         m_logger->logError(std::string("  Build log  :\n") + log);
-                                    }
-                                    else
-                                    {
-                                        std::cerr << "  Build log  :\n" << log << "\n";
                                     }
                                 }
                             }
@@ -330,10 +302,7 @@ namespace gladius
                 {
                     m_logger->logError(msg);
                 }
-                else
-                {
-                    std::cerr << msg << "\n";
-                }
+                // Avoid noisy stderr fallback; rely on logger when available
             };
 
             try

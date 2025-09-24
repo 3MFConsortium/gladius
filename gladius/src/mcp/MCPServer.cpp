@@ -139,7 +139,7 @@ namespace gladius::mcp
         // Only log in HTTP mode, not stdio mode
         if (m_transportType == TransportType::HTTP)
         {
-            std::cerr << "Registered MCP tool: " << name << std::endl;
+            std::cout << "Registered MCP tool: " << name << std::endl;
         }
     }
 
@@ -181,7 +181,7 @@ namespace gladius::mcp
     {
         if (m_running)
         {
-            std::cerr << "MCP Server is already running" << std::endl;
+            std::cout << "MCP Server is already running" << std::endl;
             return false;
         }
 
@@ -192,7 +192,7 @@ namespace gladius::mcp
           [this, port]()
           {
               m_running = true;
-              std::cerr << "MCP Server starting on port " << port << std::endl;
+              std::cout << "MCP Server starting on port " << port << std::endl;
 
               if (!m_server->listen("localhost", port))
               {
@@ -237,7 +237,7 @@ namespace gladius::mcp
         // Only print if not in stdio mode
         if (m_transportType == TransportType::HTTP)
         {
-            std::cerr << "MCP Server stopped" << std::endl;
+            std::cout << "MCP Server stopped" << std::endl;
         }
     }
 

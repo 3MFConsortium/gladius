@@ -782,12 +782,10 @@ namespace gladius
 
     void ComputeCore::logMsg(std::string msg) const
     {
-        if (!m_eventLogger)
+        if (m_eventLogger)
         {
-            std::cerr << msg << "\n";
-            return;
+            getLogger().addEvent({std::move(msg), events::Severity::Info});
         }
-        getLogger().addEvent({std::move(msg), events::Severity::Info});
     }
 
     void ComputeCore::computeVertexNormals(Mesh & mesh) const

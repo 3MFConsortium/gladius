@@ -92,10 +92,6 @@ namespace gladius
             {
                 m_logger->logError(std::string("RenderProgram error: ") + e.what());
             }
-            else
-            {
-                std::cerr << e.what();
-            }
         }
     }
 

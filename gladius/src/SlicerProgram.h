@@ -37,13 +37,12 @@ namespace gladius
         void
         movePointsToSurface(Primitives const & lines, VertexBuffer & input, VertexBuffer & output);
 
-
         /**
          * \brief Adopts the vertex positions of the given mesh to the surface
          */
-        void
-        adoptVertexOfMeshToSurface(Primitives const & lines, VertexBuffer & input, VertexBuffer & output);
-        
+        void adoptVertexOfMeshToSurface(Primitives const & lines,
+                                        VertexBuffer & input,
+                                        VertexBuffer & output);
 
         void computeMarchingSquareState(const Primitives & lines, cl_float z_mm);
 

@@ -28,11 +28,7 @@ void kernel jfaMapFromDistanceMap(__write_only image2d_t front,
                                   float lowerLimit,
                                   float upperLimit);
 
-
-void kernel jumpFlood(__write_only image2d_t front,
-                      __read_only image2d_t back,
-                      int stepLength
-                      );
+void kernel jumpFlood(__write_only image2d_t front, __read_only image2d_t back, int stepLength);
 
 void kernel distMapFromJfa(__read_only image2d_t jfaMap,
                            __write_only image2d_t distMap,

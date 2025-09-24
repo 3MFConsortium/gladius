@@ -21,7 +21,9 @@ namespace gladius
     class Rendering
     {
       public:
-        explicit Rendering(SharedComputeContext context,  RequiredCapabilities requiredCapabilities, events::SharedLogger logger);
+        explicit Rendering(SharedComputeContext context,
+                           RequiredCapabilities requiredCapabilities,
+                           events::SharedLogger logger);
 
         void init();
         void reset();
@@ -30,7 +32,6 @@ namespace gladius
 
         [[nodiscard]] bool renderScene(size_t startLine, size_t endLine);
         void renderLowResPreview() const;
-
 
         [[nodiscard]] GLImageBuffer * getResultImage() const;
 
@@ -55,12 +56,9 @@ namespace gladius
 
         [[nodiscard]] ComputeContext & getComputeContext() const;
 
-
         void logMsg(std::string msg) const;
 
-
         void setComputeContext(std::shared_ptr<ComputeContext> context);
-
 
         PlainImage createThumbnail();
         PlainImage createThumbnailPng();
@@ -70,9 +68,7 @@ namespace gladius
 
         bool isBusy() const;
 
-
       private:
-
         void throwIfNoOpenGL() const;
         [[nodiscard]] events::Logger & getLogger() const;
 
@@ -86,9 +82,9 @@ namespace gladius
                                         GLImageBuffer & targetImage) const;
         void renderImage(DistanceMap & sourceImage) const;
         mutable std::recursive_mutex m_computeMutex; // TODO: replace with std::mutex
-        
+
         events::SharedLogger m_eventLogger;
-           RequiredCapabilities m_capabilities = RequiredCapabilities::OpenGLInterop;
+        RequiredCapabilities m_capabilities = RequiredCapabilities::OpenGLInterop;
         std::unique_ptr<GLImageBuffer> m_resultImage;
         std::unique_ptr<GLImageBuffer> m_lowResPreviewImage;
         std::unique_ptr<ImageRGBA> m_thumbnailImage;

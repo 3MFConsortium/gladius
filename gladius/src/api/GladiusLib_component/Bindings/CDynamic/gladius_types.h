@@ -25,7 +25,7 @@ Interface version: 1.2.0
 #ifdef GLADIUSLIB_USELEGACYINTEGERTYPES
 
 typedef unsigned char GladiusLib_uint8;
-typedef unsigned short GladiusLib_uint16 ;
+typedef unsigned short GladiusLib_uint16;
 typedef unsigned int GladiusLib_uint32;
 typedef unsigned long long GladiusLib_uint64;
 typedef char GladiusLib_int8;
@@ -44,7 +44,7 @@ typedef uint64_t GladiusLib_uint64;
 typedef int8_t GladiusLib_int8;
 typedef int16_t GladiusLib_int16;
 typedef int32_t GladiusLib_int32;
-typedef int64_t GladiusLib_int64 ;
+typedef int64_t GladiusLib_int64;
 
 #endif // GLADIUSLIB_USELEGACYINTEGERTYPES
 
@@ -84,7 +84,7 @@ typedef void * GladiusLib_pvoid;
 #define GLADIUSLIB_ERROR_INCOMPATIBLEBINARYVERSION 8
 
 /*************************************************************************************************************************
- Declaration of handle classes 
+ Declaration of handle classes
 **************************************************************************************************************************/
 
 typedef GladiusLibHandle GladiusLib_Base;
@@ -102,24 +102,26 @@ typedef GladiusLibHandle GladiusLib_Gladius;
  Declaration of structs
 **************************************************************************************************************************/
 
-#pragma pack (1)
+#pragma pack(1)
 
-typedef struct {
+typedef struct
+{
     GladiusLib_single m_Coordinates[2];
 } sGladiusLibVector2f;
 
-typedef struct {
+typedef struct
+{
     GladiusLib_single m_Coordinates[3];
 } sGladiusLibVector3f;
 
-typedef struct {
+typedef struct
+{
     GladiusLib_single m_MinPosition[2];
     GladiusLib_single m_MaxPosition[2];
     GladiusLib_int32 m_Size[2];
     GladiusLib_int32 m_RequiredMemory;
 } sGladiusLibChannelMetaInfo;
 
-#pragma pack ()
-
+#pragma pack()
 
 #endif // __GLADIUSLIB_TYPES_HEADER

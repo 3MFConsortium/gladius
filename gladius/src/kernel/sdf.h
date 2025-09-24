@@ -1,7 +1,7 @@
 
 bool equal(float3 a, float3 b);
 
-float wrap(float x); 
+float wrap(float x);
 float mirrorRepeated(float x);
 float clamp01(float x);
 
@@ -20,7 +20,6 @@ float infiniteCylinder(float3 pos, float radius);
 float cylinder(float3 pos, float radius, float height);
 float cylinderFromTo(float3 pos, float3 start, float3 end, float radius);
 
-
 float line(float2 pos, float2 start, float2 end);
 
 float sqDistance(float2 start, float2 end);
@@ -28,7 +27,6 @@ float sqDistance(float2 start, float2 end);
 float unsignedSqLine(float2 pos, float2 start, float2 end);
 
 float unsignedLine(float2 pos, float2 start, float2 end);
-
 
 float unite(float sdfA, float sdfB);
 
@@ -52,16 +50,15 @@ float3 repeat3f(float3 pos, float3 cellSize);
 float3 finiteRepeat3f(float3 pos, float3 cellSize, float3 domain);
 float3 repeatPolar(float3 pos, float radius, float number);
 
+float lines(float3 pos, __global float* points, const uint start, const uint end);
 
-float lines(float3 pos, __global float * points, const uint start, const uint end);
-
-float polygon(float3 pos, __global float * points, const uint start, const uint end);
+float polygon(float3 pos, __global float* points, const uint start, const uint end);
 
 float box(float3 pos, float3 dimensions);
 
 float bbBox(float3 pos, float3 bbmin, float3 bbmax);
 
-float polygonPrimitive(float3 pos, struct PrimitiveMeta primitive, global float * data);
+float polygonPrimitive(float3 pos, struct PrimitiveMeta primitive, global float* data);
 
 // primitives
 
@@ -69,30 +66,16 @@ float payloadPrimitives(float3 pos, bool useApproximation, PAYLOAD_ARGS);
 float payload(float3 pos, int startIndex, int endIndex, PAYLOAD_ARGS);
 
 // Image sampling helpers (needed by ImageSampler nodes)
-float4 sampleImageNearest4f(float3 uvw,
-                            float3 dimensions,
-                            int start,
-                            int3 tileStyle,
-                            PAYLOAD_ARGS);
+float4 sampleImageNearest4f(float3 uvw, float3 dimensions, int start, int3 tileStyle, PAYLOAD_ARGS);
 
-float4 sampleImageLinear4f(float3 uvw,
-                           float3 dimensions,
-                           int start,
-                           int3 tileStyle,
-                           PAYLOAD_ARGS);
+float4 sampleImageLinear4f(float3 uvw, float3 dimensions, int start, int3 tileStyle, PAYLOAD_ARGS);
 
 // VDB-backed sampling helpers (enabled when ENABLE_VDB is defined)
-float4 sampleImageNearest4fvdb(float3 uvw,
-                               float3 dimensions,
-                               int start,
-                               int3 tileStyle,
-                               PAYLOAD_ARGS);
+float4
+sampleImageNearest4fvdb(float3 uvw, float3 dimensions, int start, int3 tileStyle, PAYLOAD_ARGS);
 
-float4 sampleImageLinear4fvdb(float3 uvw,
-                              float3 dimensions,
-                              int start,
-                              int3 tileStyle,
-                              PAYLOAD_ARGS);
+float4
+sampleImageLinear4fvdb(float3 uvw, float3 dimensions, int start, int3 tileStyle, PAYLOAD_ARGS);
 
 // VDB evaluation helpers
 float vdbModel(float3 pos, int index, PAYLOAD_ARGS);
@@ -112,10 +95,8 @@ struct LineDistance directedLine(float2 pos, float2 start, float2 end);
 
 struct LineDistance uniteLine(struct LineDistance a, struct LineDistance b);
 
-
 /// Calculates the inverse of a 4x4 matrix represented by a float16.
 float16 inverse(float16 matrixToBeInverted);
 
 /// Calculates the transpose of a 4x4 matrix represented by a float16.
 float16 transpose(float16 matrix);
-

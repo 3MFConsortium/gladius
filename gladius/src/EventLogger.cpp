@@ -215,8 +215,11 @@ namespace gladius::events
         // Only output to console if not in silent mode
         if (m_outputMode == OutputMode::Console)
         {
-            // In release mode, output to stderr to keep stdout clean for MCP
-            std::cerr << event.getMessage() << "\n";
+            if (event.getSeverity() == Severity::Error ||
+                event.getSeverity() == Severity::FatalError)
+            {
+                std::cerr << event.getMessage() << "\n";
+            }
         }
     }
 

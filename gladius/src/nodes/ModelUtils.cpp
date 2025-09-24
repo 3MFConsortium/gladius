@@ -2,19 +2,19 @@
 
 namespace gladius::nodes
 {
-    bool isQualifiedForLevelset(Model& model)
+    bool isQualifiedForLevelset(Model & model)
     {
         // Check for Begin node with float3 pos parameter
-        const Begin* beginNode = model.getBeginNode();
+        const Begin * beginNode = model.getBeginNode();
         if (!beginNode)
         {
             return false;
         }
 
         // Check if Begin node has a "pos" output port of type float3
-        const auto& outputs = beginNode->getOutputs();
+        const auto & outputs = beginNode->getOutputs();
         auto posPortIt = outputs.find(FieldNames::Pos);
-        if (posPortIt == outputs.end() || 
+        if (posPortIt == outputs.end() ||
             posPortIt->second.getTypeIndex() != ParameterTypeIndex::Float3)
         {
             return false;
@@ -27,17 +27,17 @@ namespace gladius::nodes
         }
 
         // Check for End node with at least one float parameter
-        End* endNode = model.getEndNode();
+        End * endNode = model.getEndNode();
         if (!endNode)
         {
             return false;
         }
 
         // Check if End node has at least one float parameter
-        const auto& params = endNode->parameter();
+        const auto & params = endNode->parameter();
         bool hasScalarParam = false;
-        
-        for (const auto& [name, param] : params)
+
+        for (const auto & [name, param] : params)
         {
             if (param.getTypeIndex() == ParameterTypeIndex::Float)
             {
@@ -49,36 +49,36 @@ namespace gladius::nodes
         return hasScalarParam;
     }
 
-    bool isQualifiedForVolumeColor(Model& model)
+    bool isQualifiedForVolumeColor(Model & model)
     {
         // Check for Begin node with float3 pos parameter
-        const Begin* beginNode = model.getBeginNode();
+        const Begin * beginNode = model.getBeginNode();
         if (!beginNode)
         {
             return false;
         }
 
         // Check if Begin node has a "pos" input port of type float3
-        const auto& inputs = beginNode->getOutputs();
+        const auto & inputs = beginNode->getOutputs();
         auto posPortIt = inputs.find(FieldNames::Pos);
-        if (posPortIt == inputs.end() || 
+        if (posPortIt == inputs.end() ||
             posPortIt->second.getTypeIndex() != ParameterTypeIndex::Float3)
         {
             return false;
         }
 
         // Check for End node with at least one float3 output parameter
-        End* endNode = model.getEndNode();
+        End * endNode = model.getEndNode();
         if (!endNode)
         {
             return false;
         }
 
         // Check if End node has at least one float3 output parameter
-        const auto& params = endNode->parameter();
+        const auto & params = endNode->parameter();
         bool hasScalarParam = false;
-        
-        for (const auto& [name, param] : params)
+
+        for (const auto & [name, param] : params)
         {
             if (param.getTypeIndex() == ParameterTypeIndex::Float3)
             {

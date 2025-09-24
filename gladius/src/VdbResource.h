@@ -8,18 +8,18 @@
 
 namespace gladius
 {
-    class VdbResource  : public ResourceBase
+    class VdbResource : public ResourceBase
     {
-    public:
-      explicit VdbResource(ResourceKey key, openvdb::GridBase::Ptr && grid);
+      public:
+        explicit VdbResource(ResourceKey key, openvdb::GridBase::Ptr && grid);
 
-      ~VdbResource() = default;
+        ~VdbResource() = default;
 
-      nodes::float3 getGridSize() const;
+        nodes::float3 getGridSize() const;
 
-    private:
-      openvdb::GridBase::Ptr m_grid;
+      private:
+        openvdb::GridBase::Ptr m_grid;
 
-      void loadImpl() override;
+        void loadImpl() override;
     };
 }

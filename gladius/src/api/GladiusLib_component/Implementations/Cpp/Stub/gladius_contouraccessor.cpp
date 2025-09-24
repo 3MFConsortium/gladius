@@ -17,11 +17,10 @@ Abstract: This is a stub class definition of CContourAccessor
 
 // Include custom headers here.
 
-
 using namespace GladiusLib::Impl;
 
 /*************************************************************************************************************************
- Class definition of CContourAccessor 
+ Class definition of CContourAccessor
 **************************************************************************************************************************/
 
 void CContourAccessor::setContour(gladius::SharedPolyLines resource)
@@ -43,7 +42,7 @@ IPolygonAccessor * CContourAccessor::GetCurrentPolygon()
 
 GladiusLib_uint64 CContourAccessor::GetSize()
 {
-	return m_polyLines->size();
+    return m_polyLines->size();
 }
 
 bool CContourAccessor::Next()
@@ -70,4 +69,3 @@ void CContourAccessor::Begin()
 {
     m_iter = std::cbegin(*m_polyLines);
 }
-

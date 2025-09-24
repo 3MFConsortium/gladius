@@ -65,10 +65,6 @@ namespace gladius
                     m_logger->logInfo(
                       "Aborting compilation attempt: No model source has been set yet");
                 }
-                else
-                {
-                    std::cerr << "aborting compilation: No model source set\n";
-                }
                 return;
             }
 
@@ -115,10 +111,6 @@ namespace gladius
             if (m_logger)
             {
                 m_logger->logInfo("Aborting compilation attempt: No model source has been set yet");
-            }
-            else
-            {
-                std::cerr << "aborting compilation: No model source set\n";
             }
             return;
         }
