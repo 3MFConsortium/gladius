@@ -122,6 +122,16 @@ enable_testing()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Ensure installed binaries look for co-located shared libraries first
+if(UNIX)
+  # Use $ORIGIN so binaries in /opt/gladius/<version> can find bundled .so
+  set(CMAKE_INSTALL_RPATH "$ORIGIN")
+  # Build artifacts will already carry the final install RPATH, avoiding RPATH rewrite during install
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+  set(CMAKE_SKIP_BUILD_RPATH  OFF)
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+endif()
+
 find_package(CMakeRC CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -188,6 +198,26 @@ else()
     set(INSTALL_PREFIX /opt/gladius/${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
     set(INSTALL_BIN_DIR ${INSTALL_PREFIX})
     set(SYMLINK_BIN_DIR /usr/bin)
+endif()
+
+# Bundle lib3mf runtime shared objects on Linux so the app runs out-of-the-box
+if(UNIX)
+  # Resolve the location of the imported lib3mf target
+  get_target_property(_lib3mf_loc_release lib3mf::lib3mf IMPORTED_LOCATION_RELEASE)
+  get_target_property(_lib3mf_loc         lib3mf::lib3mf IMPORTED_LOCATION)
+  set(_lib3mf_resolved "${_lib3mf_loc_release}")
+  if(NOT _lib3mf_resolved)
+    set(_lib3mf_resolved "${_lib3mf_loc}")
+  endif()
+  if(_lib3mf_resolved)
+    get_filename_component(_lib3mf_dir "${_lib3mf_resolved}" DIRECTORY)
+    if(EXISTS "${_lib3mf_dir}")
+      file(GLOB _lib3mf_so_files "${_lib3mf_dir}/lib3mf.so*")
+      if(_lib3mf_so_files)
+        install(FILES ${_lib3mf_so_files} DESTINATION ${INSTALL_PREFIX})
+      endif()
+    endif()
+  endif()
 endif()
 
 add_subdirectory(tests)
@@ -279,9 +309,11 @@ install(
     PATTERN "kernel" EXCLUDE
 )
 
-# Create a symbolic link in /usr/bin
+# Install a lightweight launcher in /usr/bin that forwards to the real binary in /opt
 if(UNIX)
-    install(CODE "execute_process(COMMAND ln -sf ${INSTALL_BIN_DIR}/gladius ${SYMLINK_BIN_DIR}/gladius)")
+  set(GLADIUS_LAUNCHER "${PROJECT_BINARY_DIR}/gladius_launcher.sh")
+  file(WRITE "${GLADIUS_LAUNCHER}" "#!/bin/sh\nexec ${INSTALL_PREFIX}/gladius \"$@\"\n")
+  install(PROGRAMS "${GLADIUS_LAUNCHER}" DESTINATION ${SYMLINK_BIN_DIR} RENAME gladius)
 endif()
 
 
@@ -308,6 +340,9 @@ if (UNIX)
   set(CPACK_DEBIAN_PACKAGE_MAINTAINER "3MF Consortium")
   set(CPACK_DEBIAN_PACKAGE_SECTION "Graphics")
   set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/3MFConsortium/gladius")
+  # Let dpkg-shlibdeps compute runtime dependencies against system libs.
+  # We still bundle lib3mf to avoid requiring it from apt when unavailable.
+  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 endif()
 
 include(CPack)
