@@ -268,9 +268,6 @@ namespace gladius
                     errorMsg += ": " + buildLog;
                 }
 
-                // Always output detailed error to stderr for debugging
-                std::cerr << "OPENCL_BUILD_ERROR: " << errorMsg << std::endl;
-
                 if (logger)
                 {
                     logger->logError(errorMsg);
@@ -784,7 +781,8 @@ namespace gladius
                                            std::string(e.what()));
                     }
                     // Fall back to single-level compilation
-                    goto single_level_compile;
+                    compileSingleLevel(callBack, currentHash);
+                    return;
                 }
             }
             else
@@ -1010,11 +1008,23 @@ namespace gladius
                 // Also output to stderr for debugging visibility
                 std::cerr << "OPENCL_ERROR: " << errorDetails << std::endl;
                 // Fall back to single-level compilation
-                goto single_level_compile;
+                compileSingleLevel(callBack, currentHash);
+                return;
             }
         }
 
-    single_level_compile:
+        // If two-level path not taken or not applicable, perform single-level compile
+        compileSingleLevel(callBack, currentHash);
+        return;
+    }
+
+    void CLProgram::compileNonBlocking(BuildCallBack & callBack)
+    {
+        ProfileFunction m_kernelCompilation = std::async([&]() { this->compile(callBack); });
+    }
+
+    void CLProgram::compileSingleLevel(BuildCallBack & callBack, size_t currentHash)
+    {
         // Single-level compilation fallback
         m_program =
           std::make_unique<cl::Program>(cl::Program(m_ComputeContext->GetContext(), m_sources));
@@ -1095,11 +1105,6 @@ namespace gladius
         m_isCompilationInProgress = false;
 
         callBackDispatcher(nullptr, &m_callBackUserData);
-    }
-
-    void CLProgram::compileNonBlocking(BuildCallBack & callBack)
-    {
-        ProfileFunction m_kernelCompilation = std::async([&]() { this->compile(callBack); });
     }
 
     void CLProgram::buildWithLib(BuildCallBack & callBack)

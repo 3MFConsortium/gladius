@@ -507,5 +507,8 @@ namespace gladius
         void saveStaticLibraryToCache(size_t staticHash, const cl::Program & staticLibrary);
         bool loadLinkedProgramFromCache(size_t staticHash, size_t dynamicHash);
         void saveLinkedProgramToCache(size_t staticHash, size_t dynamicHash);
+
+        // Single-level compilation fallback extracted from compile()
+        void compileSingleLevel(BuildCallBack & callBack, size_t currentHash);
     };
 }
