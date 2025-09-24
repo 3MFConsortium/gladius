@@ -69,7 +69,7 @@ int main(int argc, char ** argv)
                         return 1;
                     }
                 }
-                catch (const std::exception &) bool openclDebug = false;
+                catch (const std::exception &)
                 {
                     std::cerr << "Invalid port number: " << argv[i] << std::endl;
                     return 1;
@@ -150,7 +150,7 @@ int main(int argc, char ** argv)
 
             // Restore stdout for MCP protocol
             std::cout.rdbuf(orig_cout);
-            gladius::Application app(headless, openclDebug);
+            gladius::Application app(headless);
             if (!success)
             {
                 // Use stderr for error since stdout is reserved for MCP protocol
