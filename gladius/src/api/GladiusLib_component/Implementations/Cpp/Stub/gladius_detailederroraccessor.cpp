@@ -94,7 +94,6 @@ std::string CDetailedErrorAccessor::GetDescription()
     return m_iter->getMessage();
 }
 
-
 GladiusLib_uint32 CDetailedErrorAccessor::GetSeverity()
 {
     if (!m_sharedLogger)

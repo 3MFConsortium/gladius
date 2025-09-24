@@ -41,13 +41,15 @@ namespace gladius::nodes
 
         /**
          * @brief Get integration statistics
-         * @return A tuple containing number of integrated calls, redundant integration skips, 
+         * @return A tuple containing number of integrated calls, redundant integration skips,
          *         flattened models count, and redundant flattening skips
          */
         std::tuple<size_t, size_t, size_t, size_t> getIntegrationStats() const
         {
-            return {m_integratedFunctionCalls.size(), m_redundantIntegrationSkips, 
-                    m_flattenedModels.size(), m_redundantFlatteningSkips};
+            return {m_integratedFunctionCalls.size(),
+                    m_redundantIntegrationSkips,
+                    m_flattenedModels.size(),
+                    m_redundantFlatteningSkips};
         }
 
       private:
@@ -156,7 +158,7 @@ namespace gladius::nodes
          * Used to avoid redundant processing of the same function call multiple times
          */
         std::unordered_set<nodes::FunctionCall const *> m_integratedFunctionCalls;
-        
+
         /**
          * @brief Set of models that have already been flattened
          * Used to avoid redundant flattening of the same model multiple times

@@ -1,9 +1,9 @@
 #pragma once
-#include "Document.h"
 #include "BuildItemView.h"
+#include "Document.h"
 #include "MetaDataView.h"
 
-//forward declaration
+// forward declaration
 namespace gladius::nodes
 {
     class BuildItem;

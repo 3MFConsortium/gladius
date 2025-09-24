@@ -28,6 +28,7 @@ namespace gladius
     class Mesh;
     class ResourceContext;
     class ImageStackOCLBuffer;
+    class BeamLatticeResource;
 
     using TextureBuffer = ImageImpl<cl_float4>;
 
@@ -136,6 +137,7 @@ namespace gladius
         void addResource(ResourceKey key, vdb::TriangleMesh && mesh);
         void addResource(ResourceKey key, openvdb::GridBase::Ptr && grid);
         void addResource(ResourceKey key, io::ImageStack && stack);
+        void addResource(ResourceKey key, std::unique_ptr<BeamLatticeResource> && resource);
 
         /**
          * \brief Loads all resources that have not been load yet

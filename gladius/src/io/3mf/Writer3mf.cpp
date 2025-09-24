@@ -12,6 +12,7 @@
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
 
+#include <fmt/format.h>
 #include <unordered_map>
 
 namespace gladius::io
@@ -487,31 +488,23 @@ namespace gladius::io
     }
 
     Writer3mf::Writer3mf(events::SharedLogger logger)
-        : m_logger(std::move(logger))
+        : Writer3mfBase(std::move(logger))
     {
-        try
-        {
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
-        }
-        catch (std::exception & e)
-        {
-            m_logger->addEvent({e.what(), events::Severity::Error});
-            return;
-        }
     }
 
     void Writer3mf::save(std::filesystem::path const & filename,
                          Document const & doc,
                          bool writeThumbnail)
     {
+        m_logger->logInfo(fmt::format("Starting save operation to file: {}", filename.string()));
         auto model = doc.get3mfModel();
-
 
         if (!model)
         {
             m_logger->addEvent({"No 3MF model to save.", events::Severity::Error});
             return;
         }
+        m_logger->logInfo("3MF model found successfully");
         auto metaDataGroup = model->GetMetaDataGroup();
 
         if (!metaDataGroup)
@@ -519,6 +512,7 @@ namespace gladius::io
             m_logger->addEvent({"No metadata group found.", events::Severity::Warning});
             return;
         }
+        m_logger->logInfo("Metadata group retrieved successfully");
 
         try
         {
@@ -527,32 +521,64 @@ namespace gladius::io
             if (!metaApplication)
             {
                 metaDataGroup->AddMetaData("", metaKeyApp, "Gladius", "string", true);
+                m_logger->logInfo("Added Gladius metadata successfully");
+            }
+            else
+            {
+                m_logger->logInfo("Gladius metadata already exists");
             }
         }
         catch (const std::exception & e)
         {
-            m_logger->addEvent({e.what(), events::Severity::Warning});
+            m_logger->addEvent(
+              {fmt::format("Failed to add metadata: {}", e.what()), events::Severity::Warning});
         }
 
+        m_logger->logInfo("Starting model update");
         updateModel(doc);
+        m_logger->logInfo("Model update completed");
+
         if (writeThumbnail)
         {
-            updateThumbnail(const_cast<Document &>(doc));
+            try
+            {
+                m_logger->logInfo("Starting thumbnail update");
+                updateThumbnail(const_cast<Document &>(doc), model);
+                m_logger->logInfo("Thumbnail update completed");
+            }
+            catch (const std::exception & e)
+            {
+                m_logger->addEvent(
+                  {fmt::format("Failed to update thumbnail. Writing file without thumbnail: {}",
+                               e.what()),
+                   events::Severity::Warning});
+            }
         }
 
         try
         {
+            m_logger->logInfo("Creating 3MF writer");
             auto writer = model->QueryWriter("3mf");
+            m_logger->logInfo(fmt::format("Writing to file: {}", filename.string()));
             writer->WriteToFile(filename.string().c_str());
+            m_logger->logInfo("File write completed successfully");
         }
         catch (Lib3MF::ELib3MFException const & e)
         {
-            m_logger->addEvent({e.what(), events::Severity::Error});
+            m_logger->addEvent(
+              {fmt::format("3MF write error: {} (Error Code: {})", e.what(), e.getErrorCode()),
+               events::Severity::Error});
+        }
+        catch (const std::exception & e)
+        {
+            m_logger->addEvent({fmt::format("Standard exception during write: {}", e.what()),
+                                events::Severity::Error});
         }
     }
 
     void Writer3mf::updateModel(Document const & doc)
     {
+        m_logger->logInfo("Starting updateModel operation");
         auto model3mf = doc.get3mfModel();
 
         if (!model3mf)
@@ -561,93 +587,130 @@ namespace gladius::io
             return;
         }
 
-        for (auto & [name, model] : doc.getAssembly()->getFunctions())
+        m_logger->logInfo("Retrieved 3MF model for update");
+        auto assembly = doc.getAssembly();
+        if (!assembly)
         {
+            m_logger->addEvent({"No assembly found in document.", events::Severity::Error});
+            return;
+        }
+
+        auto functions = assembly->getFunctions();
+        m_logger->logInfo(fmt::format("Found {} functions to process", functions.size()));
+
+        for (auto & [name, model] : functions)
+        {
+            m_logger->logInfo(fmt::format("Processing function: {}", name));
+
             if (model->isManaged())
             {
+                m_logger->logInfo(fmt::format("Skipping managed function: {}", name));
                 continue; // dont write functions that represent other aspects the 3mf model
             }
 
-            auto function3mf = findExistingFunction(model3mf, *model);
+            try
+            {
+                auto function3mf = findExistingFunction(model3mf, *model);
 
-            if (function3mf)
-            {
-                function3mf->Clear();
-                fillFunction(function3mf, *model, model3mf);
+                if (function3mf)
+                {
+                    m_logger->logInfo(fmt::format("Updating existing function: {}", name));
+                    function3mf->Clear();
+                    fillFunction(function3mf, *model, model3mf);
+                    m_logger->logInfo(fmt::format("Successfully updated function: {}", name));
+                }
+                else
+                {
+                    m_logger->logInfo(fmt::format("Adding new function: {}", name));
+                    addFunctionTo3mf(*model, model3mf);
+                    m_logger->logInfo(fmt::format("Successfully added new function: {}", name));
+                }
             }
-            else
+            catch (const std::exception & e)
             {
-                //throw std::runtime_error("Function not found in 3mf model");
-                addFunctionTo3mf(*model, model3mf);
+                m_logger->addEvent(
+                  {fmt::format("Failed to process function '{}': {}", name, e.what()),
+                   events::Severity::Error});
             }
         }
+        m_logger->logInfo("updateModel operation completed");
     }
 
     void Writer3mf::addFunctionTo3mf(gladius::nodes::Model & model, Lib3MF::PModel model3mf)
     {
-        auto newFunction = model3mf->AddImplicitFunction();
-        fillFunction(newFunction, model, model3mf);
+        m_logger->logInfo(
+          fmt::format("Creating new implicit function for model: {}", model.getModelName()));
+        try
+        {
+            auto newFunction = model3mf->AddImplicitFunction();
+            m_logger->logInfo("Implicit function created, filling with data");
+            fillFunction(newFunction, model, model3mf);
+            m_logger->logInfo("Function data filled successfully");
+        }
+        catch (const std::exception & e)
+        {
+            m_logger->addEvent({fmt::format("Failed to add function to 3MF: {}", e.what()),
+                                events::Severity::Error});
+            throw;
+        }
     }
 
     void Writer3mf::fillFunction(Lib3MF::PImplicitFunction function,
                                  gladius::nodes::Model & model,
                                  Lib3MF::PModel model3mf)
     {
-        NodeCreator nodeCreator{function, model3mf};
-        LinkCreator linkCreator{function};
-
-        if (model.getDisplayName().has_value())
-        {
-            function->SetDisplayName(model.getDisplayName().value());
-        }
-
-        for (auto & [portName, input] : model.getInputs())
-        {
-            function->AddInput(
-              portName, input.getShortName(), convertPortType(input.getTypeIndex()));
-        }
-
-        model.visitNodes(nodeCreator);
-        model.visitNodes(linkCreator);
-
-        for (auto & [portName, output] : model.getOutputs())
-        {
-            if (!output.getSource().has_value())
-            {
-                continue;
-            }
-            auto output3mf =
-              function->AddOutput(portName, portName, convertPortType(output.getTypeIndex()));
-            auto const sourcePath = model.getSourceName(output.getSource().value().portId);
-            auto const targetPath = fmt::format("outputs.{}", portName);
-            function->AddLinkByNames(sourcePath, targetPath);
-        }
-    }
-
-    void Writer3mf::updateThumbnail(Document & doc)
-    {
-        auto model3mf = doc.get3mfModel();
-
-        if (!model3mf)
-        {
-            m_logger->addEvent({"No 3MF model to update.", events::Severity::Error});
-            return;
-        }
+        m_logger->logInfo(fmt::format("Starting fillFunction for model: {}", model.getModelName()));
         try
         {
-            auto image = doc.getCore()->createThumbnailPng();
+            NodeCreator nodeCreator{function, model3mf};
+            LinkCreator linkCreator{function};
 
-            if (model3mf->HasPackageThumbnailAttachment())
+            if (model.getDisplayName().has_value())
             {
-                model3mf->RemovePackageThumbnailAttachment();
+                function->SetDisplayName(model.getDisplayName().value());
+                m_logger->logInfo(
+                  fmt::format("Set display name: {}", model.getDisplayName().value()));
             }
-            auto thumbNail = model3mf->CreatePackageThumbnailAttachment();
-            thumbNail->ReadFromBuffer(image.data);
+
+            auto inputs = model.getInputs();
+            m_logger->logInfo(fmt::format("Adding {} input ports", inputs.size()));
+            for (auto & [portName, input] : inputs)
+            {
+                function->AddInput(
+                  portName, input.getShortName(), convertPortType(input.getTypeIndex()));
+                m_logger->logInfo(fmt::format("Added input port: {}", portName));
+            }
+
+            m_logger->logInfo("Starting node visitation");
+            model.visitNodes(nodeCreator);
+            model.visitNodes(linkCreator);
+            m_logger->logInfo("Node visitation completed");
+
+            auto outputs = model.getOutputs();
+            m_logger->logInfo(fmt::format("Processing {} outputs", outputs.size()));
+            for (auto & [portName, output] : outputs)
+            {
+                if (!output.getSource().has_value())
+                {
+                    continue;
+                }
+                auto output3mf =
+                  function->AddOutput(portName, portName, convertPortType(output.getTypeIndex()));
+                m_logger->logInfo(fmt::format("Added output port: {}", portName));
+
+                auto const sourcePath = model.getSourceName(output.getSource().value().portId);
+                auto const targetPath = fmt::format("outputs.{}", portName);
+                function->AddLinkByNames(sourcePath, targetPath);
+                m_logger->logInfo(fmt::format("Linked output: {} -> {}", sourcePath, targetPath));
+            }
+
+            m_logger->logInfo("fillFunction completed successfully");
         }
         catch (const std::exception & e)
         {
-            m_logger->addEvent({e.what(), events::Severity::Error});
-            return;
+            m_logger->addEvent(
+              {fmt::format("Failed to fill function: {}", e.what()), events::Severity::Error});
+            throw;
         }
     }
 

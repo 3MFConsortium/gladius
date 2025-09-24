@@ -310,13 +310,7 @@ namespace gladius::ui
                 m_camera.mouseInputHandler(ImGuiMouseButton_Middle, 0, mousePos.x, mousePos.y);
             }
 
-            if (fabs(io.MouseWheel) > 0. && ImGui::IsMouseHoveringRect(contentMin, contentMax))
-            {
-                m_camera.zoom(-io.MouseWheel * 0.1f);
-                m_renderWindowState.isMoving = true;
-                m_dirty = true;
-                m_renderWindowState.currentLine = 0;
-            }
+            // Wheel zoom is handled via ShortcutManager (camera.zoomInWheel / camera.zoomOutWheel)
         }
 
         ImGui::SameLine();
@@ -382,6 +376,9 @@ namespace gladius::ui
 
         // Mark model as modified for permanent centering
         m_modelModifiedSinceLastCenter = true;
+
+        // Reset first-time bounding box availability for new model
+        m_boundingBoxEverAvailable = false;
     }
 
     void RenderWindow::renderScene(RenderWindowState & state)
@@ -857,8 +854,13 @@ namespace gladius::ui
             m_view->startAnimationMode();
         }
 
-        // Handle both manual center requests and permanent centering
-        bool const shouldCenter = m_centerViewRequested || shouldRecalculateCenter();
+        // Check if this is the first time we have a valid bounding box for this model
+        bool const firstTimeBoundingBoxAvailable =
+          !m_boundingBoxEverAvailable && m_core->getBoundingBox().has_value();
+
+        // Handle both manual center requests, permanent centering, and first-time centering
+        bool const shouldCenter =
+          m_centerViewRequested || shouldRecalculateCenter() || firstTimeBoundingBoxAvailable;
 
         if (shouldCenter)
         {
@@ -886,6 +888,12 @@ namespace gladius::ui
                     }
 
                     m_centerViewRequested = false;
+
+                    // Mark that we now have a bounding box available
+                    if (firstTimeBoundingBoxAvailable)
+                    {
+                        m_boundingBoxEverAvailable = true;
+                    }
                 }
             }
 

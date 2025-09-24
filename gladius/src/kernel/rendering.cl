@@ -1,4 +1,4 @@
-#define RENDER_SDF
+// RENDER_SDF macro removed; SDF visualization is controlled at runtime via renderingSettings.flags
 
 float4 cachedSdf(float3 pos, PAYLOAD_ARGS)
 {
@@ -75,8 +75,7 @@ struct DistanceColor mapCached(float3 pos, PAYLOAD_ARGS)
     parts.color = (float4)(modelSdf.xyz, 1.f);
     result = uniteColor(parts, platform);
     
-#ifdef RENDER_SDF
-if (renderingSettings.z_mm > 0.0001f && renderingSettings.flags & RF_SHOW_FIELD)
+if (renderingSettings.z_mm > 0.0001f && (renderingSettings.flags & RF_SHOW_FIELD))
 {
     struct DistanceColor isolines;
     isolines.type = 3.f;
@@ -91,7 +90,7 @@ if (renderingSettings.z_mm > 0.0001f && renderingSettings.flags & RF_SHOW_FIELD)
     result = uniteColor(result, isolines);
 }
 
-if (renderingSettings.z_mm > 0.0001f && renderingSettings.flags & RF_SHOW_STACK)
+if (renderingSettings.z_mm > 0.0001f && (renderingSettings.flags & RF_SHOW_STACK))
 {
     struct DistanceColor isolines;
     isolines.type = 3.f;
@@ -104,7 +103,6 @@ if (renderingSettings.z_mm > 0.0001f && renderingSettings.flags & RF_SHOW_STACK)
     isolines.signedDistance = max(buildVolume, bbBox(stackPos, (float3)( preCompSdfBBox.min.xy , 0.f), (float3)(preCompSdfBBox.max.xy, 0.5f)));
     result = uniteColor(result, isolines);
 }
-#endif
     //coordinate system
     if (renderingSettings.flags & RF_SHOW_COORDINATE_SYSTEM)
     {

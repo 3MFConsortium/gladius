@@ -221,14 +221,14 @@ namespace gladius::ui
                                                   rectMax,
                                                   ImGui::ColorConvertFloat4ToU32(color),
                                                   15.0f); // Rounded corners
-        
+
         // Handle tooltip by checking if mouse is hovering over the overlay region
         if (!tooltip.empty())
         {
             ImVec2 mousePos = ImGui::GetIO().MousePos;
             bool isHovered = (mousePos.x >= rectMin.x && mousePos.x <= rectMax.x &&
                               mousePos.y >= rectMin.y && mousePos.y <= rectMax.y);
-                              
+
             if (isHovered)
             {
                 ImGui::BeginTooltip();

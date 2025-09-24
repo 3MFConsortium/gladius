@@ -28,6 +28,7 @@ namespace gladius::nodes
 
         void setIsUsed(bool isUsed);
         [[nodiscard]] bool isUsed() const;
+
       private:
         std::string m_uniqueName{};
         std::string m_shortName{}; // "e.g. FieldNames::Shape, FieldNames::Pos etc.

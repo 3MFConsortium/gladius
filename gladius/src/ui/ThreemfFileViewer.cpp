@@ -234,7 +234,7 @@ namespace gladius::ui
     {
         // Scan the directory if needed
         scanDirectory();
-            
+
         // Calculate the number of columns that fit into the window based on thumbnail size
         float const windowWidth = ImGui::GetContentRegionAvail().x;
         float const spacing = ImGui::GetStyle().ItemSpacing.x;
@@ -242,7 +242,7 @@ namespace gladius::ui
 
         // Calculate how many thumbnails fit in the window width
         m_columns = std::max(1, static_cast<int>(windowWidth / effectiveItemWidth));
-            
+
         bool oneThumbnailLoaded = false;
         // Display files in a grid
         if (m_files.empty())
@@ -254,167 +254,165 @@ namespace gladius::ui
             // No need for a child window as we're already in a tab or window
             float availableHeight = ImGui::GetContentRegionAvail().y;
 
-                // Calculate item width based on available width and desired columns
-                float windowWidth = ImGui::GetContentRegionAvail().x;
-                float itemWidth =
-                  (windowWidth - ImGui::GetStyle().ItemSpacing.x * (m_columns - 1)) / m_columns;
+            // Calculate item width based on available width and desired columns
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+            float itemWidth =
+              (windowWidth - ImGui::GetStyle().ItemSpacing.x * (m_columns - 1)) / m_columns;
 
-                // Define standard item size for consistent layout
-                const float itemHeight = m_thumbnailSize + 40.0f; // Thumbnail + space for text
+            // Define standard item size for consistent layout
+            const float itemHeight = m_thumbnailSize + 40.0f; // Thumbnail + space for text
 
-                // Loop through files and display them in a grid
-                int fileIndex = 0;
-                for (auto & fileInfo : m_files)
+            // Loop through files and display them in a grid
+            int fileIndex = 0;
+            for (auto & fileInfo : m_files)
+            {
+                // Start on a new line if not the first item and not at the start of a row
+                if (fileIndex > 0 && (fileIndex % m_columns) != 0)
                 {
-                    // Start on a new line if not the first item and not at the start of a row
-                    if (fileIndex > 0 && (fileIndex % m_columns) != 0)
-                    {
-                        ImGui::SameLine();
-                    }
-
-                    // Create a unique ID for the item
-                    ImGui::PushID(fileIndex);
-
-                    // Create a selectable group for the file
-                    ImGui::BeginGroup();
-
-                    // Process thumbnail if not already loaded
-                    if (!fileInfo.thumbnailLoaded && !oneThumbnailLoaded)
-                    {
-                        oneThumbnailLoaded = true;
-                        loadThumbnail(fileInfo);
-                    }
-
-                    // Calculate display dimensions while maintaining aspect ratio
-                    float aspectRatio = 1.0f;
-                    float thumbnailHeight = m_thumbnailSize;
-                    float thumbnailWidth = m_thumbnailSize;
-
-                    if (fileInfo.hasThumbnail && fileInfo.thumbnailWidth > 0 &&
-                        fileInfo.thumbnailHeight > 0)
-                    {
-                        aspectRatio = static_cast<float>(fileInfo.thumbnailWidth) /
-                                      static_cast<float>(fileInfo.thumbnailHeight);
-
-                        // Calculate dimensions to fit within the standard size while preserving
-                        // aspect ratio
-                        if (aspectRatio > 1.0f) // Wider than tall
-                        {
-                            thumbnailHeight = m_thumbnailSize / aspectRatio;
-                        }
-                        else // Taller than wide or square
-                        {
-                            thumbnailWidth = m_thumbnailSize * aspectRatio;
-                        }
-                    }
-
-                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-
-                    // Save the initial cursor position before the selectable
-                    ImVec2 itemStartPos = ImGui::GetCursorPos();
-
-                    // Create a selectable container with fixed height for consistent layout
-                    bool isClicked = ImGui::Selectable("##selector",
-                                                       false,
-                                                       ImGuiSelectableFlags_AllowDoubleClick,
-                                                       ImVec2(m_thumbnailSize, itemHeight));
-
-                    // Save selectable height to properly position elements
-                    ImVec2 selectableSize = ImGui::GetItemRectSize();
-
-                    // Return cursor to beginning of the item so we can draw inside the selectable
-                    // area
-                    ImGui::SetCursorPos(itemStartPos);
-
-                    // Handle thumbnail click event after setting up visual elements
-                    if (isClicked && ImGui::IsMouseDoubleClicked(0))
-                    {
-                        // Double click to import all functions of the file
-                        try
-                        {
-                            doc->merge(fileInfo.filePath);
-                            
-                            if (m_logger)
-                            {
-                                m_logger->addEvent(
-                                  {fmt::format("Loaded file: {}", fileInfo.fileName),
-                                   events::Severity::Info});
-                            }
-                        }
-                        catch (const std::exception & e)
-                        {
-                            if (m_logger)
-                            {
-                                m_logger->addEvent({fmt::format("Failed to load file {}: {}",
-                                                                fileInfo.fileName,
-                                                                e.what()),
-                                                    events::Severity::Error});
-                            }
-                        }
-                    }
-
-                    // Center the thumbnail horizontally and vertically within the item area
-                    float centeringOffsetX = (m_thumbnailSize - thumbnailWidth) * 0.5f;
-                    float centeringOffsetY = (m_thumbnailSize - thumbnailHeight) * 0.5f;
-
-                    // Calculate proper thumbnail position (centered in the top portion of the
-                    // selectable)
-                    ImVec2 thumbnailPos =
-                      ImVec2(itemStartPos.x + centeringOffsetX, itemStartPos.y + centeringOffsetY);
-
-                    // Set cursor position to draw the thumbnail
-                    ImGui::SetCursorPos(thumbnailPos);
-
-                    // Display the thumbnail or placeholder
-                    if (fileInfo.hasThumbnail && fileInfo.thumbnailTextureId != 0)
-                    {
-                        ImGui::Image(reinterpret_cast<void *>(
-                                       static_cast<intptr_t>(fileInfo.thumbnailTextureId)),
-                                     ImVec2(thumbnailWidth, thumbnailHeight));
-                    }
-                    else
-                    {
-                        // Draw a placeholder if no thumbnail is available
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
-                        ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FILE_IMPORT),
-                                      ImVec2(m_thumbnailSize, m_thumbnailSize));
-                        ImGui::PopStyleColor();
-                    }
-
-                    ImGui::PopStyleVar();
-
-                    // Position text at the bottom of the selectable area
-                    float textHeight = ImGui::GetTextLineHeight();
-                    float textY =
-                      itemStartPos.y + selectableSize.y - textHeight - 5.0f; // 5px margin
-
-                    // Add file name below the thumbnail
-                    float textWidth = ImGui::CalcTextSize(fileInfo.fileName.c_str()).x;
-
-                    if (textWidth > m_thumbnailSize)
-                    {
-                        // Truncate file name if it's too long
-                        std::string truncatedName = fileInfo.fileName.substr(0, 20) + "...";
-                        float posX =
-                          itemStartPos.x +
-                          (m_thumbnailSize - ImGui::CalcTextSize(truncatedName.c_str()).x) * 0.5f;
-
-                        ImGui::SetCursorPos(ImVec2(posX, textY));
-                        ImGui::TextUnformatted(truncatedName.c_str());
-                    }
-                    else
-                    {
-                        float posX = itemStartPos.x + (m_thumbnailSize - textWidth) * 0.5f;
-                        ImGui::SetCursorPos(ImVec2(posX, textY));
-                        ImGui::TextUnformatted(fileInfo.fileName.c_str());
-                    }
-
-                    ImGui::EndGroup();
-                    ImGui::PopID();
-
-                    fileIndex++;
+                    ImGui::SameLine();
                 }
+
+                // Create a unique ID for the item
+                ImGui::PushID(fileIndex);
+
+                // Create a selectable group for the file
+                ImGui::BeginGroup();
+
+                // Process thumbnail if not already loaded
+                if (!fileInfo.thumbnailLoaded && !oneThumbnailLoaded)
+                {
+                    oneThumbnailLoaded = true;
+                    loadThumbnail(fileInfo);
+                }
+
+                // Calculate display dimensions while maintaining aspect ratio
+                float aspectRatio = 1.0f;
+                float thumbnailHeight = m_thumbnailSize;
+                float thumbnailWidth = m_thumbnailSize;
+
+                if (fileInfo.hasThumbnail && fileInfo.thumbnailWidth > 0 &&
+                    fileInfo.thumbnailHeight > 0)
+                {
+                    aspectRatio = static_cast<float>(fileInfo.thumbnailWidth) /
+                                  static_cast<float>(fileInfo.thumbnailHeight);
+
+                    // Calculate dimensions to fit within the standard size while preserving
+                    // aspect ratio
+                    if (aspectRatio > 1.0f) // Wider than tall
+                    {
+                        thumbnailHeight = m_thumbnailSize / aspectRatio;
+                    }
+                    else // Taller than wide or square
+                    {
+                        thumbnailWidth = m_thumbnailSize * aspectRatio;
+                    }
+                }
+
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+
+                // Save the initial cursor position before the selectable
+                ImVec2 itemStartPos = ImGui::GetCursorPos();
+
+                // Create a selectable container with fixed height for consistent layout
+                bool isClicked = ImGui::Selectable("##selector",
+                                                   false,
+                                                   ImGuiSelectableFlags_AllowDoubleClick,
+                                                   ImVec2(m_thumbnailSize, itemHeight));
+
+                // Save selectable height to properly position elements
+                ImVec2 selectableSize = ImGui::GetItemRectSize();
+
+                // Return cursor to beginning of the item so we can draw inside the selectable
+                // area
+                ImGui::SetCursorPos(itemStartPos);
+
+                // Handle thumbnail click event after setting up visual elements
+                if (isClicked && ImGui::IsMouseDoubleClicked(0))
+                {
+                    // Double click to import all functions of the file
+                    try
+                    {
+                        doc->merge(fileInfo.filePath);
+
+                        if (m_logger)
+                        {
+                            m_logger->addEvent({fmt::format("Loaded file: {}", fileInfo.fileName),
+                                                events::Severity::Info});
+                        }
+                    }
+                    catch (const std::exception & e)
+                    {
+                        if (m_logger)
+                        {
+                            m_logger->addEvent({fmt::format("Failed to load file {}: {}",
+                                                            fileInfo.fileName,
+                                                            e.what()),
+                                                events::Severity::Error});
+                        }
+                    }
+                }
+
+                // Center the thumbnail horizontally and vertically within the item area
+                float centeringOffsetX = (m_thumbnailSize - thumbnailWidth) * 0.5f;
+                float centeringOffsetY = (m_thumbnailSize - thumbnailHeight) * 0.5f;
+
+                // Calculate proper thumbnail position (centered in the top portion of the
+                // selectable)
+                ImVec2 thumbnailPos =
+                  ImVec2(itemStartPos.x + centeringOffsetX, itemStartPos.y + centeringOffsetY);
+
+                // Set cursor position to draw the thumbnail
+                ImGui::SetCursorPos(thumbnailPos);
+
+                // Display the thumbnail or placeholder
+                if (fileInfo.hasThumbnail && fileInfo.thumbnailTextureId != 0)
+                {
+                    ImGui::Image(
+                      reinterpret_cast<void *>(static_cast<intptr_t>(fileInfo.thumbnailTextureId)),
+                      ImVec2(thumbnailWidth, thumbnailHeight));
+                }
+                else
+                {
+                    // Draw a placeholder if no thumbnail is available
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+                    ImGui::Button(reinterpret_cast<const char *>(ICON_FA_FILE_IMPORT),
+                                  ImVec2(m_thumbnailSize, m_thumbnailSize));
+                    ImGui::PopStyleColor();
+                }
+
+                ImGui::PopStyleVar();
+
+                // Position text at the bottom of the selectable area
+                float textHeight = ImGui::GetTextLineHeight();
+                float textY = itemStartPos.y + selectableSize.y - textHeight - 5.0f; // 5px margin
+
+                // Add file name below the thumbnail
+                float textWidth = ImGui::CalcTextSize(fileInfo.fileName.c_str()).x;
+
+                if (textWidth > m_thumbnailSize)
+                {
+                    // Truncate file name if it's too long
+                    std::string truncatedName = fileInfo.fileName.substr(0, 20) + "...";
+                    float posX =
+                      itemStartPos.x +
+                      (m_thumbnailSize - ImGui::CalcTextSize(truncatedName.c_str()).x) * 0.5f;
+
+                    ImGui::SetCursorPos(ImVec2(posX, textY));
+                    ImGui::TextUnformatted(truncatedName.c_str());
+                }
+                else
+                {
+                    float posX = itemStartPos.x + (m_thumbnailSize - textWidth) * 0.5f;
+                    ImGui::SetCursorPos(ImVec2(posX, textY));
+                    ImGui::TextUnformatted(fileInfo.fileName.c_str());
+                }
+
+                ImGui::EndGroup();
+                ImGui::PopID();
+
+                fileIndex++;
             }
+        }
     }
 
 } // namespace gladius::ui

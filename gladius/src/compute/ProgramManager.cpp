@@ -15,15 +15,15 @@
 #include <lodepng.h>
 
 #include "CliReader.h"
-#include "Mesh.h"
-#include "ProgramManager.h"
-#include "compute/ProgramManager.h"
-#include "gpgpu.h"
 #include "Contour.h"
+#include "Mesh.h"
 #include "Profiling.h"
+#include "ProgramManager.h"
 #include "RenderProgram.h"
 #include "ResourceContext.h"
 #include "SlicerProgram.h"
+#include "compute/ProgramManager.h"
+#include "gpgpu.h"
 #include "nodes/GraphFlattener.h"
 #include "nodes/OptimizeOutputs.h"
 #include <ToCommandStreamVisitor.h>
@@ -49,6 +49,18 @@ namespace gladius
         ProfileFunction std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         m_slicerProgram = std::make_unique<SlicerProgram>(m_ComputeContext, m_resources);
         m_optimizedRenderProgram = std::make_unique<RenderProgram>(m_ComputeContext, m_resources);
+
+        // Propagate logger to programs so that CL diagnostics go to the event logger
+        if (m_eventLogger)
+        {
+            m_slicerProgram->setLogger(m_eventLogger);
+            m_optimizedRenderProgram->setLogger(m_eventLogger);
+        }
+
+        // Set up binary caching
+        auto cacheDir = std::filesystem::temp_directory_path() / "gladius" / "opencl_cache";
+        m_slicerProgram->setCacheDirectory(cacheDir);
+        m_optimizedRenderProgram->setCacheDirectory(cacheDir);
 
         m_optimizedRenderProgram->buildKernelLib();
         recompileIfRequired();
@@ -135,7 +147,7 @@ namespace gladius
     {
         ProfileFunction
 
-        m_optimizedRenderProgram->setModelKernel(m_modelSource);
+          m_optimizedRenderProgram->setModelKernel(m_modelSource);
         m_slicerProgram->setModelKernel(m_modelSource);
 
         m_optimizedRenderProgram->recompileBlocking();
@@ -193,12 +205,11 @@ namespace gladius
 
     void ProgramManager::logMsg(std::string msg) const
     {
-        if (!m_eventLogger)
+        if (m_eventLogger)
         {
-            std::cout << msg << "\n";
-            return;
+            getLogger().addEvent({msg, events::Severity::Info});
         }
-        getLogger().addEvent({std::move(msg), events::Severity::Info});
+        // If no logger, remain silent to avoid console noise
     }
 
     events::Logger & ProgramManager::getLogger() const
@@ -255,8 +266,33 @@ namespace gladius
     {
         std::lock_guard<std::mutex> lock(m_modelSourceMutex);
         m_modelSource = std::move(source);
+        if (m_eventLogger)
+        {
+            getLogger().addEvent(
+              {fmt::format("ProgramManager.setModelSource: size={} bytes", m_modelSource.size()),
+               events::Severity::Info});
+        }
         m_slicerState.signalCompilationRequired();
         m_renderState.signalCompilationRequired();
+    }
+
+    bool ProgramManager::hasModelSource() const
+    {
+        std::lock_guard<std::mutex> lock(m_modelSourceMutex);
+        return !m_modelSource.empty();
+    }
+
+    std::string ProgramManager::getDebugStateSummary() const
+    {
+        std::lock_guard<std::mutex> lock(m_modelSourceMutex);
+        std::stringstream ss;
+        ss << "ProgramManager: modelSource="
+           << (m_modelSource.empty() ? 0 : (int) m_modelSource.size())
+           << "B renderUpToDate=" << (m_renderState.isModelUpToDate() ? 1 : 0)
+           << " slicerUpToDate=" << (m_slicerState.isModelUpToDate() ? 1 : 0)
+           << " renderCompiling=" << (m_optimizedRenderProgram->isCompilationInProgress() ? 1 : 0)
+           << " slicerCompiling=" << (m_slicerProgram->isCompilationInProgress() ? 1 : 0);
+        return ss.str();
     }
 
     ModelState const & ProgramManager::getSlicerState()

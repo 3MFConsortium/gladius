@@ -1,6 +1,6 @@
 
-#include "types.h"
 #include "utils.h"
+#include "types.h"
 
 #include <algorithm>
 #include <eigen3/Eigen/Eigen>
@@ -10,9 +10,10 @@ namespace gladius
 {
     std::string toLowerCase(std::string text)
     {
-        std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
-            return std::tolower(static_cast<int>(c));
-        });
+        std::transform(text.begin(),
+                       text.end(),
+                       text.begin(),
+                       [](unsigned char c) { return std::tolower(static_cast<int>(c)); });
         return text;
     }
 
@@ -39,7 +40,7 @@ namespace gladius
         return matrix;
     }
 
-    nodes::Matrix4x4 inverseMatrix(const nodes::Matrix4x4& matrix)
+    nodes::Matrix4x4 inverseMatrix(const nodes::Matrix4x4 & matrix)
     {
         Eigen::Matrix4f eigenMatrix;
         for (int row = 0; row < 4; ++row)
@@ -64,4 +65,3 @@ namespace gladius
         return result;
     }
 }
-

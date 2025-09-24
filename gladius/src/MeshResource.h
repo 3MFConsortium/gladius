@@ -10,10 +10,9 @@ namespace gladius
       public:
         MeshResource(ResourceKey key, vdb::TriangleMesh && mesh)
             : ResourceBase(std::move(key))
-            , m_mesh(std::move(mesh))
-        {
-          
-        };
+            , m_mesh(std::move(mesh)) {
+
+            };
 
         vdb::TriangleMesh const & getMesh() const
         {

@@ -36,7 +36,6 @@ IndentWidth: 4
 Language: Cpp
 NamespaceIndentation: All
 PointerAlignment: Left
-PointerAlignment: Middle
 SortIncludes: true
 SpaceAfterCStyleCast: true
 SpaceAfterTemplateKeyword: true

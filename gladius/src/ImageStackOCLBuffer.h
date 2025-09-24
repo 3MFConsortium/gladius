@@ -1,8 +1,8 @@
 #pragma once
 #include "ComputeContext.h"
 
-#include "ResourceManager.h"
 #include "Buffer.h"
+#include "ResourceManager.h"
 #include "io/3mf/ImageStack.h"
 #include <CL/cl_platform.h>
 #include <memory>
@@ -27,7 +27,7 @@ namespace gladius
 
         std::string const & getName() const;
 
-        cl::Buffer const& getBuffer() const;
+        cl::Buffer const & getBuffer() const;
 
       private:
         ComputeContext & m_ComputeContext;

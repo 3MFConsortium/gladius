@@ -50,7 +50,7 @@ namespace gladius_tests
     TEST_F(Assembly_Test, CopyAssigment_LoadedAssembly_EqualsOriginal)
     {
         nodes::Assembly dolly;
-        auto source = load3mf("testdata/ImplicitGyroid.3mf");
+        auto source = load3mf("testdata/SimpleGyroid.3mf");
         dolly = *source;
 
         EXPECT_TRUE(dolly.equals(*source));

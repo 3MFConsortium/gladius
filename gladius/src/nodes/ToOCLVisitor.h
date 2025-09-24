@@ -85,6 +85,8 @@ namespace gladius::nodes
 
         void visit(SignedDistanceToMesh & signedDistanceToMesh) override;
 
+        void visit(SignedDistanceToBeamLattice & signedDistanceToBeamLattice) override;
+
         void visit(FunctionCall & functionCall) override;
 
         // gladius extensions

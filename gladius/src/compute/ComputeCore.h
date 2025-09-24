@@ -405,7 +405,12 @@ namespace gladius
 
         bool precomputeSdfForWholeBuildPlatform();
         void precomputeSdfForBBox(const BoundingBox & boundingBox);
-        [[nodiscard]] SharedGLImageBuffer getResultImage() const;        [[nodiscard]] SharedContourExtractor getContour() const;
+
+        /// @brief Prepares the compute core for thumbnail generation in headless mode
+        /// @return true if preparation succeeded, false otherwise
+        bool prepareImageRendering();
+        [[nodiscard]] SharedGLImageBuffer getResultImage() const;
+        [[nodiscard]] SharedContourExtractor getContour() const;
 
         [[nodiscard]] cl_float getSliceHeight() const;
 
@@ -436,7 +441,7 @@ namespace gladius
 
         void refreshProgram(nodes::SharedAssembly assembly);
         void tryRefreshProgramProtected(nodes::SharedAssembly assembly);
-        
+
         [[nodiscard]] bool isRendererReady() const;
 
         [[nodiscard]] SharedComputeContext getComputeContext() const;
@@ -463,7 +468,8 @@ namespace gladius
 
         std::mutex & getContourExtractorMutex();
 
-        void invalidatePreCompSdf();        [[nodiscard]] events::SharedLogger getSharedLogger() const;
+        void invalidatePreCompSdf();
+        [[nodiscard]] events::SharedLogger getSharedLogger() const;
 
         [[nodiscard]] CodeGenerator getCodeGenerator() const;
 

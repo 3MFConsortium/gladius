@@ -63,8 +63,6 @@ namespace gladius
             sliceParameter.zHeight_mm = z_mm;
             generator.requestContourUpdate(sliceParameter);
             writeLayer(generator.getContour()->getContour(), z_mm);
-            std::cout << "Exporting layer " << i << " of " << numberLayer << " with height " << z_mm
-                      << " mm\n";
         }
 
         m_file << "$$GEOMETRYEND\n";
@@ -82,9 +80,9 @@ namespace gladius
         {
             m_file.open(fileName);
         }
-        catch (const std::exception & e)
+        catch (...)
         {
-            std::cerr << e.what() << '\n';
+            throw; // Surface error to caller rather than printing to console
         }
         writeHeader();
         generator.updateBBoxOrThrow();

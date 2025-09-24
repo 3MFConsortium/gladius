@@ -6,7 +6,7 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "installDir": "$env{CML}/gladius/gladius-1.2.12",
+            "installDir": "$env{CML}/gladius/gladius-1.2.14",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -40,7 +40,7 @@
                 "CMAKE_CXX_FLAGS_DEBUG": "/Z7 /RTCus /D_ITERATOR_DEBUG_LEVEL=2 /D_DEBUG /D_DISABLE_VECTOR_ANNOTATION",
                 "ENABLE_TRACY": "false",
                 "ENABLE_ASAN": "false",
-                "ENABLE_OPENCL_TESTS": "OFF"
+                "ENABLE_OPENCL_TESTS": "ON"
             }
         },
         {
@@ -54,7 +54,8 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "ENABLE_TRACY": "false"
+                "ENABLE_TRACY": "false",
+                "ENABLE_OPENCL_TESTS": "ON"
             }
         },
         {
@@ -106,7 +107,8 @@
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
                 "USE_CACHE": "true",
                 "VCPKG_OVERLAY_PORTS": "${sourceDir}/vcpkg-overlay-ports",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "ENABLE_COVERAGE": "OFF"
             }
         },
         {

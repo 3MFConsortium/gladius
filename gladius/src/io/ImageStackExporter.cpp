@@ -143,7 +143,8 @@ namespace gladius::io
         }
 
         m_startHeight_mm = bb->min.z;
-        m_endHeight_mm = bb->max.z;        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
+        m_endHeight_mm = bb->max.z;
+        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
         generator.updateClippingAreaToBoundingBox();
         generator.getResourceContext()->requestDistanceMaps();
 

@@ -60,6 +60,7 @@ namespace gladius::nodes
     class Sign;
     class Fract;
     class SignedDistanceToMesh;
+    class SignedDistanceToBeamLattice;
     class FunctionCall;
     class Length;
     class DecomposeVector;
@@ -123,6 +124,7 @@ namespace gladius::nodes
                                  Fmod,
                                  Pow,
                                  SignedDistanceToMesh,
+                                 SignedDistanceToBeamLattice,
                                  FunctionCall,
                                  Transformation,
                                  Length,
@@ -164,8 +166,6 @@ namespace gladius::nodes
         Export,
         _3mf
     };
-
-
 
     using CategoryNamesT = std::map<Category, std::string>;
     static const CategoryNamesT CategoryNames{{Category::Internal, "Internal"},
@@ -242,6 +242,7 @@ namespace gladius::nodes
         static auto constexpr Filename = "filename";
         static auto constexpr ResourceId = "resourceid";
         static auto constexpr Mesh = "mesh";
+        static auto constexpr BeamLattice = "beamlattice";
 
         static auto constexpr Image = "image";
         static auto constexpr Red = "red";
@@ -259,7 +260,6 @@ namespace gladius::nodes
         static auto constexpr NumberOfTeeth = "numberOfTeeth";
         static auto constexpr Modulus = "modulus";
         static auto constexpr ClearanceFactor = "clearanceFactor";
-
 
         static auto constexpr OriginX = "origin_x";
         static auto constexpr OriginY = "origin_y";

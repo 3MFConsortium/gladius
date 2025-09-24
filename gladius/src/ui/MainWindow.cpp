@@ -60,6 +60,9 @@ namespace gladius::ui
         m_logger = std::move(logger);
         m_outline.setDocument(m_doc);
 
+        // Set UI mode to true since we're using the MainWindow (UI interface)
+        m_doc->setUiMode(true);
+
         m_modelEditor.setDocument(m_doc);
         // Set the library root directory
         m_modelEditor.setLibraryRootDirectory(getAppDir() / "library");
@@ -117,15 +120,14 @@ namespace gladius::ui
         m_welcomeScreen.setBackupManager(&m_doc->getBackupManager());
 
         // Set backup restore callback
-        m_welcomeScreen.setRestoreBackupCallback(
-          [this](const std::filesystem::path & backupPath)
-          {
-              open(backupPath);
-              m_welcomeScreen.hide();
-          });
+        m_welcomeScreen.setRestoreBackupCallback([this](const std::filesystem::path & backupPath)
+                                                 { open(backupPath); });
 
         // Set recent files
         m_welcomeScreen.setRecentFiles(getRecentFiles(100));
+
+        // Set examples directory
+        m_welcomeScreen.setExamplesDirectory(getAppDir() / "examples");
 
         nodeEditor();
         newModel();
@@ -148,48 +150,51 @@ namespace gladius::ui
 
         if (ImGui::CollapsingHeader("Rendering"))
         {
-            // Add save/load buttons for settings if ConfigManager is available
-            if (m_configManager)
+            if (!m_computeAvailable)
             {
-                if (ImGui::Button("Save Settings"))
+                ImGui::TextWrapped("Rendering and compute settings are unavailable because "
+                                   "OpenCL/compute initialization failed.\nThe UI remains usable, "
+                                   "but 3D preview and slicing are disabled.");
+                ImGui::Separator();
+                if (ImGui::Button("Close"))
                 {
-                    saveRenderSettings();
+                    // Nothing else to do when compute is disabled
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Load Settings"))
+            }
+            else
+            {
+                // Add save/load buttons for settings if ConfigManager is available
+                if (m_configManager)
                 {
-                    loadRenderSettings();
+                    if (ImGui::Button("Save Settings"))
+                    {
+                        saveRenderSettings();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Load Settings"))
+                    {
+                        loadRenderSettings();
+                        refreshModel();
+                    }
+                    ImGui::Separator();
+                }
+
+                ImGui::SliderFloat("Ray marching tolerance",
+                                   &m_core->getResourceContext()->getRenderingSettings().quality,
+                                   0.1f,
+                                   20.0f);
+
+                // Toggle SDF visualization using rendering flags
+                auto & rs = m_core->getResourceContext()->getRenderingSettings();
+                bool enableSdfRendering = (rs.flags & RF_SHOW_FIELD) != 0u;
+                if (ImGui::Checkbox("Show Distance field", &enableSdfRendering))
+                {
+                    if (enableSdfRendering)
+                        rs.flags |= RF_SHOW_FIELD;
+                    else
+                        rs.flags &= ~RF_SHOW_FIELD;
                     refreshModel();
                 }
-                ImGui::Separator();
-            }
-
-            ImGui::SliderFloat("Ray marching tolerance",
-                               &m_core->getResourceContext()->getRenderingSettings().quality,
-                               0.1f,
-                               20.0f);
-
-            dragParameter("Weight dist to neighbor",
-                          &m_core->getResourceContext()->getRenderingSettings().weightDistToNb,
-                          0.f,
-                          100.0f);
-
-            dragParameter("Weight midpoint",
-                          &m_core->getResourceContext()->getRenderingSettings().weightMidPoint,
-                          0.f,
-                          100.0f);
-
-            dragParameter("Normal offset",
-                          &m_core->getResourceContext()->getRenderingSettings().normalOffset,
-                          0.f,
-                          5.0f);
-
-            bool enableSdfRendering =
-              m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
-            if (ImGui::Checkbox("Show Distance field", &enableSdfRendering))
-            {
-                m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(enableSdfRendering);
-                refreshModel();
             }
         }
 
@@ -246,25 +251,132 @@ namespace gladius::ui
         ProfileFunction;
         m_initialized = true;
 
-        auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+        // Create the GL context up-front so any GL-backed resources can be created safely
+        m_mainView.ensureInitialized();
 
-        if (!context->isValid())
+        // Try to initialize compute stack; if it fails, keep UI running in limited mode.
+        try
         {
-            throw std::runtime_error(
-              "Failed to create OpenCL Context. Did you install proper GPU drivers?");
+            auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+            context->setLogger(m_logger);
+            gladius::setGlobalLogger(m_logger);
+            context->setDebugOutputEnabled(m_openclDebugEnabled);
+            if (!context->isValid())
+            {
+                throw OpenCLContextCreationError("Context invalid after initialization");
+            }
+
+            m_core =
+              std::make_shared<ComputeCore>(context, RequiredCapabilities::OpenGLInterop, m_logger);
+            m_doc = std::make_shared<Document>(m_core);
+            m_computeAvailable = true;
+            m_computeErrorMessage.clear();
+        }
+        catch (const GladiusException & e)
+        {
+            // Handle any OpenCL-related errors gracefully
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            m_showComputeErrorModal = true;
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {std::string("Compute disabled: ") + e.what(), events::Severity::Warning});
+            }
+        }
+        catch (const std::exception & e)
+        {
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            m_showComputeErrorModal = true;
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {std::string("Compute disabled: ") + e.what(), events::Severity::Warning});
+            }
         }
 
-        m_core =
-          std::make_shared<ComputeCore>(context, RequiredCapabilities::OpenGLInterop, m_logger);
-        m_doc = std::make_shared<Document>(m_core);
-
-        // Load render settings if ConfigManager is available
-        if (m_configManager)
+        // Load render settings only when compute is available
+        if (m_configManager && m_computeAvailable)
         {
             loadRenderSettings();
         }
 
-        setup(m_core, m_doc, m_logger);
+        // Hook up the basic UI rendering callbacks regardless of compute availability
+        m_mainView.clearViewCallback();
+        m_renderCallback =
+          [&]() { /* no-op when compute disabled; updateModel() set in full setup */ };
+        m_mainView.setRenderCallback(m_renderCallback);
+        m_mainView.addViewCallBack([&]() { render(); });
+        m_mainView.setFileDropCallback([&](std::filesystem::path const & path) { open(path); });
+
+        // If compute is available, continue normal setup. Otherwise, keep UI minimal.
+        if (m_computeAvailable)
+        {
+            setup(m_core, m_doc, m_logger);
+        }
+        else
+        {
+            // Minimal UI: welcome screen, menus, status bar
+            m_welcomeScreen.setLogger(m_logger);
+            m_welcomeScreen.setRecentFiles(getRecentFiles(100));
+        }
+    }
+
+    void MainWindow::setupHeadless(events::SharedLogger logger)
+    {
+        ProfileFunction;
+        // Only run once
+        if (m_initialized && m_doc && m_core)
+        {
+            return;
+        }
+
+        m_logger = std::move(logger);
+        m_initialized = true;
+
+        // Initialize compute stack without OpenGL interop for headless safety
+        try
+        {
+            auto context = std::make_shared<ComputeContext>(EnableGLOutput::disabled);
+            context->setLogger(m_logger);
+            gladius::setGlobalLogger(m_logger);
+            context->setDebugOutputEnabled(m_openclDebugEnabled);
+            if (!context->isValid())
+            {
+                throw OpenCLContextCreationError("Context invalid after initialization (headless)");
+            }
+
+            m_core =
+              std::make_shared<ComputeCore>(context, RequiredCapabilities::ComputeOnly, m_logger);
+            m_doc = std::make_shared<Document>(m_core);
+
+            // Explicitly mark document as non-UI mode to disable backups and UI-only behaviors
+            m_doc->setUiMode(false);
+
+            m_computeAvailable = true;
+            m_computeErrorMessage.clear();
+        }
+        catch (const GladiusException & e)
+        {
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            if (m_logger)
+            {
+                m_logger->addEvent({std::string("Headless compute disabled: ") + e.what(),
+                                    events::Severity::Warning});
+            }
+        }
+        catch (const std::exception & e)
+        {
+            m_computeAvailable = false;
+            m_computeErrorMessage = e.what();
+            if (m_logger)
+            {
+                m_logger->addEvent({std::string("Headless compute disabled: ") + e.what(),
+                                    events::Severity::Warning});
+            }
+        }
     }
 
     void MainWindow::render()
@@ -287,26 +399,40 @@ namespace gladius::ui
         ImGuiIO & io = ImGui::GetIO();
         processShortcuts(ShortcutContext::Global);
 
-        // try to get the compute token
-        auto computeToken = m_core->requestComputeToken();
-        if (computeToken)
+        // If compute is available, validate context
+        if (m_computeAvailable && m_core)
         {
-            if (!m_core->getComputeContext()->isValid())
+            // try to get the compute token
+            auto computeToken = m_core->requestComputeToken();
+            if (computeToken)
             {
-                m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
-
-                const auto context = std::make_shared<ComputeContext>(EnableGLOutput::enabled);
-
-                if (!context->isValid())
+                if (!m_core->getComputeContext()->isValid())
                 {
-                    m_logger->addEvent(
-                      {"Failed to create OpenCL Context. Did you install proper GPU drivers?",
-                       events::Severity::FatalError});
-                    throw std::runtime_error(
-                      "Failed to create OpenCL Context. Did you install proper GPU drivers?");
-                }
+                    m_logger->addEvent({"Reinitializing compute context", events::Severity::Info});
 
-                m_core->setComputeContext(context);
+                    try
+                    {
+                        const auto context =
+                          std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+                        context->setLogger(m_logger);
+                        gladius::setGlobalLogger(m_logger);
+                        context->setDebugOutputEnabled(m_openclDebugEnabled);
+                        if (!context->isValid())
+                        {
+                            throw OpenCLContextCreationError("Context invalid after reinit");
+                        }
+                        m_core->setComputeContext(context);
+                    }
+                    catch (const std::exception & e)
+                    {
+                        // Switch to compute-disabled mode
+                        m_computeAvailable = false;
+                        m_computeErrorMessage = e.what();
+                        m_logger->addEvent(
+                          {std::string("Compute disabled after failure: ") + e.what(),
+                           events::Severity::Error});
+                    }
+                }
             }
         }
 
@@ -368,6 +494,7 @@ namespace gladius::ui
             // Only render the normal UI if welcome screen is not visible and fadeout is complete
             if (!welcomeScreenVisible)
             {
+                // If compute is not available, show a non-blocking banner in status areas
 
                 if (m_showStyleEditor)
                 {
@@ -483,10 +610,14 @@ namespace gladius::ui
                 ImGui::PopStyleVar();
 
                 mainWindowDockingArea();
-                sliceWindow();
-                renderWindow();
-                meshExportDialog();
-                cliExportDialog();
+                if (m_computeAvailable)
+                {
+                    sliceWindow();
+                    renderWindow();
+                    meshExportDialog();
+                    meshExportDialog3mf();
+                    cliExportDialog();
+                }
                 mainMenu();
                 showExitPopUp();
                 showSaveBeforeFileOperationPopUp();
@@ -497,12 +628,7 @@ namespace gladius::ui
                 }
             }
 
-            // Render welcome screen if it's visible
-            if (welcomeScreenVisible)
-            {
-                // Now render the welcome screen on top of the overlay we created earlier
-                m_welcomeScreen.render();
-            }
+            m_welcomeScreen.render();
 
             logViewer();
             m_about.render();
@@ -637,6 +763,15 @@ namespace gladius::ui
 
     void MainWindow::newModel()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent({"New model is unavailable: compute/renderer disabled",
+                                    events::Severity::Warning});
+            }
+            return;
+        }
         if (m_fileChanged)
         {
             m_pendingFileOperation = PendingFileOperation::NewModel;
@@ -652,6 +787,10 @@ namespace gladius::ui
 
     void MainWindow::renderWindow()
     {
+        if (!m_computeAvailable)
+        {
+            return; // skip rendering UI when compute is disabled
+        }
         // Process render window shortcuts
         if (m_renderWindow.isVisible() && m_renderWindow.isHovered() && m_renderWindow.isFocused())
         {
@@ -690,6 +829,7 @@ namespace gladius::ui
         ImGui::Begin("Menu", &m_showMainMenu, window_flags);
 
         ImGui::SetWindowSize(ImVec2(menuWidth, io.DisplaySize.y - menuBarHeight));
+
         if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_FILE "\tNew")))
         {
             closeMenu();
@@ -739,20 +879,17 @@ namespace gladius::ui
             }
         }
 
-        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_SCHOOL "\tExamples")))
+        if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_HOME "\tHome")))
         {
             closeMenu();
-            const auto filename = queryLoadFilename({{"*.3mf"}}, getAppDir() / "examples/");
-            if (filename.has_value())
-            {
-                open(filename.value());
-            }
+            showWelcomeScreen();
         }
 
         CliWriter writer;
 
         ImGui::Separator();
         ImGui::TextUnformatted("Export");
+        if (m_computeAvailable)
         {
             if (ImGui::MenuItem(reinterpret_cast<const char *>("\t" ICON_FA_MINUS
                                                                "\tExport current layer as CLI")))
@@ -818,11 +955,7 @@ namespace gladius::ui
                     vdb::MeshExporter exporter;
                     exporter.setQualityLevel(1);
                     exporter.beginExport(filename.value(), *m_core);
-                    while (exporter.advanceExport(*m_core))
-                    {
-                        std::cout << " Processing layer with z = " << m_core->getSliceHeight()
-                                  << "\n";
-                    }
+                    while (exporter.advanceExport(*m_core)) {}
                     exporter.finalizeExportVdb();
                 }
             }
@@ -835,11 +968,7 @@ namespace gladius::ui
                 {
                     vdb::MeshExporter exporter;
                     exporter.beginExport(filename.value(), *m_core);
-                    while (exporter.advanceExport(*m_core))
-                    {
-                        std::cout << " Processing layer with z = " << m_core->getSliceHeight()
-                                  << "\n";
-                    }
+                    while (exporter.advanceExport(*m_core)) {}
                     exporter.finalizeExportNanoVdb();
                 }
             }
@@ -867,33 +996,33 @@ namespace gladius::ui
             }
 
             if (ImGui::MenuItem(
-                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\tImage Stack")))
+                  reinterpret_cast<const char *>("\t" ICON_FA_FILE_CODE "\t3MF (Mesh)")))
             {
                 closeMenu();
                 QueriedFilename filename;
-                std::filesystem::path suggestedFilename =
-                  m_currentAssemblyFileName.value_or("imagestack");
-                suggestedFilename.replace_extension("imagestack.3mf");
-
-                filename = querySaveFilename({"*.3mf"}, suggestedFilename);
-
+                if (m_currentAssemblyFileName.has_value())
+                {
+                    auto suggestedFilename = m_currentAssemblyFileName.value();
+                    suggestedFilename.replace_extension("3mf");
+                    filename = querySaveFilename({"*.3mf"}, suggestedFilename);
+                }
+                else
+                {
+                    filename = querySaveFilename({"*.3mf"}, "part.3mf");
+                }
                 if (filename.has_value())
                 {
-                    io::ImageStackExporter exporter(m_logger);
-                    exporter.beginExport(filename.value(), *m_core);
+                    filename->replace_extension(".3mf");
 
-                    if (filename.has_value())
-                    {
-                        exporter.beginExport(filename.value(), *m_core);
-                        while (exporter.advanceExport(*m_core))
-                        {
-                            std::cout << " Processing layer with z = " << m_core->getSliceHeight()
-                                      << "\n";
-                        }
-                        exporter.finalize();
-                    }
+                    m_meshExporterDialog3mf.beginExport(filename.value(), *m_core, m_doc.get());
                 }
             }
+        }
+        else
+        {
+            ImGui::BeginDisabled();
+            ImGui::TextDisabled("Compute is disabled: export functions are unavailable.");
+            ImGui::EndDisabled();
         }
 
         ImGui::Separator();
@@ -987,6 +1116,16 @@ namespace gladius::ui
         m_meshExporterDialog.render(*m_core);
     }
 
+    void MainWindow::meshExportDialog3mf()
+    {
+        if (m_meshExporterDialog3mf.isVisible())
+        {
+            m_mainView.startAnimationMode();
+            m_renderWindow.invalidateView();
+        }
+        m_meshExporterDialog3mf.render(*m_core);
+    }
+
     void MainWindow::cliExportDialog()
     {
         if (m_cliExportDialog.isVisible())
@@ -1024,6 +1163,15 @@ namespace gladius::ui
 
     void MainWindow::open()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Open is unavailable: compute/renderer disabled", events::Severity::Warning});
+            }
+            return;
+        }
         if (m_fileChanged)
         {
             m_pendingFileOperation = PendingFileOperation::OpenFile;
@@ -1041,6 +1189,15 @@ namespace gladius::ui
 
     void MainWindow::merge()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Merge is unavailable: compute/renderer disabled", events::Severity::Warning});
+            }
+            return;
+        }
         const auto filename = queryLoadFilename({{"*.3mf"}});
         if (filename.has_value())
         {
@@ -1063,6 +1220,15 @@ namespace gladius::ui
 
     void MainWindow::open(const std::filesystem::path & filename)
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Open is unavailable: compute/renderer disabled", events::Severity::Warning});
+            }
+            return;
+        }
         if (m_fileChanged)
         {
             m_pendingFileOperation = PendingFileOperation::OpenFile;
@@ -1088,12 +1254,21 @@ namespace gladius::ui
 
     void MainWindow::save()
     {
+        // Allow saving even if compute is disabled; just skip thumbnail generation.
+        if (!m_doc)
+        {
+            return;
+        }
         if (m_currentAssemblyFileName->empty())
         {
             saveAs();
             return;
         }
-        bool writeThumbnail = m_core->isRendererReady();
+        bool writeThumbnail = false;
+        if (m_computeAvailable && m_core)
+        {
+            writeThumbnail = m_core->isRendererReady();
+        }
         m_doc->saveAs(m_currentAssemblyFileName.value(), writeThumbnail);
         m_renderWindow.invalidateViewDuetoModelUpdate();
         m_fileChanged = false;
@@ -1104,12 +1279,22 @@ namespace gladius::ui
 
     void MainWindow::saveAs()
     {
-        auto filename =
-          querySaveFilename({"*.3mf"}, m_currentAssemblyFileName.value_or(std::filesystem::path{}));
+        // Allow saving even if compute is disabled; just skip thumbnail generation.
+        if (!m_doc)
+        {
+            return;
+        }
+        auto filename = querySaveFilename(
+          {"*.implicit.3mf"}, m_currentAssemblyFileName.value_or(std::filesystem::path{}));
         if (filename.has_value())
         {
             filename->replace_extension(".3mf");
-            m_doc->saveAs(filename.value());
+            bool writeThumbnail = false;
+            if (m_computeAvailable && m_core)
+            {
+                writeThumbnail = m_core->isRendererReady();
+            }
+            m_doc->saveAs(filename.value(), writeThumbnail);
             m_renderWindow.invalidateViewDuetoModelUpdate();
             m_fileChanged = false;
             m_currentAssemblyFileName = filename;
@@ -1121,6 +1306,16 @@ namespace gladius::ui
 
     void MainWindow::saveCurrentFunction()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent(
+                  {"Save Current Function is unavailable: compute/renderer disabled",
+                   events::Severity::Warning});
+            }
+            return;
+        }
         auto function = m_modelEditor.currentModel();
         if (!function)
         {
@@ -1139,6 +1334,15 @@ namespace gladius::ui
 
     void MainWindow::importImageStack()
     {
+        if (!m_computeAvailable || !m_doc)
+        {
+            if (m_logger)
+            {
+                m_logger->addEvent({"Import Image Stack is unavailable: compute/renderer disabled",
+                                    events::Severity::Warning});
+            }
+            return;
+        }
         // query directory
         const auto directory = queryDirectory();
         if (!directory.has_value())
@@ -1353,10 +1557,119 @@ namespace gladius::ui
                 m_logView.show();
             }
             ImGui::PopStyleColor(4);
+
+            // Show UI scale and compute status on the right
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 220.0f);
+            ImGui::Text("UI %.2f (%.2f x %.2f)",
+                        m_mainView.getUiScale(),
+                        m_mainView.getBaseScale(),
+                        m_mainView.getUserScale());
+
+            if (!m_computeAvailable)
+            {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Compute: disabled"))
+                {
+                    m_showComputeErrorModal = true;
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::TextUnformatted("OpenCL/compute unavailable. Click for details.");
+                    if (!m_computeErrorMessage.empty())
+                    {
+                        ImGui::Separator();
+                        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 50.0f);
+                        ImGui::TextWrapped("%s", m_computeErrorMessage.c_str());
+                        ImGui::PopTextWrapPos();
+                    }
+                    ImGui::EndTooltip();
+                }
+            }
         }
         ImGui::End();
 
         ImGui::PopStyleVar(3);
+
+        // Compute error details modal
+        if (m_showComputeErrorModal)
+        {
+            if (!ImGui::IsPopupOpen("OpenCL/Compute Unavailable"))
+            {
+                ImGui::OpenPopup("OpenCL/Compute Unavailable");
+            }
+            if (ImGui::BeginPopupModal("OpenCL/Compute Unavailable",
+                                       &m_showComputeErrorModal,
+                                       ImGuiWindowFlags_AlwaysAutoResize |
+                                         ImGuiWindowFlags_NoSavedSettings))
+            {
+                ImGui::TextWrapped("Gladius couldn't initialize OpenCL. The UI stays usable, but "
+                                   "rendering and slicing are disabled.");
+                ImGui::Separator();
+                if (!m_computeErrorMessage.empty())
+                {
+                    ImGui::TextUnformatted("Details:");
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+                    ImGui::BeginChild("##oclErrDetails", ImVec2(600, 160), true);
+                    ImGui::PushTextWrapPos();
+                    ImGui::TextWrapped("%s", m_computeErrorMessage.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndChild();
+                    ImGui::PopStyleColor(2);
+                }
+                ImGui::Spacing();
+                if (ImGui::Button("Retry Initialization"))
+                {
+                    try
+                    {
+                        const auto context =
+                          std::make_shared<ComputeContext>(EnableGLOutput::enabled);
+                        context->setLogger(m_logger);
+                        gladius::setGlobalLogger(m_logger);
+                        context->setDebugOutputEnabled(m_openclDebugEnabled);
+                        if (!context->isValid())
+                        {
+                            throw OpenCLContextCreationError("Context invalid after retry");
+                        }
+                        if (!m_core)
+                        {
+                            m_core = std::make_shared<ComputeCore>(
+                              context, RequiredCapabilities::OpenGLInterop, m_logger);
+                            m_doc = std::make_shared<Document>(m_core);
+                        }
+                        else
+                        {
+                            m_core->setComputeContext(context);
+                        }
+                        m_computeAvailable = true;
+                        m_computeErrorMessage.clear();
+                        m_showComputeErrorModal = false;
+                        loadRenderSettings();
+                    }
+                    catch (const std::exception & e)
+                    {
+                        m_computeAvailable = false;
+                        m_computeErrorMessage = e.what();
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Copy Details"))
+                {
+                    std::string details = m_computeErrorMessage.empty()
+                                            ? std::string("No details available")
+                                            : m_computeErrorMessage;
+                    ImGui::SetClipboardText(details.c_str());
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Close"))
+                {
+                    m_showComputeErrorModal = false;
+                }
+                ImGui::EndPopup();
+            }
+        }
     }
 
     void MainWindow::showSaveBeforeFileOperationPopUp()
@@ -1794,8 +2107,7 @@ namespace gladius::ui
         // Get recent files list from config
         nlohmann::json recentFiles = m_configManager->getValue<nlohmann::json>(
           "recentFiles", "files", nlohmann::json::array());
-        // print size of recentFiles
-        std::cout << "Size of recentFiles: " << recentFiles.size() << std::endl;
+        //
         // Process each entry
         for (auto & entry : recentFiles)
         {
@@ -1934,6 +2246,28 @@ namespace gladius::ui
                                           ShortcutCombo(ImGuiKey_K, true), // Ctrl+K
                                           [this]() { showShortcutSettings(); });
 
+        m_shortcutManager->registerAction("view.uiScaleIncrease",
+                                          "Increase UI Scale",
+                                          "Increase UI scaling (Ctrl +)",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_Equal, true), // Ctrl +/=
+                                          [this]() { m_mainView.adjustUserScale(1.10f); });
+
+        m_shortcutManager->registerAction("view.uiScaleDecrease",
+                                          "Decrease UI Scale",
+                                          "Decrease UI scaling (Ctrl -)",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo(ImGuiKey_Minus, true), // Ctrl -
+                                          [this]() { m_mainView.adjustUserScale(1.0f / 1.10f); });
+
+        m_shortcutManager->registerAction(
+          "view.uiScaleReset",
+          "Reset UI Scale",
+          "Reset UI scaling (Ctrl+Shift+0)",
+          ShortcutContext::Global,
+          ShortcutCombo(ImGuiKey_0, true, false, true), // Ctrl+Shift+0
+          [this]() { m_mainView.resetUserScale(); });
+
         // Model editor shortcuts - Compile implicit function
         m_shortcutManager->registerAction("model.compileImplicit",
                                           "Compile Implicit Function",
@@ -1941,6 +2275,35 @@ namespace gladius::ui
                                           ShortcutContext::ModelEditor,
                                           ShortcutCombo(ImGuiKey_F7), // F7
                                           [this]() { m_modelEditor.requestManualCompile(); });
+
+        // Model editor: Copy / Paste
+        m_shortcutManager->registerAction("model.copy",
+                                          "Copy Nodes",
+                                          "Copy selected nodes to clipboard",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_C, true), // Ctrl+C
+                                          [this]()
+                                          {
+                                              if (m_modelEditor.isHovered())
+                                              {
+                                                  // Delegate to editor, which reads current
+                                                  // selection Note: copySelectionToClipboard is
+                                                  // private; use keyboard in editor
+                                              }
+                                          });
+        m_shortcutManager->registerAction("model.paste",
+                                          "Paste Nodes",
+                                          "Paste nodes from clipboard",
+                                          ShortcutContext::ModelEditor,
+                                          ShortcutCombo(ImGuiKey_V, true), // Ctrl+V
+                                          [this]()
+                                          {
+                                              if (m_modelEditor.isHovered())
+                                              {
+                                                  // Editor handles Ctrl+V; we keep registration for
+                                                  // UI visibility
+                                              }
+                                          });
 
         // Standard CAD view shortcuts for RenderWindow
         // Based on industry standards (Blender, 3ds Max, Maya, AutoCAD, SolidWorks)
@@ -2151,14 +2514,14 @@ namespace gladius::ui
                                           "Zoom In (Alt)",
                                           "Zoom in the camera view",
                                           ShortcutContext::RenderWindow,
-                                          ShortcutCombo(ImGuiKey_Equal, true), // Ctrl+=
+                                          ShortcutCombo(ImGuiKey_Equal, false, true), // Alt+=
                                           [this]() { m_renderWindow.zoomIn(); });
 
         m_shortcutManager->registerAction("camera.zoomOutAlt",
                                           "Zoom Out (Alt)",
                                           "Zoom out the camera view",
                                           ShortcutContext::RenderWindow,
-                                          ShortcutCombo(ImGuiKey_Minus, true), // Ctrl+-
+                                          ShortcutCombo(ImGuiKey_Minus, false, true), // Alt-
                                           [this]() { m_renderWindow.zoomOut(); });
 
         m_shortcutManager->registerAction("camera.zoomExtents",
@@ -2213,6 +2576,21 @@ namespace gladius::ui
           ShortcutContext::RenderWindow,
           ShortcutCombo(ImGuiKey_V, true, false, true), // Ctrl+Shift+V
           [this]() { m_renderWindow.restoreSavedView(); });
+
+        // Mouse wheel zoom (handled via shortcut manager)
+        m_shortcutManager->registerAction("camera.zoomInWheel",
+                                          "Zoom In (Wheel)",
+                                          "Zoom in using mouse wheel",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo::fromString("WheelUp"),
+                                          [this]() { m_renderWindow.zoomIn(); });
+
+        m_shortcutManager->registerAction("camera.zoomOutWheel",
+                                          "Zoom Out (Wheel)",
+                                          "Zoom out using mouse wheel",
+                                          ShortcutContext::RenderWindow,
+                                          ShortcutCombo::fromString("WheelDown"),
+                                          [this]() { m_renderWindow.zoomOut(); });
 
         // Fly/Walk mode shortcuts
         m_shortcutManager->registerAction("camera.flyMode",
@@ -2275,7 +2653,7 @@ namespace gladius::ui
                                           "Zoom In",
                                           "Zoom in slice view",
                                           ShortcutContext::SlicePreview,
-                                          ShortcutCombo(ImGuiKey_Equal, true), // Ctrl+=
+                                          ShortcutCombo(ImGuiKey_Equal, false, true), // Alt+=
                                           [this]()
                                           {
                                               if (m_isSlicePreviewVisible)
@@ -2288,7 +2666,7 @@ namespace gladius::ui
                                           "Zoom Out",
                                           "Zoom out slice view",
                                           ShortcutContext::SlicePreview,
-                                          ShortcutCombo(ImGuiKey_Minus, true), // Ctrl+-
+                                          ShortcutCombo(ImGuiKey_Minus, false, true), // Alt-
                                           [this]()
                                           {
                                               if (m_isSlicePreviewVisible)
@@ -2296,6 +2674,48 @@ namespace gladius::ui
                                                   m_sliceView.zoomOut();
                                               }
                                           });
+
+        // Slice preview wheel zoom
+        m_shortcutManager->registerAction("sliceview.zoominWheel",
+                                          "Zoom In (Wheel)",
+                                          "Zoom in slice view using mouse wheel",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo::fromString("WheelUp"),
+                                          [this]()
+                                          {
+                                              if (m_isSlicePreviewVisible)
+                                              {
+                                                  m_sliceView.zoomIn();
+                                              }
+                                          });
+
+        m_shortcutManager->registerAction("sliceview.zoomoutWheel",
+                                          "Zoom Out (Wheel)",
+                                          "Zoom out slice view using mouse wheel",
+                                          ShortcutContext::SlicePreview,
+                                          ShortcutCombo::fromString("WheelDown"),
+                                          [this]()
+                                          {
+                                              if (m_isSlicePreviewVisible)
+                                              {
+                                                  m_sliceView.zoomOut();
+                                              }
+                                          });
+
+        // Global UI scaling via Ctrl + Mouse Wheel
+        m_shortcutManager->registerAction("view.uiScaleIncreaseWheel",
+                                          "Increase UI Scale (Ctrl+Wheel)",
+                                          "Increase UI scale using Ctrl+Mouse Wheel",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo::fromString("Ctrl+WheelUp"),
+                                          [this]() { m_mainView.adjustUserScale(1.10f); });
+
+        m_shortcutManager->registerAction("view.uiScaleDecreaseWheel",
+                                          "Decrease UI Scale (Ctrl+Wheel)",
+                                          "Decrease UI scale using Ctrl+Mouse Wheel",
+                                          ShortcutContext::Global,
+                                          ShortcutCombo::fromString("Ctrl+WheelDown"),
+                                          [this]() { m_mainView.adjustUserScale(1.0f / 1.10f); });
 
         m_shortcutManager->registerAction("sliceview.reset",
                                           "Reset View",
@@ -2324,9 +2744,20 @@ namespace gladius::ui
         m_shortcutSettingsDialog.show();
     }
 
+    void MainWindow::showWelcomeScreen()
+    {
+        m_overlayOpacity = 1.0f;
+        m_welcomeScreen.show();
+    }
+
+    void MainWindow::hideWelcomeScreen()
+    {
+        m_welcomeScreen.hide();
+    }
+
     void MainWindow::saveRenderSettings()
     {
-        if (!m_configManager)
+        if (!m_configManager || !m_computeAvailable || !m_core)
         {
             return;
         }
@@ -2337,14 +2768,13 @@ namespace gladius::ui
         // Create JSON object for render settings
         nlohmann::json renderJson;
         renderJson["quality"] = renderSettings.quality;
-        renderJson["weightDistToNb"] = renderSettings.weightDistToNb;
-        renderJson["weightMidPoint"] = renderSettings.weightMidPoint;
-        renderJson["normalOffset"] = renderSettings.normalOffset;
-        renderJson["sdfVisEnabled"] =
-          m_core->getPreviewRenderProgram()->isSdfVisualizationEnabled();
+        renderJson["sdfVisEnabled"] = (renderSettings.flags & RF_SHOW_FIELD) != 0u;
 
         // Save to config
         m_configManager->setValue("rendering", "settings", renderJson);
+
+        // Save UI settings (user scale factor)
+        m_configManager->setValue("ui", "userScale", m_mainView.getUserScale());
 
         // Save shortcuts too
         if (m_shortcutManager)
@@ -2361,7 +2791,7 @@ namespace gladius::ui
 
     void MainWindow::loadRenderSettings()
     {
-        if (!m_configManager)
+        if (!m_configManager || !m_computeAvailable || !m_core)
         {
             return;
         }
@@ -2385,28 +2815,20 @@ namespace gladius::ui
             renderSettings.quality = renderJson["quality"].get<float>();
         }
 
-        if (renderJson.contains("weightDistToNb"))
-        {
-            renderSettings.weightDistToNb = renderJson["weightDistToNb"].get<float>();
-        }
-
-        if (renderJson.contains("weightMidPoint"))
-        {
-            renderSettings.weightMidPoint = renderJson["weightMidPoint"].get<float>();
-        }
-
-        if (renderJson.contains("normalOffset"))
-        {
-            renderSettings.normalOffset = renderJson["normalOffset"].get<float>();
-        }
-
         if (renderJson.contains("sdfVisEnabled"))
         {
-            m_core->getPreviewRenderProgram()->setSdfVisualizationEnabled(
-              renderJson["sdfVisEnabled"].get<bool>());
+            bool const en = renderJson["sdfVisEnabled"].get<bool>();
+            if (en)
+                renderSettings.flags |= RF_SHOW_FIELD;
+            else
+                renderSettings.flags &= ~RF_SHOW_FIELD;
         }
 
         // Load shortcuts too (this happens automatically when m_shortcutManager is created)
+
+        // Load UI settings (user scale factor)
+        float const userScale = m_configManager->getValue<float>("ui", "userScale", 1.0f);
+        m_mainView.setUserScale(userScale);
 
         // Log success
         m_logger->addEvent({"Rendering settings loaded", events::Severity::Info});

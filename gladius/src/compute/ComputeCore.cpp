@@ -377,7 +377,16 @@ namespace gladius
 
         if (!m_programs.getSlicerState().isModelUpToDate())
         {
-            recompileIfRequired();
+            try
+            {
+                logMsg("updateBoundingBoxFast: slicer state not up to date, requesting recompile");
+                recompileIfRequired();
+                logMsg("updateBoundingBoxFast: after recompileIfRequired: " +
+                       m_programs.getDebugStateSummary());
+            }
+            catch (...)
+            {
+            }
             LOG_LOCATION
             return false;
         }
@@ -389,6 +398,13 @@ namespace gladius
 
         if (!m_programs.getSlicerProgram()->isValid())
         {
+            try
+            {
+                logMsg("updateBoundingBoxFast: slicer program invalid");
+            }
+            catch (...)
+            {
+            }
             LOG_LOCATION
             return false;
         }
@@ -402,11 +418,48 @@ namespace gladius
         }
         catch (std::exception const & e)
         {
-            logMsg(e.what());
+            logMsg(std::string("updateBoundingBoxFast: movePointsToSurface exception: ") +
+                   e.what());
+
+            // Add additional diagnostic information
+            try
+            {
+                auto diagInfo = m_ComputeContext->getDiagnosticInfo();
+                logMsg("updateBoundingBoxFast: ComputeContext diagnostics:\n" + diagInfo);
+            }
+            catch (...)
+            {
+                logMsg("updateBoundingBoxFast: Failed to get ComputeContext diagnostics");
+            }
+
             return false;
         }
 
-        CL_ERROR(m_ComputeContext->GetQueue().finish());
+        // Enhanced error handling for queue finish
+        try
+        {
+            CL_ERROR(m_ComputeContext->GetQueue().finish());
+        }
+        catch (std::exception const & e)
+        {
+            logMsg(std::string("updateBoundingBoxFast: queue.finish() failed: ") + e.what());
+
+            // Add diagnostic information
+            try
+            {
+                auto diagInfo = m_ComputeContext->getDiagnosticInfo();
+                logMsg("updateBoundingBoxFast: ComputeContext diagnostics after queue.finish() "
+                       "failure:\n" +
+                       diagInfo);
+            }
+            catch (...)
+            {
+                logMsg("updateBoundingBoxFast: Failed to get ComputeContext diagnostics after "
+                       "queue.finish() failure");
+            }
+
+            return false;
+        }
         m_resources->getConvexHullVertices().read();
         for (auto const & vertex : vertices)
         {
@@ -578,7 +631,11 @@ namespace gladius
 
     bool ComputeCore::isSlicingInProgress() const
     {
-        ProfileFunction if (!m_sliceFuture.valid())
+        ProfileFunction
+
+          std::lock_guard<std::recursive_mutex>
+            lock(m_computeMutex);
+        if (!m_sliceFuture.valid())
         {
             return false;
         }
@@ -725,12 +782,10 @@ namespace gladius
 
     void ComputeCore::logMsg(std::string msg) const
     {
-        if (!m_eventLogger)
+        if (m_eventLogger)
         {
-            std::cout << msg << "\n";
-            return;
+            getLogger().addEvent({std::move(msg), events::Severity::Info});
         }
-        getLogger().addEvent({std::move(msg), events::Severity::Info});
     }
 
     void ComputeCore::computeVertexNormals(Mesh & mesh) const
@@ -844,6 +899,122 @@ namespace gladius
         m_programs.getSlicerProgram()->precomputeSdf(*m_primitives, boundingBox);
     }
 
+    bool ComputeCore::prepareImageRendering()
+    {
+        ProfileFunction
+
+          std::lock_guard<std::recursive_mutex>
+            lock(m_computeMutex);
+
+        try
+        {
+            // Caveman logs for headless diagnostics
+            try
+            {
+                std::stringstream ss;
+                ss << "ComputeCore.prepareThumbnailGeneration: begin"
+                   << " glInterop=" << (m_capabilities == RequiredCapabilities::OpenGLInterop)
+                   << " precompValid=" << (m_precompSdfIsValid ? 1 : 0) << " renderProgValid="
+                   << (m_programs.getRenderProgram() &&
+                       !m_programs.getRenderProgram()->isCompilationInProgress())
+                   << " slicerValid="
+                   << (m_programs.getSlicerProgram() && m_programs.getSlicerProgram()->isValid());
+                logMsg(ss.str());
+            }
+            catch (...)
+            {
+            }
+            // Ensure model is compiled and up to date
+            if (!m_programs.getSlicerState().isModelUpToDate())
+            {
+                // Add explicit debug about model source and states
+                try
+                {
+                    logMsg(std::string(
+                             "prepareThumbnailGeneration: slicer not up to date; hasModelSource=") +
+                           (m_programs.hasModelSource() ? "1" : "0"));
+                    logMsg("prepareThumbnailGeneration: before recompile: " +
+                           m_programs.getDebugStateSummary());
+                }
+                catch (...)
+                {
+                }
+
+                recompileIfRequired();
+
+                // Check again after recompilation
+                if (!m_programs.getSlicerState().isModelUpToDate())
+                {
+                    // Try a blocking compile as a last resort in headless mode
+                    try
+                    {
+                        logMsg("prepareThumbnailGeneration: retry with blocking compile");
+                    }
+                    catch (...)
+                    {
+                    }
+                    m_programs.recompileBlockingNoLock();
+                    if (!m_programs.getSlicerState().isModelUpToDate())
+                    {
+                        logMsg("Model compilation failed during thumbnail preparation (blocking)");
+                        return false;
+                    }
+                }
+                try
+                {
+                    logMsg("prepareThumbnailGeneration: after compile: " +
+                           m_programs.getDebugStateSummary());
+                }
+                catch (...)
+                {
+                }
+            }
+
+            // Ensure SDF is precomputed
+            if (!precomputeSdfForWholeBuildPlatform())
+            {
+                logMsg("SDF precomputation failed during thumbnail preparation");
+                return false;
+            }
+
+            // Ensure bounding box is valid
+            updateBBox();
+            if (!m_boundingBox.has_value())
+            {
+                logMsg("Bounding box computation failed during thumbnail preparation");
+                return false;
+            }
+
+            auto const & bb = m_boundingBox.value();
+            if (std::isnan(bb.min.x) || std::isnan(bb.min.y) || std::isnan(bb.min.z) ||
+                std::isnan(bb.max.x) || std::isnan(bb.max.y) || std::isnan(bb.max.z))
+            {
+                logMsg("Bounding box contains invalid values during thumbnail preparation");
+                return false;
+            }
+
+            try
+            {
+                std::stringstream ss2;
+                ss2 << "ComputeCore.prepareThumbnailGeneration: OK bbox min(" << bb.min.x << ","
+                    << bb.min.y << "," << bb.min.z << ") max(" << bb.max.x << "," << bb.max.y << ","
+                    << bb.max.z << ")";
+                logMsg(ss2.str());
+            }
+            catch (...)
+            {
+            }
+
+            logMsg("Thumbnail generation preparation completed successfully");
+            return true;
+        }
+        catch (std::exception const & e)
+        {
+            logMsg("Exception during thumbnail preparation: " + std::string(e.what()));
+            return false;
+        }
+    }
+
     SharedGLImageBuffer ComputeCore::getResultImage() const
     {
         return m_resultImage;
@@ -851,11 +1022,26 @@ namespace gladius
 
     SharedContourExtractor ComputeCore::getContour() const
     {
-        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
-        if (m_sliceFuture.valid())
+        // Create a local copy of the future to avoid race conditions
+        // We must NOT hold the mutex while waiting to avoid deadlock
+        std::future<void> localFuture;
         {
-            const_cast<std::future<void> &>(m_sliceFuture).get();
+            std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
+            if (m_sliceFuture.valid())
+            {
+                // Move the future to avoid race conditions
+                localFuture = std::move(const_cast<std::future<void> &>(m_sliceFuture));
+            }
         }
+
+        // Wait for the future outside the mutex to avoid deadlock
+        if (localFuture.valid())
+        {
+            localFuture.get();
+        }
+
+        // Now acquire the mutex to safely return the contour
+        std::lock_guard<std::recursive_mutex> lock(m_computeMutex);
         return m_contour;
     }
 
@@ -1110,24 +1296,32 @@ namespace gladius
 
         if (!m_thumbnailImage || !m_thumbnailImageHighRes)
         {
+            logMsg("ComputeCore.createThumbnail: thumbnail images not initialized");
             throw std::runtime_error("Thumbnail image is not initialized");
         }
 
         if (m_codeGenerator != CodeGenerator::CommandStream &&
             !m_programs.getRendererState().isModelUpToDate())
         {
+            logMsg("ComputeCore.createThumbnail: renderer state not up to date");
             throw std::runtime_error("Model is not up to date");
         }
 
         if (!m_precompSdfIsValid)
         {
+            logMsg("ComputeCore.createThumbnail: precomputed SDF is not valid");
             throw std::runtime_error("Precomputed SDF is not valid");
         }
 
-        glFinish();
+        // Only call glFinish if OpenGL is available
+        if (m_capabilities == RequiredCapabilities::OpenGLInterop)
+        {
+            glFinish();
+        }
         updateBBox();
         if (!m_boundingBox.has_value())
         {
+            logMsg("ComputeCore.createThumbnail: no bounding box available");
             throw std::runtime_error("Bounding box is not valid");
         }
 
@@ -1135,6 +1329,7 @@ namespace gladius
         if (std::isnan(bb.min.x) || std::isnan(bb.min.y) || std::isnan(bb.min.z) ||
             std::isnan(bb.max.x) || std::isnan(bb.max.y) || std::isnan(bb.max.z))
         {
+            logMsg("ComputeCore.createThumbnail: bounding box invalid values");
             throw std::runtime_error("Bounding box is not valid");
         }
 

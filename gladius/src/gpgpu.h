@@ -5,6 +5,16 @@
 #define NOMINMAX
 #endif
 
+// Prevent socket redefinition errors by defining these before Windows.h
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+// Prevent winsock.h from being included which conflicts with winsock2.h
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
+
 #include <Windows.h>
 #include <iostream>
 #endif

@@ -11,13 +11,13 @@ namespace gladius
 {
     class GLImageBuffer final : public ImageRGBA
     {
-    public:
-        explicit GLImageBuffer(ComputeContext& context)
+      public:
+        explicit GLImageBuffer(ComputeContext & context)
             : ImageRGBA(context)
         {
         }
 
-        GLImageBuffer(ComputeContext& context, size_t width, size_t height)
+        GLImageBuffer(ComputeContext & context, size_t width, size_t height)
             : ImageRGBA(context, width, height)
         {
         }
@@ -36,7 +36,7 @@ namespace gladius
 
         void invalidateContent();
 
-    private:
+      private:
         void setupForInterOp();
         void setupForReadPixel();
 

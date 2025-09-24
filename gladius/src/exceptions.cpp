@@ -348,7 +348,8 @@ namespace gladius
             return "CL_INVALID_PROGRAM";
 
         case -45:
-            return "The OpenCL kernel program is invalid. This may happen if the model is somehow invalid. It might be necessary to restart Gladius to recover from this error.";
+            return "The OpenCL kernel program is invalid. This may happen if the model is somehow "
+                   "invalid. It might be necessary to restart Gladius to recover from this error.";
 
         case -46:
             return "CL_INVALID_KERNEL_NAME";

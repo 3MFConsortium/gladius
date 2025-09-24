@@ -1,23 +1,23 @@
 #pragma once
 
 #include <filesystem>
-#include <nlohmann/json.hpp>
-#include <string>
 #include <memory>
 #include <mutex>
+#include <nlohmann/json.hpp>
+#include <string>
 #include <unordered_map>
 
 namespace gladius
 {
     /**
      * @brief Configuration manager class for handling application settings
-     * 
+     *
      * Provides a centralized way to manage application configuration settings.
      * Settings are stored in a JSON file and can be accessed through this class.
      */
     class ConfigManager
     {
-    public:
+      public:
         /**
          * @brief Construct a new ConfigManager object
          */
@@ -36,8 +36,10 @@ namespace gladius
          * @param defaultValue Default value to return if the key doesn't exist
          * @return The value from the configuration or the default value
          */
-        template<typename T>
-        T getValue(std::string const& section, std::string const& key, T const& defaultValue) const;
+        template <typename T>
+        T getValue(std::string const & section,
+                   std::string const & key,
+                   T const & defaultValue) const;
 
         /**
          * @brief Set a value in the configuration
@@ -46,8 +48,8 @@ namespace gladius
          * @param key Key name within the section
          * @param value Value to set
          */
-        template<typename T>
-        void setValue(std::string const& section, std::string const& key, T const& value);
+        template <typename T>
+        void setValue(std::string const & section, std::string const & key, T const & value);
 
         /**
          * @brief Save the current configuration to the file
@@ -63,12 +65,12 @@ namespace gladius
          * @brief Get the path to the configuration directory
          * @return Path to the configuration directory
          */
-        std::filesystem::path const& getConfigDir() const
+        std::filesystem::path const & getConfigDir() const
         {
             return m_configDir;
         }
 
-    private:
+      private:
         /**
          * @brief Initialize the configuration
          * Creates the configuration directory if it doesn't exist
@@ -86,19 +88,21 @@ namespace gladius
         mutable std::mutex m_mutex;
 
         // Disable copy and move
-        ConfigManager(ConfigManager const&) = delete;
-        ConfigManager& operator=(ConfigManager const&) = delete;
-        ConfigManager(ConfigManager&&) = delete;
-        ConfigManager& operator=(ConfigManager&&) = delete;
+        ConfigManager(ConfigManager const &) = delete;
+        ConfigManager & operator=(ConfigManager const &) = delete;
+        ConfigManager(ConfigManager &&) = delete;
+        ConfigManager & operator=(ConfigManager &&) = delete;
     };
 
     // Template implementations
-    
-    template<typename T>
-    T ConfigManager::getValue(std::string const& section, std::string const& key, T const& defaultValue) const
+
+    template <typename T>
+    T ConfigManager::getValue(std::string const & section,
+                              std::string const & key,
+                              T const & defaultValue) const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        
+
         if (m_config.contains(section) && m_config[section].contains(key))
         {
             try
@@ -111,15 +115,16 @@ namespace gladius
                 return defaultValue;
             }
         }
-        
+
         return defaultValue;
     }
 
-    template<typename T>
-    void ConfigManager::setValue(std::string const& section, std::string const& key, T const& value)
+    template <typename T>
+    void
+    ConfigManager::setValue(std::string const & section, std::string const & key, T const & value)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        
+
         m_config[section][key] = value;
     }
 

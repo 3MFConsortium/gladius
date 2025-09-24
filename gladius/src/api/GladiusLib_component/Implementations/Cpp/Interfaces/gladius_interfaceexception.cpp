@@ -13,7 +13,6 @@ Interface version: 1.2.0
 
 */
 
-
 #include <string>
 
 #include "gladius_interfaceexception.hpp"
@@ -22,24 +21,24 @@ Interface version: 1.2.0
  Class EGladiusLibInterfaceException
 **************************************************************************************************************************/
 EGladiusLibInterfaceException::EGladiusLibInterfaceException(GladiusLibResult errorCode)
-    : m_errorMessage("GladiusLib Error " + std::to_string (errorCode))
+    : m_errorMessage("GladiusLib Error " + std::to_string(errorCode))
 {
     m_errorCode = errorCode;
 }
 
-EGladiusLibInterfaceException::EGladiusLibInterfaceException(GladiusLibResult errorCode, std::string errorMessage)
-    : m_errorMessage(errorMessage + " (" + std::to_string (errorCode) + ")")
+EGladiusLibInterfaceException::EGladiusLibInterfaceException(GladiusLibResult errorCode,
+                                                             std::string errorMessage)
+    : m_errorMessage(errorMessage + " (" + std::to_string(errorCode) + ")")
 {
     m_errorCode = errorCode;
 }
 
-GladiusLibResult EGladiusLibInterfaceException::getErrorCode ()
+GladiusLibResult EGladiusLibInterfaceException::getErrorCode()
 {
     return m_errorCode;
 }
 
-const char * EGladiusLibInterfaceException::what () const noexcept
+const char * EGladiusLibInterfaceException::what() const noexcept
 {
     return m_errorMessage.c_str();
 }
-

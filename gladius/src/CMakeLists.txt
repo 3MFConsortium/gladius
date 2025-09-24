@@ -1,17 +1,18 @@
 set(BINARY ${CMAKE_PROJECT_NAME})
 file(GLOB SOURCES LIST_DIRECTORIES true *.h *.cpp)
 
-# Explicitly add our new shortcut system files
-list(APPEND SOURCES 
-    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutManager.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutSettingsDialog.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/ui/ShortcutSettingsDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/BackupManager.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/BackupManager.cpp
-)
+# MCP sources are intentionally NOT part of the core targets (gladius, gladius_lib)
+# They will be added to the dedicated gladiusmcp target below
+file(GLOB MCP_SOURCES LIST_DIRECTORIES true mcp/*.h mcp/*.cpp)
+# Add MCP tools sources
+file(GLOB MCP_TOOLS_SOURCES LIST_DIRECTORIES true mcp/tools/*.h mcp/tools/*.cpp)
+
+
 
 add_library(${BINARY}_lib STATIC ${SOURCES})
+# MCP-enabled variant of the core library so Application.cpp and others are built with MCP code
+add_library(${BINARY}_lib_mcp STATIC ${SOURCES})
+target_compile_definitions(${BINARY}_lib_mcp PUBLIC GLADIUS_ENABLE_MCP)
 
 if (MSVC)
     add_executable(${BINARY} WIN32 ${SOURCES} )
@@ -26,24 +27,31 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/components/IconFontCppHeaders
     ${CMAKE_CURRENT_SOURCE_DIR}/components/psimpl/lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/nodes
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/io
+    ${CMAKE_CURRENT_SOURCE_DIR}/contour
+    ${CMAKE_CURRENT_SOURCE_DIR}/nodes
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
 )
 
 set (INCLUDE_PATHS
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/io
+    ${CMAKE_CURRENT_SOURCE_DIR}/contour
+    ${CMAKE_CURRENT_SOURCE_DIR}/nodes
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
     ${CMAKE_CURRENT_SOURCE_DIR}/components/IconFontCppHeaders
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${OPENMESH_INCLUDE_DIRS}
     ${AdditionalIncludes}
 )
 target_include_directories(${BINARY}_lib PUBLIC ${INCLUDE_PATHS})
+target_include_directories(${BINARY}_lib_mcp PUBLIC ${INCLUDE_PATHS})
 target_include_directories(${BINARY} PUBLIC ${INCLUDE_PATHS})
 
-set(DEPENDENCIES
+# Core dependencies (shared by gladius and gladiusmcp)
+set(DEPENDENCIES_CORE
     OpenCL::OpenCL
     ${X11_LIBRARIES}
     ${OPENGL_LIBRARIES}
@@ -65,20 +73,56 @@ set(DEPENDENCIES
     imgui::imgui
     unofficial::imgui-node-editor::imgui-node-editor
     PkgConfig::Clipper2
+    muparser::muparser
+    PkgConfig::libcoro
+)
+
+# MCP-only dependencies
+set(DEPENDENCIES_MCP
+    httplib::httplib
+    nlohmann_json::nlohmann_json
 )
 
 if (WIN32)
-    set(DEPENDENCIES ${DEPENDENCIES} blosc_shared)
+    set(DEPENDENCIES_CORE ${DEPENDENCIES_CORE} blosc_shared)
 else()
-    set(DEPENDENCIES ${DEPENDENCIES} blosc_static)
+    set(DEPENDENCIES_CORE ${DEPENDENCIES_CORE} blosc_static)
 endif()
 
 if (ENABLE_TRACY)
-    set(DEPENDENCIES ${DEPENDENCIES} Tracy::TracyClient)
+    set(DEPENDENCIES_CORE ${DEPENDENCIES_CORE} Tracy::TracyClient)
 endif()
 
 
-target_link_libraries(${BINARY}_lib PUBLIC ${DEPENDENCIES})
+target_link_libraries(${BINARY}_lib PUBLIC ${DEPENDENCIES_CORE})
+target_link_libraries(${BINARY}_lib_mcp PUBLIC ${DEPENDENCIES_CORE})
 target_link_libraries(${BINARY} PUBLIC ${BINARY}_lib)
 
+# Enable AVX2 SIMD instructions for Phase 3 optimization
+if (NOT WIN32)
+    target_compile_options(${BINARY}_lib PRIVATE -mavx2 -mfma)
+    target_compile_options(${BINARY} PRIVATE -mavx2 -mfma)
+endif()
+
 install(TARGETS ${BINARY} RUNTIME DESTINATION ${INSTALL_PREFIX}/)
+
+#
+# gladiusmcp: gladius with MCP server support
+#
+# Build gladiusmcp by linking the MCP-enabled core library and MCP sources
+add_executable(gladiusmcp ${MCP_SOURCES} ${MCP_TOOLS_SOURCES} main.cpp)
+target_include_directories(gladiusmcp PUBLIC ${INCLUDE_PATHS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/io
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/contour
+    ${CMAKE_CURRENT_SOURCE_DIR}/nodes
+    ${CMAKE_CURRENT_SOURCE_DIR}/mcp
+)
+target_compile_definitions(gladiusmcp PRIVATE GLADIUS_ENABLE_MCP)
+target_link_libraries(gladiusmcp PUBLIC ${BINARY}_lib_mcp ${DEPENDENCIES_MCP})
+# Ensure the MCP-enabled static library is built before linking the executable
+add_dependencies(gladiusmcp ${BINARY}_lib_mcp)
+if (NOT WIN32)
+    target_compile_options(gladiusmcp PRIVATE -mavx2 -mfma)
+endif()
+install(TARGETS gladiusmcp RUNTIME DESTINATION ${INSTALL_PREFIX}/)

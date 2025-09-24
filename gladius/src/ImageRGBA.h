@@ -30,10 +30,7 @@ namespace gladius
         {
         }
 
-        ImageImpl(ComputeContext & ComputeContext,
-                        size_t width,
-                        size_t height,
-                        size_t depth)
+        ImageImpl(ComputeContext & ComputeContext, size_t width, size_t height, size_t depth)
             : m_width(width)
             , m_height(height)
             , m_depth(depth)
@@ -56,7 +53,14 @@ namespace gladius
             CL_ERROR(m_ComputeContext.GetQueue().finish());
         }
 
-        virtual ~ImageImpl() = default;
+        virtual ~ImageImpl()
+        {
+            if (m_buffer && m_allocatedBytes > 0)
+            {
+                m_ComputeContext.onBufferReleased(m_allocatedBytes);
+                m_allocatedBytes = 0;
+            }
+        }
 
         void setWidth(size_t width)
         {
@@ -92,75 +96,43 @@ namespace gladius
 
         virtual void allocateOnDevice()
         {
-            auto determineImageFormat = []() constexpr
-            {
-                if constexpr (std::is_same_v<ImageDataPoint, cl_int>)
-                {
-                    return cl::ImageFormat{CL_R, CL_SIGNED_INT32};
-                }
-                else if constexpr (std::is_same_v<ImageDataPoint, cl_int2>)
-                {
-                    return cl::ImageFormat{CL_RG, CL_SIGNED_INT32};
-                }
-                else if constexpr (std::is_same_v<ImageDataPoint, cl_float2>)
-                {
-                    return cl::ImageFormat{CL_RG, CL_FLOAT};
-                } // note that cl_float3 == cl_float4 due to memory alignment
-                else if constexpr (std::is_same_v<ImageDataPoint, cl_float4>)
-                {
-                    return cl::ImageFormat{CL_RGBA, CL_FLOAT};
-                }
-                else if constexpr (std::is_same_v<ImageDataPoint, cl_uchar>)
-                {
-                    return cl::ImageFormat{CL_R, CL_UNSIGNED_INT8};
-                }
-                else if constexpr (std::is_same_v<ImageDataPoint, cl_float>)
-                {
-                    return cl::ImageFormat{CL_R, CL_FLOAT};
-                }
-                else if constexpr (std::is_same_v<ImageDataPoint, cl_char4>)
-                {
-                    return cl::ImageFormat{CL_RGBA, CL_UNSIGNED_INT8};
-                }
-                else if constexpr (std::is_same_v<ImageDataPoint, cl_char>)
-                {
-                    return cl::ImageFormat{CL_R, CL_UNSIGNED_INT8};
-                }
-                else
-                {
-                    throw std::domain_error("Image Format is not supported!");
-                }
-            };
             const cl::ImageFormat format = determineImageFormat();
 
             m_data.resize(m_width * m_height * m_depth);
 
-            cl_int err{0};
+            // If re-allocating, release previous accounting tracked
+            if (m_buffer && m_allocatedBytes > 0)
+            {
+                m_ComputeContext.onBufferReleased(m_allocatedBytes);
+                m_allocatedBytes = 0;
+            }
+
             if (m_depth == 1)
             {
-                m_buffer = std::make_unique<cl::Image2D>(m_ComputeContext.GetContext(),
-                                                         CL_MEM_READ_WRITE,
-                                                         format,
-                                                         m_width,
-                                                         m_height,
-                                                         0,
-                                                         nullptr,
-                                                         &err);
+                m_buffer = m_ComputeContext.createImage2DChecked(format,
+                                                                 m_width,
+                                                                 m_height,
+                                                                 CL_MEM_READ_WRITE,
+                                                                 0,
+                                                                 nullptr,
+                                                                 typeid(ImageDataPoint).name());
+                m_allocatedBytes =
+                  ComputeContext::estimateImageSizeBytes(format, m_width, m_height, 1);
             }
             else
             {
-                m_buffer = std::make_unique<cl::Image3D>(m_ComputeContext.GetContext(),
-                                                         CL_MEM_READ_WRITE,
-                                                         format,
-                                                         m_width,
-                                                         m_height,
-                                                         m_depth,
-                                                         0,
-                                                         0,
-                                                         nullptr,
-                                                         &err);
+                m_buffer = m_ComputeContext.createImage3DChecked(format,
+                                                                 m_width,
+                                                                 m_height,
+                                                                 m_depth,
+                                                                 CL_MEM_READ_WRITE,
+                                                                 0,
+                                                                 0,
+                                                                 nullptr,
+                                                                 typeid(ImageDataPoint).name());
+                m_allocatedBytes =
+                  ComputeContext::estimateImageSizeBytes(format, m_width, m_height, m_depth);
             }
-            CL_ERROR(err);
             write();
         }
 
@@ -269,6 +241,49 @@ namespace gladius
         size_t m_size = 0;
         ComputeContext & m_ComputeContext;
         std::unique_ptr<cl::Image> m_buffer;
+
+        // Track bytes accounted in ComputeContext for this device image
+        size_t m_allocatedBytes{0};
+
+        static cl::ImageFormat determineImageFormat()
+        {
+            if constexpr (std::is_same_v<ImageDataPoint, cl_int>)
+            {
+                return cl::ImageFormat{CL_R, CL_SIGNED_INT32};
+            }
+            else if constexpr (std::is_same_v<ImageDataPoint, cl_int2>)
+            {
+                return cl::ImageFormat{CL_RG, CL_SIGNED_INT32};
+            }
+            else if constexpr (std::is_same_v<ImageDataPoint, cl_float2>)
+            {
+                return cl::ImageFormat{CL_RG, CL_FLOAT};
+            }
+            else if constexpr (std::is_same_v<ImageDataPoint, cl_float4>)
+            {
+                return cl::ImageFormat{CL_RGBA, CL_FLOAT};
+            }
+            else if constexpr (std::is_same_v<ImageDataPoint, cl_uchar>)
+            {
+                return cl::ImageFormat{CL_R, CL_UNSIGNED_INT8};
+            }
+            else if constexpr (std::is_same_v<ImageDataPoint, cl_float>)
+            {
+                return cl::ImageFormat{CL_R, CL_FLOAT};
+            }
+            else if constexpr (std::is_same_v<ImageDataPoint, cl_char4>)
+            {
+                return cl::ImageFormat{CL_RGBA, CL_UNSIGNED_INT8};
+            }
+            else if constexpr (std::is_same_v<ImageDataPoint, cl_char>)
+            {
+                return cl::ImageFormat{CL_R, CL_UNSIGNED_INT8};
+            }
+            else
+            {
+                throw std::domain_error("Image Format is not supported!");
+            }
+        }
     };
 
     using ImageRGBA = ImageImpl<cl_float4>;

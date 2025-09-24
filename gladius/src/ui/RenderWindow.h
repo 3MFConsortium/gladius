@@ -191,6 +191,9 @@ namespace gladius::ui
         bool m_permanentCenteringEnabled = false;
         bool m_lastCameraStateValid = false;
 
+        // First-time centering for new models
+        bool m_boundingBoxEverAvailable = false;
+
         // Camera state tracking for permanent centering
         struct CameraState
         {

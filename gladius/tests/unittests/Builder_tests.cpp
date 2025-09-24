@@ -24,7 +24,7 @@ namespace gladius_tests
         model.createBeginEndWithDefaultInAndOuts();
         nodes::Builder builder;
         nodes::Matrix4x4 trafo;
-        auto const transformedPosId = builder.addTransformationToInputCs(model, trafo);
+        auto const transformedPosId = builder.addTransformationToInputCs(model, trafo, 1.0f);
 
         EXPECT_EQ(transformedPosId.getId(), 10001);
     }
@@ -35,10 +35,11 @@ namespace gladius_tests
         model.createBeginEndWithDefaultInAndOuts();
         nodes::Builder builder;
         nodes::Matrix4x4 trafo;
-        auto port = builder.addTransformationToInputCs(model, trafo);
+        auto port = builder.addTransformationToInputCs(model, trafo, 1.0f);
         builder.addResourceRef(model, ResourceKey{1}, port);
 
-        EXPECT_EQ(model.getSize(), 5); // Begin, End, Transformation, ResourceId and FunctionCall-Node
+        EXPECT_EQ(model.getSize(),
+                  5); // Begin, End, Transformation, ResourceId and FunctionCall-Node
     }
 
     TEST_F(Builder_Test, AddComponentRef_EmptyModel_ModelIncludesTransformationAndPart)
@@ -50,7 +51,7 @@ namespace gladius_tests
         nodes::Model referencedModel;
         referencedModel.createBeginEndWithDefaultInAndOuts();
 
-        builder.addComponentRef(model, referencedModel, trafo);
+        builder.addComponentRef(model, referencedModel, trafo, 1.0f);
 
         EXPECT_EQ(model.getSize(),
                   5); // Begin, End, Transformation, ResourceId and FunctionCall-Node

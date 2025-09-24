@@ -23,7 +23,11 @@ namespace gladius::nodes
     struct float2
     {
         float2() = default;
-        float2(float x, float y) : x(x), y(y) {}
+        float2(float x, float y)
+            : x(x)
+            , y(y)
+        {
+        }
         float x = 0.f;
         float y = 0.f;
     };

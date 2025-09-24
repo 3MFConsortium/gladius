@@ -44,12 +44,17 @@
     "lodepng",
     "minizip",
     "pugixml",
-    "lib3mf",
+    {
+      "name": "lib3mf"
+    },
     "pkgconf",
     "minizip",
     "tracy",
     "clipper2",
-    "nlohmann-json"
+    "nlohmann-json",
+    "muparser",
+    "cpp-httplib",
+    "libcoro"
   ],
   "overrides": [
     {
@@ -62,6 +67,6 @@
     }
   ],
   "name": "gladius",
-  "builtin-baseline": "f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2",
+  "builtin-baseline": "6ecbbbdf31cba47aafa7cf6189b1e73e10ac61f8",
   "version-string": "@CPACK_PACKAGE_VERSION_MAJOR@.@CPACK_PACKAGE_VERSION_MINOR@.@CPACK_PACKAGE_VERSION_PATCH@"
 }

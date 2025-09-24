@@ -5,12 +5,12 @@
 
 namespace gladius
 {
-    class ImageStackResource  : public ResourceBase
+    class ImageStackResource : public ResourceBase
     {
-    public:
-      explicit ImageStackResource(ResourceKey key, io::ImageStack && stack);
+      public:
+        explicit ImageStackResource(ResourceKey key, io::ImageStack && stack);
 
-      ~ImageStackResource() = default;
+        ~ImageStackResource() = default;
 
         size_t getWidth() const
         {
@@ -31,18 +31,16 @@ namespace gladius
         {
             return m_numChannels;
         }
-    private:
+
+      private:
         size_t m_width{};
         size_t m_height{};
         size_t m_numSheets{};
         size_t m_numChannels{};
         io::PixelFormat m_format{};
 
-
         io::ImageStack m_stack;
 
         void loadImpl() override;
-
-
     };
 }

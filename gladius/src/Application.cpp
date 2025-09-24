@@ -1,4 +1,8 @@
 #include "Application.h"
+#if defined(GLADIUS_ENABLE_MCP)
+#include "mcp/ApplicationMCPAdapter.h"
+#include "mcp/MCPServer.h"
+#endif
 #include "ui/MainWindow.h"
 
 #include <filesystem>
@@ -9,58 +13,304 @@ namespace gladius
     Application::Application()
         : m_configManager()
         , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
+#if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
+        , m_mcpAdapter(nullptr)
+#endif
     {
         m_mainWindow.setConfigManager(m_configManager);
-        m_mainWindow.setup();
-        m_mainWindow.startMainLoop();
+        if (!m_headlessMode)
+        {
+            // Let MainWindow perform compute initialization and gracefully fall back on failure
+            m_mainWindow.setup();
+        }
+    }
+
+    Application::Application(bool headlessMode)
+        : m_configManager()
+        , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
+#if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
+        , m_mcpAdapter(nullptr)
+#endif
+    {
+        m_headlessMode = headlessMode;
+        m_mainWindow.setConfigManager(m_configManager);
+        if (!m_headlessMode)
+        {
+            m_mainWindow.setup();
+        }
+        else
+        {
+            // Prepare minimal compute/document so MCP document ops work in headless mode
+            m_mainWindow.setupHeadless(m_globalLogger);
+        }
+    }
+
+    Application::Application(bool headlessMode, bool openclDebugEnabled)
+        : m_configManager()
+        , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
+#if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
+        , m_mcpAdapter(nullptr)
+#endif
+    {
+        m_headlessMode = headlessMode;
+        m_mainWindow.setConfigManager(m_configManager);
+        m_mainWindow.setOpenCLDebugEnabled(openclDebugEnabled);
+        if (!m_headlessMode)
+        {
+            m_mainWindow.setup();
+        }
+        else
+        {
+            m_mainWindow.setupHeadless(m_globalLogger);
+        }
     }
 
     Application::Application(int argc, char ** argv)
         : m_configManager()
         , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
+#if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
+        , m_mcpAdapter(nullptr)
+#endif
     {
         m_mainWindow.setConfigManager(m_configManager);
         m_mainWindow.setup();
-        
+
         // the first argument is the executable name
         if (argc >= 2)
         {
             std::filesystem::path filename{argv[1]};
 
-            // because this is a console application, we print to the console
-            std::cout << "Opening file: " << filename << std::endl;
+            // Use the global logger instead of cout
+            m_globalLogger->logInfo("Opening file: " + filename.string());
             if (std::filesystem::exists(filename))
             {
                 m_mainWindow.open(filename);
             }
             else
             {
-                std::cout << "File does not exist: " << filename << std::endl;
+                m_globalLogger->logError("File does not exist: " + filename.string());
             }
         }
         else
         {
-            std::cout << "No file specified" << std::endl;
+            m_globalLogger->logInfo("No file specified");
         }
-        m_mainWindow.startMainLoop();
     }
-    
+
     Application::Application(std::filesystem::path const & filename)
         : m_configManager()
         , m_mainWindow()
+        , m_globalLogger(std::make_shared<events::Logger>())
+#if defined(GLADIUS_ENABLE_MCP)
+        , m_mcpServer(nullptr)
+        , m_mcpAdapter(nullptr)
+#endif
     {
         m_mainWindow.setConfigManager(m_configManager);
         m_mainWindow.setup();
 
-        
         if (std::filesystem::exists(filename))
         {
             m_mainWindow.open(filename);
         }
         else
         {
-            std::cout << "File does not exist: " << filename << std::endl;
+            m_globalLogger->logError("File does not exist: " + filename.string());
+        }
+    }
+
+    void Application::startMainLoop()
+    {
+        if (m_headlessMode)
+        {
+            // In headless mode we do not block on the UI loop.
+            return;
         }
         m_mainWindow.startMainLoop();
+    }
+
+    Application::~Application()
+    {
+        // Default destructor implementation
+        // The unique_ptr<MCPServer> will be properly destroyed here
+        // since we have the complete MCPServer definition included
+        if (m_uiThread.joinable())
+        {
+            m_uiThread.join();
+        }
+    }
+
+#if defined(GLADIUS_ENABLE_MCP)
+    bool Application::enableMCPServer(int port)
+    {
+        if (m_mcpServer && m_mcpServer->isRunning())
+        {
+            m_globalLogger->logWarning("MCP Server is already running");
+            return false;
+        }
+
+        try
+        {
+            // Create the adapter that will bridge this Application to the MCP interface
+            m_mcpAdapter = std::make_unique<ApplicationMCPAdapter>(this);
+
+            // Create the MCP server with the adapter
+            m_mcpServer = std::make_unique<mcp::MCPServer>(m_mcpAdapter.get());
+            bool success = m_mcpServer->start(port, mcp::TransportType::HTTP);
+
+            if (success)
+            {
+                m_globalLogger->logInfo("MCP Server enabled on port " + std::to_string(port));
+            }
+            else
+            {
+                m_globalLogger->logError("Failed to enable MCP Server on port " +
+                                         std::to_string(port));
+                m_mcpServer.reset();
+                m_mcpAdapter.reset();
+            }
+
+            return success;
+        }
+        catch (const std::exception & e)
+        {
+            m_globalLogger->logError("Error enabling MCP Server: " + std::string(e.what()));
+            m_mcpServer.reset();
+            m_mcpAdapter.reset();
+            return false;
+        }
+    }
+
+    bool Application::enableMCPServerStdio()
+    {
+        if (m_mcpServer && m_mcpServer->isRunning())
+        {
+            return false; // Don't print anything in stdio mode
+        }
+
+        try
+        {
+            // Create the adapter that will bridge this Application to the MCP interface
+            m_mcpAdapter = std::make_unique<ApplicationMCPAdapter>(this);
+
+            // Create the MCP server with the adapter
+            m_mcpServer = std::make_unique<mcp::MCPServer>(m_mcpAdapter.get());
+            bool success = m_mcpServer->start(0, mcp::TransportType::STDIO);
+
+            if (!success)
+            {
+                m_mcpServer.reset();
+                m_mcpAdapter.reset();
+            }
+
+            return success;
+        }
+        catch (const std::exception & /* e */)
+        {
+            m_mcpServer.reset();
+            m_mcpAdapter.reset();
+            return false;
+        }
+    }
+
+    void Application::disableMCPServer()
+    {
+        if (m_mcpServer)
+        {
+            m_mcpServer->stop();
+            m_mcpServer.reset();
+            m_mcpAdapter.reset();
+            m_globalLogger->logInfo("MCP Server disabled");
+        }
+    }
+
+    bool Application::isMCPServerEnabled() const
+    {
+        return m_mcpServer && m_mcpServer->isRunning();
+    }
+#endif // GLADIUS_ENABLE_MCP
+
+    events::SharedLogger Application::getGlobalLogger() const
+    {
+        return m_globalLogger;
+    }
+
+    void Application::setLoggerOutputMode(events::OutputMode mode)
+    {
+        if (m_globalLogger)
+        {
+            m_globalLogger->setOutputMode(mode);
+        }
+    }
+
+    void Application::setHeadlessMode(bool headless)
+    {
+        bool const wasHeadless = m_headlessMode;
+        m_headlessMode = headless;
+        if (m_headlessMode && !wasHeadless)
+        {
+            // Transitioning to headless: ensure compute/doc exist without UI
+            m_mainWindow.setupHeadless(m_globalLogger);
+        }
+    }
+
+    bool Application::isHeadlessMode() const
+    {
+        return m_headlessMode;
+    }
+
+    std::shared_ptr<Document> Application::getCurrentDocument() const
+    {
+        return m_mainWindow.getCurrentDocument();
+    }
+
+    bool Application::showUI()
+    {
+        if (!m_headlessMode)
+        {
+            // UI mode already; if UI loop not running yet, start it on a background thread.
+            if (!m_uiRunning.load())
+            {
+                m_uiThread = std::thread(
+                  [this]()
+                  {
+                      m_uiRunning = true;
+                      m_mainWindow.startMainLoop();
+                      m_uiRunning = false;
+                  });
+            }
+            return true;
+        }
+
+        try
+        {
+            m_headlessMode = false;
+            // If headless was previously initialized, setup() will complete full UI wiring
+            m_mainWindow.setup();
+            m_uiThread = std::thread(
+              [this]()
+              {
+                  m_uiRunning = true;
+                  m_mainWindow.startMainLoop();
+                  m_uiRunning = false;
+              });
+            return true;
+        }
+        catch (const std::exception & e)
+        {
+            if (m_globalLogger)
+            {
+                m_globalLogger->logError(std::string("Failed to show UI: ") + e.what());
+            }
+            return false;
+        }
     }
 }

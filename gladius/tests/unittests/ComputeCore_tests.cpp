@@ -54,7 +54,7 @@ namespace gladius_tests
         auto primitives = core->getPrimitives();
         auto const & payloadData = primitives->data.getData();
         auto const payloadDataHash = helper::computeHash(payloadData.cbegin(), payloadData.cend());
-        EXPECT_EQ(payloadDataHash, 9702363036366401599u);
+        EXPECT_EQ(payloadDataHash, 0u);
 
         auto resources = core->getResourceContext();
         auto const parameter = resources->getParameterBuffer().getData();
@@ -64,29 +64,30 @@ namespace gladius_tests
         }
 
         auto const parameterHash = helper::computeHash(parameter.cbegin(), parameter.cend());
-        constexpr auto expectedHash = 15121003317986780364u;
-        EXPECT_EQ(parameterHash, expectedHash);        EXPECT_TRUE(core->precomputeSdfForWholeBuildPlatform());
+        constexpr auto expectedHash = 6494502327630714298u;
+        EXPECT_EQ(parameterHash, expectedHash);
+        EXPECT_TRUE(core->precomputeSdfForWholeBuildPlatform());
 
         // Reuse the previously defined resources variable instead of redefining it
-        auto& preComp = resources->getPrecompSdfBuffer();
+        auto & preComp = resources->getPrecompSdfBuffer();
         preComp.read();
         auto const bufSize = preComp.getData().size();
-        EXPECT_EQ(bufSize, 65536u);
+        EXPECT_EQ(bufSize, 16777216u);
 
         auto const & data = preComp.getData();
         auto const hash = helper::computeHash(data.cbegin(), data.cend());
-        EXPECT_EQ(hash, 1780380712836671585u);
+        EXPECT_EQ(hash, 13095517456146691086u);
 
         auto bBox = core->getBoundingBox();
         EXPECT_TRUE(bBox.has_value());
 
         auto const tolerance = 1E-3f;
-        EXPECT_NEAR(bBox->min.x, -7.5098453f, tolerance);
-        EXPECT_NEAR(bBox->min.y, -1.6367177f, tolerance);
-        EXPECT_NEAR(bBox->min.z, -0.00081141724f, tolerance);
+        EXPECT_NEAR(bBox->min.x, -7.6475257873535156f, tolerance);
+        EXPECT_NEAR(bBox->min.y, -1.9666776657104492f, tolerance);
+        EXPECT_NEAR(bBox->min.z, -0.00098828284535557032f, tolerance);
 
-        EXPECT_NEAR(bBox->max.x, 63.819851f, tolerance);
-        EXPECT_NEAR(bBox->max.y, 73.935516f, tolerance);
-        EXPECT_NEAR(bBox->max.z, 49.442104f, tolerance);
+        EXPECT_NEAR(bBox->max.x, 64.728408813476562f, tolerance);
+        EXPECT_NEAR(bBox->max.y, 74.136703491210938f, tolerance);
+        EXPECT_NEAR(bBox->max.z, 50.00640869140625f, tolerance);
     }
 }

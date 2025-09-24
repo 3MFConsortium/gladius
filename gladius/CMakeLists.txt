@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.12)
 
+# Set policies to avoid warnings
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)  # FindBoost module removal policy
+endif()
+
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)  # install() DESTINATION paths normalization
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Options
@@ -7,7 +16,7 @@ option(ENABLE_OPENCL_TESTS "Enable tests that require OpenCL" ON)
 
 set(CPACK_PACKAGE_VERSION_MAJOR "1")
 set(CPACK_PACKAGE_VERSION_MINOR "2")
-set(CPACK_PACKAGE_VERSION_PATCH "12")
+set(CPACK_PACKAGE_VERSION_PATCH "14")
 
 # Set the version of the package in src/version.h
 configure_file(
@@ -48,7 +57,9 @@ if(WIN32)
   else()
     # Set MSVC runtime to MultiThreaded (/MT)
     cmake_policy(SET CMP0091 NEW)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    # Use the dynamic runtime (/MD) to match vcpkg-built third-party libraries
+    # and avoid RuntimeLibrary mismatches during linking.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
   endif()
 endif()
 
@@ -69,6 +80,10 @@ if(_change_MSVC_flags)
 endif()
 
 project(gladius)
+
+# Include coverage support after project declaration so compiler info is available
+include(cmake/Coverage.cmake)
+
 if (MSVC)
     add_compile_options(/bigobj /utf-8 /Zc:__cplusplus)
 
@@ -137,7 +152,10 @@ find_package(imgui CONFIG REQUIRED)
 find_package(unofficial-imgui-node-editor CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(muparser CONFIG REQUIRED)
+find_package(httplib CONFIG REQUIRED)
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
+pkg_check_modules(libcoro REQUIRED IMPORTED_TARGET libcoro)
 
 
 file(GLOB KERNEL_FILES
@@ -186,7 +204,14 @@ configure_file(src/kernel/sdf.cl src/kernel/sdf.cl COPYONLY)
 configure_file(src/kernel/sdf.h src/kernel/sdf.h COPYONLY)
 configure_file(src/kernel/rendering.cl src/kernel/rendering.cl COPYONLY)
 configure_file(src/kernel/sdf_generator.cl src/kernel/sdf_generator.cl COPYONLY)
-configure_file(src/kernel/CNanoVDB.h src/kernel/CNanoVDB.h COPYONLY)
+
+# Copy CNanoVDB.h from vcpkg OpenVDB installation instead of using manually maintained copy
+find_path(NANOVDB_INCLUDE_DIR
+    NAMES nanovdb/CNanoVDB.h
+    HINTS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include
+    REQUIRED
+)
+configure_file(${NANOVDB_INCLUDE_DIR}/nanovdb/CNanoVDB.h src/kernel/CNanoVDB.h COPYONLY)
 configure_file(components/fonts/Roboto-Medium.ttf src/misc/fonts/Roboto-Medium.ttf COPYONLY)
 configure_file(components/fonts/fontawesome-free-5.14.0-web/fa-regular-400.ttf src/misc/fonts/fa-regular-400.ttf COPYONLY)
 configure_file(components/fonts/fontawesome-free-5.14.0-web/fa-solid-900.ttf src/misc/fonts/fa-solid-900.ttf COPYONLY)

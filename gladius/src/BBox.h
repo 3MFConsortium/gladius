@@ -15,7 +15,7 @@ namespace gladius
         [[nodiscard]] Eigen::Vector3f getMin() const;
 
       private:
-        Eigen::Vector3f m_max{-FLT_MAX,-FLT_MAX, -FLT_MAX};
+        Eigen::Vector3f m_max{-FLT_MAX, -FLT_MAX, -FLT_MAX};
         Eigen::Vector3f m_min{FLT_MAX, FLT_MAX, FLT_MAX};
     };
 
