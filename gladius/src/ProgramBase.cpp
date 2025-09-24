@@ -62,7 +62,8 @@ namespace gladius
             {
                 if (m_logger)
                 {
-                    m_logger->logWarning("Aborting compilation: No model source set");
+                    m_logger->logInfo(
+                      "Aborting compilation attempt: No model source has been set yet");
                 }
                 else
                 {
@@ -113,7 +114,7 @@ namespace gladius
         {
             if (m_logger)
             {
-                m_logger->logWarning("Aborting compilation: No model source set");
+                m_logger->logInfo("Aborting compilation attempt: No model source has been set yet");
             }
             else
             {
