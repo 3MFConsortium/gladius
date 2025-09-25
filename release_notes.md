@@ -1,22 +1,13 @@
 # Gladius Release Notes
 
-## Version 1.2.12
+## Version 1.2.13
 
 ### Features
 
-- New model outline
-- Editor for metadata
-- Nodes can now be grouped (tags)
-
-### Improvements
-
-- Enhanced User Experience
-- Improved 3MF volumetric extension support
-- Faster OpenCL program creation
-- Enhanced UI responsiveness
-- Faster bounding box calculations
+- Improved slice view
+  - Automatic view adjustments
+  - Rulers
 
 ### Bug Fixes
 
-- Fixed rendering issues with thin walled levelsets
-- Mapping of 3mf image sheets
+- Fixing issues in the app initialization

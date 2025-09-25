@@ -135,7 +135,7 @@ namespace gladius::ui
 
         ui::OrbitalCamera m_camera;
 
-        float2 m_renderWindowSize_px{{128, 128}};
+        float2 m_renderWindowSize_px{128, 128};
 
         bool m_isVisible{true};
 
@@ -217,7 +217,7 @@ namespace gladius::ui
 
         CameraState m_lastCameraState;
         bool m_modelModifiedSinceLastCenter = false;
-        float2 m_lastViewportSize{{0, 0}};
+        float2 m_lastViewportSize{0, 0};
         bool m_viewportSizeChangedSinceLastCenter = false;
 
         // Helper methods for permanent centering

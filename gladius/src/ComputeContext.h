@@ -71,6 +71,11 @@ namespace gladius
 
         explicit ComputeContext(EnableGLOutput enableOutput);
 
+        /// @brief Check if OpenCL acceleration is available on the system
+        /// @return true if OpenCL is available and at least one suitable device is found, false
+        /// otherwise
+        [[nodiscard]] static bool isOpenCLAvailable();
+
         [[nodiscard]] const cl::Context & GetContext() const;
 
         [[nodiscard]] const cl::CommandQueue & GetQueue();

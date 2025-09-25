@@ -279,7 +279,7 @@ namespace gladius::io
         std::vector<Lib3MF_uint8> inputData;
 
         inputData.resize(distmap.getData().size());
-        if (inputData.size() != m_columnCountWorld * m_rowCountWorld)
+        if (inputData.size() != static_cast<size_t>(m_columnCountWorld) * m_rowCountWorld)
         {
             throw std::runtime_error("Size of input data does not match the size of the image");
         }

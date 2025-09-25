@@ -102,10 +102,10 @@ namespace gladius
     void Rendering::updateClippingArea() const
     {
         ProfileFunction auto constexpr padding = 10.f;
-        cl_float4 const newClippingArea{{m_boundingBox->min.x - padding,
+        cl_float4 const newClippingArea{m_boundingBox->min.x - padding,
                                          m_boundingBox->min.y - padding,
                                          m_boundingBox->max.x + padding,
-                                         m_boundingBox->max.y + padding}};
+                                         m_boundingBox->max.y + padding};
 
         if (isValidClippingArea(newClippingArea))
         {
