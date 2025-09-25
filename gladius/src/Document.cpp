@@ -73,15 +73,15 @@ namespace gladius
     Document::Document(std::shared_ptr<ComputeCore> core)
         : m_core(std::move(core))
     {
-        m_channels.push_back(BitmapChannel{"DownSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateDownSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"DownSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateDownSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
-        m_channels.push_back(BitmapChannel{"UpSkin", [&](float z_mm, Vector2 pixelSize_mm) {
-                                               return m_core->generateUpSkinMap(
-                                                 z_mm, std::move(pixelSize_mm));
-                                           }});
+        m_channels.push_back(
+          BitmapChannel{"UpSkin",
+                        [&](float z_mm, Vector2 pixelSize_mm)
+                        { return m_core->generateUpSkinMap(z_mm, std::move(pixelSize_mm)); }});
 
         newModel();
         resetGeneratorContext();
@@ -223,14 +223,20 @@ namespace gladius
             auto tempDir = std::filesystem::temp_directory_path();
             auto tempBackupFile = tempDir / "gladius_temp_backup.3mf";
 
+            // Preserve the original filename before saving backup
+            auto originalFilename = m_currentAssemblyFileName;
+
             // Save current model to temporary file
             saveAs(tempBackupFile, false);
 
+            // Restore the original filename (backup shouldn't change current file)
+            m_currentAssemblyFileName = originalFilename;
+
             // Get original filename for backup naming
             std::string originalName = "untitled";
-            if (m_currentAssemblyFileName.has_value() && !m_currentAssemblyFileName->empty())
+            if (originalFilename.has_value() && !originalFilename->empty())
             {
-                originalName = m_currentAssemblyFileName->stem().string();
+                originalName = originalFilename->stem().string();
             }
 
             // Create backup using BackupManager
@@ -533,7 +539,12 @@ namespace gladius
     {
         if (filename.extension() == ".3mf")
         {
-            auto computeToken = m_core->waitForComputeToken();
+            // Only acquire a compute token if we need to render a thumbnail.
+            if (writeThumbnail)
+            {
+                auto computeToken = m_core->waitForComputeToken();
+                (void) computeToken; // suppress unused warning in Release
+            }
             io::saveTo3mfFile(filename, *this, writeThumbnail);
         }
 
@@ -550,6 +561,11 @@ namespace gladius
     {
 
         return m_assembly;
+    }
+
+    std::optional<std::filesystem::path> Document::getCurrentAssemblyFilename() const
+    {
+        return m_currentAssemblyFileName;
     }
 
     float Document::getFloatParameter(ResourceId modelId,
@@ -895,6 +911,25 @@ namespace gladius
     {
         auto computeToken = m_core->waitForComputeToken();
         m_buildItems.clear();
+        // clear event logger
+        auto logger = getSharedLogger();
+        if (logger)
+        {
+            logger->clear();
+        }
+
+        // Check if file exists before attempting to load
+        if (!std::filesystem::exists(filename))
+        {
+            if (logger)
+            {
+                logger->addEvent(
+                  {fmt::format("File not found: {}", filename.string()), events::Severity::Error});
+            }
+            newModel(); // Create empty model if file doesn't exist
+            return;
+        }
+
         resetGeneratorContext();
         m_core->reset();
         m_core->getResourceContext()->clearImageStacks();
@@ -1023,7 +1058,7 @@ namespace gladius
 
         auto & resourceManager = getGeneratorContext().resourceManager;
 
-        ResourceKey key = ResourceKey(new3mfMesh->GetModelResourceID());
+        ResourceKey key = ResourceKey(new3mfMesh->GetModelResourceID(), ResourceType::Mesh);
         key.setDisplayName(name);
         resourceManager.addResource(key, std::move(mesh));
 
@@ -1174,10 +1209,10 @@ namespace gladius
                    events::Severity::Error});
             }
 
-            return ResourceKey{0};
+            return ResourceKey{0, ResourceType::Unknown};
         }
         auto & resourceManager = getGeneratorContext().resourceManager;
-        auto const key = ResourceKey{stack->GetModelResourceID()};
+        auto const key = ResourceKey{stack->GetModelResourceID(), ResourceType::ImageStack};
 
         io::ImageExtractor extractor;
 
@@ -1193,7 +1228,7 @@ namespace gladius
         writer.updateModel(*this);
     }
 
-    void Document::updateDocumenFrom3mfModel(bool skipImplicitFunctions)
+    void Document::updateDocumentFrom3mfModel(bool skipImplicitFunctions)
     {
         if (!m_3mfmodel)
         {
@@ -1323,7 +1358,7 @@ namespace gladius
             {
                 // Get the model resource ID for this resource
                 Lib3MF_uint32 modelResourceId = resource->GetModelResourceID();
-                ResourceKey key{modelResourceId};
+                ResourceKey key{modelResourceId, ResourceType::Unknown};
 
                 // Check if this is actually a function (need to handle differently)
                 bool isFunction = false;

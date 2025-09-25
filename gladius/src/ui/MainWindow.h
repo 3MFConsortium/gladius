@@ -59,6 +59,27 @@ namespace gladius::ui
         void startMainLoop();
         void setup();
 
+        // Enable or disable verbose OpenCL debug checks/output for any contexts created here
+        void setOpenCLDebugEnabled(bool enabled)
+        {
+            m_openclDebugEnabled = enabled;
+        }
+
+        /**
+         * @brief Minimal setup for headless operation (no UI/GL windows).
+         * Initializes ComputeCore and Document so document operations work in headless mode.
+         * Does not register any UI callbacks and keeps Document in non-UI mode to avoid backups.
+         */
+        void setupHeadless(events::SharedLogger logger);
+
+        /**
+         * @brief Returns whether compute/rendering is available.
+         */
+        bool isComputeAvailable() const
+        {
+            return m_computeAvailable;
+        }
+
         /**
          * @brief Initialize the shortcut system
          * Registers standard keyboard shortcuts for the application
@@ -81,6 +102,25 @@ namespace gladius::ui
          */
         void showWelcomeScreen();
 
+        /**
+         * @brief Hide the welcome screen
+         */
+        void hideWelcomeScreen();
+
+        /**
+         * @brief Create a new model
+         */
+        void newModel();
+
+        /**
+         * @brief Get the current document
+         * @return Shared pointer to the current document
+         */
+        std::shared_ptr<Document> getCurrentDocument() const
+        {
+            return m_doc;
+        }
+
       private:
         void render();
         void nodeEditor();
@@ -100,7 +140,6 @@ namespace gladius::ui
         void refreshModel();
 
         void markFileAsChanged();
-        void newModel();
         void import();
         void updateContours();
         void close();
@@ -211,5 +250,15 @@ namespace gladius::ui
         // Shortcut system
         std::shared_ptr<ShortcutManager> m_shortcutManager;
         ShortcutSettingsDialog m_shortcutSettingsDialog;
+
+        // Compute availability flag. If false, UI runs in a limited mode without rendering.
+        bool m_computeAvailable{true};
+        // Optional message why compute is disabled.
+        std::string m_computeErrorMessage;
+        // Controls visibility of the compute error details modal
+        bool m_showComputeErrorModal{false};
+
+        // Instance-level flag to propagate OpenCL debug verbosity to contexts we create
+        bool m_openclDebugEnabled{false};
     };
 }

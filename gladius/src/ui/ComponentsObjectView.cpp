@@ -143,7 +143,7 @@ namespace gladius::ui
                 componentsObject->SetName("New Components Object");
 
                 document->markFileAsChanged();
-                document->updateDocumenFrom3mfModel();
+                document->updateDocumentFrom3mfModel();
                 propertiesChanged = true;
             }
             catch (...)
@@ -201,7 +201,7 @@ namespace gladius::ui
                             {
                                 model3mf->RemoveResource(componentsObject.get());
                                 document->markFileAsChanged();
-                                document->updateDocumenFrom3mfModel();
+                                document->updateDocumentFrom3mfModel();
                                 propertiesChanged = true;
                             }
                             else
@@ -274,7 +274,7 @@ namespace gladius::ui
                                 componentsObject->AddComponent(defaultObject.get(), transform);
 
                                 document->markFileAsChanged();
-                                document->updateDocumenFrom3mfModel();
+                                document->updateDocumentFrom3mfModel();
                                 propertiesChanged = true;
                             }
                         }
@@ -318,9 +318,9 @@ namespace gladius::ui
                 }
                 ImGui::EndGroup();
                 frameOverlay(ImVec4(1.0f, 0.8f, 0.8f, 0.2f),
-                            "Components\n\n"
-                            "Components are reusable parts that make up your 3D models.\n"
-                            "They can be combined to create complex objects and assemblies.");
+                             "Components\n\n"
+                             "Components are reusable parts that make up your 3D models.\n"
+                             "They can be combined to create complex objects and assemblies.");
             }
         }
         catch (...)
@@ -387,7 +387,7 @@ namespace gladius::ui
                         // which is complex without direct library support
 
                         document->markFileAsChanged();
-                        document->updateDocumenFrom3mfModel();
+                        document->updateDocumentFrom3mfModel();
                         propertiesChanged = true;
                     }
                     catch (...)
@@ -439,7 +439,7 @@ namespace gladius::ui
                             transform.m_Fields[i][j] = value;
                             component->SetTransform(transform);
                             document->markFileAsChanged();
-                            document->updateDocumenFrom3mfModel();
+                            document->updateDocumentFrom3mfModel();
                             propertiesChanged = true;
                         }
                         ImGui::PopID();
@@ -460,7 +460,7 @@ namespace gladius::ui
 
                     component->SetTransform(transform);
                     document->markFileAsChanged();
-                    document->updateDocumenFrom3mfModel();
+                    document->updateDocumentFrom3mfModel();
                     propertiesChanged = true;
                 }
                 catch (...)

@@ -15,14 +15,16 @@ namespace gladius
         static nodes::NodeTypes nodeTypes;
         int id = 0;
         int commandId = -1;
-        nodes::staticFor(nodeTypes, [&](auto, auto & node) {
-            ++id;
+        nodes::staticFor(nodeTypes,
+                         [&](auto, auto & node)
+                         {
+                             ++id;
 
-            if (typeid(node) == typeid(NodeType))
-            {
-                commandId = id;
-            }
-        });
+                             if (typeid(node) == typeid(NodeType))
+                             {
+                                 commandId = id;
+                             }
+                         });
         if (commandId < 0)
         {
             throw std::runtime_error(std::string{typeid(NodeType).name()} +

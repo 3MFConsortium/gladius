@@ -69,7 +69,7 @@ namespace gladius::nodes
     }
 
     void Port::setParent(NodeBase * parent)
-    {   
+    {
         if (parent == nullptr)
         {
             throw std::runtime_error("Port::setParent: parent is nullptr");

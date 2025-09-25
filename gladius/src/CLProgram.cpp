@@ -2,28 +2,287 @@
 #include "Profiling.h"
 #include "TimeMeasurement.h"
 #include "gpgpu.h"
+#include <boost/functional/hash.hpp>
 #include <cmrc/cmrc.hpp>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
-#include <iostream>
+#include <iostream> // TODO: Remove if no other translation units rely on side-effects; kept temporarily for potential error output fallbacks
 #include <sstream>
 #include <string>
+
+#ifdef _WIN32
+#include <cstdlib>
+#endif
 
 CMRC_DECLARE(gladius_resources);
 
 namespace gladius
 {
-    void printBuildStatus(const cl::Program & program, const cl::Device & device)
+    namespace
     {
-        cl_int buildStatus = 0;
-        program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device, &buildStatus);
-        const bool buildWasSuccessful = buildStatus == CL_SUCCESS;
-        if (!buildWasSuccessful)
+        // --- Diagnostic helpers (OpenCL source/options dump) ---
+        inline bool isOclDumpEnabled()
         {
-            std::cerr << "Build failed\n";
-            std::cerr << "\n\n Kernel build info: \n"
-                      << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+            return false;
+        }
+
+        inline std::filesystem::path ensureDumpDir(std::filesystem::path const & cacheDir)
+        {
+            std::filesystem::path dir = cacheDir.empty()
+                                          ? (std::filesystem::current_path() / "ocl_dumps")
+                                          : (cacheDir / "ocl_dumps");
+            try
+            {
+                if (!std::filesystem::exists(dir))
+                {
+                    std::filesystem::create_directories(dir);
+                }
+            }
+            catch (...)
+            {
+            }
+            return dir;
+        }
+
+        inline void dumpTextFile(std::filesystem::path const & dir,
+                                 std::string const & filename,
+                                 std::string const & content)
+        {
+            try
+            {
+                std::ofstream f(dir / filename, std::ios::out | std::ios::trunc);
+                if (!f.is_open())
+                    return;
+                f << content;
+            }
+            catch (...)
+            {
+            }
+        }
+
+        inline void dumpSources(std::filesystem::path const & dir,
+                                std::string const & filename,
+                                std::vector<std::string> const & sources)
+        {
+            try
+            {
+                std::ofstream f(dir / filename, std::ios::out | std::ios::trunc);
+                if (!f.is_open())
+                    return;
+                // Add small header for readability
+                f << "// OpenCL source dump (" << filename << ")\n";
+                for (size_t i = 0; i < sources.size(); ++i)
+                {
+                    f << "\n// ---- Source chunk " << i << " ----\n\n";
+                    f << sources[i];
+                    if (!sources[i].empty() && sources[i].back() != '\n')
+                        f << '\n';
+                }
+            }
+            catch (...)
+            {
+            }
+        }
+
+        inline void dumpBuildOptions(std::filesystem::path const & dir,
+                                     std::string const & filename,
+                                     std::string const & options,
+                                     std::string const & deviceSignature)
+        {
+            std::ostringstream ss;
+            ss << "# Build Options\n"
+               << (options.empty() ? std::string("<none>") : options) << "\n\n# Device\n"
+               << deviceSignature << "\n";
+            dumpTextFile(dir, filename, ss.str());
+        }
+
+        // Dump the OpenCL build log to a file if available
+        inline void dumpBuildLog(std::filesystem::path const & dir,
+                                 std::string const & filename,
+                                 cl::Program const & program,
+                                 cl::Device const & device)
+        {
+            try
+            {
+                std::string const log = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+                if (!log.empty())
+                {
+                    dumpTextFile(dir, filename, log);
+                }
+            }
+            catch (...)
+            {
+                // Ignore logging failures
+            }
+        }
+
+        // Print detailed program diagnostics for the current device
+        std::string makeProgramDiagnostics(const cl::Program & program,
+                                           const cl::Device & device,
+                                           std::string const & buildOptions,
+                                           std::string const & contextHint = {})
+        {
+            std::ostringstream out;
+            try
+            {
+                auto const devName = device.getInfo<CL_DEVICE_NAME>();
+                auto const vendor = device.getInfo<CL_DEVICE_VENDOR>();
+                auto const version = device.getInfo<CL_DEVICE_VERSION>();
+                out << "[OpenCL Diagnostics]";
+                if (!contextHint.empty())
+                    out << " (" << contextHint << ")";
+                out << "\n  Device      : " << devName << "\n  Vendor      : " << vendor
+                    << "\n  Version     : " << version << "\n  Build opts  : "
+                    << (buildOptions.empty() ? std::string("<none>") : buildOptions) << "\n";
+
+                // Kernel metadata
+                try
+                {
+                    auto const numKernels = program.getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    out << "  Num kernels : " << numKernels << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+                try
+                {
+                    auto const kernelNames = program.getInfo<CL_PROGRAM_KERNEL_NAMES>();
+                    if (!kernelNames.empty())
+                        out << "  Kernels     : " << kernelNames << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+
+                // Binary type and build status/log
+                try
+                {
+                    cl_program_binary_type binType{};
+                    program.getBuildInfo(device, CL_PROGRAM_BINARY_TYPE, &binType);
+                    std::string binTypeStr =
+                      (binType == CL_PROGRAM_BINARY_TYPE_NONE)              ? "NONE"
+                      : (binType == CL_PROGRAM_BINARY_TYPE_COMPILED_OBJECT) ? "COMPILED_OBJECT"
+                      : (binType == CL_PROGRAM_BINARY_TYPE_LIBRARY)         ? "LIBRARY"
+                      : (binType == CL_PROGRAM_BINARY_TYPE_EXECUTABLE)      ? "EXECUTABLE"
+                                                                            : "UNKNOWN";
+                    out << "  Binary type : " << binTypeStr << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+
+                try
+                {
+                    auto const status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+                    std::string statusStr = (status == CL_BUILD_NONE)          ? "NONE"
+                                            : (status == CL_BUILD_ERROR)       ? "ERROR"
+                                            : (status == CL_BUILD_SUCCESS)     ? "SUCCESS"
+                                            : (status == CL_BUILD_IN_PROGRESS) ? "IN_PROGRESS"
+                                                                               : "UNKNOWN";
+                    out << "  Build status: " << statusStr << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+
+                try
+                {
+                    out << "\n  Build log  :\n"
+                        << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << "\n";
+                }
+                catch (...)
+                {
+                    // ignore
+                }
+            }
+            catch (...)
+            {
+                // best-effort diagnostics only
+            }
+            return out.str();
+        }
+
+        // Log build status and log output if the build failed
+        void logBuildStatusIfFailed(const cl::Program & program,
+                                    const cl::Device & device,
+                                    events::SharedLogger const & logger)
+        {
+            try
+            {
+                auto const status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+                if (status != CL_BUILD_SUCCESS)
+                {
+                    std::string const buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+                    if (logger)
+                    {
+                        logger->logError("OpenCL: Build failed");
+                        if (!buildLog.empty())
+                        {
+                            logger->logError(std::string("Build log:\n") + buildLog);
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "OpenCL: Build failed\n";
+                        // --- Diagnostic helpers (OpenCL source/options + build logs dump) ---
+                        {
+                            std::cerr << "Build log:\n" << buildLog << "\n";
+                        }
+                    }
+                }
+            }
+            catch (...)
+            {
+                // best-effort
+            }
+        }
+    }
+
+    void validateBuildStatus(const cl::Program & program,
+                             const cl::Device & device,
+                             events::SharedLogger const & logger)
+    {
+        try
+        {
+            auto const status = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device);
+            std::string const buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device);
+
+            // Forward build log to logger if available; avoid noisy stderr
+            if (!buildLog.empty() && logger)
+            {
+                logger->logWarning(std::string("OpenCL build log:\n") + buildLog);
+            }
+
+            if (status != CL_BUILD_SUCCESS)
+            {
+                std::string errorMsg =
+                  "OpenCL program build failed (status: " + std::to_string(status) + ")";
+                if (!buildLog.empty())
+                {
+                    errorMsg += ": " + buildLog;
+                }
+
+                if (logger)
+                {
+                    logger->logError(errorMsg);
+                }
+
+                throw std::runtime_error(errorMsg);
+            }
+        }
+        catch (const std::runtime_error &)
+        {
+            throw; // Re-throw runtime errors (our build failures)
+        }
+        catch (...)
+        {
+            // best-effort for OpenCL API errors, but don't fail
         }
     }
 
@@ -36,19 +295,18 @@ namespace gladius
 
         const auto data = reinterpret_cast<CallBackUserData *>(userData);
         bool buildWasSuccessful = false;
-        cl_int buildStatus = 0;
         if ((data->program != nullptr) && (data->computeContext != nullptr))
         {
-            printBuildStatus(*data->program, data->computeContext->GetDevice());
-            data->program->getBuildInfo<CL_PROGRAM_BUILD_STATUS>(&buildStatus);
-            buildWasSuccessful = buildStatus == CL_SUCCESS;
+            auto const status = data->program->getBuildInfo<CL_PROGRAM_BUILD_STATUS>(
+              data->computeContext->GetDevice());
+            buildWasSuccessful = (status == CL_BUILD_SUCCESS);
         }
 
         if ((data->callBack != nullptr) && data->callBack->has_value())
         {
             data->callBack->value()();
         }
-        
+
         if ((data->sender != nullptr) && buildWasSuccessful)
         {
             data->sender->compilationFinishedHandler();
@@ -68,25 +326,46 @@ namespace gladius
           std::scoped_lock lock(m_compilationMutex);
         const auto fs = cmrc::gladius_resources::get_filesystem();
 
-        m_sources.reserve(m_sources.size() + filenames.size());
+        m_staticSources.reserve(m_staticSources.size() + filenames.size());
         for (auto & filename : filenames)
         {
             const auto resourceFilename = std::string("src/kernel/" + filename);
             if (!fs.exists(resourceFilename) || !fs.is_file(resourceFilename))
             {
-                std::cerr << "missing file in resources: " << resourceFilename << "\n";
+                if (m_logger)
+                {
+                    m_logger->logError(std::string("Missing file in resources: ") +
+                                       resourceFilename);
+                }
+                // Suppress direct stderr output when logger unavailable
                 throw std::runtime_error("missing file in resources: " + resourceFilename);
             }
 
             auto file = fs.open(resourceFilename);
-            m_sources.emplace_back(std::string(file.begin(), file.end()));
+            m_staticSources.emplace_back(std::string(file.begin(), file.end()));
         }
+
+        // Update combined sources for compatibility
+        m_sources.clear();
+        m_sources.insert(m_sources.end(), m_staticSources.begin(), m_staticSources.end());
+        m_sources.insert(m_sources.end(), m_dynamicSources.begin(), m_dynamicSources.end());
     }
 
     void CLProgram::addSource(const std::string & source)
     {
         ProfileFunction std::scoped_lock lock(m_compilationMutex);
         m_sources.emplace_back(source);
+    }
+
+    void CLProgram::addDynamicSource(const std::string & source)
+    {
+        ProfileFunction std::scoped_lock lock(m_compilationMutex);
+        m_dynamicSources.emplace_back(source);
+
+        // Update combined sources for compatibility
+        m_sources.clear();
+        m_sources.insert(m_sources.end(), m_staticSources.begin(), m_staticSources.end());
+        m_sources.insert(m_sources.end(), m_dynamicSources.begin(), m_dynamicSources.end());
     }
 
     void CLProgram::dumpSource(std::filesystem::path filename)
@@ -131,16 +410,17 @@ namespace gladius
         for (auto & prog : progsToLink)
         {
             prog.compile(arguments.c_str());
-            printBuildStatus(prog, m_ComputeContext->GetDevice());
+            validateBuildStatus(prog, m_ComputeContext->GetDevice(), m_logger);
         }
         m_lib = std::make_unique<cl::Program>(
-          linkProgram(progsToLink, "-create-library -enable-link-options"));
-        printBuildStatus(*m_lib, m_ComputeContext->GetDevice());
+          cl::linkProgram(progsToLink, "-create-library -enable-link-options"));
+        validateBuildStatus(*m_lib, m_ComputeContext->GetDevice(), m_logger);
     }
 
     std::string CLProgram::generateDefineSymbol() const
     {
         ProfileFunction std::stringstream args;
+
         if (m_useFastRelaxedMath)
         {
             args << " -cl-fast-relaxed-math";
@@ -151,6 +431,7 @@ namespace gladius
             args << " -D " << symbol;
         }
         args << m_additionalDefine;
+
         return args.str();
     }
 
@@ -160,10 +441,22 @@ namespace gladius
         {
             return;
         }
-        for (auto & source : m_sources)
+
+        // Apply replacements to the actual source vectors that will be used
+        // for the two-level compilation and hashing.
+        for (auto & source : m_staticSources)
         {
             applyKernelReplacements(source, *m_kernelReplacements);
         }
+        for (auto & source : m_dynamicSources)
+        {
+            applyKernelReplacements(source, *m_kernelReplacements);
+        }
+
+        // Rebuild the combined sources for single-level fallback and other code paths
+        m_sources.clear();
+        m_sources.insert(m_sources.end(), m_staticSources.begin(), m_staticSources.end());
+        m_sources.insert(m_sources.end(), m_dynamicSources.begin(), m_dynamicSources.end());
     }
 
     size_t CLProgram::computeHash() const
@@ -175,12 +468,36 @@ namespace gladius
         // Calculate the hash of the source, device name and additional defines
         for (const auto & source : m_sources)
         {
-            hash_combine(hash, std::hash<std::string>{}(source));
+            boost::hash_combine(hash, std::hash<std::string>{}(source));
         }
 
-        hash_combine(
+        // Include the dynamic interface header content in the hash as it is
+        // compiled together with dynamic sources during linking
+        try
+        {
+            auto const fs = cmrc::gladius_resources::get_filesystem();
+            auto const headerPath = std::string("src/kernel/dynamic_interface.h");
+            if (fs.exists(headerPath) && fs.is_file(headerPath))
+            {
+                auto file = fs.open(headerPath);
+                std::string ifaceSrc(file.begin(), file.end());
+                if (m_kernelReplacements)
+                {
+                    auto tmp = ifaceSrc; // applyKernelReplacements works in-place; keep ifaceSrc
+                    applyKernelReplacements(tmp, *m_kernelReplacements);
+                    ifaceSrc.swap(tmp);
+                }
+                boost::hash_combine(hash, std::hash<std::string>{}(ifaceSrc));
+            }
+        }
+        catch (...)
+        {
+            // best effort; if we cannot load the header, skip adding it
+        }
+
+        boost::hash_combine(
           hash, std::hash<std::string>{}(m_ComputeContext->GetDevice().getInfo<CL_DEVICE_NAME>()));
-        hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
+        boost::hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
 
         // kernel replacements
         if (m_kernelReplacements)
@@ -188,8 +505,90 @@ namespace gladius
             for (const auto & replacement : *m_kernelReplacements)
             {
                 const auto & [search, replace] = replacement;
-                hash_combine(hash, std::hash<std::string>{}(search));
-                hash_combine(hash, std::hash<std::string>{}(replace));
+                boost::hash_combine(hash, std::hash<std::string>{}(search));
+                boost::hash_combine(hash, std::hash<std::string>{}(replace));
+            }
+        }
+
+        return hash;
+    }
+
+    size_t CLProgram::computeStaticHash() const
+    {
+        ProfileFunction
+
+          size_t hash = 0;
+
+        // Calculate the hash of static sources, device name and additional defines
+        for (const auto & source : m_staticSources)
+        {
+            boost::hash_combine(hash, std::hash<std::string>{}(source));
+        }
+
+        boost::hash_combine(
+          hash, std::hash<std::string>{}(m_ComputeContext->GetDevice().getInfo<CL_DEVICE_NAME>()));
+
+        // Also include the dynamic interface header in the static hash to tie the
+        // cached static library to the interface/ABI used by the dynamic part.
+        try
+        {
+            auto const fs = cmrc::gladius_resources::get_filesystem();
+            auto const headerPath = std::string("src/kernel/dynamic_interface.h");
+            if (fs.exists(headerPath) && fs.is_file(headerPath))
+            {
+                auto file = fs.open(headerPath);
+                std::string ifaceSrc(file.begin(), file.end());
+                if (m_kernelReplacements)
+                {
+                    auto tmp = ifaceSrc;
+                    applyKernelReplacements(tmp, *m_kernelReplacements);
+                    ifaceSrc.swap(tmp);
+                }
+                boost::hash_combine(hash, std::hash<std::string>{}(ifaceSrc));
+            }
+        }
+        catch (...)
+        {
+            // best effort; if we cannot load the header, skip adding it
+        }
+
+        // Use unified defines for static hash computation to guarantee consistency
+        boost::hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
+
+        // kernel replacements
+        if (m_kernelReplacements)
+        {
+            for (const auto & replacement : *m_kernelReplacements)
+            {
+                const auto & [search, replace] = replacement;
+                boost::hash_combine(hash, std::hash<std::string>{}(search));
+                boost::hash_combine(hash, std::hash<std::string>{}(replace));
+            }
+        }
+
+        return hash;
+    }
+
+    size_t CLProgram::computeDynamicHash() const
+    {
+        ProfileFunction
+
+          size_t hash = 0;
+
+        // Calculate the hash of dynamic sources
+        for (const auto & source : m_dynamicSources)
+        {
+            boost::hash_combine(hash, std::hash<std::string>{}(source));
+        }
+        // Ensure dynamic hash also reflects the same compile-time defines and replacements
+        boost::hash_combine(hash, std::hash<std::string>{}(generateDefineSymbol()));
+        if (m_kernelReplacements)
+        {
+            for (const auto & replacement : *m_kernelReplacements)
+            {
+                const auto & [search, replace] = replacement;
+                boost::hash_combine(hash, std::hash<std::string>{}(search));
+                boost::hash_combine(hash, std::hash<std::string>{}(replace));
             }
         }
 
@@ -214,49 +613,497 @@ namespace gladius
 
         applyAllKernelReplacements();
 
-        if (m_hashLastSuccessfulCompilation != 0 &&
-            m_hashLastSuccessfulCompilation == computeHash())
+        // Compute separate hashes for static and dynamic parts
+        auto staticHash = computeStaticHash();
+        auto dynamicHash = computeDynamicHash();
+        auto currentHash = computeHash(); // Keep for fallback
+
+        // Dump prepared static/dynamic inputs (post-replacements) and options if requested
+        if (isOclDumpEnabled())
         {
+            auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+            try
+            {
+                dumpSources(
+                  dumpDir, "static_" + std::to_string(staticHash) + ".cl", m_staticSources);
+                // dynamic will be dumped later when we build the combined dynamic vector
+                dumpBuildOptions(dumpDir,
+                                 "options_common_" + std::to_string(staticHash) + "_" +
+                                   std::to_string(dynamicHash) + ".txt",
+                                 generateDefineSymbol(),
+                                 getDeviceSignature());
+            }
+            catch (...)
+            {
+            }
+        }
+
+        // Check if we can load complete linked program from cache first
+        if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
+            !m_dynamicSources.empty() && loadLinkedProgramFromCache(staticHash, dynamicHash))
+        {
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Loaded linked program from cache (static: " +
+                                  std::to_string(staticHash) +
+                                  ", dynamic: " + std::to_string(dynamicHash) + ")");
+            }
+            m_hashLastSuccessfulCompilation = currentHash;
             m_valid = true;
             m_isCompilationInProgress = false;
+            m_kernels.clear(); // Clear stale kernels when using cached program
+
+            // Set up callback user data properly for cached program
+            m_callBackUserData.computeContext = m_ComputeContext.get();
+            m_callBackUserData.callBack = &callBack;
+            m_callBackUserData.sender = this;
+            m_callBackUserData.program = m_program.get();
+
             callBackDispatcher(nullptr, &m_callBackUserData);
             return;
         }
+
+        // Fallback: Check if we can load from old single-level binary cache
+        if (m_cacheEnabled && !m_cacheDirectory.empty() && loadProgramFromCache(currentHash))
+        {
+            if (m_logger)
+            {
+                m_logger->logInfo(
+                  "CLProgram: Loaded program from single-level binary cache (hash: " +
+                  std::to_string(currentHash) + ")");
+            }
+            m_hashLastSuccessfulCompilation = currentHash;
+            m_valid = true;
+            m_isCompilationInProgress = false;
+            m_kernels.clear(); // Clear stale kernels when using cached program
+
+            // Set up callback user data properly for cached program
+            m_callBackUserData.computeContext = m_ComputeContext.get();
+            m_callBackUserData.callBack = &callBack;
+            m_callBackUserData.sender = this;
+            m_callBackUserData.program = m_program.get();
+
+            callBackDispatcher(nullptr, &m_callBackUserData);
+            return;
+        }
+
+        if (m_hashLastSuccessfulCompilation != 0 && m_hashLastSuccessfulCompilation == currentHash)
+        {
+            m_valid = true;
+            m_isCompilationInProgress = false;
+            m_kernels.clear(); // Clear stale kernels when reusing existing program
+            callBackDispatcher(nullptr, &m_callBackUserData);
+            return;
+        }
+
         m_valid = false;
         m_isCompilationInProgress = true;
 
-        m_program =
-          std::make_unique<cl::Program>(cl::Program(m_ComputeContext->GetContext(), m_sources));
-
-        const auto arguments = generateDefineSymbol();
-
-        std::cout << "Compiling program with " << numberOfLines(m_sources) << " lines\n";
-
-        m_callBackUserData.computeContext = m_ComputeContext.get();
-        m_callBackUserData.callBack = &callBack;
-        m_callBackUserData.sender = this;
-        m_callBackUserData.program = m_program.get();
-        try
+        // Two-level compilation: try to load/compile static library, then link with dynamic
+        if (m_logger)
         {
-            // write to file for debugging
-            // dumpSource("debug.cl");
-            m_program->build({m_ComputeContext->GetDevice()}, arguments.c_str(), nullptr, nullptr);
-            m_hashLastSuccessfulCompilation = computeHash();
+            m_logger->logInfo("CLProgram: Two-level compilation check - cacheEnabled: " +
+                              std::to_string(m_cacheEnabled) + ", cacheDirectory: '" +
+                              m_cacheDirectory.string() + "'" +
+                              ", staticSources: " + std::to_string(m_staticSources.size()) +
+                              ", dynamicSources: " + std::to_string(m_dynamicSources.size()));
         }
-        catch (const std::exception & e)
+        if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
+            !m_dynamicSources.empty())
         {
-            m_ComputeContext->invalidate();
-            std::cerr << e.what() << '\n';
+            cl::Program staticLibrary;
+            bool staticLoaded = loadStaticLibraryFromCache(staticHash, staticLibrary);
+
+            if (!staticLoaded)
+            {
+                // Compile static library from source - include ALL files (headers +
+                // implementations)
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Compiling static library from source");
+                }
+                try
+                {
+                    // Create static library sources with headers + implementations
+                    cl::Program::Sources staticLibrarySources;
+                    const auto fs = cmrc::gladius_resources::get_filesystem();
+
+                    // Include ALL files (headers + implementations) in static library
+                    for (const auto & filename : m_sourceFilenames)
+                    {
+                        const auto resourceFilename = std::string("src/kernel/" + filename);
+                        if (fs.exists(resourceFilename) && fs.is_file(resourceFilename))
+                        {
+                            auto file = fs.open(resourceFilename);
+                            std::string source(file.begin(), file.end());
+                            if (m_kernelReplacements)
+                            {
+                                applyKernelReplacements(source, *m_kernelReplacements);
+                            }
+                            staticLibrarySources.emplace_back(source);
+                        }
+                    }
+
+                    // Compile objects for the static library
+                    cl::Program staticObjects(m_ComputeContext->GetContext(), staticLibrarySources);
+                    const auto arguments = generateDefineSymbol();
+                    staticObjects.compile(arguments.c_str());
+
+                    // Link into an OpenCL static library
+                    cl::Program lib =
+                      cl::linkProgram({staticObjects}, "-create-library -enable-link-options");
+
+                    if (isOclDumpEnabled())
+                    {
+                        auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                        dumpBuildLog(dumpDir,
+                                     "buildlog_static_" + std::to_string(staticHash) + ".txt",
+                                     lib,
+                                     m_ComputeContext->GetDevice());
+                    }
+
+                    // Use the library for subsequent final link
+                    staticLibrary = lib;
+
+                    // Save compiled static library to cache
+                    saveStaticLibraryToCache(staticHash, staticLibrary);
+                    if (m_logger)
+                    {
+                        m_logger->logInfo("CLProgram: Compiled and cached static library (hash: " +
+                                          std::to_string(staticHash) + ") with args: " + arguments);
+                    }
+                }
+                catch (const std::exception & e)
+                {
+                    if (m_logger)
+                    {
+                        m_logger->logError("CLProgram: Failed to compile static library: " +
+                                           std::string(e.what()));
+                    }
+                    // Fall back to single-level compilation
+                    compileSingleLevel(callBack, currentHash);
+                    return;
+                }
+            }
+            else
+            {
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Loaded static library from cache (hash: " +
+                                      std::to_string(staticHash) + ")");
+                }
+            }
+
+            // Compile dynamic source and link with static library
+            try
+            {
+                cl::Program::Sources dynamicSourcesCombined;
+
+                // Include all header files (.h) in dynamic compilation for full type/macro access
+                // Only .cl files (implementations) should be excluded to avoid duplicate symbols
+                const auto fs = cmrc::gladius_resources::get_filesystem();
+
+                // Re-load and include all header files from the filenames list
+                for (const auto & filename : m_sourceFilenames)
+                {
+                    if (filename.ends_with(".h"))
+                    {
+                        const auto resourceFilename = std::string("src/kernel/" + filename);
+                        if (fs.exists(resourceFilename) && fs.is_file(resourceFilename))
+                        {
+                            auto file = fs.open(resourceFilename);
+                            std::string headerSource(file.begin(), file.end());
+                            if (m_kernelReplacements)
+                            {
+                                applyKernelReplacements(headerSource, *m_kernelReplacements);
+                            }
+                            dynamicSourcesCombined.emplace_back(headerSource);
+                        }
+                    }
+                }
+
+                // Add the generated model code
+                dynamicSourcesCombined.insert(
+                  dynamicSourcesCombined.end(), m_dynamicSources.begin(), m_dynamicSources.end());
+
+                // Dump dynamic phase inputs if requested
+                if (isOclDumpEnabled())
+                {
+                    auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                    try
+                    {
+                        dumpSources(dumpDir,
+                                    "dynamic_" + std::to_string(dynamicHash) + ".cl",
+                                    dynamicSourcesCombined);
+                        dumpBuildOptions(dumpDir,
+                                         "options_dynamic_" + std::to_string(dynamicHash) + ".txt",
+                                         generateDefineSymbol(),
+                                         getDeviceSignature());
+                    }
+                    catch (...)
+                    {
+                    }
+                }
+
+                cl::Program dynamicProgram(m_ComputeContext->GetContext(), dynamicSourcesCombined);
+                const auto arguments = generateDefineSymbol();
+                dynamicProgram.compile(arguments.c_str());
+                if (isOclDumpEnabled())
+                {
+                    auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                    dumpBuildLog(dumpDir,
+                                 "buildlog_dynamic_" + std::to_string(dynamicHash) + ".txt",
+                                 dynamicProgram,
+                                 m_ComputeContext->GetDevice());
+                }
+                validateBuildStatus(dynamicProgram, m_ComputeContext->GetDevice(), m_logger);
+
+                // Link static library with dynamic program
+                std::vector<cl::Program> programs = {staticLibrary, dynamicProgram};
+                const auto linkOptions = generateDefineSymbol();
+                m_program =
+                  std::make_unique<cl::Program>(cl::linkProgram(programs, linkOptions.c_str()));
+
+                // Some drivers require an explicit build() after link() to materialize kernels
+                try
+                {
+                    m_program->build({m_ComputeContext->GetDevice()});
+                }
+                catch (const std::exception &)
+                {
+                    // build() can be a no-op after link() on some drivers; continue to validate
+                }
+
+                if (isOclDumpEnabled())
+                {
+                    auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                    dumpBuildLog(dumpDir,
+                                 "buildlog_linked_" + std::to_string(dynamicHash) + "_" +
+                                   std::to_string(staticHash) + ".txt",
+                                 *m_program,
+                                 m_ComputeContext->GetDevice());
+                }
+
+                // Validate and log detailed diagnostics of the linked program
+                validateBuildStatus(*m_program, m_ComputeContext->GetDevice(), m_logger);
+                if (m_logger)
+                {
+                    m_logger->logInfo(makeProgramDiagnostics(*m_program,
+                                                             m_ComputeContext->GetDevice(),
+                                                             generateDefineSymbol(),
+                                                             "link(executable)"));
+                }
+
+                // Guard: some drivers may produce an empty executable when linking only a library
+                // with a header-only dynamic part Be strict here: require an EXECUTABLE binary with
+                // at least one kernel, otherwise force fallback.
+                try
+                {
+                    // Check for kernels
+                    auto const numKernels = m_program->getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    // Check kernel names (can be empty on some drivers when no kernels are present)
+                    std::string kernelNames;
+                    try
+                    {
+                        kernelNames = m_program->getInfo<CL_PROGRAM_KERNEL_NAMES>();
+                    }
+                    catch (...)
+                    {
+                        // ignore, keep empty
+                    }
+                    // Check binary type
+                    cl_program_binary_type binType{};
+                    try
+                    {
+                        m_program->getBuildInfo(
+                          m_ComputeContext->GetDevice(), CL_PROGRAM_BINARY_TYPE, &binType);
+                    }
+                    catch (...)
+                    {
+                        binType = CL_PROGRAM_BINARY_TYPE_NONE;
+                    }
+
+                    bool const hasKernels = (numKernels > 0) || (!kernelNames.empty());
+                    bool const isExecutable = (binType == CL_PROGRAM_BINARY_TYPE_EXECUTABLE);
+                    if (!hasKernels || !isExecutable)
+                    {
+                        if (m_logger)
+                        {
+                            m_logger->logWarning(
+                              std::string("CLProgram: Linked program validation failed (kernels=") +
+                              std::to_string(numKernels) +
+                              ", executable=" + (isExecutable ? "true" : "false") +
+                              "). Falling back to single-level build.");
+                        }
+                        // Force fallback by throwing to the outer catch which already routes to
+                        // single_level_compile
+                        throw std::runtime_error(
+                          "Linked program invalid: no kernels or non-executable binary");
+                    }
+                }
+                catch (const std::exception &)
+                {
+                    // Re-throw to be handled by the outer catch which falls back to single-level
+                    throw;
+                }
+
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Successfully linked static library with dynamic program");
+                }
+
+                // Extra safety: ensure the program is executable and has kernels before caching
+                try
+                {
+                    cl_program_binary_type binType{};
+                    m_program->getBuildInfo(
+                      m_ComputeContext->GetDevice(), CL_PROGRAM_BINARY_TYPE, &binType);
+                    auto const numKernels = m_program->getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    if (binType != CL_PROGRAM_BINARY_TYPE_EXECUTABLE || numKernels == 0)
+                    {
+                        if (m_logger)
+                        {
+                            m_logger->logWarning("CLProgram: Not caching linked program (invalid: "
+                                                 "no kernels or non-executable)");
+                        }
+                    }
+                    else
+                    {
+                        // Save linked program to cache (validated)
+                        saveLinkedProgramToCache(staticHash, dynamicHash);
+                    }
+                }
+                catch (...)
+                {
+                    // On diagnostics failure, avoid caching to be safe
+                }
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Saved linked program to cache");
+                }
+
+                m_hashLastSuccessfulCompilation = currentHash;
+                m_valid = true;
+                m_kernels.clear();
+                m_isCompilationInProgress = false;
+
+                // Set up callback
+                m_callBackUserData.computeContext = m_ComputeContext.get();
+                m_callBackUserData.callBack = &callBack;
+                m_callBackUserData.sender = this;
+                m_callBackUserData.program = m_program.get();
+
+                callBackDispatcher(nullptr, &m_callBackUserData);
+                return;
+            }
+            catch (const std::exception & e)
+            {
+                std::string errorDetails =
+                  "CLProgram: Failed to compile/link dynamic program: " + std::string(e.what());
+                if (m_logger)
+                {
+                    m_logger->logError(errorDetails);
+                }
+                // Avoid extra stderr noise; logger already captured details
+                // Fall back to single-level compilation
+                compileSingleLevel(callBack, currentHash);
+                return;
+            }
         }
 
-        m_isCompilationInProgress = false;
-
-        callBackDispatcher(nullptr, &m_callBackUserData);
+        // If two-level path not taken or not applicable, perform single-level compile
+        compileSingleLevel(callBack, currentHash);
+        return;
     }
 
     void CLProgram::compileNonBlocking(BuildCallBack & callBack)
     {
         ProfileFunction m_kernelCompilation = std::async([&]() { this->compile(callBack); });
+    }
+
+    void CLProgram::compileSingleLevel(BuildCallBack & callBack, size_t currentHash)
+    {
+        // Single-level compilation fallback
+        m_program =
+          std::make_unique<cl::Program>(cl::Program(m_ComputeContext->GetContext(), m_sources));
+
+        const auto arguments = generateDefineSymbol();
+
+        if (m_logger)
+        {
+            m_logger->logInfo("OpenCL: Compiling program (" +
+                              std::to_string(numberOfLines(m_sources)) + " lines)");
+        }
+
+        m_callBackUserData.computeContext = m_ComputeContext.get();
+        m_callBackUserData.callBack = &callBack;
+        m_callBackUserData.sender = this;
+        m_callBackUserData.program = m_program.get();
+        // Dump single-level inputs if requested
+        if (isOclDumpEnabled())
+        {
+            auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+            try
+            {
+                dumpSources(
+                  dumpDir, "singlelevel_" + std::to_string(currentHash) + ".cl", m_sources);
+                dumpBuildOptions(dumpDir,
+                                 "options_singlelevel_" + std::to_string(currentHash) + ".txt",
+                                 arguments,
+                                 getDeviceSignature());
+            }
+            catch (...)
+            {
+            }
+        }
+
+        try
+        {
+            // write to file for debugging
+            // dumpSource("debug.cl");
+            m_program->build({m_ComputeContext->GetDevice()}, arguments.c_str(), nullptr, nullptr);
+            if (isOclDumpEnabled())
+            {
+                auto const dumpDir = ensureDumpDir(m_cacheDirectory);
+                dumpBuildLog(dumpDir,
+                             std::string("buildlog_singlelevel_") + std::to_string(currentHash) +
+                               ".txt",
+                             *m_program,
+                             m_ComputeContext->GetDevice());
+            }
+            m_hashLastSuccessfulCompilation = currentHash;
+
+            // Save to binary cache if compilation succeeded
+            if (m_cacheEnabled && !m_cacheDirectory.empty())
+            {
+                saveProgramToCache(currentHash);
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Saved program to binary cache (hash: " +
+                                      std::to_string(currentHash) + ")");
+                }
+            }
+
+            // Always print build status (and logs on failure)
+            logBuildStatusIfFailed(*m_program, m_ComputeContext->GetDevice(), m_logger);
+        }
+        catch (const std::exception & e)
+        {
+            m_ComputeContext->invalidate("Program build/compilation failed in CLProgram");
+            const auto diag = makeProgramDiagnostics(
+              *m_program, m_ComputeContext->GetDevice(), arguments, "compile(build)");
+            if (m_logger)
+            {
+                m_logger->logError(std::string("OpenCL build failed: ") + e.what());
+                m_logger->logError(diag);
+            }
+            // Suppress direct stderr output when logger unavailable
+        }
+
+        m_isCompilationInProgress = false;
+
+        callBackDispatcher(nullptr, &m_callBackUserData);
     }
 
     void CLProgram::buildWithLib(BuildCallBack & callBack)
@@ -288,16 +1135,23 @@ namespace gladius
             }
             catch (const std::exception & e)
             {
-                m_ComputeContext->invalidate();
-                std::cerr << e.what() << '\n';
+                m_ComputeContext->invalidate("Program library compilation failed in CLProgram");
+                if (m_logger)
+                {
+                    m_logger->logError(std::string("OpenCL compile failed: ") + e.what());
+                    const auto diag = makeProgramDiagnostics(
+                      prog, m_ComputeContext->GetDevice(), arguments, "compile(lib)");
+                    m_logger->logError(diag);
+                }
+                // Suppress direct stderr output when logger unavailable
             }
 
-            printBuildStatus(prog, m_ComputeContext->GetDevice());
+            logBuildStatusIfFailed(prog, m_ComputeContext->GetDevice(), m_logger);
         }
         progsToLink.push_back(*m_lib);
 
-        m_program = std::make_unique<cl::Program>(linkProgram(progsToLink));
-        printBuildStatus(*m_program, m_ComputeContext->GetDevice());
+        m_program = std::make_unique<cl::Program>(cl::linkProgram(progsToLink));
+        validateBuildStatus(*m_program, m_ComputeContext->GetDevice(), m_logger);
 
         m_callBackUserData.computeContext = m_ComputeContext.get();
         m_callBackUserData.callBack = &callBack;
@@ -325,8 +1179,14 @@ namespace gladius
     {
         ProfileFunction;
         m_valid = false;
+
+        // Clear all sources to start fresh
+        m_staticSources.clear();
+        m_dynamicSources.clear();
+        m_sources.clear();
+
         loadSourceFromFile(filenames);
-        addSource(dynamicSource);
+        addDynamicSource(dynamicSource);
         compileNonBlocking(callBack);
     }
 
@@ -335,11 +1195,7 @@ namespace gladius
                                                              BuildCallBack & callBack)
     {
         ProfileFunction;
-
-        m_valid = false;
-        loadSourceFromFile(filenames);
-        addSource(dynamicSource);
-        compileNonBlocking(callBack);
+        buildFromSourceAndLinkWithLibImpl(filenames, dynamicSource, callBack, true);
     }
 
     void CLProgram::buildFromSourceAndLinkWithLib(const FileNames & filenames,
@@ -347,11 +1203,36 @@ namespace gladius
                                                   BuildCallBack & callBack)
     {
         ProfileFunction;
+        buildFromSourceAndLinkWithLibImpl(filenames, dynamicSource, callBack, false);
+    }
 
+    void CLProgram::buildFromSourceAndLinkWithLibImpl(const FileNames & filenames,
+                                                      const std::string & dynamicSource,
+                                                      BuildCallBack & callBack,
+                                                      bool nonBlocking)
+    {
         m_valid = false;
+
+        // Clear all sources to start fresh
+        m_staticSources.clear();
+        m_dynamicSources.clear();
+        m_sources.clear();
+
+        // Store filenames for use in compile() function
+        m_sourceFilenames = filenames;
+
         loadSourceFromFile(filenames);
-        addSource(dynamicSource);
-        compile(callBack);
+        // Add as dynamic source to enable proper two-level compilation and hashing
+        addDynamicSource(dynamicSource);
+
+        if (nonBlocking)
+        {
+            compileNonBlocking(callBack);
+        }
+        else
+        {
+            compile(callBack);
+        }
     }
 
     void CLProgram::loadAndCompileLib(const FileNames & filenames)
@@ -360,6 +1241,12 @@ namespace gladius
 
         m_valid = false;
         CL_ERROR(m_ComputeContext->GetQueue().finish());
+
+        // Clear all sources to start fresh
+        m_staticSources.clear();
+        m_dynamicSources.clear();
+        m_sources.clear();
+
         loadSourceFromFile(filenames);
         compileAsLib();
     }
@@ -403,6 +1290,457 @@ namespace gladius
             {
                 source.replace(pos, search.length(), replace);
                 pos += replace.length();
+            }
+        }
+    }
+
+    void CLProgram::setCacheDirectory(const std::filesystem::path & path)
+    {
+        if (m_logger)
+        {
+            m_logger->logInfo("CLProgram::setCacheDirectory called with path: " + path.string());
+        }
+        m_cacheDirectory = path;
+        if (!path.empty() && !std::filesystem::exists(path))
+        {
+            std::filesystem::create_directories(path);
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Created cache directory: " + path.string());
+            }
+        }
+    }
+
+    void CLProgram::clearCache()
+    {
+        if (m_cacheDirectory.empty())
+            return;
+
+        try
+        {
+            for (const auto & entry : std::filesystem::directory_iterator(m_cacheDirectory))
+            {
+                if (entry.path().extension() == ".clcache")
+                {
+                    std::filesystem::remove(entry.path());
+                }
+            }
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Cleared cache directory: " +
+                                  m_cacheDirectory.string());
+            }
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to clear cache: " + std::string(e.what()));
+            }
+        }
+    }
+
+    void CLProgram::setCacheEnabled(bool enabled)
+    {
+        m_cacheEnabled = enabled;
+        if (m_logger)
+        {
+            m_logger->logInfo("CLProgram: Cache " + std::string(enabled ? "enabled" : "disabled"));
+        }
+    }
+
+    bool CLProgram::isCacheEnabled() const
+    {
+        return m_cacheEnabled;
+    }
+
+    bool CLProgram::loadProgramFromCache(size_t hash)
+    {
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
+            return false;
+
+        auto cachePath = m_cacheDirectory / (std::to_string(hash) + ".clcache");
+        if (!std::filesystem::exists(cachePath))
+            return false;
+
+        try
+        {
+            std::ifstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return false;
+
+            // Read device signature
+            size_t deviceSigSize;
+            file.read(reinterpret_cast<char *>(&deviceSigSize), sizeof(deviceSigSize));
+            std::string cachedDeviceSignature(deviceSigSize, '\0');
+            file.read(cachedDeviceSignature.data(), deviceSigSize);
+
+            // Verify device signature matches
+            if (cachedDeviceSignature != getDeviceSignature())
+            {
+                if (m_logger)
+                {
+                    m_logger->logInfo("CLProgram: Cache device signature mismatch, ignoring cache");
+                }
+                return false;
+            }
+
+            // Read binary data
+            size_t binarySize;
+            file.read(reinterpret_cast<char *>(&binarySize), sizeof(binarySize));
+            std::vector<unsigned char> binary(binarySize);
+            file.read(reinterpret_cast<char *>(binary.data()), binarySize);
+
+            // Create program from binary
+            m_program =
+              std::make_unique<cl::Program>(m_ComputeContext->GetContext(),
+                                            std::vector<cl::Device>{m_ComputeContext->GetDevice()},
+                                            std::vector<std::vector<unsigned char>>{binary});
+
+            // Build the program (required even when loading from binary)
+            try
+            {
+                m_program->build({m_ComputeContext->GetDevice()});
+                m_callBackUserData.program = m_program.get();
+                // Ensure program is marked as valid and kernels cache is cleared
+                m_valid = true;
+                m_kernels.clear();
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Successfully loaded and built program from cache");
+                }
+                return true;
+            }
+            catch (const std::exception & e)
+            {
+                if (m_logger)
+                {
+                    m_logger->logError("CLProgram: Failed to build cached program: " +
+                                       std::string(e.what()));
+                }
+                return false;
+            }
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to load from cache: " + std::string(e.what()));
+            }
+            return false;
+        }
+    }
+
+    void CLProgram::saveProgramToCache(size_t hash)
+    {
+        if (!m_cacheEnabled || m_cacheDirectory.empty() || !m_program)
+            return;
+
+        try
+        {
+            // Get program binaries
+            auto binaries = m_program->getInfo<CL_PROGRAM_BINARIES>();
+            if (binaries.empty() || binaries[0].empty())
+                return;
+
+            auto cachePath = m_cacheDirectory / (std::to_string(hash) + ".clcache");
+            std::ofstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return;
+
+            // Write device signature
+            std::string deviceSig = getDeviceSignature();
+            size_t deviceSigSize = deviceSig.size();
+            file.write(reinterpret_cast<const char *>(&deviceSigSize), sizeof(deviceSigSize));
+            file.write(deviceSig.data(), deviceSigSize);
+
+            // Write binary data
+            size_t binarySize = binaries[0].size();
+            file.write(reinterpret_cast<const char *>(&binarySize), sizeof(binarySize));
+            file.write(reinterpret_cast<const char *>(binaries[0].data()), binarySize);
+
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Saved program binary to cache: " +
+                                  cachePath.string());
+            }
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to save to cache: " + std::string(e.what()));
+            }
+        }
+    }
+
+    std::string CLProgram::getDeviceSignature() const
+    {
+        try
+        {
+            auto device = m_ComputeContext->GetDevice();
+            std::string deviceName = device.getInfo<CL_DEVICE_NAME>();
+            std::string driverVersion = device.getInfo<CL_DRIVER_VERSION>();
+            std::string deviceVersion = device.getInfo<CL_DEVICE_VERSION>();
+
+            return deviceName + "|" + driverVersion + "|" + deviceVersion;
+        }
+        catch (...)
+        {
+            return "unknown_device";
+        }
+    }
+
+    bool CLProgram::loadStaticLibraryFromCache(size_t staticHash, cl::Program & staticLibrary)
+    {
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
+            return false;
+
+        auto cachePath = m_cacheDirectory / ("static_" + std::to_string(staticHash) + ".clcache");
+        if (!std::filesystem::exists(cachePath))
+            return false;
+
+        try
+        {
+            std::ifstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return false;
+
+            // Read device signature
+            size_t deviceSigSize;
+            file.read(reinterpret_cast<char *>(&deviceSigSize), sizeof(deviceSigSize));
+            std::string cachedDeviceSignature(deviceSigSize, '\0');
+            file.read(cachedDeviceSignature.data(), deviceSigSize);
+
+            // Verify device signature matches
+            if (cachedDeviceSignature != getDeviceSignature())
+            {
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Static library cache device signature mismatch, ignoring cache");
+                }
+                return false;
+            }
+
+            // Read binary data
+            size_t binarySize;
+            file.read(reinterpret_cast<char *>(&binarySize), sizeof(binarySize));
+            std::vector<unsigned char> binary(binarySize);
+            file.read(reinterpret_cast<char *>(binary.data()), binarySize);
+
+            // Create program from binary
+            staticLibrary = cl::Program(m_ComputeContext->GetContext(),
+                                        std::vector<cl::Device>{m_ComputeContext->GetDevice()},
+                                        std::vector<std::vector<unsigned char>>{binary});
+
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Successfully loaded static library from cache");
+            }
+            return true;
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to load static library from cache: " +
+                                     std::string(e.what()));
+            }
+            return false;
+        }
+    }
+
+    void CLProgram::saveStaticLibraryToCache(size_t staticHash, const cl::Program & staticLibrary)
+    {
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
+            return;
+
+        try
+        {
+            // Get program binaries
+            auto binaries = staticLibrary.getInfo<CL_PROGRAM_BINARIES>();
+            if (binaries.empty() || binaries[0].empty())
+                return;
+
+            auto cachePath =
+              m_cacheDirectory / ("static_" + std::to_string(staticHash) + ".clcache");
+            std::ofstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return;
+
+            // Write device signature first
+            std::string deviceSignature = getDeviceSignature();
+            size_t deviceSigSize = deviceSignature.size();
+            file.write(reinterpret_cast<const char *>(&deviceSigSize), sizeof(deviceSigSize));
+            file.write(deviceSignature.data(), deviceSigSize);
+
+            // Write binary data
+            const auto & binary = binaries[0];
+            size_t binarySize = binary.size();
+            file.write(reinterpret_cast<const char *>(&binarySize), sizeof(binarySize));
+            file.write(reinterpret_cast<const char *>(binary.data()), binarySize);
+
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Saved static library to cache");
+            }
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to save static library to cache: " +
+                                     std::string(e.what()));
+            }
+        }
+    }
+
+    bool CLProgram::loadLinkedProgramFromCache(size_t staticHash, size_t dynamicHash)
+    {
+        if (!m_cacheEnabled || m_cacheDirectory.empty())
+            return false;
+
+        auto cachePath = m_cacheDirectory / ("linked_" + std::to_string(staticHash) + "_" +
+                                             std::to_string(dynamicHash) + ".clcache");
+        if (!std::filesystem::exists(cachePath))
+            return false;
+
+        try
+        {
+            std::ifstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return false;
+
+            // Read device signature
+            size_t deviceSigSize;
+            file.read(reinterpret_cast<char *>(&deviceSigSize), sizeof(deviceSigSize));
+            std::string cachedDeviceSignature(deviceSigSize, '\0');
+            file.read(cachedDeviceSignature.data(), deviceSigSize);
+
+            // Verify device signature matches
+            if (cachedDeviceSignature != getDeviceSignature())
+            {
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Linked program cache device signature mismatch, ignoring cache");
+                }
+                return false;
+            }
+
+            // Read binary data
+            size_t binarySize;
+            file.read(reinterpret_cast<char *>(&binarySize), sizeof(binarySize));
+            std::vector<unsigned char> binary(binarySize);
+            file.read(reinterpret_cast<char *>(binary.data()), binarySize);
+
+            // Create program from binary
+            m_program =
+              std::make_unique<cl::Program>(m_ComputeContext->GetContext(),
+                                            std::vector<cl::Device>{m_ComputeContext->GetDevice()},
+                                            std::vector<std::vector<unsigned char>>{binary});
+
+            // Build the program (required even when loading from binary)
+            try
+            {
+                m_program->build({m_ComputeContext->GetDevice()});
+                m_callBackUserData.program = m_program.get();
+                // Ensure program is marked as valid and kernels cache is cleared
+                m_valid = true;
+                m_kernels.clear();
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "CLProgram: Successfully loaded and built linked program from cache");
+                    // Emit detailed diagnostics for the linked program
+                    m_logger->logInfo(makeProgramDiagnostics(*m_program,
+                                                             m_ComputeContext->GetDevice(),
+                                                             generateDefineSymbol(),
+                                                             "load(linked_cache)"));
+                }
+                // Reject cached binaries that contain zero kernels
+                try
+                {
+                    auto const numKernels = m_program->getInfo<CL_PROGRAM_NUM_KERNELS>();
+                    if (numKernels == 0)
+                    {
+                        if (m_logger)
+                        {
+                            m_logger->logWarning("CLProgram: Cached linked program has zero "
+                                                 "kernels, recompile required");
+                        }
+                        return false;
+                    }
+                }
+                catch (...)
+                {
+                }
+                return true;
+            }
+            catch (const std::exception & e)
+            {
+                if (m_logger)
+                {
+                    m_logger->logError("CLProgram: Failed to build cached linked program: " +
+                                       std::string(e.what()));
+                }
+                return false;
+            }
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to load linked program from cache: " +
+                                     std::string(e.what()));
+            }
+            return false;
+        }
+    }
+
+    void CLProgram::saveLinkedProgramToCache(size_t staticHash, size_t dynamicHash)
+    {
+        if (!m_cacheEnabled || m_cacheDirectory.empty() || !m_program)
+            return;
+
+        try
+        {
+            // Get program binaries
+            auto binaries = m_program->getInfo<CL_PROGRAM_BINARIES>();
+            if (binaries.empty() || binaries[0].empty())
+                return;
+
+            auto cachePath = m_cacheDirectory / ("linked_" + std::to_string(staticHash) + "_" +
+                                                 std::to_string(dynamicHash) + ".clcache");
+            std::ofstream file(cachePath, std::ios::binary);
+            if (!file.is_open())
+                return;
+
+            // Write device signature first
+            std::string deviceSignature = getDeviceSignature();
+            size_t deviceSigSize = deviceSignature.size();
+            file.write(reinterpret_cast<const char *>(&deviceSigSize), sizeof(deviceSigSize));
+            file.write(deviceSignature.data(), deviceSigSize);
+
+            // Write binary data
+            const auto & binary = binaries[0];
+            size_t binarySize = binary.size();
+            file.write(reinterpret_cast<const char *>(&binarySize), sizeof(binarySize));
+            file.write(reinterpret_cast<const char *>(binary.data()), binarySize);
+
+            if (m_logger)
+            {
+                m_logger->logInfo("CLProgram: Saved linked program to cache");
+            }
+        }
+        catch (const std::exception & e)
+        {
+            if (m_logger)
+            {
+                m_logger->logWarning("Failed to save linked program to cache: " +
+                                     std::string(e.what()));
             }
         }
     }

@@ -3,6 +3,8 @@
 #include "MeshExporter.h"
 #include "compute/ComputeCore.h"
 #include "io/3mf/ResourceIdUtil.h"
+// Ensure Lib3MF loads robustly regardless of current working directory
+#include "io/3mf/Lib3mfLoader.h"
 
 #include <lodepng.h>
 
@@ -115,7 +117,7 @@ namespace gladius::io
     {
         try
         {
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
+            m_wrapper = gladius::io::loadLib3mfScoped();
         }
         catch (std::exception & e)
         {
@@ -143,7 +145,8 @@ namespace gladius::io
         }
 
         m_startHeight_mm = bb->min.z;
-        m_endHeight_mm = bb->max.z;        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
+        m_endHeight_mm = bb->max.z;
+        generator.setSliceHeight(bb->min.z - m_layerIncrement_mm);
         generator.updateClippingAreaToBoundingBox();
         generator.getResourceContext()->requestDistanceMaps();
 

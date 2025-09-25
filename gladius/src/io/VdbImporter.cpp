@@ -1,12 +1,12 @@
 #include "VdbImporter.h"
 
-#include "nodes/Assembly.h"
-#include "nodes/Model.h"
 #include "Document.h"
 #include "Primitives.h"
 #include "Profiling.h"
 #include "ResourceContext.h"
 #include "exceptions.h"
+#include "nodes/Assembly.h"
+#include "nodes/Model.h"
 #include "types.h"
 #include "vdb.h"
 

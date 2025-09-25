@@ -12,15 +12,11 @@
 namespace gladius::io
 {
 
-
-
-
-
     class ImageStackExporter : public IExporter
     {
       public:
         explicit ImageStackExporter(events::SharedLogger logger);
-        
+
         void beginExport(const std::filesystem::path & fileName, ComputeCore & generator) override;
         bool advanceExport(ComputeCore & generator) override;
 
@@ -53,8 +49,6 @@ namespace gladius::io
         Lib3MF_uint32 m_sheetcount = 0u;
         Lib3MF_uint32 m_columnCountWorld = 0u;
         Lib3MF_uint32 m_rowCountWorld = 0u;
-
-
 
         events::SharedLogger m_logger;
     };

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Portable pre-commit formatter hook for Gladius
+# - Formats only staged C/C++ files under gladius/src/
+# - Prefers `git clang-format` (formats only changed hunks)
+# - Falls back to `clang-format -i`
+# - Respects .clang-format style files committed in the repo
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+# Gather staged C/C++ files limited to gladius/src/
+mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACM \
+  | grep -E '^gladius/src/.*\.(h|hpp|c|cc|cpp|cxx)$' || true)
+
+# Nothing to do
+if [ ${#FILES[@]} -eq 0 ]; then
+  exit 0
+fi
+
+# Try git clang-format first (formats only changed lines)
+if command -v git >/dev/null 2>&1 && git clang-format -h >/dev/null 2>&1; then
+  # Use --staged to read changes from index; specify extensions explicitly
+  if ! git clang-format --staged --extensions h,hpp,c,cc,cpp,cxx -- "${FILES[@]}" >/dev/null; then
+    echo "git clang-format failed; falling back to clang-format -i" >&2
+    USE_CFALLBACK=1
+  else
+    USE_CFALLBACK=0
+  fi
+else
+  USE_CFALLBACK=1
+fi
+
+# Fallback path: clang-format -i on full files
+if [ "${USE_CFALLBACK}" -eq 1 ]; then
+  if ! command -v clang-format >/dev/null 2>&1; then
+    echo "clang-format not found. Please install it or use the pre-commit framework." >&2
+    exit 1
+  fi
+  clang-format -i "${FILES[@]}"
+fi
+
+# Re-stage formatted files
+if [ ${#FILES[@]} -gt 0 ]; then
+  git add -- "${FILES[@]}"
+  echo "Applied clang-format to ${#FILES[@]} file(s) in gladius/src/."
+fi
+
+exit 0

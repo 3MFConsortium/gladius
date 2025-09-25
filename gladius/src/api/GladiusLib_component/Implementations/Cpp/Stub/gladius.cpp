@@ -15,37 +15,37 @@ Interface version: 1.0.0
 
 #include "gladius_abi.hpp"
 #include "gladius_gladius.hpp"
-#include "gladius_interfaces.hpp"
 #include "gladius_interfaceexception.hpp"
+#include "gladius_interfaces.hpp"
 
 using namespace GladiusLib;
 using namespace GladiusLib::Impl;
 
-void CWrapper::GetVersion(GladiusLib_uint32 & nMajor, GladiusLib_uint32 & nMinor, GladiusLib_uint32 & nMicro)
+void CWrapper::GetVersion(GladiusLib_uint32 & nMajor,
+                          GladiusLib_uint32 & nMinor,
+                          GladiusLib_uint32 & nMicro)
 {
-	nMajor = GLADIUSLIB_VERSION_MAJOR;
-	nMinor = GLADIUSLIB_VERSION_MINOR;
-	nMicro = GLADIUSLIB_VERSION_MICRO;
+    nMajor = GLADIUSLIB_VERSION_MAJOR;
+    nMinor = GLADIUSLIB_VERSION_MINOR;
+    nMicro = GLADIUSLIB_VERSION_MICRO;
 }
 
-bool CWrapper::GetLastError(IBase* pInstance, std::string & sErrorMessage)
+bool CWrapper::GetLastError(IBase * pInstance, std::string & sErrorMessage)
 {
     return pInstance->GetLastErrorMessage(sErrorMessage);
 }
 
-void CWrapper::AcquireInstance(IBase* pInstance)
+void CWrapper::AcquireInstance(IBase * pInstance)
 {
-	IBase::AcquireBaseClassInterface(pInstance);
+    IBase::AcquireBaseClassInterface(pInstance);
 }
 
-void CWrapper::ReleaseInstance(IBase* pInstance)
+void CWrapper::ReleaseInstance(IBase * pInstance)
 {
-	IBase::ReleaseBaseClassInterface(pInstance);
+    IBase::ReleaseBaseClassInterface(pInstance);
 }
 
 IGladius * CWrapper::CreateGladius()
 {
     return new CGladius();
 }
-
-

@@ -2,6 +2,7 @@
 #include "nodes/graph/DirectedGraph.h"
 #include "nodes/graph/GraphAlgorithms.h"
 #include <gtest/gtest.h>
+#include "io/3mf/Lib3mfLoader.h"
 #include <lib3mf_abi.hpp>
 #include <lib3mf_implicit.hpp>
 
@@ -18,7 +19,7 @@ namespace gladius_tests
         void SetUp() override
         {
             // Create a new 3MF model wrapper for each test
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
+            m_wrapper = gladius::io::loadLib3mfScoped();
             ASSERT_TRUE(m_wrapper) << "Failed to load Lib3MF library";
 
             // Create a model

@@ -333,10 +333,10 @@ namespace gladius::ui
             }
             ImGui::EndGroup();
             frameOverlay(ImVec4(1.0f, 0.0f, 1.0f, 0.2f),
-                        "Volume Data Properties\n\n"
-                        "Volume data defines properties like color or density that change\n"
-                        "throughout your model. This allows for gradients, varying materials,\n"
-                        "and other effects that aren't possible with simple surface models.");
+                         "Volume Data Properties\n\n"
+                         "Volume data defines properties like color or density that change\n"
+                         "throughout your model. This allows for gradients, varying materials,\n"
+                         "and other effects that aren't possible with simple surface models.");
         }
 
         return propertiesChanged;

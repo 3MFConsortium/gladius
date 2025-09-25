@@ -124,7 +124,8 @@ namespace gladius::nodes
             while (isNodeNameOccupied(node->getUniqueName()))
             {
                 ++fakeId;
-                node->setUniqueName(NodeName(m_name + "_" + node->getUniqueName() +std::to_string(fakeId)));
+                node->setUniqueName(
+                  NodeName(m_name + "_" + node->getUniqueName() + std::to_string(fakeId)));
             }
             node->setId(m_lastId);
 
@@ -166,8 +167,6 @@ namespace gladius::nodes
         auto removeLink(PortId const startId, ParameterId const endId) -> bool;
 
         void visitNodes(Visitor & visitor);
-
-  
 
         void updateGraphAndOrderIfNeeded();
 
@@ -211,7 +210,7 @@ namespace gladius::nodes
 
         bool updateTypes();
         [[nodiscard]] bool isValid(); // Not const because it might update the graph
-        void updateValidityState(); // Updates the m_isValid state based on the graph validation
+        void updateValidityState();   // Updates the m_isValid state based on the graph validation
 
         void setDisplayName(std::string const & name);
         [[nodiscard]] std::optional<std::string> getDisplayName() const;
@@ -248,12 +247,12 @@ namespace gladius::nodes
          * @return The number of nodes removed during simplification
          */
         size_t simplifyModel();
-        
+
         /**
          * @brief Clears the Model, resetting it to its initial state.
          */
         void clear();
-        
+
       private:
         void updateOrder();
         auto buildGraph() -> graph::AdjacencyListDirectedGraph &;

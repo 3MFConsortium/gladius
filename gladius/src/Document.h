@@ -132,6 +132,12 @@ namespace gladius
         void invalidatePrimitiveData();
         nodes::SharedAssembly getAssembly() const;
 
+        /**
+         * @brief Get the current assembly filename
+         * @return The current assembly filename if available, empty optional otherwise
+         */
+        std::optional<std::filesystem::path> getCurrentAssemblyFilename() const;
+
         float getFloatParameter(ResourceId modelId,
                                 std::string const & nodeName,
                                 std::string const & parameterName);
@@ -220,7 +226,7 @@ namespace gladius
          * @brief Updates the document from the 3MF model.
          *
          */
-        void updateDocumenFrom3mfModel(bool skipImplicitFunctions = false);
+        void updateDocumentFrom3mfModel(bool skipImplicitFunctions = false);
 
         /**
          * @brief Checks if a resource can be safely deleted, without dependencies.

@@ -1,10 +1,10 @@
 #include "ShortcutSettingsDialog.h"
 
 #include <algorithm>
-#include <unordered_set>
-#include <vector>
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <unordered_set>
+#include <vector>
 
 namespace gladius::ui
 {
@@ -37,12 +37,12 @@ namespace gladius::ui
         }
 
         constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_AlwaysAutoResize;
-        
+
         if (!ImGui::Begin("Keyboard Shortcuts", &m_visible, windowFlags))
         {
             ImGui::End();
             return;
-        }        // Search filter
+        } // Search filter
         ImGui::Text("Filter:");
         ImGui::SameLine();
 
@@ -79,7 +79,7 @@ namespace gladius::ui
             }
 
             // Detect key press
-            ImGuiIO& io = ImGui::GetIO();
+            ImGuiIO & io = ImGui::GetIO();
             bool keyPressed = false;
             ImGuiKey pressedKey = ImGuiKey_None;
 
@@ -89,8 +89,7 @@ namespace gladius::ui
                 ImGuiKey key = static_cast<ImGuiKey>(i);
                 if (key != ImGuiKey_LeftCtrl && key != ImGuiKey_RightCtrl &&
                     key != ImGuiKey_LeftShift && key != ImGuiKey_RightShift &&
-                    key != ImGuiKey_LeftAlt && key != ImGuiKey_RightAlt &&
-                    key != ImGuiKey_Escape)
+                    key != ImGuiKey_LeftAlt && key != ImGuiKey_RightAlt && key != ImGuiKey_Escape)
                 {
                     if (ImGui::IsKeyPressed(key, false))
                     {
@@ -105,13 +104,13 @@ namespace gladius::ui
             {
                 // Create shortcut from current modifiers and pressed key
                 ShortcutCombo combo(pressedKey, io.KeyCtrl, io.KeyAlt, io.KeyShift);
-                
+
                 // Apply the new shortcut
                 if (!combo.isEmpty())
                 {
                     m_shortcutManager->setShortcut(m_capturingForActionId, combo);
                 }
-                
+
                 m_isCapturingInput = false;
             }
         }
@@ -119,7 +118,7 @@ namespace gladius::ui
         {
             // Get all contexts from registered actions
             std::unordered_set<ShortcutContext> contexts;
-            for (auto const& action : m_shortcutManager->getActions())
+            for (auto const & action : m_shortcutManager->getActions())
             {
                 contexts.insert(action->getContext());
             }
@@ -129,17 +128,17 @@ namespace gladius::ui
             {
                 renderContextSection(ShortcutContext::Global);
             }
-            
+
             if (contexts.contains(ShortcutContext::RenderWindow))
             {
                 renderContextSection(ShortcutContext::RenderWindow);
             }
-            
+
             if (contexts.contains(ShortcutContext::ModelEditor))
             {
                 renderContextSection(ShortcutContext::ModelEditor);
             }
-            
+
             if (contexts.contains(ShortcutContext::SlicePreview))
             {
                 renderContextSection(ShortcutContext::SlicePreview);
@@ -153,7 +152,7 @@ namespace gladius::ui
     {
         // Get actions for this context
         std::vector<std::shared_ptr<ShortcutAction>> contextActions;
-        for (auto const& action : m_shortcutManager->getActions())
+        for (auto const & action : m_shortcutManager->getActions())
         {
             if (action->getContext() == context)
             {
@@ -162,39 +161,46 @@ namespace gladius::ui
                 {
                     std::string actionName = action->getName();
                     std::string actionDesc = action->getDescription();
-                    
+
                     // Convert to lowercase for case-insensitive search
-                    std::transform(actionName.begin(), actionName.end(), actionName.begin(), 
+                    std::transform(actionName.begin(),
+                                   actionName.end(),
+                                   actionName.begin(),
                                    [](unsigned char c) { return std::tolower(c); });
-                    std::transform(actionDesc.begin(), actionDesc.end(), actionDesc.begin(), 
+                    std::transform(actionDesc.begin(),
+                                   actionDesc.end(),
+                                   actionDesc.begin(),
                                    [](unsigned char c) { return std::tolower(c); });
-                    
+
                     std::string filter = m_searchFilter;
-                    std::transform(filter.begin(), filter.end(), filter.begin(), 
+                    std::transform(filter.begin(),
+                                   filter.end(),
+                                   filter.begin(),
                                    [](unsigned char c) { return std::tolower(c); });
-                    
-                    if (actionName.find(filter) == std::string::npos && 
+
+                    if (actionName.find(filter) == std::string::npos &&
                         actionDesc.find(filter) == std::string::npos)
                     {
                         continue;
                     }
                 }
-                
+
                 contextActions.push_back(action);
             }
         }
-        
+
         // Skip empty sections
         if (contextActions.empty())
         {
             return;
         }
-        
+
         // Create collapsible header for this context
-        if (ImGui::CollapsingHeader(contextToString(context).c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::CollapsingHeader(contextToString(context).c_str(),
+                                    ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::Indent();
-            
+
             // Table to align the shortcuts and their names
             if (ImGui::BeginTable("ShortcutTable", 4, ImGuiTableFlags_BordersInnerV))
             {
@@ -202,22 +208,22 @@ namespace gladius::ui
                 ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 180.0f);
                 ImGui::TableSetupColumn("Edit", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                 ImGui::TableSetupColumn("Reset", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-                
+
                 // List all actions in this context
-                for (auto const& action : contextActions)
+                for (auto const & action : contextActions)
                 {
                     ImGui::TableNextRow();
-                    
+
                     // Action name and description
                     ImGui::TableNextColumn();
                     ImGui::TextUnformatted(action->getName().c_str());
                     ImGui::TextDisabled("%s", action->getDescription().c_str());
-                    
+
                     // Current shortcut
                     ImGui::TableNextColumn();
                     ShortcutCombo shortcut = m_shortcutManager->getShortcut(action->getId());
                     ImGui::TextUnformatted(shortcut.toString().c_str());
-                    
+
                     // Edit button
                     ImGui::TableNextColumn();
                     std::string buttonId = "Edit##" + action->getId();
@@ -226,7 +232,7 @@ namespace gladius::ui
                         m_isCapturingInput = true;
                         m_capturingForActionId = action->getId();
                     }
-                    
+
                     // Reset button
                     ImGui::TableNextColumn();
                     buttonId = "Reset##" + action->getId();
@@ -235,15 +241,16 @@ namespace gladius::ui
                         m_shortcutManager->resetShortcutToDefault(action->getId());
                     }
                 }
-                
+
                 ImGui::EndTable();
             }
-            
+
             ImGui::Unindent();
         }
     }
 
-    void ShortcutSettingsDialog::setShortcutManager(std::shared_ptr<ShortcutManager> shortcutManager)
+    void
+    ShortcutSettingsDialog::setShortcutManager(std::shared_ptr<ShortcutManager> shortcutManager)
     {
         m_shortcutManager = std::move(shortcutManager);
     }

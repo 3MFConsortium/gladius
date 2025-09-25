@@ -319,19 +319,19 @@ namespace gladius::ui
                 }
                 ImGui::EndGroup();
                 frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
-                            "Mesh Resource Details\n\n"
-                            "View vertices, triangles, and properties of this mesh.\n"
-                            "Meshes define the shape of objects using triangular surfaces.");
+                             "Mesh Resource Details\n\n"
+                             "View vertices, triangles, and properties of this mesh.\n"
+                             "Meshes define the shape of objects using triangular surfaces.");
             }
             ImGui::TreePop();
         }
 
         ImGui::EndGroup();
         frameOverlay(ImVec4(0.5f, 1.0f, 0.5f, 0.1f),
-                    "Mesh Resources\n\n"
-                    "Traditional 3D models made of triangles.\n"
-                    "Meshes define the surface of your objects using connected triangles\n"
-                    "and can include properties like color and texture.");
+                     "Mesh Resources\n\n"
+                     "Traditional 3D models made of triangles.\n"
+                     "Meshes define the surface of your objects using connected triangles\n"
+                     "and can include properties like color and texture.");
 
         // image stack
         ImGui::BeginGroup();
@@ -475,18 +475,18 @@ namespace gladius::ui
                 }
                 ImGui::EndGroup();
                 frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
-                            "Image Stack Details\n\n"
-                            "View and edit the 3D image data used in volumetric models.\n"
-                            "These stacked images create a full 3D representation.");
+                             "Image Stack Details\n\n"
+                             "View and edit the 3D image data used in volumetric models.\n"
+                             "These stacked images create a full 3D representation.");
             }
             ImGui::TreePop();
         }
         ImGui::EndGroup();
         frameOverlay(ImVec4(1.0f, 0.65f, 0.0f, 0.1f),
-                    "Image Stacks\n\n"
-                    "3D image data for volumetric models.\n"
-                    "Image stacks store information as voxels (3D pixels) and allow you to\n"
-                    "represent object properties that vary throughout the volume.");
+                     "Image Stacks\n\n"
+                     "3D image data for volumetric models.\n"
+                     "Image stacks store information as voxels (3D pixels) and allow you to\n"
+                     "represent object properties that vary throughout the volume.");
     }
 
     void ResourceView::addMesh(SharedDocument document) const

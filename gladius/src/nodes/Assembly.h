@@ -95,8 +95,6 @@ namespace gladius::nodes
             return m_FallbackValueLevelSet;
         }
 
-
-
       private:
         Models m_subModels;
         ResourceId m_assemblyModelId{};

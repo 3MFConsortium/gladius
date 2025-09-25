@@ -28,7 +28,7 @@ namespace GladiusLib::Impl
         m_iter = m_polyLineIter->vertices.cbegin();
     }
 
-	GladiusLib::sVector2f CPolygonAccessor::GetCurrentVertex()
+    GladiusLib::sVector2f CPolygonAccessor::GetCurrentVertex()
     {
         return {m_iter->x(), m_iter->y()};
     }
@@ -51,14 +51,13 @@ namespace GladiusLib::Impl
 
     bool CPolygonAccessor::Prev()
     {
-        if (m_polyLineIter->vertices.empty() ||
-            m_iter == m_polyLineIter->vertices.cbegin())
+        if (m_polyLineIter->vertices.empty() || m_iter == m_polyLineIter->vertices.cbegin())
         {
             return false;
         }
 
         --m_iter;
-	    return true;
+        return true;
     }
 
     GladiusLib_single CPolygonAccessor::GetArea()

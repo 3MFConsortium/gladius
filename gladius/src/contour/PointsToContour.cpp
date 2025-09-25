@@ -49,12 +49,14 @@ namespace gladius::contour
                 {
                     break;
                 }
-                auto bestOption = std::min_element(neighbors.cbegin(),
-                                 neighbors.cend(),
-                                   [&currentVertex](auto const & a, auto const & b) {
+                auto bestOption =
+                  std::min_element(neighbors.cbegin(),
+                                   neighbors.cend(),
+                                   [&currentVertex](auto const & a, auto const & b)
+                                   {
                                        return determineConnectionCost(currentVertex, a) <
                                               determineConnectionCost(currentVertex, b);
-                                 });
+                                   });
 
                 poly.vertices.push_back(bestOption->position);
                 currentVertex = *bestOption;

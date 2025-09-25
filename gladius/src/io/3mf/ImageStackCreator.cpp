@@ -1,13 +1,13 @@
 #include "ImageStackCreator.h"
 #include "ImageExtractor.h"
-#include <lodepng.h>
 #include <fmt/format.h>
+#include <lodepng.h>
 
 namespace gladius::io
 {
     Lib3MF::PImageStack
     ImageStackCreator::addImageStackFromDirectory(Lib3MF::PModel model,
-                                                   std::filesystem::path const & path)
+                                                  std::filesystem::path const & path)
     {
         auto files = getFiles(path);
         if (files.empty())
@@ -19,11 +19,12 @@ namespace gladius::io
 
         auto stack = model->AddImageStack(m_cols, m_rows, m_numSheets);
 
-        unsigned int i  = 0u;
+        unsigned int i = 0u;
 
         for (auto & file : files)
         {
-            auto newFileName = fmt::format("/volume/Image_{}_layer_{}.png", file.stem().string(), i);
+            auto newFileName =
+              fmt::format("/volume/Image_{}_layer_{}.png", file.stem().string(), i);
             stack->CreateSheetFromFile(i, newFileName, file.string());
             ++i;
         }
@@ -33,7 +34,7 @@ namespace gladius::io
 
     Lib3MF::PFunctionFromImage3D
     ImageStackCreator::importDirectoryAsFunctionFromImage3D(Lib3MF::PModel model,
-                                                             std::filesystem::path const & path)
+                                                            std::filesystem::path const & path)
     {
         auto stack = addImageStackFromDirectory(model, path);
         if (stack)
@@ -85,7 +86,7 @@ namespace gladius::io
         }
 
         lodepng::State state;
-        lodepng_inspect(&m_cols, &m_rows, &state, &buffer[0], buffer.size());        
+        lodepng_inspect(&m_cols, &m_rows, &state, &buffer[0], buffer.size());
         m_numSheets = static_cast<unsigned int>(files.size());
     }
 }

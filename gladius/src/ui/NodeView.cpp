@@ -830,8 +830,13 @@ namespace gladius::ui
     void NodeView::showLinkAssignmentMenu(ParameterMap::reference parameter)
     {
         m_showLinkAssignmentMenu = true;
+        // Copy the required data so the callback does not hold dangling references across frames
+        nodes::VariantParameter const targetParameterCopy = parameter.second; // by-value copy
+        nodes::ParameterId const targetParamId = parameter.second.getId();
+        std::string const targetNameCopy = parameter.first; // by-value copy
+
         m_modelEditor->showPopupMenu(
-          [&]()
+          [this, targetParameterCopy, targetParamId, targetNameCopy]()
           {
               if (m_showLinkAssignmentMenu)
               {
@@ -844,10 +849,11 @@ namespace gladius::ui
                   return;
               }
 
-              const auto newSource = inputMenu(*model, parameter.second, parameter.first);
+              // Use the safe copies captured above
+              const auto newSource = inputMenu(*model, targetParameterCopy, targetNameCopy);
               if (newSource.has_value())
               {
-                  model->addLink(newSource.value(), parameter.second.getId(), false);
+                  model->addLink(newSource.value(), targetParamId, false);
                   m_modelEditor->markModelAsModified();
               }
           });

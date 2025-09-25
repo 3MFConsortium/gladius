@@ -5,11 +5,11 @@
 #include "Parameter.h"
 #include "nodesfwd.h"
 
+#include "Primitives.h"
 #include <filesystem>
 #include <fmt/format.h>
 #include <limits>
 #include <map>
-#include "Primitives.h"
 
 #include "ImageStackResource.h"
 #include "ResourceContext.h"
@@ -53,6 +53,12 @@ namespace gladius::nodes
                     "geometry itself."};
         }
 
+        /// @brief Begin nodes are exempt from input validation as they are input markers
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
+        }
+
         // name does not match, but it is called when the model is updated
         void updateMemoryOffsets(GeneratorContext &) override
         {
@@ -89,6 +95,12 @@ namespace gladius::nodes
         {
             return {"A End node consumes the calculated distance (shape) and color. \"End\" can be "
                     "seen as the end of a function."};
+        }
+
+        /// @brief End nodes are exempt from input validation as they are output markers
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         // name does not match, but it is called when the model is updated
@@ -133,6 +145,12 @@ namespace gladius::nodes
         [[nodiscard]] Port & getValueOutputPort()
         {
             return m_outputs.at(FieldNames::Value);
+        }
+
+        /// @brief Constant nodes are exempt from input validation as they provide constant values
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         // name does not match, but it is called when the model is updated
@@ -195,6 +213,12 @@ namespace gladius::nodes
             {
                 param.second.setInputSourceRequired(false);
             }
+        }
+
+        /// @brief Constant nodes are exempt from input validation as they provide constant values
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         [[nodiscard]] Port & getVectorOutputPort()
@@ -268,6 +292,12 @@ namespace gladius::nodes
             {
                 param.second.setInputSourceRequired(false);
             }
+        }
+
+        /// @brief Constant nodes are exempt from input validation as they provide constant values
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
         }
 
         [[nodiscard]] Port & getMatrixOutputPort()
@@ -454,6 +484,14 @@ namespace gladius::nodes
       public:
         SignedDistanceToMesh();
         explicit SignedDistanceToMesh(NodeId id);
+        void updateMemoryOffsets(GeneratorContext & generatorContext);
+    };
+
+    class SignedDistanceToBeamLattice : public ClonableNode<SignedDistanceToBeamLattice>
+    {
+      public:
+        SignedDistanceToBeamLattice();
+        explicit SignedDistanceToBeamLattice(NodeId id);
         void updateMemoryOffsets(GeneratorContext & generatorContext);
     };
 
@@ -1333,6 +1371,11 @@ namespace gladius::nodes
             }
         }
 
+        [[nodiscard]] bool isExemptFromInputValidation() const override
+        {
+            return true;
+        }
+
       private:
     };
 
@@ -1519,6 +1562,11 @@ namespace gladius::nodes
             return NodeBase::m_outputs.at(FieldNames::Value);
         }
 
+        Port & getOutputValue()
+        {
+            return NodeBase::m_outputs.at(FieldNames::Value);
+        }
+
         void setResourceId(ResourceId resId)
         {
             m_resourceId = resId;
@@ -1569,7 +1617,6 @@ namespace gladius::nodes
                                           {FieldNames::Alpha, ParameterTypeIndex::Float}}}};
             applyTypeRule(m_typeRules.front());
 
-            
             updateNodeIds();
         }
 
@@ -1708,15 +1755,36 @@ namespace gladius::nodes
 
             auto imageResourceId = getImageResourceId();
 
-            auto key = ResourceKey{imageResourceId};
-
             try
             {
                 auto & resMan = generatorContext.resourceManager;
-                auto & res = resMan.getResource(key);
-                res.setInUse(true);
-                ImageStackResource * imageStack = dynamic_cast<ImageStackResource *>(&res);
-                VdbResource * vdbResource = dynamic_cast<VdbResource *>(&res);
+
+                // Resolve resource using typed keys (ResourceKey now includes type)
+                // Try ImageStack first
+                IResource * resPtr =
+                  resMan.getResourcePtr(ResourceKey{imageResourceId, ResourceType::ImageStack});
+                bool isImageStack = resPtr != nullptr;
+                bool isVdb = false;
+                if (!resPtr)
+                {
+                    // Fallback: VDB resource
+                    resPtr = resMan.getResourcePtr(ResourceKey{imageResourceId, ResourceType::Vdb});
+                    isVdb = (resPtr != nullptr);
+                }
+
+                if (!resPtr)
+                {
+                    throw std::runtime_error(
+                      fmt::format("The resource referenced by ResourceId of the ImageSampler node "
+                                  "{} was not found as ImageStack or Vdb",
+                                  getDisplayName()));
+                }
+
+                // Mark in use and dispatch based on actual type
+                resPtr->setInUse(true);
+                ImageStackResource * imageStack =
+                  isImageStack ? dynamic_cast<ImageStackResource *>(resPtr) : nullptr;
+                VdbResource * vdbResource = isVdb ? dynamic_cast<VdbResource *>(resPtr) : nullptr;
 
                 if (imageStack)
                 {
@@ -1749,8 +1817,9 @@ namespace gladius::nodes
                                   getDisplayName()));
                 }
 
-                m_parameter.at(FieldNames::Start).setValue(res.getStartIndex());
-                m_parameter.at(FieldNames::End).setValue(res.getEndIndex());
+                // Also set generic start/end from base resource
+                m_parameter.at(FieldNames::Start).setValue(resPtr->getStartIndex());
+                m_parameter.at(FieldNames::End).setValue(resPtr->getEndIndex());
             }
             catch (...)
             {

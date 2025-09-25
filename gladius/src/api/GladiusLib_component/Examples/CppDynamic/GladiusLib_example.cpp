@@ -27,8 +27,7 @@ int main()
         auto const libpath = std::filesystem::canonical("gladiuslib.dll");
         std::cout << "gladiuslib path = " << libpath << "\n";
 
-        auto wrapper = GladiusLib::CWrapper::loadLibrary(
-          libpath.string());
+        auto wrapper = GladiusLib::CWrapper::loadLibrary(libpath.string());
         GladiusLib_uint32 nMajor, nMinor, nMicro;
         wrapper->GetVersion(nMajor, nMinor, nMicro);
         std::cout << "GladiusLib.Version = " << nMajor << "." << nMinor << "." << nMicro;
@@ -41,7 +40,7 @@ int main()
         auto contourAccessor = gladius->GenerateContour(0.5, 0.);
         std::cout << "contourAccessor size: " << contourAccessor->GetSize() << "\n";
 
-       do
+        do
         {
             auto polyAccessor = contourAccessor->GetCurrentPolygon();
             std::cout << "\tpolygon size: " << polyAccessor->GetSize() << "\n";
@@ -52,7 +51,6 @@ int main()
                           << ")\n";
             } while (polyAccessor->Next());
         } while (contourAccessor->Next());
-    
 
         auto const partLength = gladius->GetFloatParameter("Assembly", "Part_9", "part_length");
         std::cout << "\npart_length = " << partLength << "\n";

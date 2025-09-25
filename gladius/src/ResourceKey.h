@@ -1,12 +1,50 @@
 #pragma once
 
-#include <optional>
+#include "types.h"
 #include <filesystem>
 #include <fmt/format.h>
-#include "types.h"
+#include <optional>
 
 namespace gladius
 {
+    /// Enumeration of resource types for proper resource identification
+    enum class ResourceType
+    {
+        Unknown = 0,
+        Mesh,
+        BeamLattice,
+        ImageStack,
+        Vdb,
+        Stl,
+        Function,
+        Material
+    };
+
+    /// Convert ResourceType to string for display purposes
+    inline std::string resourceTypeToString(ResourceType type)
+    {
+        switch (type)
+        {
+        case ResourceType::Unknown:
+            return "Unknown";
+        case ResourceType::Mesh:
+            return "Mesh";
+        case ResourceType::BeamLattice:
+            return "BeamLattice";
+        case ResourceType::ImageStack:
+            return "ImageStack";
+        case ResourceType::Vdb:
+            return "Vdb";
+        case ResourceType::Stl:
+            return "Stl";
+        case ResourceType::Function:
+            return "Function";
+        case ResourceType::Material:
+            return "Material";
+        default:
+            return "Invalid";
+        }
+    }
 
     template <typename T, typename... Rest>
     void hash_combine(std::size_t & seed, const T & v, const Rest &... rest)
@@ -20,11 +58,14 @@ namespace gladius
       public:
         explicit ResourceKey(std::filesystem::path const & filename)
             : m_filename(filename)
+            , m_resourceType(ResourceType::Unknown)
         {
         }
 
-        explicit ResourceKey(ResourceId resourceId)
+        explicit ResourceKey(ResourceId resourceId,
+                             ResourceType resourceType = ResourceType::Unknown)
             : m_resourceId(resourceId)
+            , m_resourceType(resourceType)
         {
         }
 
@@ -43,6 +84,11 @@ namespace gladius
             return m_resourceId;
         }
 
+        auto getResourceType() const
+        {
+            return m_resourceType;
+        }
+
         std::size_t getHash() const
         {
             size_t hashValue = 0;
@@ -54,6 +100,9 @@ namespace gladius
             {
                 hash_combine(hashValue, m_resourceId.value());
             }
+
+            // Include resource type in hash calculation
+            hash_combine(hashValue, static_cast<int>(m_resourceType));
 
             if (m_textHash.has_value())
             {
@@ -76,6 +125,11 @@ namespace gladius
 
             if (m_resourceId.has_value())
             {
+                if (m_resourceType != ResourceType::Unknown)
+                {
+                    return fmt::format(
+                      "{} resource {}", resourceTypeToString(m_resourceType), m_resourceId.value());
+                }
                 return fmt::format("3mf resource {}", m_resourceId.value());
             }
             if (m_textHash.has_value())
@@ -95,6 +149,7 @@ namespace gladius
         std::optional<ResourceId> m_resourceId{};
         std::optional<size_t> m_textHash{};
         std::optional<std::string> m_displayName;
+        ResourceType m_resourceType{ResourceType::Unknown};
     };
 
 }

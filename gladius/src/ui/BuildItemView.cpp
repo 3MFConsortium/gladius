@@ -13,7 +13,7 @@ namespace gladius::ui
 {
     namespace
     {
-        std::string getBuildItemName(const Lib3MF::PBuildItem& buildItem)
+        std::string getBuildItemName(const Lib3MF::PBuildItem & buildItem)
         {
             try
             {
@@ -26,10 +26,9 @@ namespace gladius::ui
                     std::string partNumber = buildItem->GetPartNumber();
                     if (!partName.empty())
                     {
-                        return fmt::format("{} (BuildItem #{})", 
-                            partName, buildItem->GetObjectResourceID());
+                        return fmt::format(
+                          "{} (BuildItem #{})", partName, buildItem->GetObjectResourceID());
                     }
-
                 }
                 return fmt::format("BuildItem #{}", buildItem->GetObjectResourceID());
             }
@@ -40,9 +39,9 @@ namespace gladius::ui
             }
         }
 
-        bool renderBuildItemProperties(const Lib3MF::PBuildItem& buildItem,
-                                      SharedDocument document,
-                                      Lib3MF::PModel model3mf)
+        bool renderBuildItemProperties(const Lib3MF::PBuildItem & buildItem,
+                                       SharedDocument document,
+                                       Lib3MF::PModel model3mf)
         {
             bool propertiesChanged = false;
 
@@ -52,14 +51,14 @@ namespace gladius::ui
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Object:");
                 ImGui::TableNextColumn();
-                propertiesChanged |= BuildItemView::renderObjectDropdown(
-                    document, model3mf, buildItem);
+                propertiesChanged |=
+                  BuildItemView::renderObjectDropdown(document, model3mf, buildItem);
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted("Transform:");
                 ImGui::TableNextColumn();
-                propertiesChanged |= BuildItemView::renderTransformControls(
-                    document, model3mf, buildItem);
+                propertiesChanged |=
+                  BuildItemView::renderTransformControls(document, model3mf, buildItem);
 
                 // Part number
                 ImGui::TableNextColumn();
@@ -79,7 +78,7 @@ namespace gladius::ui
                                 buildItem->SetPartNumber(partNumber);
                                 document->markFileAsChanged();
 
-                               // propertiesChanged = true;
+                                // propertiesChanged = true;
                             }
                             catch (...)
                             {
@@ -128,7 +127,8 @@ namespace gladius::ui
                 while (resourceIterator->MoveNext())
                 {
                     auto resource = resourceIterator->GetCurrent();
-                    Lib3MF::PMeshObject meshObject = std::dynamic_pointer_cast<Lib3MF::CMeshObject>(resource);
+                    Lib3MF::PMeshObject meshObject =
+                      std::dynamic_pointer_cast<Lib3MF::CMeshObject>(resource);
                     if (meshObject && meshObject->GetType() == Lib3MF::eObjectType::Model)
                     {
                         defaultObject = meshObject;
@@ -149,7 +149,8 @@ namespace gladius::ui
                         }
                     }
                     // Convert PMeshObject to PObject before adding to build item
-                    Lib3MF::PObject objectResource = std::static_pointer_cast<Lib3MF::CObject>(defaultObject);
+                    Lib3MF::PObject objectResource =
+                      std::static_pointer_cast<Lib3MF::CObject>(defaultObject);
                     model3mf->AddBuildItem(objectResource, transform);
                 }
                 else
@@ -167,12 +168,13 @@ namespace gladius::ui
                     // We still need an object, so find or create a minimal one
                     auto minimalObject = model3mf->AddMeshObject();
                     // Convert PMeshObject to PObject before adding to build item
-                    Lib3MF::PObject objectResource = std::static_pointer_cast<Lib3MF::CObject>(minimalObject);
+                    Lib3MF::PObject objectResource =
+                      std::static_pointer_cast<Lib3MF::CObject>(minimalObject);
                     model3mf->AddBuildItem(objectResource, transform);
                 }
-                
+
                 document->markFileAsChanged();
-                document->updateDocumenFrom3mfModel();
+                document->updateDocumentFrom3mfModel();
                 propertiesChanged = true;
             }
             catch (...)
@@ -212,14 +214,15 @@ namespace gladius::ui
                             document->update3mfModel();
                             model3mf->RemoveBuildItem(buildItem);
                             document->markFileAsChanged();
-                            document->updateDocumenFrom3mfModel();
+                            document->updateDocumentFrom3mfModel();
                             propertiesChanged = true;
                             ImGui::TreePop();
                             ImGui::EndGroup();
-                            frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
-                                        "Build Item Properties\n\n"
-                                        "Each build item can be positioned, rotated, and scaled.\n"
-                                        "Changes here affect how your model appears in the final print.");
+                            frameOverlay(
+                              ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
+                              "Build Item Properties\n\n"
+                              "Each build item can be positioned, rotated, and scaled.\n"
+                              "Changes here affect how your model appears in the final print.");
                             continue; // Skip the rest for this deleted item
                         }
                         catch (...)
@@ -228,15 +231,16 @@ namespace gladius::ui
                         }
                     }
 
-                    bool currentPropertiesChanged = renderBuildItemProperties(buildItem, document, model3mf);
+                    bool currentPropertiesChanged =
+                      renderBuildItemProperties(buildItem, document, model3mf);
                     propertiesChanged = propertiesChanged || currentPropertiesChanged;
                     ImGui::TreePop();
                 }
                 ImGui::EndGroup();
                 frameOverlay(ImVec4(1.0f, 1.0f, 1.0f, 0.2f),
-                            "Build Item\n\n"
-                            "Items in this section represent objects that will be printed.\n"
-                            "Each one has a position, rotation, and references a 3D model.");
+                             "Build Item\n\n"
+                             "Items in this section represent objects that will be printed.\n"
+                             "Each one has a position, rotation, and references a 3D model.");
             }
         }
         catch (...)
@@ -247,15 +251,14 @@ namespace gladius::ui
         return propertiesChanged;
     }
 
-    bool BuildItemView::renderObjectDropdown(
-        SharedDocument document,
-        Lib3MF::PModel model3mf,
-        Lib3MF::PBuildItem buildItem)
+    bool BuildItemView::renderObjectDropdown(SharedDocument document,
+                                             Lib3MF::PModel model3mf,
+                                             Lib3MF::PBuildItem buildItem)
     {
         bool propertiesChanged = false;
 
         ImGui::PushID("ObjectDropdown");
-        
+
         Lib3MF::PObject currentObject;
         try
         {
@@ -267,7 +270,8 @@ namespace gladius::ui
         }
 
         std::string currentObjectName =
-            currentObject ? fmt::format("Object #{}", currentObject->GetResourceID()) : "Please select";
+          currentObject ? fmt::format("Object #{}", currentObject->GetResourceID())
+                        : "Please select";
 
         if (ImGui::BeginCombo("", currentObjectName.c_str()))
         {
@@ -282,17 +286,18 @@ namespace gladius::ui
                 }
 
                 std::string objectName = object->GetName();
-                std::string displayName = objectName.empty() 
-                    ? fmt::format("Object #{}", object->GetResourceID())
-                    : fmt::format("{} (#{})", objectName, object->GetResourceID());
+                std::string displayName =
+                  objectName.empty() ? fmt::format("Object #{}", object->GetResourceID())
+                                     : fmt::format("{} (#{})", objectName, object->GetResourceID());
 
-                bool isSelected = (currentObject && currentObject->GetResourceID() == object->GetResourceID());
+                bool isSelected =
+                  (currentObject && currentObject->GetResourceID() == object->GetResourceID());
                 if (ImGui::Selectable(displayName.c_str(), isSelected))
                 {
                     try
                     {
                         document->update3mfModel();
-                        
+
                         // Get current transform
                         Lib3MF::sTransform transform;
                         try
@@ -310,13 +315,13 @@ namespace gladius::ui
                                 }
                             }
                         }
-                        
+
                         // Remove current build item and create a new one with the selected object
                         model3mf->RemoveBuildItem(buildItem);
                         model3mf->AddBuildItem(object, transform);
-                        
+
                         document->markFileAsChanged();
-                        document->updateDocumenFrom3mfModel();
+                        document->updateDocumentFrom3mfModel();
                         propertiesChanged = true;
                     }
                     catch (...)
@@ -333,25 +338,24 @@ namespace gladius::ui
 
             ImGui::EndCombo();
         }
-        
+
         ImGui::PopID();
 
         return propertiesChanged;
     }
 
-    bool BuildItemView::renderTransformControls(
-        SharedDocument document,
-        Lib3MF::PModel model3mf,
-        Lib3MF::PBuildItem buildItem)
+    bool BuildItemView::renderTransformControls(SharedDocument document,
+                                                Lib3MF::PModel model3mf,
+                                                Lib3MF::PBuildItem buildItem)
     {
         bool propertiesChanged = false;
 
         ImGui::PushID("TransformControls");
-        
+
         try
         {
             Lib3MF::sTransform transform = buildItem->GetObjectTransform();
-            
+
             // Create a 4x3 matrix UI for editing
             if (ImGui::BeginTable("TransformMatrix", 3, ImGuiTableFlags_Borders))
             {
@@ -361,10 +365,10 @@ namespace gladius::ui
                     for (int j = 0; j < 3; j++)
                     {
                         ImGui::TableNextColumn();
-                        
+
                         char label[32];
                         snprintf(label, sizeof(label), "##M%d%d", i, j);
-                        
+
                         float value = transform.m_Fields[i][j];
                         if (ImGui::InputFloat(label, &value, 0.0f, 0.0f, "%.3f"))
                         {
@@ -374,7 +378,7 @@ namespace gladius::ui
                                 transform.m_Fields[i][j] = value;
                                 buildItem->SetObjectTransform(transform);
                                 document->markFileAsChanged();
-                                document->updateDocumenFrom3mfModel();
+                                document->updateDocumentFrom3mfModel();
                                 propertiesChanged = true;
                             }
                             catch (...)
@@ -386,20 +390,20 @@ namespace gladius::ui
                 }
                 ImGui::EndTable();
             }
-            
+
             // Add buttons for common transformations
             if (ImGui::Button("Reset to Identity"))
             {
                 try
                 {
                     document->update3mfModel();
-                    
+
                     // Set identity matrix
                     io::setTransformToIdentity(transform);
-                    
+
                     buildItem->SetObjectTransform(transform);
                     document->markFileAsChanged();
-                    document->updateDocumenFrom3mfModel();
+                    document->updateDocumentFrom3mfModel();
                     propertiesChanged = true;
                 }
                 catch (...)
@@ -412,7 +416,7 @@ namespace gladius::ui
         {
             ImGui::TextUnformatted("Error: Unable to access transform");
         }
-        
+
         ImGui::PopID();
 
         return propertiesChanged;

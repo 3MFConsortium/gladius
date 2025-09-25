@@ -83,7 +83,7 @@ namespace gladius::nodes
 
         // 2. Integrate the referenced model into the target model
         m_flatteningDepth++;
-       
+
         // Add to integrated set before proceeding with integration
         m_integratedFunctionCalls.insert(&functionCall);
 
@@ -223,17 +223,17 @@ namespace gladius::nodes
     void GraphFlattener::flattenRecursive(Model & model)
     {
         ProfileFunction;
-        
+
         // Check if this model has already been flattened
         if (m_flattenedModels.find(&model) != m_flattenedModels.end())
         {
             m_redundantFlatteningSkips++;
             return;
         }
-        
+
         // Add to flattened models set before processing
         m_flattenedModels.insert(&model);
-        
+
         // 1. Find all function calls
         auto functionCallVisitor = OnTypeVisitor<FunctionCall>(
           [&](FunctionCall & functionCallNode)

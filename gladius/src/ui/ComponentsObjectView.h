@@ -17,19 +17,17 @@ namespace gladius::ui
 {
     class ComponentsObjectView
     {
-    public:
+      public:
         // Main render function for ComponentsObjects
         bool render(SharedDocument document) const;
 
         // Helper functions
-        static bool renderObjectDropdown(
-            SharedDocument document,
-            Lib3MF::PModel model3mf,
-            Lib3MF::PComponent component);
-        
-        static bool renderTransformControls(
-            SharedDocument document,
-            Lib3MF::PModel model3mf,
-            Lib3MF::PComponent component);
+        static bool renderObjectDropdown(SharedDocument document,
+                                         Lib3MF::PModel model3mf,
+                                         Lib3MF::PComponent component);
+
+        static bool renderTransformControls(SharedDocument document,
+                                            Lib3MF::PModel model3mf,
+                                            Lib3MF::PComponent component);
     };
 } // namespace gladius::ui

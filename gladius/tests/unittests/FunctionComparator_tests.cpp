@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "io/3mf/Lib3mfLoader.h"
 #include <iostream>
 
 #include "io/3mf/FunctionComparator.h"
@@ -9,7 +10,7 @@ class FunctionComparator_Test : public ::testing::Test
 protected:
     virtual void SetUp()
     {
-        m_wrapper = Lib3MF::CWrapper::loadLibrary();
+    m_wrapper = gladius::io::loadLib3mfScoped();
         m_model = m_wrapper->CreateModel();
     }
 

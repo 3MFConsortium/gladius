@@ -14,7 +14,7 @@ Interface version: 1.0.0
 
 ]]
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.21)
 
 set(CMAKE_CURRENT_BINDING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../Bindings/CppDynamic)
 project(GladiusLibExample_CPPDynamic)
