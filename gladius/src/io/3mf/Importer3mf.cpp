@@ -3,6 +3,7 @@
 
 #include <fmt/format.h>
 #include <lib3mf_abi.hpp>
+#include "Lib3mfLoader.h"
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
 #include <map>
@@ -79,7 +80,7 @@ namespace gladius::io
         ProfileFunction
         try
         {
-            m_wrapper = Lib3MF::CWrapper::loadLibrary();
+            m_wrapper = gladius::io::loadLib3mfScoped();
         }
         catch (std::exception & e)
         {

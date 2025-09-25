@@ -116,8 +116,42 @@ int main(int argc, char ** argv)
         }
     }
 
-    // Set working directory
-    std::filesystem::current_path(std::filesystem::path(argv[0]).parent_path());
+    // Set working directory to the executable's directory (robust to wrappers)
+    // On Linux, prefer /proc/self/exe to resolve the actual binary path. Fall back to argv[0].
+    try
+    {
+        std::filesystem::path exePath;
+#if defined(__linux__)
+        try
+        {
+            exePath = std::filesystem::read_symlink("/proc/self/exe");
+        }
+        catch (...)
+        {
+            // ignore and fall back
+        }
+#endif
+        if (exePath.empty() || !std::filesystem::exists(exePath))
+        {
+            exePath = std::filesystem::path(argv[0]);
+        }
+
+        std::filesystem::path targetDir = exePath.has_parent_path() ? exePath.parent_path() : std::filesystem::current_path();
+        if (std::filesystem::exists(targetDir))
+        {
+            std::filesystem::current_path(targetDir);
+        }
+        else
+        {
+            // Gracefully continue if directory is missing; resources may still be resolved via absolute paths
+            std::cerr << "Warning: install directory not found: " << targetDir << std::endl;
+        }
+    }
+    catch (std::filesystem::filesystem_error const & ex)
+    {
+        std::cerr << "Warning: could not set working directory (" << ex.what() << ")" << std::endl;
+        // continue
+    }
 
     // Create application based on arguments
     gladius::Application app(headless);
