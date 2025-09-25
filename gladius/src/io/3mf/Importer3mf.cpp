@@ -84,7 +84,9 @@ namespace gladius::io
         }
         catch (std::exception & e)
         {
-            std::cerr << e.what() << std::endl;
+            if (m_eventLogger) {
+                m_eventLogger->addEvent({fmt::format("Error initializing Importer3mf: {}", e.what()), events::Severity::Error});
+            }
             return;
         }
     }
