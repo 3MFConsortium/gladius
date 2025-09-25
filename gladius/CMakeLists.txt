@@ -124,11 +124,15 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Ensure installed binaries look for co-located shared libraries first
 if(UNIX)
-  # Use $ORIGIN so binaries in /opt/gladius/<version> can find bundled .so
+  # Install tree: Use $ORIGIN so installed binaries in /opt/gladius/<version> resolve
+  # bundled shared objects (e.g. our patched lib3mf) placed alongside them.
   set(CMAKE_INSTALL_RPATH "$ORIGIN")
-  # Build artifacts will already carry the final install RPATH, avoiding RPATH rewrite during install
-  set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-  set(CMAKE_SKIP_BUILD_RPATH  OFF)
+  # Build tree: DO NOT force build RPATH to install RPATH. Tests run from the
+  # build tree (e.g. build/tests/unittests) and previously failed to locate
+  # lib3mf.so.2 when we set CMAKE_BUILD_WITH_INSTALL_RPATH ON (RPATH became
+  # just $ORIGIN which points to the test directory that does not contain lib3mf).
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+  set(CMAKE_SKIP_BUILD_RPATH OFF)
   set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 endif()
 
@@ -212,10 +216,17 @@ if(UNIX)
   if(_lib3mf_resolved)
     get_filename_component(_lib3mf_dir "${_lib3mf_resolved}" DIRECTORY)
     if(EXISTS "${_lib3mf_dir}")
+      # Bundle all versioned variants (lib3mf.so, lib3mf.so.2, etc.) into install prefix.
       file(GLOB _lib3mf_so_files "${_lib3mf_dir}/lib3mf.so*")
       if(_lib3mf_so_files)
         install(FILES ${_lib3mf_so_files} DESTINATION ${INSTALL_PREFIX})
       endif()
+      # Ensure build-tree executables (tests, tools) can locate lib3mf at runtime
+      # by appending its directory to the build RPATH. This fixes CI failures like:
+      #   error while loading shared libraries: lib3mf.so.2: cannot open shared object file
+      list(APPEND CMAKE_BUILD_RPATH "${_lib3mf_dir}")
+      list(REMOVE_DUPLICATES CMAKE_BUILD_RPATH)
+      set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" CACHE STRING "RPATH for build tree executables" FORCE)
     endif()
   endif()
 endif()
