@@ -22,8 +22,11 @@ namespace gladius
             char const * pattern = filePattern[i].c_str();
             filePatterns[i] = pattern;
         }
-        auto const fileName = tinyfd_saveFileDialog(
-          "Save File", baseDir.string().c_str(), static_cast<int>(numPattern), filePatterns, nullptr);
+        auto const fileName = tinyfd_saveFileDialog("Save File",
+                                                    baseDir.string().c_str(),
+                                                    static_cast<int>(numPattern),
+                                                    filePatterns,
+                                                    "Supported files");
 
         if (fileName == nullptr)
         {
@@ -32,7 +35,7 @@ namespace gladius
         auto fileToSave = QueriedFilename(fileName);
         return fileToSave;
     }
-    
+
     auto queryLoadFilename(FilePatterns const & filePattern, std::filesystem::path baseDir)
       -> QueriedFilename
     {
@@ -47,8 +50,12 @@ namespace gladius
             char const * pattern = filePattern[i].c_str();
             filePatterns[i] = pattern;
         }
-        auto const fileName = tinyfd_openFileDialog(
-          "Open File", baseDir.string().c_str(), static_cast<int>(numPattern), filePatterns, nullptr, 0);
+        auto const fileName = tinyfd_openFileDialog("Open File",
+                                                    baseDir.string().c_str(),
+                                                    static_cast<int>(numPattern),
+                                                    filePatterns,
+                                                    "Supported files",
+                                                    0);
         if (fileName == nullptr)
         {
             return {};

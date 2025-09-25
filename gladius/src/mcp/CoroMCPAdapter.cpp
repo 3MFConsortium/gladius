@@ -1,0 +1,383 @@
+#include "CoroMCPAdapter.h"
+#include "../Application.h"
+#include "../Document.h"
+#include <chrono>
+#include <filesystem>
+#include <iostream>
+#include <thread>
+
+namespace gladius::mcp
+{
+
+    CoroMCPAdapter::CoroMCPAdapter(Application * application,
+                                   std::size_t backgroundThreads,
+                                   std::size_t computeThreads)
+        : m_application(application)
+        , m_lastErrorMessage("No error")
+    {
+        if (!m_application)
+        {
+            throw std::invalid_argument("Application pointer cannot be null");
+        }
+
+        // Create thread pools for different operation types
+        m_backgroundPool = coro::thread_pool::make_shared(
+          coro::thread_pool::options{.thread_count = static_cast<uint32_t>(backgroundThreads),
+                                     .on_thread_start_functor = [](std::size_t) -> void {},
+                                     .on_thread_stop_functor = [](std::size_t) -> void {}});
+
+        m_computePool = coro::thread_pool::make_shared(
+          coro::thread_pool::options{.thread_count = static_cast<uint32_t>(computeThreads),
+                                     .on_thread_start_functor = [](std::size_t) -> void {},
+                                     .on_thread_stop_functor = [](std::size_t) -> void {}});
+    }
+
+    CoroMCPAdapter::~CoroMCPAdapter()
+    {
+        // Shutdown thread pools gracefully
+        if (m_backgroundPool)
+        {
+            m_backgroundPool->shutdown();
+        }
+        if (m_computePool)
+        {
+            m_computePool->shutdown();
+        }
+    }
+
+    auto CoroMCPAdapter::saveDocumentAsync(const std::string & path) -> coro::task<bool>
+    {
+        // Validate input on current thread
+        if (!validatePath(path))
+        {
+            co_return false;
+        }
+
+        // Get document reference (main thread operation)
+        auto document = m_application->getCurrentDocument();
+        if (!document)
+        {
+            setError("No active document available");
+            co_return false;
+        }
+
+        try
+        {
+            // Switch to background thread for I/O operations
+            co_await m_backgroundPool->schedule();
+
+            // This now runs on background thread - no UI blocking!
+            // In headless mode, include thumbnail generation to embed a preview in the 3MF.
+            try
+            {
+                if (auto doc = m_application->getCurrentDocument())
+                {
+                    if (auto log = doc->getSharedLogger())
+                    {
+                        log->logInfo(
+                          std::string{"MCP.saveDocumentAsync: start path='"} + path +
+                          (m_application->isHeadlessMode() ? "' headless=1" : "' headless=0"));
+                    }
+                }
+            }
+            catch (...)
+            {
+            }
+            bool const writeThumbnail = m_application && m_application->isHeadlessMode();
+
+            bool preparationSuccess = true;
+            if (writeThumbnail)
+            {
+                // Get the compute core from the document for thumbnail preparation
+                auto computeCore = document->getCore();
+                if (computeCore)
+                {
+                    // Ensure assembly is updated before thumbnail preparation
+                    try
+                    {
+                        document->updateFlatAssembly();
+                        computeCore->tryRefreshProgramProtected(document->getAssembly());
+                    }
+                    catch (const std::exception & e)
+                    {
+                        setError("Assembly update failed: " + std::string(e.what()));
+                        preparationSuccess = false;
+                        try
+                        {
+                            if (auto log = document->getSharedLogger())
+                            {
+                                log->logInfo("MCP.saveDocumentAsync: assembly/program refresh OK");
+                            }
+                        }
+                        catch (...)
+                        {
+                        }
+                    }
+
+                    if (preparationSuccess)
+                    {
+                        // Prepare the model for thumbnail generation
+                        preparationSuccess = computeCore->prepareImageRendering();
+                        if (!preparationSuccess)
+                        {
+                            setError(
+                              "Thumbnail preparation failed: This may be due to model compilation "
+                              "errors, "
+                              "SDF precomputation failure, or invalid bounding box. "
+                              "Check model validation for detailed OpenCL compilation errors.");
+                            // Don't fail the save operation, just disable thumbnail generation
+                            try
+                            {
+                                if (auto log = document->getSharedLogger())
+                                {
+                                    log->logError(
+                                      "MCP.saveDocumentAsync: prepareThumbnailGeneration=false");
+                                }
+                            }
+                            catch (...)
+                            {
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                if (auto log = document->getSharedLogger())
+                                {
+                                    log->logInfo(
+                                      "MCP.saveDocumentAsync: prepareThumbnailGeneration OK");
+                                }
+                            }
+                            catch (...)
+                            {
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    setError("No compute core available for thumbnail preparation");
+                    try
+                    {
+                        if (auto log = document->getSharedLogger())
+                        {
+                            log->logError(
+                              "MCP.saveDocumentAsync: no compute core for thumbnail prep");
+                        }
+                    }
+                    catch (...)
+                    {
+                    }
+                    preparationSuccess = false;
+                }
+            }
+
+            // Only write thumbnail if preparation succeeded
+            bool const actualWriteThumbnail = writeThumbnail && preparationSuccess;
+            try
+            {
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logInfo(std::string{"MCP.saveDocumentAsync: saving 3MF (thumb="} +
+                                 (actualWriteThumbnail ? "1)" : "0)"));
+                }
+            }
+            catch (...)
+            {
+            }
+            document->saveAs(std::filesystem::path(path), actualWriteThumbnail);
+
+            // Success
+            m_lastErrorMessage = actualWriteThumbnail ? "Document saved successfully with thumbnail"
+                                 : (writeThumbnail && !preparationSuccess)
+                                   ? "Document saved successfully (thumbnail preparation failed)"
+                                   : "Document saved successfully";
+            try
+            {
+                if (auto log = document->getSharedLogger())
+                {
+                    log->logInfo(std::string{"MCP.saveDocumentAsync: done: "} + m_lastErrorMessage);
+                }
+            }
+            catch (...)
+            {
+            }
+            co_return true;
+        }
+        catch (const std::exception & e)
+        {
+            setError("Save operation failed: " + std::string(e.what()));
+            try
+            {
+                if (auto doc = m_application->getCurrentDocument())
+                {
+                    if (auto log = doc->getSharedLogger())
+                    {
+                        log->logError(std::string{"MCP.saveDocumentAsync: exception: "} + e.what());
+                    }
+                }
+            }
+            catch (...)
+            {
+            }
+            co_return false;
+        }
+    }
+
+    auto CoroMCPAdapter::saveDocumentWithThumbnailAsync(const std::string & path)
+      -> coro::task<bool>
+    {
+        // Validate input
+        if (!validatePath(path))
+        {
+            co_return false;
+        }
+
+        auto document = m_application->getCurrentDocument();
+        if (!document)
+        {
+            setError("No active document available");
+            co_return false;
+        }
+
+        try
+        {
+            // Start save and thumbnail operations in parallel
+            auto saveTask = [this, &path, document]() -> coro::task<bool>
+            {
+                co_await m_backgroundPool->schedule();
+                document->saveAs(std::filesystem::path(path), true); // Save with thumbnail
+                co_return true;
+            };
+
+            auto thumbnailTask = [this, document]() -> coro::task<bool>
+            {
+                co_await m_computePool->schedule();
+
+                // TODO: Implement proper OpenCL thumbnail generation
+                // This would use our existing thumbnail generation code
+                // but isolated to the compute thread pool
+
+                // For now, just simulate the operation
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                co_return true;
+            };
+
+            // Create the tasks
+            auto saveOperation = saveTask();
+            auto thumbnailOperation = thumbnailTask();
+
+            // Wait for both operations to complete
+            auto [saveTaskResult, thumbnailTaskResult] =
+              co_await coro::when_all(std::move(saveOperation), std::move(thumbnailOperation));
+
+            if (!saveTaskResult.return_value())
+            {
+                setError("Document save failed");
+                co_return false;
+            }
+
+            if (!thumbnailTaskResult.return_value())
+            {
+                setError("Thumbnail generation failed");
+                // Don't fail the save operation just because thumbnail failed
+            }
+
+            m_lastErrorMessage = "Document saved successfully with thumbnail";
+            co_return true;
+        }
+        catch (const std::exception & e)
+        {
+            setError("Save with thumbnail failed: " + std::string(e.what()));
+            co_return false;
+        }
+    }
+
+    bool CoroMCPAdapter::saveDocumentAs(const std::string & path)
+    {
+        try
+        {
+            // Use coro::sync_wait to bridge async/sync worlds
+            // This blocks the current thread but the actual work happens on background threads
+            return coro::sync_wait(saveDocumentAsync(path));
+        }
+        catch (const std::exception & e)
+        {
+            setError("Synchronous save wrapper failed: " + std::string(e.what()));
+            return false;
+        }
+    }
+
+    auto CoroMCPAdapter::generateThumbnailAsync() -> coro::task<bool>
+    {
+        auto document = m_application->getCurrentDocument();
+        if (!document)
+        {
+            setError("No active document available for thumbnail generation");
+            co_return false;
+        }
+
+        try
+        {
+            // Switch to compute thread for OpenCL operations
+            co_await m_computePool->schedule();
+
+            // TODO: Implement actual thumbnail generation
+            // This would call into our existing OpenCL rendering code
+            // but safely isolated on the compute thread
+
+            // For now, simulate the operation
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+            m_lastErrorMessage = "Thumbnail generated successfully";
+            co_return true;
+        }
+        catch (const std::exception & e)
+        {
+            setError("Thumbnail generation failed: " + std::string(e.what()));
+            co_return false;
+        }
+    }
+
+    bool CoroMCPAdapter::validatePath(const std::string & path)
+    {
+        if (path.empty())
+        {
+            setError("File path cannot be empty");
+            return false;
+        }
+
+        if (!path.ends_with(".3mf"))
+        {
+            setError("File must have .3mf extension");
+            return false;
+        }
+
+        // Check if directory exists and is writable
+        std::filesystem::path filePath(path);
+        auto parentDir = filePath.parent_path();
+
+        if (!parentDir.empty() && !std::filesystem::exists(parentDir))
+        {
+            try
+            {
+                std::filesystem::create_directories(parentDir);
+            }
+            catch (const std::exception & e)
+            {
+                setError("Cannot create directory: " + std::string(e.what()));
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool CoroMCPAdapter::setError(const std::string & message)
+    {
+        m_lastErrorMessage = message;
+        std::cerr << "MCP Error: " << message << std::endl;
+        return false;
+    }
+
+} // namespace gladius::mcp

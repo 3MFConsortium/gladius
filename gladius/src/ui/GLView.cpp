@@ -25,10 +25,7 @@
 namespace gladius
 {
 
-    GLView::GLView()
-    {
-        init();
-    }
+    GLView::GLView() = default;
 
     void errorCallback(int error, const char * description)
     {
@@ -45,31 +42,48 @@ namespace gladius
 
     GLView::~GLView()
     {
-        // Explicitly save ImGui settings before destroying context
-        if (!m_iniFileNameStorage.empty())
+        // Only tear down if we actually initialized a window/context
+        if (m_initialized)
         {
-            try
+            // Explicitly save ImGui settings before destroying context
+            if (!m_iniFileNameStorage.empty())
             {
-                ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+                try
+                {
+                    ImGui::SaveIniSettingsToDisk(m_iniFileNameStorage.c_str());
+                }
+                catch (...)
+                {
+                    // Ignore save errors during destruction to prevent exceptions
+                    std::cerr << "Warning: Failed to save ImGui settings during destruction\n";
+                }
             }
-            catch (...)
+
+            // Clear window user pointer to prevent dangling references
+            if (m_window)
             {
-                // Ignore save errors during destruction to prevent exceptions
-                std::cerr << "Warning: Failed to save ImGui settings during destruction\n";
+                glfwSetWindowUserPointer(m_window, nullptr);
+            }
+
+            ImGui_ImplOpenGL2_Shutdown();
+            ImGui_ImplGlfw_Shutdown();
+
+            ImGui::DestroyContext();
+            if (glfwGetCurrentContext())
+            {
+                // Terminate GLFW only if it was initialized in this process
+                glfwTerminate();
             }
         }
+    }
 
-        // Clear window user pointer to prevent dangling references
-        if (m_window)
+    void GLView::ensureInitialized()
+    {
+        // Lazily create the window and GL context if not already done
+        if (!m_initialized)
         {
-            glfwSetWindowUserPointer(m_window, nullptr);
+            init();
         }
-
-        ImGui_ImplOpenGL2_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-
-        ImGui::DestroyContext();
-        glfwTerminate();
     }
 
     void GLView::storeWindowSettings()
@@ -111,6 +125,10 @@ namespace gladius
 
     void GLView::init()
     {
+        if (m_initialized)
+        {
+            return;
+        }
         if (!glfwInit())
         {
             std::cerr << "Initialization of OpenGL context failed\n";
@@ -168,9 +186,22 @@ namespace gladius
                 view->determineUiScale();
             }
         };
+
+        static auto staticContentScaleCallback = [](GLFWwindow * window, float xscale, float yscale)
+        {
+            // Get the GLView instance from the window user pointer
+            GLView * view = static_cast<GLView *>(glfwGetWindowUserPointer(window));
+            if (view)
+            {
+                view->determineUiScale();
+            }
+        };
+
         glfwSetWindowSizeCallback(m_window, staticWindowSizeCallback);
+        glfwSetWindowContentScaleCallback(m_window, staticContentScaleCallback);
 
         applyFullscreenMode();
+        m_initialized = true;
     }
 
     void GLView::setGladiusTheme(ImGuiIO & io)
@@ -364,7 +395,16 @@ namespace gladius
 
             // zoom / dpi scaling
             ImGui::Text("UI Scaling");
-            ImGui::SliderFloat("UI Scaling", &m_uiScale, 0.1f, 5.0f);
+            ImGui::Text("Base: %.2f  User: %.2f  Total: %.2f", m_baseScale, m_userScale, m_uiScale);
+            if (ImGui::SliderFloat("User UI Scaling", &m_userScale, 0.25f, 5.0f))
+            {
+                recomputeTotalScale();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset"))
+            {
+                resetUserScale();
+            }
 
             ImGui::End();
         }
@@ -404,23 +444,74 @@ namespace gladius
         HWND hwnd = glfwGetWin32Window(m_window);
         if (hwnd)
         {
-            m_uiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
+            m_baseScale = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
+            recomputeTotalScale();
             return;
         }
 
         ImGui_ImplWin32_EnableDpiAwareness();
 #endif
 
+        // First, try to use GLFW's content scale detection (preferred method)
+        float xscale, yscale;
+        glfwGetWindowContentScale(m_window, &xscale, &yscale);
+
+        // Debug output to help diagnose issues
+#ifdef DEBUG
+        std::cout << "GLFW Content Scale: " << xscale << " x " << yscale << std::endl;
+#endif
+
+        // GLFW's content scale is more reliable as it considers system DPI settings
+        if (xscale > 0.0f && yscale > 0.0f)
+        {
+            m_baseScale = (xscale + yscale) / 2.0f;
+#ifdef DEBUG
+            std::cout << "Using GLFW content scale (base): " << m_baseScale << std::endl;
+#endif
+            recomputeTotalScale();
+            return;
+        }
+
+        // Fallback to framebuffer vs window size ratio (legacy method)
         int width, height;
         glfwGetWindowSize(m_window, &width, &height);
         int fbWidth, fbHeight;
         glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
-        float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
-        float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
 
-        // Calculate scale based on HDPI
-        float calculatedScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
-        m_uiScale = calculatedScale;
+#ifdef DEBUG
+        std::cout << "Window size: " << width << " x " << height << std::endl;
+        std::cout << "Framebuffer size: " << fbWidth << " x " << fbHeight << std::endl;
+#endif
+
+        if (width > 0 && height > 0 && fbWidth > 0 && fbHeight > 0)
+        {
+            float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
+            float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
+            m_baseScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
+#ifdef DEBUG
+            std::cout << "Using framebuffer ratio (base): " << m_baseScale << std::endl;
+#endif
+        }
+        else
+        {
+            // Final fallback
+            m_baseScale = 1.0f;
+#ifdef DEBUG
+            std::cout << "Using fallback base scale: " << m_baseScale << std::endl;
+#endif
+        }
+
+        recomputeTotalScale();
+    }
+
+    void GLView::recomputeTotalScale()
+    {
+        // Clamp user scale to a reasonable range
+        if (m_userScale < 0.25f)
+            m_userScale = 0.25f;
+        if (m_userScale > 5.0f)
+            m_userScale = 5.0f;
+        m_uiScale = m_baseScale * m_userScale;
     }
 
     void GLView::handleDropCallback(GLFWwindow *, int count, const char ** paths)
@@ -508,7 +599,7 @@ namespace gladius
 
     void GLView::applyFullscreenMode()
     {
-        if (!m_window)
+        if (!m_window || !m_initialized)
         {
             return;
         }
@@ -602,6 +693,12 @@ namespace gladius
 
     void GLView::startMainLoop()
     {
+        // Lazy init of window and ImGui when UI actually starts
+        if (!m_initialized)
+        {
+            init();
+        }
+
         auto lastAnimationTimePoint_ms = getTimeStamp_ms();
         auto lastFrame_ms = getTimeStamp_ms();
         auto constexpr minFrameDurationAnimation =
@@ -691,5 +788,27 @@ namespace gladius
     void GLView::stopAnimationMode()
     {
         m_isAnimationRunning = false;
+    }
+}
+
+// User scale controls
+namespace gladius
+{
+    void GLView::setUserScale(float scale)
+    {
+        m_userScale = scale;
+        recomputeTotalScale();
+    }
+
+    void GLView::adjustUserScale(float factor)
+    {
+        m_userScale *= factor;
+        recomputeTotalScale();
+    }
+
+    void GLView::resetUserScale()
+    {
+        m_userScale = 1.0f;
+        recomputeTotalScale();
     }
 }

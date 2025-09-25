@@ -7,7 +7,7 @@ namespace gladius
     {
         switch (format)
         {
-            case io::PixelFormat::RGBA_16BIT:
+        case io::PixelFormat::RGBA_16BIT:
         case io::PixelFormat::RGBA_8BIT:
             return 4;
         case io::PixelFormat::RGB_16BIT:
@@ -52,7 +52,6 @@ namespace gladius
 
         int i = 0;
 
-        
         for (auto const & image : stack)
         {
             auto const & data = image.getData();
@@ -82,8 +81,8 @@ namespace gladius
                     cl_float4 rgba = {r / 255.f, g / 255.f, b / 255.f, a / 255.f};
                     // cl_float4 const rgba = {static_cast<float>(x) / static_cast<float>(m_width),
                     //                         static_cast<float>(y) / static_cast<float>(m_height),
-                    //                         static_cast<float>(i) / static_cast<float>(m_numSheets),
-                    //                         1.f};
+                    //                         static_cast<float>(i) /
+                    //                         static_cast<float>(m_numSheets), 1.f};
                     m_image3dRGBA->setValue(x, y, i, rgba);
                 }
             }

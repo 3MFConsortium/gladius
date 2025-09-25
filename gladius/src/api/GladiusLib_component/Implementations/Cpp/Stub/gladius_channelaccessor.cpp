@@ -22,12 +22,11 @@ using namespace GladiusLib::Impl;
 **************************************************************************************************************************/
 
 CChannelAccessor::CChannelAccessor(gladius::Document * doc)
-      : m_doc(doc)
-  {
+    : m_doc(doc)
+{
     m_iter = m_doc->getBitmapChannels().begin();
     m_bitmap.reset();
-  }
-
+}
 
 GladiusLib::sChannelMetaInfo CChannelAccessor::GetMetaInfo()
 {
@@ -45,13 +44,13 @@ GladiusLib::sChannelMetaInfo CChannelAccessor::GetMetaInfo()
     metaInfo.m_MaxPosition[0] =
       m_bitmap->position.x() + m_bitmap->width_px * m_bitmap->pixelSize.x();
     metaInfo.m_MaxPosition[1] =
-      m_bitmap->position.y() + m_bitmap->height_px* m_bitmap->pixelSize.y();
+      m_bitmap->position.y() + m_bitmap->height_px * m_bitmap->pixelSize.y();
 
     metaInfo.m_Size[0] = static_cast<GladiusLib_int32>(m_bitmap->width_px);
     metaInfo.m_Size[1] = static_cast<GladiusLib_int32>(m_bitmap->height_px);
 
-    metaInfo.m_RequiredMemory = static_cast<GladiusLib_int32>(
-      m_bitmap->bitmapData.size() * sizeof(float));
+    metaInfo.m_RequiredMemory =
+      static_cast<GladiusLib_int32>(m_bitmap->bitmapData.size() * sizeof(float));
 
     return metaInfo;
 }
@@ -61,7 +60,7 @@ void CChannelAccessor::Copy(const GladiusLib_int64 nTargetPtr)
 
     auto & src = m_bitmap->bitmapData;
 
-    float * dest = reinterpret_cast<float*>(nTargetPtr);
+    float * dest = reinterpret_cast<float *>(nTargetPtr);
     std::copy(src.cbegin(), src.cend(), dest);
 }
 
@@ -121,8 +120,9 @@ void CChannelAccessor::Begin()
     m_bitmap.reset();
 }
 
-void CChannelAccessor::Evaluate(const GladiusLib_single fZ_mm, const GladiusLib_single fPixelWidth_mm,
-    const GladiusLib_single fPixelHeight_mm)
+void CChannelAccessor::Evaluate(const GladiusLib_single fZ_mm,
+                                const GladiusLib_single fPixelWidth_mm,
+                                const GladiusLib_single fPixelHeight_mm)
 {
     auto bitmap = m_iter->generate(fZ_mm, {fPixelWidth_mm, fPixelHeight_mm});
     m_bitmap.emplace(std::move(bitmap));

@@ -16,8 +16,8 @@ namespace gladius::ui
     void LogView::hide()
     {
         m_visible = false;
-    }   
-    
+    }
+
     void LogView::render(gladius::events::Logger & logger)
     {
         if (!m_visible)
@@ -25,24 +25,56 @@ namespace gladius::ui
             return;
         }
 
-       
         // Render appropriate view based on collapsed state
         if (m_collapsed)
         {
-                        renderCollapsedView(logger);
+            renderCollapsedView(logger);
         }
         else
         {
             // we need at least 400px height to show the toolbar and the log
-   
-            ImGui::SetNextWindowSizeConstraints(ImVec2(-1, 400), ImVec2(-1, FLT_MAX)); // Min height of 400px, no max height constraint
+
+            ImGui::SetNextWindowSizeConstraints(
+              ImVec2(-1, 400),
+              ImVec2(-1, FLT_MAX)); // Min height of 400px, no max height constraint
             ImGui::SetNextWindowSize(ImVec2(0, 400));
 
-             ImGui::Begin("Events", &m_visible);
+            ImGui::Begin("Events", &m_visible);
             // Top toolbar
             ImGui::Checkbox("Auto-scroll", &m_autoScroll);
             ImGui::SameLine();
-            
+
+            // Severity filter controls
+            bool severityChanged = false;
+            ImGui::TextUnformatted("Show:");
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Info", &m_showInfo))
+            {
+                severityChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Warnings", &m_showWarnings))
+            {
+                severityChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Errors", &m_showErrors))
+            {
+                severityChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Fatal", &m_showFatal))
+            {
+                severityChanged = true;
+            }
+
+            if (severityChanged)
+            {
+                updateCache(logger);
+            }
+
+            ImGui::SameLine();
+
             if (ImGui::Button("Collapse"))
             {
                 m_collapsed = true;
@@ -53,7 +85,7 @@ namespace gladius::ui
 
             if (m_filter.Draw("Filter") || (m_logSizeWhenCacheWasGenerated != logger.size()))
             {
-                if (m_filter.IsActive())
+                if (m_filter.IsActive() || isSeverityFilterActive())
                 {
                     updateCache(logger);
                 }
@@ -65,31 +97,34 @@ namespace gladius::ui
                 logger.clear();
             }
 
-        
             renderExpandedView(logger);
             ImGui::End();
-        }  
-    
+        }
     }
 
     void LogView::renderCollapsedView(gladius::events::Logger & logger)
     {
-        auto const & eventsBegin = m_filter.IsActive() ? m_filteredEvents.cbegin() : logger.cbegin();
-        auto const & eventsEnd = m_filter.IsActive() ? m_filteredEvents.cend() : logger.cend();
+        auto const & eventsBegin = (m_filter.IsActive() || isSeverityFilterActive())
+                                     ? m_filteredEvents.cbegin()
+                                     : logger.cbegin();
+        auto const & eventsEnd = (m_filter.IsActive() || isSeverityFilterActive())
+                                   ? m_filteredEvents.cend()
+                                   : logger.cend();
 
         // remove window size constraints to allow resizing
-        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(-1, FLT_MAX)); // No min/max constraints
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                            ImVec2(-1, FLT_MAX)); // No min/max constraints
         ImGui::SetNextWindowSize(ImVec2(500, 50));
-             
+
         ImGui::Begin("Events", &m_visible);
-        
+
         // Count warnings, errors and fatal errors
         size_t infoCount = 0;
         size_t warningCount = 0;
         size_t errorCount = 0;
         size_t fatalErrorCount = 0;
         bool hasFatalError = false;
-        
+
         for (auto iter = eventsBegin; iter != eventsEnd; ++iter)
         {
             switch (iter->getSeverity())
@@ -109,12 +144,14 @@ namespace gladius::ui
                 break;
             default:;
             }
-        }        if (fatalErrorCount > 0)
+        }
+        if (fatalErrorCount > 0)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.f, 1.0f));
-            ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION " Fatal Errors: %zu"), fatalErrorCount);
+            ImGui::Text(reinterpret_cast<const char *>(ICON_FA_EXCLAMATION " Fatal Errors: %zu"),
+                        fatalErrorCount);
             ImGui::PopStyleColor();
-            
+
             // Show tooltip with all fatal error messages when hovering
             if (ImGui::IsItemHovered())
             {
@@ -124,7 +161,7 @@ namespace gladius::ui
                 ImGui::TextUnformatted("Fatal Errors:");
                 ImGui::PopStyleColor();
                 ImGui::Separator();
-                
+
                 for (auto iter = eventsBegin; iter != eventsEnd; ++iter)
                 {
                     if (iter->getSeverity() == events::Severity::FatalError)
@@ -142,9 +179,10 @@ namespace gladius::ui
         if (errorCount > 0)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
-            ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION_TRIANGLE " Errors: %zu"), errorCount);
+            ImGui::Text(reinterpret_cast<const char *>(ICON_FA_EXCLAMATION_TRIANGLE " Errors: %zu"),
+                        errorCount);
             ImGui::PopStyleColor();
-            
+
             // Show tooltip with all error messages when hovering
             if (ImGui::IsItemHovered())
             {
@@ -154,7 +192,7 @@ namespace gladius::ui
                 ImGui::TextUnformatted("Errors:");
                 ImGui::PopStyleColor();
                 ImGui::Separator();
-                
+
                 for (auto iter = eventsBegin; iter != eventsEnd; ++iter)
                 {
                     if (iter->getSeverity() == events::Severity::Error)
@@ -172,9 +210,10 @@ namespace gladius::ui
         if (warningCount > 0)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.f, 1.0f));
-            ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION_CIRCLE " Warnings: %zu"), warningCount);
+            ImGui::Text(reinterpret_cast<const char *>(ICON_FA_EXCLAMATION_CIRCLE " Warnings: %zu"),
+                        warningCount);
             ImGui::PopStyleColor();
-            
+
             // Show tooltip with all warning messages when hovering
             if (ImGui::IsItemHovered())
             {
@@ -184,7 +223,7 @@ namespace gladius::ui
                 ImGui::TextUnformatted("Warnings:");
                 ImGui::PopStyleColor();
                 ImGui::Separator();
-                
+
                 for (auto iter = eventsBegin; iter != eventsEnd; ++iter)
                 {
                     if (iter->getSeverity() == events::Severity::Warning)
@@ -204,14 +243,13 @@ namespace gladius::ui
             logger.clear();
             hide();
         }
-         
+
         if (ImGui::Button("Show Log"))
         {
             m_collapsed = false;
             // Force update of cache when switching view modes
             updateCache(logger);
         }
-
 
         // Show the fatal error dialog if needed
         if (hasFatalError)
@@ -224,12 +262,13 @@ namespace gladius::ui
                     lastFatalErrorIter = iter;
                 }
             }
-            
+
             if (lastFatalErrorIter != eventsEnd)
             {
                 ImGui::Begin("Something went terribly wrong");
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.f, 1.0f));
-                ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION "\t\tA fatal error has occurred\t"));
+                ImGui::Text(reinterpret_cast<const char *>(ICON_FA_EXCLAMATION
+                                                           "\t\tA fatal error has occurred\t"));
                 ImGui::PopStyleColor();
                 ImGui::NewLine();
                 ImGui::TextUnformatted(warpTextAfter(lastFatalErrorIter->getMessage(), 80).c_str());
@@ -247,8 +286,12 @@ namespace gladius::ui
 
     void LogView::renderExpandedView(gladius::events::Logger & logger)
     {
-        auto const & eventsBegin = m_filter.IsActive() ? m_filteredEvents.cbegin() : logger.cbegin();
-        auto const & eventsEnd = m_filter.IsActive() ? m_filteredEvents.cend() : logger.cend();
+        auto const & eventsBegin = (m_filter.IsActive() || isSeverityFilterActive())
+                                     ? m_filteredEvents.cbegin()
+                                     : logger.cbegin();
+        auto const & eventsEnd = (m_filter.IsActive() || isSeverityFilterActive())
+                                   ? m_filteredEvents.cend()
+                                   : logger.cend();
 
         ImGui::BeginChild("scrolling", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 
@@ -265,7 +308,7 @@ namespace gladius::ui
             for (auto iter = displayBegin; iter != eventsEnd && iter != displayEnd; ++iter)
             {
                 auto inTime = std::chrono::system_clock::to_time_t(iter->getTimeStamp());
-              
+
                 std::tm tm{};
 #ifdef _MSVC_LANG
                 localtime_s(&tm, &inTime);
@@ -279,22 +322,25 @@ namespace gladius::ui
                 {
                 case events::Severity::Info:
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.2f, 1.f, 1.0f));
-                    ImGui::Text(reinterpret_cast<const char*>("\tINFO\t" ICON_FA_INFO));
+                    ImGui::Text(reinterpret_cast<const char *>("\tINFO\t" ICON_FA_INFO));
                     ImGui::PopStyleColor();
                     break;
                 case events::Severity::Warning:
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.f, 1.0f));
-                    ImGui::Text(reinterpret_cast<const char*>("\tWARNING\t" ICON_FA_EXCLAMATION_CIRCLE));
+                    ImGui::Text(
+                      reinterpret_cast<const char *>("\tWARNING\t" ICON_FA_EXCLAMATION_CIRCLE));
                     ImGui::PopStyleColor();
                     break;
                 case events::Severity::Error:
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
-                    ImGui::Text(reinterpret_cast<const char*>("\tERROR\t" ICON_FA_EXCLAMATION_TRIANGLE));
+                    ImGui::Text(
+                      reinterpret_cast<const char *>("\tERROR\t" ICON_FA_EXCLAMATION_TRIANGLE));
                     ImGui::PopStyleColor();
                     break;
                 case events::Severity::FatalError:
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.f, 1.0f));
-                    ImGui::Text(reinterpret_cast<const char*>("\t\tFATAL ERROR:\t" ICON_FA_EXCLAMATION));
+                    ImGui::Text(
+                      reinterpret_cast<const char *>("\t\tFATAL ERROR:\t" ICON_FA_EXCLAMATION));
                     ImGui::PopStyleColor();
                     lastFatalErrorIter = iter;
 
@@ -311,7 +357,8 @@ namespace gladius::ui
         {
             ImGui::Begin("Something went terribly wrong");
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.f, 1.0f));
-            ImGui::Text(reinterpret_cast<const char*>(ICON_FA_EXCLAMATION "\t\tA fatal error has occurred\t"));
+            ImGui::Text(reinterpret_cast<const char *>(ICON_FA_EXCLAMATION
+                                                       "\t\tA fatal error has occurred\t"));
             ImGui::PopStyleColor();
             ImGui::NewLine();
             ImGui::TextUnformatted(warpTextAfter(lastFatalErrorIter->getMessage(), 80).c_str());
@@ -338,7 +385,26 @@ namespace gladius::ui
         m_filteredEvents.clear();
         for (auto & item : logger)
         {
-            if (m_filter.PassFilter(item.getMessage().c_str()))
+            bool passSeverity = true;
+            switch (item.getSeverity())
+            {
+            case events::Severity::Info:
+                passSeverity = m_showInfo;
+                break;
+            case events::Severity::Warning:
+                passSeverity = m_showWarnings;
+                break;
+            case events::Severity::Error:
+                passSeverity = m_showErrors;
+                break;
+            case events::Severity::FatalError:
+                passSeverity = m_showFatal;
+                break;
+            default:
+                break;
+            }
+            if (passSeverity &&
+                (!m_filter.IsActive() || m_filter.PassFilter(item.getMessage().c_str())))
             {
                 m_filteredEvents.push_back(item);
             }

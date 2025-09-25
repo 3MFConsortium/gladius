@@ -1,7 +1,7 @@
 #include "PathBuilder.h"
 #include "CLMath.h"
-#include "contour/ContourValidator.h"
 #include "Contour.h"
+#include "contour/ContourValidator.h"
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4244)
@@ -203,8 +203,6 @@ namespace gladius
         return angle(ab, bc);
     }
 
-
-
     void determineContourMode(PolyLine & target, OrientationMeaning orientationMeaning)
     {
         if (!target.isClosed)
@@ -217,7 +215,6 @@ namespace gladius
             target.contourMode = ContourMode::ExcludeFromSlice;
             return;
         }
-
 
         if (orientationMeaning == OrientationMeaning::clockWiseIsOuter)
         {

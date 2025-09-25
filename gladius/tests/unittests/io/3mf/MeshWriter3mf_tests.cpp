@@ -14,6 +14,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include "io/3mf/Lib3mfLoader.h"
 #include <lib3mf_implicit.hpp>
 
 #include <chrono>
@@ -144,7 +145,7 @@ namespace gladius_tests
             // Try to read the file with lib3mf to validate structure
             try
             {
-                auto wrapper = Lib3MF::CWrapper::loadLibrary();
+                auto wrapper = gladius::io::loadLib3mfScoped();
                 auto model = wrapper->CreateModel();
                 auto reader = model->QueryReader("3mf");
                 reader->ReadFromFile(filePath.string());
@@ -383,7 +384,7 @@ namespace gladius_tests
         // Read and validate metadata using lib3mf
         try
         {
-            auto wrapper = Lib3MF::CWrapper::loadLibrary();
+            auto wrapper = gladius::io::loadLib3mfScoped();
             auto model = wrapper->CreateModel();
             auto reader = model->QueryReader("3mf");
             reader->ReadFromFile(outputPath.string());

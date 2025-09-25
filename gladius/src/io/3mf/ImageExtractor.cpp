@@ -340,4 +340,3 @@ namespace gladius::io
         return m_pngInfo;
     }
 } // namespace gladius::io
-

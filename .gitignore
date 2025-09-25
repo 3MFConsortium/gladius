@@ -34,8 +34,10 @@ gladius/components/lib3mf/Examples/CSharp/obj/*
 gladius/examples/implicit/*.gcode
 *.so
 gladius/src/api/GladiusLib_component/Examples/CSharp/obj/*
+build/
+gladius/vcpkg_installed/*
+gladius/.serena/cache/
+gladius/compile_commands.json
 build/build_test/
 vcpkg/buildtrees/
-
-# vcpkg dependencies
 **/vcpkg_installed/

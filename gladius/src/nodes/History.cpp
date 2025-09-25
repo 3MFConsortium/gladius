@@ -36,7 +36,7 @@ namespace gladius::nodes
     {
         if (assembly == nullptr || stack.empty())
         {
-            std::cout << "Warning: Stack is empty (or assembly is null) \n";
+            // No action possible; avoid noisy console output
             return;
         }
 

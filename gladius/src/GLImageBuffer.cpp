@@ -87,25 +87,16 @@ namespace gladius
 
     void GLImageBuffer::setupForInterOp()
     {
-        cl_int err = 0;
-        m_buffer = std::make_unique<cl::ImageGL>(
-            m_ComputeContext.GetContext(), CL_MEM_READ_WRITE, GL_TEXTURE_2D, 0, m_textureID, &err);
-        CL_ERROR(err);
+        m_buffer = m_ComputeContext.createImageGLInteropChecked(
+          GL_TEXTURE_2D, 0, m_textureID, CL_MEM_READ_WRITE, "GLImageBuffer::interop");
+        // Interop aliases GL memory; nothing to account here
     }
 
     void GLImageBuffer::setupForReadPixel()
     {
         static const cl::ImageFormat format = {CL_RGBA, CL_FLOAT};
-        cl_int err = 0;
-        m_buffer = std::make_unique<cl::Image2D>(m_ComputeContext.GetContext(),
-                                                 CL_MEM_READ_WRITE,
-                                                 format,
-                                                 m_width,
-                                                 m_height,
-                                                 0,
-                                                 nullptr,
-                                                 &err);
-        CL_ERROR(err);
+        m_buffer = m_ComputeContext.createImage2DChecked(
+          format, m_width, m_height, CL_MEM_READ_WRITE, 0, nullptr, "GLImageBuffer::readpixel");
     }
 
     void GLImageBuffer::transferPixels()
@@ -116,7 +107,7 @@ namespace gladius
         }
 
         m_ComputeContext.GetQueue().enqueueReadImage(
-            *m_buffer, CL_TRUE, {}, {m_width, m_height, 1u}, 0, 0, m_data.data());
+          *m_buffer, CL_TRUE, {}, {m_width, m_height, 1u}, 0, 0, m_data.data());
         CL_ERROR(m_ComputeContext.GetQueue().finish());
 
         glBindTexture(GL_TEXTURE_2D, m_textureID);

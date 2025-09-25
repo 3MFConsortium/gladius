@@ -22,8 +22,6 @@ namespace gladius::vdb
         Representation representation = Representation::NearDistanceField;
     };
 
-
-
     struct TriangleMesh
     {
         std::vector<openvdb::Vec3s> vertices;
@@ -109,13 +107,15 @@ namespace gladius::vdb
 
     // template <typename T>
     // void
-    // importFromGridUint8(openvdb::GridBase::Ptr sdfGrid, PrimitiveBuffer & primitives, float scaling)
+    // importFromGridUint8(openvdb::GridBase::Ptr sdfGrid, PrimitiveBuffer & primitives, float
+    // scaling)
     // {
     //     ProfileFunction PrimitiveMeta metaData{};
 
     //     metaData.primitiveType = SDF_VDB_GRAYSCALE_8BIT;
 
-    //     auto handle = nanovdb::createNanoGrid<io::OneChannelCharGrid, uint8_t, nanovdb::HostBuffer>(
+    //     auto handle = nanovdb::createNanoGrid<io::OneChannelCharGrid, uint8_t,
+    //     nanovdb::HostBuffer>(
     //       *sdfGrid, nanovdb::StatsMode::Default, nanovdb::ChecksumMode::Default, 0);
     //     auto * grid = handle.grid<T>();
 
@@ -205,6 +205,19 @@ namespace gladius::vdb
         targetBuffer.resize(metaData.start + required32BitBlocks);
         void * dstPtr = &*(targetBuffer.begin() + metaData.start);
         memcpy(dstPtr, handle.data(), handle.size());
+
+        // Add buffer alignment padding to prevent memory corruption between NanoVDB grids and
+        // subsequent data NanoVDB requires CNANOVDB_DATA_ALIGNMENT (32-byte) alignment for proper
+        // GPU access
+        constexpr size_t BUFFER_ALIGNMENT = 32; // Match CNANOVDB_DATA_ALIGNMENT
+        size_t currentByteOffset = primitives.data.size() * sizeof(float);
+        size_t alignmentPadding =
+          (BUFFER_ALIGNMENT - (currentByteOffset % BUFFER_ALIGNMENT)) % BUFFER_ALIGNMENT;
+        size_t paddingFloats = alignmentPadding / sizeof(float);
+        for (size_t i = 0; i < paddingFloats; ++i)
+        {
+            primitives.data.push_back(0.0f);
+        }
 
         metaData.end = static_cast<int>(primitives.data.size());
         primitives.meta.push_back(metaData);

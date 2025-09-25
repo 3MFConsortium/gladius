@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.12)
 
+# Set policies to avoid warnings
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)  # FindBoost module removal policy
+endif()
+
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)  # install() DESTINATION paths normalization
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Options
@@ -7,7 +16,7 @@ option(ENABLE_OPENCL_TESTS "Enable tests that require OpenCL" ON)
 
 set(CPACK_PACKAGE_VERSION_MAJOR "1")
 set(CPACK_PACKAGE_VERSION_MINOR "2")
-set(CPACK_PACKAGE_VERSION_PATCH "13")
+set(CPACK_PACKAGE_VERSION_PATCH "14")
 
 # Set the version of the package in src/version.h
 configure_file(
@@ -48,7 +57,9 @@ if(WIN32)
   else()
     # Set MSVC runtime to MultiThreaded (/MT)
     cmake_policy(SET CMP0091 NEW)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    # Use the dynamic runtime (/MD) to match vcpkg-built third-party libraries
+    # and avoid RuntimeLibrary mismatches during linking.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
   endif()
 endif()
 
@@ -111,6 +122,20 @@ enable_testing()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Ensure installed binaries look for co-located shared libraries first
+if(UNIX)
+  # Install tree: Use $ORIGIN so installed binaries in /opt/gladius/<version> resolve
+  # bundled shared objects (e.g. our patched lib3mf) placed alongside them.
+  set(CMAKE_INSTALL_RPATH "$ORIGIN")
+  # Build tree: DO NOT force build RPATH to install RPATH. Tests run from the
+  # build tree (e.g. build/tests/unittests) and previously failed to locate
+  # lib3mf.so.2 when we set CMAKE_BUILD_WITH_INSTALL_RPATH ON (RPATH became
+  # just $ORIGIN which points to the test directory that does not contain lib3mf).
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+  set(CMAKE_SKIP_BUILD_RPATH OFF)
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+endif()
+
 find_package(CMakeRC CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -141,7 +166,10 @@ find_package(imgui CONFIG REQUIRED)
 find_package(unofficial-imgui-node-editor CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(muparser CONFIG REQUIRED)
+find_package(httplib CONFIG REQUIRED)
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
+pkg_check_modules(libcoro REQUIRED IMPORTED_TARGET libcoro)
 
 
 file(GLOB KERNEL_FILES
@@ -176,6 +204,33 @@ else()
     set(SYMLINK_BIN_DIR /usr/bin)
 endif()
 
+# Bundle lib3mf runtime shared objects on Linux so the app runs out-of-the-box
+if(UNIX)
+  # Resolve the location of the imported lib3mf target
+  get_target_property(_lib3mf_loc_release lib3mf::lib3mf IMPORTED_LOCATION_RELEASE)
+  get_target_property(_lib3mf_loc         lib3mf::lib3mf IMPORTED_LOCATION)
+  set(_lib3mf_resolved "${_lib3mf_loc_release}")
+  if(NOT _lib3mf_resolved)
+    set(_lib3mf_resolved "${_lib3mf_loc}")
+  endif()
+  if(_lib3mf_resolved)
+    get_filename_component(_lib3mf_dir "${_lib3mf_resolved}" DIRECTORY)
+    if(EXISTS "${_lib3mf_dir}")
+      # Bundle all versioned variants (lib3mf.so, lib3mf.so.2, etc.) into install prefix.
+      file(GLOB _lib3mf_so_files "${_lib3mf_dir}/lib3mf.so*")
+      if(_lib3mf_so_files)
+        install(FILES ${_lib3mf_so_files} DESTINATION ${INSTALL_PREFIX})
+      endif()
+      # Ensure build-tree executables (tests, tools) can locate lib3mf at runtime
+      # by appending its directory to the build RPATH. This fixes CI failures like:
+      #   error while loading shared libraries: lib3mf.so.2: cannot open shared object file
+      list(APPEND CMAKE_BUILD_RPATH "${_lib3mf_dir}")
+      list(REMOVE_DUPLICATES CMAKE_BUILD_RPATH)
+      set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" CACHE STRING "RPATH for build tree executables" FORCE)
+    endif()
+  endif()
+endif()
+
 add_subdirectory(tests)
 add_subdirectory(src)
 add_subdirectory(src/compute)
@@ -190,7 +245,14 @@ configure_file(src/kernel/sdf.cl src/kernel/sdf.cl COPYONLY)
 configure_file(src/kernel/sdf.h src/kernel/sdf.h COPYONLY)
 configure_file(src/kernel/rendering.cl src/kernel/rendering.cl COPYONLY)
 configure_file(src/kernel/sdf_generator.cl src/kernel/sdf_generator.cl COPYONLY)
-configure_file(src/kernel/CNanoVDB.h src/kernel/CNanoVDB.h COPYONLY)
+
+# Copy CNanoVDB.h from vcpkg OpenVDB installation instead of using manually maintained copy
+find_path(NANOVDB_INCLUDE_DIR
+    NAMES nanovdb/CNanoVDB.h
+    HINTS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include
+    REQUIRED
+)
+configure_file(${NANOVDB_INCLUDE_DIR}/nanovdb/CNanoVDB.h src/kernel/CNanoVDB.h COPYONLY)
 configure_file(components/fonts/Roboto-Medium.ttf src/misc/fonts/Roboto-Medium.ttf COPYONLY)
 configure_file(components/fonts/fontawesome-free-5.14.0-web/fa-regular-400.ttf src/misc/fonts/fa-regular-400.ttf COPYONLY)
 configure_file(components/fonts/fontawesome-free-5.14.0-web/fa-solid-900.ttf src/misc/fonts/fa-solid-900.ttf COPYONLY)
@@ -258,9 +320,23 @@ install(
     PATTERN "kernel" EXCLUDE
 )
 
-# Create a symbolic link in /usr/bin
+# Install a lightweight launcher in /usr/bin that forwards to the real binary in /opt
 if(UNIX)
-    install(CODE "execute_process(COMMAND ln -sf ${INSTALL_BIN_DIR}/gladius ${SYMLINK_BIN_DIR}/gladius)")
+  set(GLADIUS_LAUNCHER "${PROJECT_BINARY_DIR}/gladius_launcher.sh")
+  # Generate a launcher that ensures the bundled shared libraries (notably the version of lib3mf shipped with Gladius)
+  file(WRITE "${GLADIUS_LAUNCHER}" "#!/bin/sh\n"
+    "# Added by CMake: ensure Gladius' private libs (e.g., custom lib3mf) are found first.\n"
+    "GLADIUS_DIR=\"${INSTALL_PREFIX}\"\n"
+    "if [ -z \"\\$LD_LIBRARY_PATH\" ]; then\n"
+    "  export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR\\"\n"
+    "else\n"
+    "  case :\\$LD_LIBRARY_PATH: in\n"
+    "    *:\\$GLADIUS_DIR:*) ;;\n"
+    "    *) export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR:\\$LD_LIBRARY_PATH\\" ;;\n"
+    "  esac\n"
+    "fi\n"
+    "exec \"\\$GLADIUS_DIR/gladius\" \"$@\"\n")
+  install(PROGRAMS "${GLADIUS_LAUNCHER}" DESTINATION ${SYMLINK_BIN_DIR} RENAME gladius)
 endif()
 
 
@@ -287,6 +363,9 @@ if (UNIX)
   set(CPACK_DEBIAN_PACKAGE_MAINTAINER "3MF Consortium")
   set(CPACK_DEBIAN_PACKAGE_SECTION "Graphics")
   set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/3MFConsortium/gladius")
+  # Let dpkg-shlibdeps compute runtime dependencies against system libs.
+  # We still bundle lib3mf to avoid requiring it from apt when unavailable.
+  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 endif()
 
 include(CPack)

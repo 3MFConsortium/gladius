@@ -1,7 +1,7 @@
 #include "RenderProgram.h"
-#include "gpgpu.h"
-#include "ProgramBase.h"
 #include "Profiling.h"
+#include "ProgramBase.h"
+#include "gpgpu.h"
 
 #include <CL/cl_platform.h>
 #include <algorithm>
@@ -13,17 +13,15 @@ namespace gladius
     RenderProgram::RenderProgram(SharedComputeContext context, const SharedResources & resources)
         : ProgramBase(context, resources)
     {
-        m_sourceFilesProgram = {"arguments.h",
-                                "types.h",
-                                "sdf.h",
-                                "sampler.h",
-                                "rendering.h",
-                                "CNanoVDB.h",
-                                "sdf.cl",
-                                "rendering.cl",
-                                "renderer.cl"};
-
-        m_sourceFilesLib = {"arguments.h", "types.h", "CNanoVDB.h", "sdf.h", "sampler.h"};
+        m_sourceFiles = {"types.h",
+                         "arguments.h",
+                         "sdf.h",
+                         "sampler.h",
+                         "rendering.h",
+                         "CNanoVDB.h",
+                         "sdf.cl",
+                         "rendering.cl",
+                         "renderer.cl"};
     }
 
     void RenderProgram::renderScene(const Primitives & lines,
@@ -38,7 +36,7 @@ namespace gladius
             return;
         }
         swapProgramsIfNeeded();
-        
+
         if (startHeight >= endHeight)
         {
             return;
@@ -90,7 +88,10 @@ namespace gladius
         }
         catch (std::exception const & e)
         {
-            std::cerr << (e.what());
+            if (m_logger)
+            {
+                m_logger->logError(std::string("RenderProgram error: ") + e.what());
+            }
         }
     }
 
@@ -109,10 +110,5 @@ namespace gladius
         cl::NDRange const range = {targetImage.getWidth(), endHeight, 1};
         m_programFront->run(
           "resample", origin, range, targetImage.getBuffer(), sourceImage.getBuffer());
-    }
-
-    bool RenderProgram::isSdfVisualizationEnabled() const
-    {
-        return m_enableSdfVisualization;
     }
 }

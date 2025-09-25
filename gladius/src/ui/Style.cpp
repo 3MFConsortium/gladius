@@ -1,9 +1,9 @@
 #include "Style.h"
 
-#include <nodes/DerivedNodes.h>
-#include <nodes/nodesfwd.h>
 #include <algorithm>
 #include <cmath>
+#include <nodes/DerivedNodes.h>
+#include <nodes/nodesfwd.h>
 #include <tuple>
 #include <typeindex>
 #include <typeinfo>

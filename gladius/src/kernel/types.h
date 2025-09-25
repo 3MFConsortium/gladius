@@ -28,8 +28,14 @@ enum PrimitiveType
     SDF_VDB_FACE_INDICES,
     SDF_VDB_GRAYSCALE_8BIT,
     SDF_IMAGESTACK,
+    SDF_BEAM_LATTICE,             // Beam lattice root node (BVH acceleration)
+    SDF_BEAM,                     // Individual beam primitive
+    SDF_BALL,                     // Ball at beam vertex
+    SDF_BEAM_BVH_NODE,            // BVH internal node for beams
+    SDF_PRIMITIVE_INDICES,        // Primitive indices mapping for BVH traversal
+    SDF_BEAM_LATTICE_VOXEL_INDEX, // Voxel grid with primitive indices
+    SDF_BEAM_LATTICE_VOXEL_TYPE,  // Voxel grid with primitive types (optional)
 };
-
 
 enum ApproximationMode
 {
@@ -48,7 +54,6 @@ enum RenderingFlags
     RF_SHOW_COORDINATE_SYSTEM = (1u << 4)
 };
 
-
 enum SamplingFilter
 {
     SF_NEAREST = 0,
@@ -59,7 +64,7 @@ enum TextureTileStyle
 {
     TTS_REPEAT = 0,
     TTS_MIRROR = 1,
-    TTS_CLAMP  = 2,
+    TTS_CLAMP = 2,
     TTS_NONE = 3
 };
 
@@ -101,6 +106,38 @@ struct PrimitiveMeta
 
 typedef float PrimitiveData;
 
+// Beam data structure for lattice beams (shared between host and OpenCL)
+struct BeamData
+{
+    float4 startPos;   // Start position (w component unused)
+    float4 endPos;     // End position (w component unused)
+    float startRadius; // Radius at start
+    float endRadius;   // Radius at end
+    int startCapStyle; // Cap style: 0=hemisphere, 1=sphere, 2=butt
+    int endCapStyle;   // Cap style for end
+    int materialId;    // Material/property ID
+    int padding;       // Alignment padding
+};
+
+// Ball data structure for beam lattice nodes (shared between host and OpenCL)
+struct BallData
+{
+    float4 positionRadius; // xyz = position, w = radius
+};
+
+// BVH node structure for beam lattice spatial acceleration (shared between host and OpenCL)
+struct BeamBVHNode
+{
+    float4 boundingBoxMin;
+    float4 boundingBoxMax;
+    int leftChild;      // Index to left child (-1 if leaf)
+    int rightChild;     // Index to right child (-1 if leaf)
+    int primitiveStart; // First primitive index (for leaves)
+    int primitiveCount; // Number of primitives (for leaves)
+    int depth;          // Node depth for debugging
+    int padding[3];     // Alignment
+};
+
 struct RenderingSettings // Note that the alignment has to be considered
 {
     float time_s;
@@ -113,7 +150,6 @@ struct RenderingSettings // Note that the alignment has to be considered
     float weightDistToNb;
     float weightMidPoint;
     float normalOffset;
-
 };
 
 struct DistanceColor

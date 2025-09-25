@@ -20,9 +20,9 @@ namespace gladius
         {
             save();
         }
-        catch (std::exception const& e)
+        catch (...)
         {
-            std::cerr << "Failed to save configuration: " << e.what() << std::endl;
+            // Swallow errors on destruction to avoid noisy console output
         }
     }
 
@@ -37,8 +37,8 @@ namespace gladius
             std::filesystem::create_directory(m_configDir, ec);
             if (ec)
             {
-                throw FileIOError("Failed to create configuration directory: " + m_configDir.string() +
-                                  ", error: " + ec.message());
+                throw FileIOError("Failed to create configuration directory: " +
+                                  m_configDir.string() + ", error: " + ec.message());
             }
         }
     }
@@ -59,20 +59,19 @@ namespace gladius
             std::ifstream configFile(m_configFilePath);
             if (!configFile.is_open())
             {
-                throw FileIOError("Failed to open configuration file: " + m_configFilePath.string());
+                throw FileIOError("Failed to open configuration file: " +
+                                  m_configFilePath.string());
             }
 
             configFile >> m_config;
         }
-        catch (nlohmann::json::exception const& e)
+        catch (nlohmann::json::exception const &)
         {
-            std::cerr << "Error loading configuration file: " << e.what() << std::endl;
             // Use default empty config in case of parsing errors
             m_config = nlohmann::json::object();
         }
-        catch (std::exception const& e)
+        catch (...)
         {
-            std::cerr << "Error loading configuration file: " << e.what() << std::endl;
             // Use default empty config in case of other errors
             m_config = nlohmann::json::object();
         }
@@ -87,12 +86,13 @@ namespace gladius
             std::ofstream configFile(m_configFilePath);
             if (!configFile.is_open())
             {
-                throw FileIOError("Failed to open configuration file for writing: " + m_configFilePath.string());
+                throw FileIOError("Failed to open configuration file for writing: " +
+                                  m_configFilePath.string());
             }
 
             configFile << std::setw(4) << m_config << std::endl;
         }
-        catch (std::exception const& e)
+        catch (std::exception const & e)
         {
             throw FileIOError("Failed to save configuration: " + std::string(e.what()));
         }

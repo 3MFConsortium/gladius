@@ -91,7 +91,7 @@ namespace gladius::io
                 {
                     unsigned int index = (y * m_width + x) * numChannels;
                     for (unsigned int i = 0; i < numChannels; ++i)
-                    {   
+                    {
                         swappedData.push_back(m_data[index + i]);
                     }
                 }

@@ -18,7 +18,7 @@ namespace gladius::ui
 
         /**
          * @brief Renders the metadata view
-         * 
+         *
          * @param document The shared document containing the 3MF model with metadata
          * @return true If any properties were changed
          * @return false If no properties were changed
@@ -27,26 +27,24 @@ namespace gladius::ui
 
         /**
          * @brief Renders a table showing all metadata entries
-         * 
+         *
          * @param document The document context
          * @param model3mf The 3MF model
          * @return true If any metadata was changed
          * @return false If no changes were made
          */
-        [[nodiscard]] static bool renderMetaDataTable(
-            SharedDocument document,
-            Lib3MF::PModel model3mf);
-            
+        [[nodiscard]] static bool renderMetaDataTable(SharedDocument document,
+                                                      Lib3MF::PModel model3mf);
+
         /**
          * @brief Adds a new metadata entry
-         * 
+         *
          * @param document The document context
          * @param model3mf The 3MF model
          * @return true If a new entry was added
          * @return false If no entry was added
          */
-        [[nodiscard]] static bool renderAddMetaDataEntry(
-            SharedDocument document,
-            Lib3MF::PModel model3mf);
+        [[nodiscard]] static bool renderAddMetaDataEntry(SharedDocument document,
+                                                         Lib3MF::PModel model3mf);
     };
 } // namespace gladius::ui

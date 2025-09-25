@@ -1,7 +1,7 @@
 #pragma once
 
-#include "compute/ComputeCore.h"
 #include "ContourExtractor.h"
+#include "compute/ComputeCore.h"
 
 #include <filesystem>
 #include <fstream>

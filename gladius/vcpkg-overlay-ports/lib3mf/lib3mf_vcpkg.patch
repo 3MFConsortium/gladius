@@ -1,0 +1,23 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -199,11 +199,9 @@ if (USE_INCLUDED_LIBZIP)
+     endif()
+ 
+ else()
+-    find_package(PkgConfig REQUIRED)
+-    pkg_check_modules(LIBZIP REQUIRED libzip)
+-    target_link_libraries(${PROJECT_NAME} ${LIBZIP_LIBRARIES})
++    find_package(LIBZIP REQUIRED)
++    target_link_libraries(${PROJECT_NAME} PRIVATE libzip::zip)
+ endif()
+ 
+ 
+@@ -211,11 +209,9 @@ if (USE_INCLUDED_ZLIB)
+     target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/zlib/Include)
+ else()
+-    find_package(PkgConfig REQUIRED)
+-    pkg_check_modules(ZLIB REQUIRED zlib)
+-    target_link_libraries(${PROJECT_NAME} ${ZLIB_LIBRARIES})
++    find_package(ZLIB REQUIRED)
++    target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB)
+ endif()

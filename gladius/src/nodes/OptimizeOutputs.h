@@ -1,6 +1,5 @@
 #pragma once
 
-
 namespace gladius::nodes
 {
     class Assembly;
@@ -14,9 +13,9 @@ namespace gladius::nodes
       public:
         OptimizeOutputs(Assembly * assembly);
         void optimize();
+
       private:
         Assembly * m_assembly{nullptr};
-
 
         void markFunctionOutputsAsUnused(Model & model);
         void markUsedOutputs(Model & model);

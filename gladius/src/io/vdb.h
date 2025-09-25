@@ -13,6 +13,10 @@
 
 #define NANOVDB_USE_OPENVDB
 
+#ifdef isActive
+#undef isActive
+#endif
+
 #include <nanovdb/NanoVDB.h>
 #include <nanovdb/util/HostBuffer.h>
 #include <nanovdb/util/IO.h>

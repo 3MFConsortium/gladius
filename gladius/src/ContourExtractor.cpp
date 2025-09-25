@@ -14,8 +14,8 @@
 #include <CL/cl_platform.h>
 #include <Eigen/src/Core/Matrix.h>
 #include <Eigen/src/Core/util/Constants.h>
-#include <fmt/format.h>
 #include <clipper2/clipper.h>
+#include <fmt/format.h>
 
 #include "Contour.h"
 #include "ContourValidator.h"
@@ -621,7 +621,6 @@ namespace gladius
             // Otherwise, the contour is outer and the area remains positive.
             bool const isClockwise = poly.area > 0;
 
-
             if (containmentCount % 2 == 1)
             {
                 poly.area = -fabs(poly.area);
@@ -629,7 +628,6 @@ namespace gladius
                 {
                     reversePolyline(poly);
                 }
-
             }
             else
             {
@@ -642,7 +640,8 @@ namespace gladius
         }
     }
 
-    PolyLines ContourExtractor::generateOffsetContours(float offset, PolyLines const & contours) const
+    PolyLines ContourExtractor::generateOffsetContours(float offset,
+                                                       PolyLines const & contours) const
     {
 
         if (fabs(offset) < FLT_EPSILON)
@@ -665,13 +664,12 @@ namespace gladius
         // Simplyfy the input paths using Clipper2Lib as recommended in the documentation.
         for (auto & polyline : inputPaths)
         {
-            auto result = Clipper2Lib::SimplifyPath(polyline,
-                                                     m_simplificationTolerance);
+            auto result = Clipper2Lib::SimplifyPath(polyline, m_simplificationTolerance);
             if (result.empty())
             {
                 m_logger->addEvent(
-                {fmt::format("Self-intersection detected in polygon. Ignoring offset."),
-                events::Severity::Warning});
+                  {fmt::format("Self-intersection detected in polygon. Ignoring offset."),
+                   events::Severity::Warning});
                 continue;
             }
             polyline = result;

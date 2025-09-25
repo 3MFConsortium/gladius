@@ -1,6 +1,8 @@
 #pragma once
 
+#include "../ExpressionToGraphConverter.h"
 #include "../nodes/History.h"
+#include "ExpressionDialog.h"
 #include "LibraryBrowser.h"
 #include "NodeView.h"
 #include "imguinodeeditor.h"
@@ -76,6 +78,17 @@ namespace gladius::ui
         void requestManualCompile();
         void autoLayoutNodes(float distance = 200.0f);
         void showCreateNodePopup();
+        void showExpressionDialog();
+
+        /**
+         * @brief Handle creation of a function from mathematical expression
+         * @param functionName The name for the new function
+         * @param expression The mathematical expression
+         */
+        void onCreateFunctionFromExpression(std::string const & functionName,
+                                            std::string const & expression,
+                                            std::vector<FunctionArgument> const & arguments,
+                                            FunctionOutput const & output);
 
         /**
          * @brief Switch to a specific function by its ResourceId
@@ -91,6 +104,11 @@ namespace gladius::ui
         bool isHovered() const;
 
       private:
+        // Copy/Paste helpers
+        void copySelectionToClipboard();
+        void pasteClipboardAtMouse();
+        bool hasClipboard() const;
+
         void readBackNodePositions();
         void autoLayout();
         void applyNodePositions();
@@ -140,6 +158,12 @@ namespace gladius::ui
         bool m_parameterDirty{false};
         bool m_primitiveDataDirty{false};
         bool m_nodePositionsNeedUpdate{false};
+        bool m_pendingPasteRequest{false};
+        // Paste UX helpers
+        bool m_hadLastPastePos{false};
+        ImVec2 m_lastPasteCanvasPos{0.f, 0.f};
+        int m_consecutivePasteCount{0};
+        float m_pasteOffsetStep{20.f};
         float m_nodeDistance = 50.f;
         float m_scale = 0.5f;
         bool m_nodeWidthsInitialized = false;
@@ -196,12 +220,18 @@ namespace gladius::ui
         // Library browser
         LibraryBrowser m_libraryBrowser;
 
+        // Expression dialog
+        ExpressionDialog m_expressionDialog;
+
         /// Focus management for keyboard-driven workflow
         nodes::NodeId m_nodeToFocus{0};
         bool m_shouldFocusNode{false};
 
         /// Group assignment dialog state
         bool m_showGroupAssignmentDialog{false};
+
+        // Clipboard buffer for copy/paste of nodes
+        nodes::UniqueModel m_clipboardModel;
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

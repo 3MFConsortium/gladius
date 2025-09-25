@@ -1,20 +1,20 @@
 #pragma once
 
+#include "ShortcutManager.h"
 #include <memory>
 #include <string>
-#include "ShortcutManager.h"
 
 namespace gladius::ui
 {
     /**
      * @brief Dialog for configuring keyboard shortcuts
-     * 
+     *
      * Allows users to view and customize keyboard shortcuts for various actions
      * in the application. Shortcuts can be reset to defaults individually or all at once.
      */
     class ShortcutSettingsDialog
     {
-    public:
+      public:
         /**
          * @brief Construct a new ShortcutSettingsDialog
          * @param shortcutManager The shortcut manager to configure
@@ -50,12 +50,12 @@ namespace gladius::ui
 
         /**
          * @brief Render the dialog
-         * 
+         *
          * This should be called every frame if the dialog is visible.
          */
         void render();
 
-    private:
+      private:
         /**
          * @brief Render the shortcut editor for a specific context
          * @param context The context to render shortcuts for
@@ -65,17 +65,17 @@ namespace gladius::ui
         std::shared_ptr<ShortcutManager> m_shortcutManager;
         bool m_visible = false;
         std::string m_searchFilter;
-        
+
         // For capturing key input
         bool m_isCapturingInput = false;
         std::string m_capturingForActionId;
         ShortcutCombo m_pendingShortcut;
-        
+
         // Disable copy and move
-        ShortcutSettingsDialog(ShortcutSettingsDialog const&) = delete;
-        ShortcutSettingsDialog& operator=(ShortcutSettingsDialog const&) = delete;
-        ShortcutSettingsDialog(ShortcutSettingsDialog&&) = delete;
-        ShortcutSettingsDialog& operator=(ShortcutSettingsDialog&&) = delete;
+        ShortcutSettingsDialog(ShortcutSettingsDialog const &) = delete;
+        ShortcutSettingsDialog & operator=(ShortcutSettingsDialog const &) = delete;
+        ShortcutSettingsDialog(ShortcutSettingsDialog &&) = delete;
+        ShortcutSettingsDialog & operator=(ShortcutSettingsDialog &&) = delete;
     };
 
 } // namespace gladius::ui

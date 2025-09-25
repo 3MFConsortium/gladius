@@ -12,7 +12,7 @@ namespace gladius::nodes::graph
     class IDirectedGraph
     {
       public:
-        explicit IDirectedGraph(std::size_t const /*unused*/){};
+        explicit IDirectedGraph(std::size_t const /*unused*/) {};
         virtual ~IDirectedGraph() = default;
         virtual void addDependency(Identifier id, Identifier idOfDependency) = 0;
         virtual void removeDependency(Identifier id, Identifier idOfDependency) = 0;

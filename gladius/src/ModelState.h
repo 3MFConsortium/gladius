@@ -11,7 +11,7 @@ namespace gladius
 
     class ModelState
     {
-    public:
+      public:
         void signalCompilationRequired()
         {
             m_compilationState = CompilationState::CompilationRequested;
@@ -45,7 +45,7 @@ namespace gladius
             return m_compilationState == CompilationState::UpToDate;
         }
 
-    private:
+      private:
         CompilationState m_compilationState{CompilationState::UpToDate};
     };
 }

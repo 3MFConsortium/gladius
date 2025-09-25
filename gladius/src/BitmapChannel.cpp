@@ -4,7 +4,7 @@
 
 namespace gladius
 {
-    std::string const& BitmapChannel::getName() const
+    std::string const & BitmapChannel::getName() const
     {
         return m_name;
     }

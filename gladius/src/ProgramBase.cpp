@@ -1,8 +1,8 @@
 #include "ProgramBase.h"
 
+#include "Profiling.h"
 #include <fmt/format.h>
 #include <string>
-#include "Profiling.h"
 
 #include "exceptions.h"
 
@@ -13,25 +13,20 @@ namespace gladius
         , m_programFront(std::make_unique<CLProgram>(context))
         , m_resoures(resources)
     {
-        m_sourceFilesProgram = {"arguments.h",
-                                "types.h",
-                                "sdf.h",
-                                "sampler.h",
-                                "rendering.h",
-                                "sdf_generator.h",
-                                "CNanoVDB.h",
-                                "sdf.cl",
-                                "rendering.cl",
-                                "sdf_generator.cl"};
-
-        m_sourceFilesLib = {
-          "arguments.h",
-          "types.h",
-          "CNanoVDB.h",
-          "sdf.h",
-          "sdf_generator.h",
-          "sampler.h",
-        };
+        if (m_logger)
+        {
+            m_programFront->setLogger(m_logger);
+        }
+        m_sourceFiles = {"arguments.h",
+                         "types.h",
+                         "sdf.h",
+                         "sampler.h",
+                         "rendering.h",
+                         "sdf_generator.h",
+                         "CNanoVDB.h",
+                         "sdf.cl",
+                         "rendering.cl",
+                         "sdf_generator.cl"};
     }
 
     void ProgramBase::swapProgramsIfNeeded()
@@ -46,8 +41,7 @@ namespace gladius
 
     void ProgramBase::waitForCompilation() const
     {
-        ProfileFunction
-        if (!m_ComputeContext->isValid())
+        ProfileFunction if (!m_ComputeContext->isValid())
         {
             return;
         }
@@ -56,8 +50,7 @@ namespace gladius
 
     void ProgramBase::dumpSource(std::filesystem::path const & path) const
     {
-        ProfileFunction
-        m_programFront->dumpSource(path);
+        ProfileFunction m_programFront->dumpSource(path);
     }
 
     void ProgramBase::recompileNonBlocking()
@@ -67,7 +60,11 @@ namespace gladius
         {
             if (m_modelKernel.empty())
             {
-                std::cerr << "aborting compilation: No model source set\n";
+                if (m_logger)
+                {
+                    m_logger->logInfo(
+                      "Aborting compilation attempt: No model source has been set yet");
+                }
                 return;
             }
 
@@ -82,7 +79,7 @@ namespace gladius
 
             m_buildFinishedCallBack = [&]() { m_programSwapRequired = true; };
             m_programFront->clearSources();
-            
+
             if (m_isFirstBuild)
             {
                 m_isFirstBuild = false;
@@ -91,28 +88,30 @@ namespace gladius
                 swapProgramsIfNeeded();
 
                 m_programFront->buildFromSourceAndLinkWithLib(
-                  m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
+                  m_sourceFiles, m_modelKernel, m_buildFinishedCallBack);
                 m_programSwapRequired = true;
             }
             else
             {
                 m_programFront->buildFromSourceAndLinkWithLibNonBlocking(
-                  m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
+                  m_sourceFiles, m_modelKernel, m_buildFinishedCallBack);
             }
         }
         catch (OpenCLError & e)
         {
-            m_ComputeContext->invalidate();
+            m_ComputeContext->invalidate("OpenCL error during compilation in ProgramBase");
             throw e;
         }
     }
 
     void ProgramBase::recompileBlocking()
     {
-        ProfileFunction
-        if (m_modelKernel.empty())
+        ProfileFunction if (m_modelKernel.empty())
         {
-            std::cerr << "aborting compilation: No model source set\n";
+            if (m_logger)
+            {
+                m_logger->logInfo("Aborting compilation attempt: No model source has been set yet");
+            }
             return;
         }
 
@@ -127,7 +126,7 @@ namespace gladius
 
         m_programFront->clearSources();
         m_programFront->buildFromSourceAndLinkWithLib(
-                m_sourceFilesProgram, m_modelKernel, m_buildFinishedCallBack);
+          m_sourceFiles, m_modelKernel, m_buildFinishedCallBack);
         m_programSwapRequired = true;
         swapProgramsIfNeeded();
         m_isFirstBuild = false;
@@ -135,10 +134,9 @@ namespace gladius
 
     void ProgramBase::buildKernelLib() const
     {
-        ProfileFunction
-        m_programFront->clearSources();
+        ProfileFunction m_programFront->clearSources();
 
-        m_programFront->loadAndCompileLib(m_sourceFilesLib);
+        m_programFront->loadAndCompileLib(m_sourceFiles);
     }
 
     void ProgramBase::setOnProgramSwapCallBack(const std::function<void()> & callBack)
@@ -169,5 +167,64 @@ namespace gladius
     void ProgramBase::setEnableVdb(bool enableVdb)
     {
         m_enableVdb = enableVdb;
+    }
+
+    void ProgramBase::setLogger(events::SharedLogger logger)
+    {
+        m_logger = std::move(logger);
+        if (m_programFront)
+        {
+            m_programFront->setLogger(m_logger);
+        }
+    }
+
+    void ProgramBase::setCacheDirectory(const std::filesystem::path & path)
+    {
+        if (m_logger)
+        {
+            m_logger->logInfo("ProgramBase::setCacheDirectory called with path: " + path.string());
+        }
+        if (m_programFront)
+        {
+            if (m_logger)
+            {
+                m_logger->logInfo("ProgramBase: Calling CLProgram setCacheDirectory");
+            }
+            m_programFront->setCacheDirectory(path);
+        }
+        else if (m_logger)
+        {
+            m_logger->logWarning("ProgramBase: m_programFront is null!");
+        }
+    }
+
+    void ProgramBase::clearCache()
+    {
+        if (m_programFront)
+        {
+            m_programFront->clearCache();
+        }
+    }
+
+    void ProgramBase::setCacheEnabled(bool enabled)
+    {
+        if (m_programFront)
+        {
+            m_programFront->setCacheEnabled(enabled);
+        }
+        else if (m_logger)
+        {
+            m_logger->logWarning(
+              "ProgramBase: m_programFront is null, cannot set cache enabled state!");
+        }
+    }
+
+    bool ProgramBase::isCacheEnabled() const
+    {
+        if (m_programFront)
+        {
+            return m_programFront->isCacheEnabled();
+        }
+        return true; // Default value when program is not available
     }
 }

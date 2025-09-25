@@ -15,6 +15,6 @@ namespace gladius
         size_t m_size{};
 
         SharedComputeContext m_ComputeContext;
-        std::unique_ptr<cl::Image
+        std::unique_ptr < cl::Image
     }
 }

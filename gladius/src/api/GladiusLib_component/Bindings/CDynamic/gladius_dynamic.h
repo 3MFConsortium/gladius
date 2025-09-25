@@ -18,8 +18,6 @@ Interface version: 1.2.0
 
 #include "gladius_types.h"
 
-
-
 /*************************************************************************************************************************
  Class definition for Base
 **************************************************************************************************************************/
@@ -29,518 +27,635 @@ Interface version: 1.2.0
 **************************************************************************************************************************/
 
 /**
-* Returns the minimum coordinates of the bounding box
-*
-* @param[in] pBoundingBox - BoundingBox instance.
-* @param[out] pMin - The number of elements
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibBoundingBox_GetMinPtr) (GladiusLib_BoundingBox pBoundingBox, sGladiusLibVector3f * pMin);
+ * Returns the minimum coordinates of the bounding box
+ *
+ * @param[in] pBoundingBox - BoundingBox instance.
+ * @param[out] pMin - The number of elements
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibBoundingBox_GetMinPtr)(GladiusLib_BoundingBox pBoundingBox,
+                                                             sGladiusLibVector3f * pMin);
 
 /**
-* Returns the nmaximum coordinates of the bounding box
-*
-* @param[in] pBoundingBox - BoundingBox instance.
-* @param[out] pMax - The number of elements
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibBoundingBox_GetMaxPtr) (GladiusLib_BoundingBox pBoundingBox, sGladiusLibVector3f * pMax);
+ * Returns the nmaximum coordinates of the bounding box
+ *
+ * @param[in] pBoundingBox - BoundingBox instance.
+ * @param[out] pMax - The number of elements
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibBoundingBox_GetMaxPtr)(GladiusLib_BoundingBox pBoundingBox,
+                                                             sGladiusLibVector3f * pMax);
 
 /*************************************************************************************************************************
  Class definition for Face
 **************************************************************************************************************************/
 
 /**
-* Returns the vertex A of the face
-*
-* @param[in] pFace - Face instance.
-* @param[out] pVertexA - Vertex of the face
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFace_GetVertexAPtr) (GladiusLib_Face pFace, sGladiusLibVector3f * pVertexA);
+ * Returns the vertex A of the face
+ *
+ * @param[in] pFace - Face instance.
+ * @param[out] pVertexA - Vertex of the face
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFace_GetVertexAPtr)(GladiusLib_Face pFace,
+                                                          sGladiusLibVector3f * pVertexA);
 
 /**
-* Returns the vertex B of the face
-*
-* @param[in] pFace - Face instance.
-* @param[out] pVertexB - Vertex of the face
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFace_GetVertexBPtr) (GladiusLib_Face pFace, sGladiusLibVector3f * pVertexB);
+ * Returns the vertex B of the face
+ *
+ * @param[in] pFace - Face instance.
+ * @param[out] pVertexB - Vertex of the face
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFace_GetVertexBPtr)(GladiusLib_Face pFace,
+                                                          sGladiusLibVector3f * pVertexB);
 
 /**
-* Returns the vertex C of the face
-*
-* @param[in] pFace - Face instance.
-* @param[out] pVertexC - Vertex of the face
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFace_GetVertexCPtr) (GladiusLib_Face pFace, sGladiusLibVector3f * pVertexC);
+ * Returns the vertex C of the face
+ *
+ * @param[in] pFace - Face instance.
+ * @param[out] pVertexC - Vertex of the face
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFace_GetVertexCPtr)(GladiusLib_Face pFace,
+                                                          sGladiusLibVector3f * pVertexC);
 
 /**
-* Returns the normal of the face
-*
-* @param[in] pFace - Face instance.
-* @param[out] pNormal - Normal of the face
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFace_GetNormalPtr) (GladiusLib_Face pFace, sGladiusLibVector3f * pNormal);
+ * Returns the normal of the face
+ *
+ * @param[in] pFace - Face instance.
+ * @param[out] pNormal - Normal of the face
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFace_GetNormalPtr)(GladiusLib_Face pFace,
+                                                         sGladiusLibVector3f * pNormal);
 
 /**
-* Returns the normal of vertex A
-*
-* @param[in] pFace - Face instance.
-* @param[out] pNormal - Normal of vertex A
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFace_GetNormalAPtr) (GladiusLib_Face pFace, sGladiusLibVector3f * pNormal);
+ * Returns the normal of vertex A
+ *
+ * @param[in] pFace - Face instance.
+ * @param[out] pNormal - Normal of vertex A
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFace_GetNormalAPtr)(GladiusLib_Face pFace,
+                                                          sGladiusLibVector3f * pNormal);
 
 /**
-* Returns the normal of vertex B
-*
-* @param[in] pFace - Face instance.
-* @param[out] pNormal - Normal of vertex B
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFace_GetNormalBPtr) (GladiusLib_Face pFace, sGladiusLibVector3f * pNormal);
+ * Returns the normal of vertex B
+ *
+ * @param[in] pFace - Face instance.
+ * @param[out] pNormal - Normal of vertex B
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFace_GetNormalBPtr)(GladiusLib_Face pFace,
+                                                          sGladiusLibVector3f * pNormal);
 
 /**
-* Returns the normal of vertex C
-*
-* @param[in] pFace - Face instance.
-* @param[out] pNormal - Normal of vertex C
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFace_GetNormalCPtr) (GladiusLib_Face pFace, sGladiusLibVector3f * pNormal);
+ * Returns the normal of vertex C
+ *
+ * @param[in] pFace - Face instance.
+ * @param[out] pNormal - Normal of vertex C
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFace_GetNormalCPtr)(GladiusLib_Face pFace,
+                                                          sGladiusLibVector3f * pNormal);
 
 /*************************************************************************************************************************
  Class definition for DetailedErrorAccessor
 **************************************************************************************************************************/
 
 /**
-* Returns the number of elements
-*
-* @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
-* @param[out] pSize - The number of elements
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetSizePtr) (GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor, GladiusLib_uint64 * pSize);
+ * Returns the number of elements
+ *
+ * @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
+ * @param[out] pSize - The number of elements
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetSizePtr)(
+  GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor,
+  GladiusLib_uint64 * pSize);
 
 /**
-* Go to the next element
-*
-* @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
-* @param[out] pResult - Returns true, if there is a next element
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_NextPtr) (GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor, bool * pResult);
+ * Go to the next element
+ *
+ * @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
+ * @param[out] pResult - Returns true, if there is a next element
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_NextPtr)(
+  GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor,
+  bool * pResult);
 
 /**
-* Go to the previous element
-*
-* @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
-* @param[out] pResult - Returns true, if there is a previous element
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_PrevPtr) (GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor, bool * pResult);
+ * Go to the previous element
+ *
+ * @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
+ * @param[out] pResult - Returns true, if there is a previous element
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_PrevPtr)(
+  GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor,
+  bool * pResult);
 
 /**
-* Go to the first element
-*
-* @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_BeginPtr) (GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor);
+ * Go to the first element
+ *
+ * @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_BeginPtr)(
+  GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor);
 
 /**
-* Returns the title of the error
-*
-* @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
-* @param[in] nTitleBufferSize - size of the buffer (including trailing 0)
-* @param[out] pTitleNeededChars - will be filled with the count of the written bytes, or needed buffer size.
-* @param[out] pTitleBuffer -  buffer of Title of the error, may be NULL
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetTitlePtr) (GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor, const GladiusLib_uint32 nTitleBufferSize, GladiusLib_uint32* pTitleNeededChars, char * pTitleBuffer);
+ * Returns the title of the error
+ *
+ * @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
+ * @param[in] nTitleBufferSize - size of the buffer (including trailing 0)
+ * @param[out] pTitleNeededChars - will be filled with the count of the written bytes, or needed
+ * buffer size.
+ * @param[out] pTitleBuffer -  buffer of Title of the error, may be NULL
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetTitlePtr)(
+  GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor,
+  const GladiusLib_uint32 nTitleBufferSize,
+  GladiusLib_uint32 * pTitleNeededChars,
+  char * pTitleBuffer);
 
 /**
-* Returns the description of the error
-*
-* @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
-* @param[in] nDescriptionBufferSize - size of the buffer (including trailing 0)
-* @param[out] pDescriptionNeededChars - will be filled with the count of the written bytes, or needed buffer size.
-* @param[out] pDescriptionBuffer -  buffer of Description of the error, may be NULL
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetDescriptionPtr) (GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor, const GladiusLib_uint32 nDescriptionBufferSize, GladiusLib_uint32* pDescriptionNeededChars, char * pDescriptionBuffer);
+ * Returns the description of the error
+ *
+ * @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
+ * @param[in] nDescriptionBufferSize - size of the buffer (including trailing 0)
+ * @param[out] pDescriptionNeededChars - will be filled with the count of the written bytes, or
+ * needed buffer size.
+ * @param[out] pDescriptionBuffer -  buffer of Description of the error, may be NULL
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetDescriptionPtr)(
+  GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor,
+  const GladiusLib_uint32 nDescriptionBufferSize,
+  GladiusLib_uint32 * pDescriptionNeededChars,
+  char * pDescriptionBuffer);
 
 /**
-* Returns the severity of the error
-*
-* @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
-* @param[out] pSeverity - Severity of the error
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetSeverityPtr) (GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor, GladiusLib_uint32 * pSeverity);
+ * Returns the severity of the error
+ *
+ * @param[in] pDetailedErrorAccessor - DetailedErrorAccessor instance.
+ * @param[out] pSeverity - Severity of the error
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibDetailedErrorAccessor_GetSeverityPtr)(
+  GladiusLib_DetailedErrorAccessor pDetailedErrorAccessor,
+  GladiusLib_uint32 * pSeverity);
 
 /*************************************************************************************************************************
  Class definition for ResourceAccessor
 **************************************************************************************************************************/
 
 /**
-* Returns the number of elements
-*
-* @param[in] pResourceAccessor - ResourceAccessor instance.
-* @param[out] pSize - The number of elements
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibResourceAccessor_GetSizePtr) (GladiusLib_ResourceAccessor pResourceAccessor, GladiusLib_uint64 * pSize);
+ * Returns the number of elements
+ *
+ * @param[in] pResourceAccessor - ResourceAccessor instance.
+ * @param[out] pSize - The number of elements
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibResourceAccessor_GetSizePtr)(
+  GladiusLib_ResourceAccessor pResourceAccessor,
+  GladiusLib_uint64 * pSize);
 
 /**
-* Go to the next element
-*
-* @param[in] pResourceAccessor - ResourceAccessor instance.
-* @param[out] pResult - Returns true, if there is a next element
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibResourceAccessor_NextPtr) (GladiusLib_ResourceAccessor pResourceAccessor, bool * pResult);
+ * Go to the next element
+ *
+ * @param[in] pResourceAccessor - ResourceAccessor instance.
+ * @param[out] pResult - Returns true, if there is a next element
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibResourceAccessor_NextPtr)(
+  GladiusLib_ResourceAccessor pResourceAccessor,
+  bool * pResult);
 
 /**
-* Go to the previous element
-*
-* @param[in] pResourceAccessor - ResourceAccessor instance.
-* @param[out] pResult - Returns true, if there is a previous element
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibResourceAccessor_PrevPtr) (GladiusLib_ResourceAccessor pResourceAccessor, bool * pResult);
+ * Go to the previous element
+ *
+ * @param[in] pResourceAccessor - ResourceAccessor instance.
+ * @param[out] pResult - Returns true, if there is a previous element
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibResourceAccessor_PrevPtr)(
+  GladiusLib_ResourceAccessor pResourceAccessor,
+  bool * pResult);
 
 /**
-* Go to the first element
-*
-* @param[in] pResourceAccessor - ResourceAccessor instance.
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibResourceAccessor_BeginPtr) (GladiusLib_ResourceAccessor pResourceAccessor);
+ * Go to the first element
+ *
+ * @param[in] pResourceAccessor - ResourceAccessor instance.
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibResourceAccessor_BeginPtr)(
+  GladiusLib_ResourceAccessor pResourceAccessor);
 
 /*************************************************************************************************************************
  Class definition for PolygonAccessor
 **************************************************************************************************************************/
 
 /**
-* Returns the current vertex
-*
-* @param[in] pPolygonAccessor - PolygonAccessor instance.
-* @param[out] pVertex - Returns the current vertex
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibPolygonAccessor_GetCurrentVertexPtr) (GladiusLib_PolygonAccessor pPolygonAccessor, sGladiusLibVector2f * pVertex);
+ * Returns the current vertex
+ *
+ * @param[in] pPolygonAccessor - PolygonAccessor instance.
+ * @param[out] pVertex - Returns the current vertex
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibPolygonAccessor_GetCurrentVertexPtr)(
+  GladiusLib_PolygonAccessor pPolygonAccessor,
+  sGladiusLibVector2f * pVertex);
 
 /**
-* Returns the enclosed area
-*
-* @param[in] pPolygonAccessor - PolygonAccessor instance.
-* @param[out] pArea - Enclosed area
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibPolygonAccessor_GetAreaPtr) (GladiusLib_PolygonAccessor pPolygonAccessor, GladiusLib_single * pArea);
+ * Returns the enclosed area
+ *
+ * @param[in] pPolygonAccessor - PolygonAccessor instance.
+ * @param[out] pArea - Enclosed area
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibPolygonAccessor_GetAreaPtr)(
+  GladiusLib_PolygonAccessor pPolygonAccessor,
+  GladiusLib_single * pArea);
 
 /*************************************************************************************************************************
  Class definition for ContourAccessor
 **************************************************************************************************************************/
 
 /**
-* Returns an Accessor for the current Polygon
-*
-* @param[in] pContourAccessor - ContourAccessor instance.
-* @param[out] pVertex - Returns the current vertex
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibContourAccessor_GetCurrentPolygonPtr) (GladiusLib_ContourAccessor pContourAccessor, GladiusLib_PolygonAccessor * pVertex);
+ * Returns an Accessor for the current Polygon
+ *
+ * @param[in] pContourAccessor - ContourAccessor instance.
+ * @param[out] pVertex - Returns the current vertex
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibContourAccessor_GetCurrentPolygonPtr)(
+  GladiusLib_ContourAccessor pContourAccessor,
+  GladiusLib_PolygonAccessor * pVertex);
 
 /*************************************************************************************************************************
  Class definition for FaceAccessor
 **************************************************************************************************************************/
 
 /**
-* Returns an Accessor for the current Face
-*
-* @param[in] pFaceAccessor - FaceAccessor instance.
-* @param[out] pFace - Returns the current vertex
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibFaceAccessor_GetCurrentFacePtr) (GladiusLib_FaceAccessor pFaceAccessor, GladiusLib_Face * pFace);
+ * Returns an Accessor for the current Face
+ *
+ * @param[in] pFaceAccessor - FaceAccessor instance.
+ * @param[out] pFace - Returns the current vertex
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibFaceAccessor_GetCurrentFacePtr)(
+  GladiusLib_FaceAccessor pFaceAccessor,
+  GladiusLib_Face * pFace);
 
 /*************************************************************************************************************************
  Class definition for ChannelAccessor
 **************************************************************************************************************************/
 
 /**
-* Generates the matrix, necessary to call the methods below
-*
-* @param[in] pChannelAccessor - ChannelAccessor instance.
-* @param[in] fZ_mm - Z-height in mm
-* @param[in] fPixelWidth_mm - 
-* @param[in] fPixelHeight_mm - 
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibChannelAccessor_EvaluatePtr) (GladiusLib_ChannelAccessor pChannelAccessor, GladiusLib_single fZ_mm, GladiusLib_single fPixelWidth_mm, GladiusLib_single fPixelHeight_mm);
+ * Generates the matrix, necessary to call the methods below
+ *
+ * @param[in] pChannelAccessor - ChannelAccessor instance.
+ * @param[in] fZ_mm - Z-height in mm
+ * @param[in] fPixelWidth_mm -
+ * @param[in] fPixelHeight_mm -
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibChannelAccessor_EvaluatePtr)(
+  GladiusLib_ChannelAccessor pChannelAccessor,
+  GladiusLib_single fZ_mm,
+  GladiusLib_single fPixelWidth_mm,
+  GladiusLib_single fPixelHeight_mm);
 
 /**
-* Returns meta information to the matrix. Note: Evaluate has to be called before.
-*
-* @param[in] pChannelAccessor - ChannelAccessor instance.
-* @param[out] pMetaInfo - Returns the current meta information to the channel matrix
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibChannelAccessor_GetMetaInfoPtr) (GladiusLib_ChannelAccessor pChannelAccessor, sGladiusLibChannelMetaInfo * pMetaInfo);
+ * Returns meta information to the matrix. Note: Evaluate has to be called before.
+ *
+ * @param[in] pChannelAccessor - ChannelAccessor instance.
+ * @param[out] pMetaInfo - Returns the current meta information to the channel matrix
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibChannelAccessor_GetMetaInfoPtr)(
+  GladiusLib_ChannelAccessor pChannelAccessor,
+  sGladiusLibChannelMetaInfo * pMetaInfo);
 
 /**
-* Copies the matrix to the target address provided by the client. It is the responsibility of the client to ensure, that enough memory is reserverd. The required size can be queried from ChannelMetaInfo. Note: Evaluate has to be called before.
-*
-* @param[in] pChannelAccessor - ChannelAccessor instance.
-* @param[in] nTargetPtr - Target address to copy the matrix to.
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibChannelAccessor_CopyPtr) (GladiusLib_ChannelAccessor pChannelAccessor, GladiusLib_int64 nTargetPtr);
+ * Copies the matrix to the target address provided by the client. It is the responsibility of the
+ * client to ensure, that enough memory is reserverd. The required size can be queried from
+ * ChannelMetaInfo. Note: Evaluate has to be called before.
+ *
+ * @param[in] pChannelAccessor - ChannelAccessor instance.
+ * @param[in] nTargetPtr - Target address to copy the matrix to.
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibChannelAccessor_CopyPtr)(
+  GladiusLib_ChannelAccessor pChannelAccessor,
+  GladiusLib_int64 nTargetPtr);
 
 /**
-* Short name of the channel, also used as key for accessing the channel
-*
-* @param[in] pChannelAccessor - ChannelAccessor instance.
-* @param[in] nNameBufferSize - size of the buffer (including trailing 0)
-* @param[out] pNameNeededChars - will be filled with the count of the written bytes, or needed buffer size.
-* @param[out] pNameBuffer -  buffer of Short name of the channel, also used as key for accessing the channel, may be NULL
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibChannelAccessor_GetNamePtr) (GladiusLib_ChannelAccessor pChannelAccessor, const GladiusLib_uint32 nNameBufferSize, GladiusLib_uint32* pNameNeededChars, char * pNameBuffer);
+ * Short name of the channel, also used as key for accessing the channel
+ *
+ * @param[in] pChannelAccessor - ChannelAccessor instance.
+ * @param[in] nNameBufferSize - size of the buffer (including trailing 0)
+ * @param[out] pNameNeededChars - will be filled with the count of the written bytes, or needed
+ * buffer size.
+ * @param[out] pNameBuffer -  buffer of Short name of the channel, also used as key for accessing
+ * the channel, may be NULL
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibChannelAccessor_GetNamePtr)(
+  GladiusLib_ChannelAccessor pChannelAccessor,
+  const GladiusLib_uint32 nNameBufferSize,
+  GladiusLib_uint32 * pNameNeededChars,
+  char * pNameBuffer);
 
 /**
-* Switches to the channel with the given name
-*
-* @param[in] pChannelAccessor - ChannelAccessor instance.
-* @param[in] pName - Name of the channel to switch to.
-* @param[out] pResult - True, if successful
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibChannelAccessor_SwitchToChannelPtr) (GladiusLib_ChannelAccessor pChannelAccessor, const char * pName, bool * pResult);
+ * Switches to the channel with the given name
+ *
+ * @param[in] pChannelAccessor - ChannelAccessor instance.
+ * @param[in] pName - Name of the channel to switch to.
+ * @param[out] pResult - True, if successful
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibChannelAccessor_SwitchToChannelPtr)(
+  GladiusLib_ChannelAccessor pChannelAccessor,
+  const char * pName,
+  bool * pResult);
 
 /*************************************************************************************************************************
  Class definition for Gladius
 **************************************************************************************************************************/
 
 /**
-* Loads an Assembly
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pFilename - The filename of the assembly
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_LoadAssemblyPtr) (GladiusLib_Gladius pGladius, const char * pFilename);
+ * Loads an Assembly
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pFilename - The filename of the assembly
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_LoadAssemblyPtr)(GladiusLib_Gladius pGladius,
+                                                               const char * pFilename);
 
 /**
-* Exports the current assembly to an stl-file
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pFilename - The target filename
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_ExportSTLPtr) (GladiusLib_Gladius pGladius, const char * pFilename);
+ * Exports the current assembly to an stl-file
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pFilename - The target filename
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_ExportSTLPtr)(GladiusLib_Gladius pGladius,
+                                                            const char * pFilename);
 
 /**
-* Returns the value of the given parameter
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pModelName - Name of the model the parameter belongs to
-* @param[in] pNodeName - Name of the node the parameter belongs to
-* @param[in] pParameterName - Name of the parameter
-* @param[out] pValue - Value of the parameter
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_GetFloatParameterPtr) (GladiusLib_Gladius pGladius, const char * pModelName, const char * pNodeName, const char * pParameterName, GladiusLib_single * pValue);
+ * Returns the value of the given parameter
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pModelName - Name of the model the parameter belongs to
+ * @param[in] pNodeName - Name of the node the parameter belongs to
+ * @param[in] pParameterName - Name of the parameter
+ * @param[out] pValue - Value of the parameter
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_GetFloatParameterPtr)(GladiusLib_Gladius pGladius,
+                                                                    const char * pModelName,
+                                                                    const char * pNodeName,
+                                                                    const char * pParameterName,
+                                                                    GladiusLib_single * pValue);
 
 /**
-* Sets the value of the given parameter
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pModelName - Name of the model the parameter belongs to
-* @param[in] pNodeName - Name of the node the parameter belongs to
-* @param[in] pParameterName - Name of the parameter
-* @param[in] fValue - Value of the parameter
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_SetFloatParameterPtr) (GladiusLib_Gladius pGladius, const char * pModelName, const char * pNodeName, const char * pParameterName, GladiusLib_single fValue);
+ * Sets the value of the given parameter
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pModelName - Name of the model the parameter belongs to
+ * @param[in] pNodeName - Name of the node the parameter belongs to
+ * @param[in] pParameterName - Name of the parameter
+ * @param[in] fValue - Value of the parameter
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_SetFloatParameterPtr)(GladiusLib_Gladius pGladius,
+                                                                    const char * pModelName,
+                                                                    const char * pNodeName,
+                                                                    const char * pParameterName,
+                                                                    GladiusLib_single fValue);
 
 /**
-* Returns the value of the given parameter
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pModelName - Name of the model the parameter belongs to
-* @param[in] pNodeName - Name of the node the parameter belongs to
-* @param[in] pParameterName - Name of the parameter
-* @param[in] nValueBufferSize - size of the buffer (including trailing 0)
-* @param[out] pValueNeededChars - will be filled with the count of the written bytes, or needed buffer size.
-* @param[out] pValueBuffer -  buffer of Value of the parameter, may be NULL
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_GetStringParameterPtr) (GladiusLib_Gladius pGladius, const char * pModelName, const char * pNodeName, const char * pParameterName, const GladiusLib_uint32 nValueBufferSize, GladiusLib_uint32* pValueNeededChars, char * pValueBuffer);
+ * Returns the value of the given parameter
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pModelName - Name of the model the parameter belongs to
+ * @param[in] pNodeName - Name of the node the parameter belongs to
+ * @param[in] pParameterName - Name of the parameter
+ * @param[in] nValueBufferSize - size of the buffer (including trailing 0)
+ * @param[out] pValueNeededChars - will be filled with the count of the written bytes, or needed
+ * buffer size.
+ * @param[out] pValueBuffer -  buffer of Value of the parameter, may be NULL
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_GetStringParameterPtr)(
+  GladiusLib_Gladius pGladius,
+  const char * pModelName,
+  const char * pNodeName,
+  const char * pParameterName,
+  const GladiusLib_uint32 nValueBufferSize,
+  GladiusLib_uint32 * pValueNeededChars,
+  char * pValueBuffer);
 
 /**
-* Sets the value of the given parameter
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pModelName - Name of the model the parameter belongs to
-* @param[in] pNodeName - Name of the node the parameter belongs to
-* @param[in] pParameterName - Name of the parameter
-* @param[in] pValue - Value of the parameter
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_SetStringParameterPtr) (GladiusLib_Gladius pGladius, const char * pModelName, const char * pNodeName, const char * pParameterName, const char * pValue);
+ * Sets the value of the given parameter
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pModelName - Name of the model the parameter belongs to
+ * @param[in] pNodeName - Name of the node the parameter belongs to
+ * @param[in] pParameterName - Name of the parameter
+ * @param[in] pValue - Value of the parameter
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_SetStringParameterPtr)(GladiusLib_Gladius pGladius,
+                                                                     const char * pModelName,
+                                                                     const char * pNodeName,
+                                                                     const char * pParameterName,
+                                                                     const char * pValue);
 
 /**
-* Returns the value of the given parameter
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pModelName - Name of the model the parameter belongs to
-* @param[in] pNodeName - Name of the node the parameter belongs to
-* @param[in] pParameterName - Name of the parameter
-* @param[out] pValue - Value of the parameter
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_GetVector3fParameterPtr) (GladiusLib_Gladius pGladius, const char * pModelName, const char * pNodeName, const char * pParameterName, sGladiusLibVector3f * pValue);
+ * Returns the value of the given parameter
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pModelName - Name of the model the parameter belongs to
+ * @param[in] pNodeName - Name of the node the parameter belongs to
+ * @param[in] pParameterName - Name of the parameter
+ * @param[out] pValue - Value of the parameter
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_GetVector3fParameterPtr)(
+  GladiusLib_Gladius pGladius,
+  const char * pModelName,
+  const char * pNodeName,
+  const char * pParameterName,
+  sGladiusLibVector3f * pValue);
 
 /**
-* Sets the value of the given parameter
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pModelName - Name of the model the parameter belongs to
-* @param[in] pNodeName - Name of the node the parameter belongs to
-* @param[in] pParameterName - Name of the parameter
-* @param[in] fX - Value of the parameter
-* @param[in] fY - Value of the parameter
-* @param[in] fZ - Value of the parameter
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_SetVector3fParameterPtr) (GladiusLib_Gladius pGladius, const char * pModelName, const char * pNodeName, const char * pParameterName, GladiusLib_single fX, GladiusLib_single fY, GladiusLib_single fZ);
+ * Sets the value of the given parameter
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pModelName - Name of the model the parameter belongs to
+ * @param[in] pNodeName - Name of the node the parameter belongs to
+ * @param[in] pParameterName - Name of the parameter
+ * @param[in] fX - Value of the parameter
+ * @param[in] fY - Value of the parameter
+ * @param[in] fZ - Value of the parameter
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_SetVector3fParameterPtr)(GladiusLib_Gladius pGladius,
+                                                                       const char * pModelName,
+                                                                       const char * pNodeName,
+                                                                       const char * pParameterName,
+                                                                       GladiusLib_single fX,
+                                                                       GladiusLib_single fY,
+                                                                       GladiusLib_single fZ);
 
 /**
-* Generates a contour in the xy-plane
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] fZ - Z-height in mm
-* @param[in] fOffset - Offset from the part boundary in mm
-* @param[out] pAccessor - Accessor for the generated contour
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_GenerateContourPtr) (GladiusLib_Gladius pGladius, GladiusLib_single fZ, GladiusLib_single fOffset, GladiusLib_ContourAccessor * pAccessor);
+ * Generates a contour in the xy-plane
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] fZ - Z-height in mm
+ * @param[in] fOffset - Offset from the part boundary in mm
+ * @param[out] pAccessor - Accessor for the generated contour
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_GenerateContourPtr)(
+  GladiusLib_Gladius pGladius,
+  GladiusLib_single fZ,
+  GladiusLib_single fOffset,
+  GladiusLib_ContourAccessor * pAccessor);
 
 /**
-* Computes and returns the bounding box of the model
-*
-* @param[in] pGladius - Gladius instance.
-* @param[out] pBoundingBox - The computed bounding box
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_ComputeBoundingBoxPtr) (GladiusLib_Gladius pGladius, GladiusLib_BoundingBox * pBoundingBox);
+ * Computes and returns the bounding box of the model
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[out] pBoundingBox - The computed bounding box
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_ComputeBoundingBoxPtr)(
+  GladiusLib_Gladius pGladius,
+  GladiusLib_BoundingBox * pBoundingBox);
 
 /**
-* Computes a coarse mesh of the model that can be used for preview or collision detection
-*
-* @param[in] pGladius - Gladius instance.
-* @param[out] pFaces - Accessor to the faces of the preview mesh
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_GeneratePreviewMeshPtr) (GladiusLib_Gladius pGladius, GladiusLib_FaceAccessor * pFaces);
+ * Computes a coarse mesh of the model that can be used for preview or collision detection
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[out] pFaces - Accessor to the faces of the preview mesh
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_GeneratePreviewMeshPtr)(
+  GladiusLib_Gladius pGladius,
+  GladiusLib_FaceAccessor * pFaces);
 
 /**
-* Returns an accessor to all channels
-*
-* @param[in] pGladius - Gladius instance.
-* @param[out] pAccessor - Accessor to the the avilable channels
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_GetChannelsPtr) (GladiusLib_Gladius pGladius, GladiusLib_ChannelAccessor * pAccessor);
+ * Returns an accessor to all channels
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[out] pAccessor - Accessor to the the avilable channels
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_GetChannelsPtr)(
+  GladiusLib_Gladius pGladius,
+  GladiusLib_ChannelAccessor * pAccessor);
 
 /**
-* Returns an accessor to the detailed error information
-*
-* @param[in] pGladius - Gladius instance.
-* @param[out] pAccessor - Accessor to the detailed error information
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_GetDetailedErrorAccessorPtr) (GladiusLib_Gladius pGladius, GladiusLib_DetailedErrorAccessor * pAccessor);
+ * Returns an accessor to the detailed error information
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[out] pAccessor - Accessor to the detailed error information
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_GetDetailedErrorAccessorPtr)(
+  GladiusLib_Gladius pGladius,
+  GladiusLib_DetailedErrorAccessor * pAccessor);
 
 /**
-* Clears all detailed errors
-*
-* @param[in] pGladius - Gladius instance.
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_ClearDetailedErrorsPtr) (GladiusLib_Gladius pGladius);
+ * Clears all detailed errors
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_ClearDetailedErrorsPtr)(GladiusLib_Gladius pGladius);
 
 /**
-* Injects a smoothing kernel into the model
-*
-* @param[in] pGladius - Gladius instance.
-* @param[in] pKernel - Code of of the kernel to inject
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGladius_InjectSmoothingKernelPtr) (GladiusLib_Gladius pGladius, const char * pKernel);
+ * Injects a smoothing kernel into the model
+ *
+ * @param[in] pGladius - Gladius instance.
+ * @param[in] pKernel - Code of of the kernel to inject
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGladius_InjectSmoothingKernelPtr)(GladiusLib_Gladius pGladius,
+                                                                        const char * pKernel);
 
 /*************************************************************************************************************************
  Global functions
 **************************************************************************************************************************/
 
 /**
-* retrieves the binary version of this library.
-*
-* @param[out] pMajor - returns the major version of this library
-* @param[out] pMinor - returns the minor version of this library
-* @param[out] pMicro - returns the micro version of this library
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGetVersionPtr) (GladiusLib_uint32 * pMajor, GladiusLib_uint32 * pMinor, GladiusLib_uint32 * pMicro);
+ * retrieves the binary version of this library.
+ *
+ * @param[out] pMajor - returns the major version of this library
+ * @param[out] pMinor - returns the minor version of this library
+ * @param[out] pMicro - returns the micro version of this library
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGetVersionPtr)(GladiusLib_uint32 * pMajor,
+                                                     GladiusLib_uint32 * pMinor,
+                                                     GladiusLib_uint32 * pMicro);
 
 /**
-* Returns the last error recorded on this object
-*
-* @param[in] pInstance - Instance Handle
-* @param[in] nErrorMessageBufferSize - size of the buffer (including trailing 0)
-* @param[out] pErrorMessageNeededChars - will be filled with the count of the written bytes, or needed buffer size.
-* @param[out] pErrorMessageBuffer -  buffer of Message of the last error, may be NULL
-* @param[out] pHasError - Is there a last error to query
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibGetLastErrorPtr) (GladiusLib_Base pInstance, const GladiusLib_uint32 nErrorMessageBufferSize, GladiusLib_uint32* pErrorMessageNeededChars, char * pErrorMessageBuffer, bool * pHasError);
+ * Returns the last error recorded on this object
+ *
+ * @param[in] pInstance - Instance Handle
+ * @param[in] nErrorMessageBufferSize - size of the buffer (including trailing 0)
+ * @param[out] pErrorMessageNeededChars - will be filled with the count of the written bytes, or
+ * needed buffer size.
+ * @param[out] pErrorMessageBuffer -  buffer of Message of the last error, may be NULL
+ * @param[out] pHasError - Is there a last error to query
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibGetLastErrorPtr)(
+  GladiusLib_Base pInstance,
+  const GladiusLib_uint32 nErrorMessageBufferSize,
+  GladiusLib_uint32 * pErrorMessageNeededChars,
+  char * pErrorMessageBuffer,
+  bool * pHasError);
 
 /**
-* Acquire shared ownership of an Instance
-*
-* @param[in] pInstance - Instance Handle
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibAcquireInstancePtr) (GladiusLib_Base pInstance);
+ * Acquire shared ownership of an Instance
+ *
+ * @param[in] pInstance - Instance Handle
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibAcquireInstancePtr)(GladiusLib_Base pInstance);
 
 /**
-* Releases shared ownership of an Instance
-*
-* @param[in] pInstance - Instance Handle
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibReleaseInstancePtr) (GladiusLib_Base pInstance);
+ * Releases shared ownership of an Instance
+ *
+ * @param[in] pInstance - Instance Handle
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibReleaseInstancePtr)(GladiusLib_Base pInstance);
 
 /**
-* Creates a new Gladius instance
-*
-* @param[out] pInstance - New Gladius instance
-* @return error code or 0 (success)
-*/
-typedef GladiusLibResult (*PGladiusLibCreateGladiusPtr) (GladiusLib_Gladius * pInstance);
+ * Creates a new Gladius instance
+ *
+ * @param[out] pInstance - New Gladius instance
+ * @return error code or 0 (success)
+ */
+typedef GladiusLibResult (*PGladiusLibCreateGladiusPtr)(GladiusLib_Gladius * pInstance);
 
 /*************************************************************************************************************************
  Function Table Structure
 **************************************************************************************************************************/
 
-typedef struct {
+typedef struct
+{
     void * m_LibraryHandle;
     PGladiusLibBoundingBox_GetMinPtr m_BoundingBox_GetMin;
     PGladiusLibBoundingBox_GetMaxPtr m_BoundingBox_GetMax;
@@ -598,7 +713,7 @@ typedef struct {
 **************************************************************************************************************************/
 GladiusLibResult InitGladiusLibWrapperTable(sGladiusLibDynamicWrapperTable * pWrapperTable);
 GladiusLibResult ReleaseGladiusLibWrapperTable(sGladiusLibDynamicWrapperTable * pWrapperTable);
-GladiusLibResult LoadGladiusLibWrapperTable(sGladiusLibDynamicWrapperTable * pWrapperTable, const char * pLibraryFileName);
+GladiusLibResult LoadGladiusLibWrapperTable(sGladiusLibDynamicWrapperTable * pWrapperTable,
+                                            const char * pLibraryFileName);
 
 #endif // __GLADIUSLIB_DYNAMICHEADER
-

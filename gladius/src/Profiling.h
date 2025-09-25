@@ -1,10 +1,10 @@
 #pragma once
 
+#include <chrono>
 #include <iostream>
+#include <string>
 #include <thread>
 #include <tracy/Tracy.hpp>
-#include <chrono>
-#include <string>
 
 namespace gladius
 {
@@ -27,8 +27,8 @@ namespace gladius
     };
 
 #define LOG_LOCATION
-    //#define LOG_LOCATION std::cout << "Method: " << __FUNCTION__ << " line: " << __LINE__ << ",
-    //Thread ID: " << std::this_thread::get_id() << std::endl; #define ProfileFunction ZoneScoped;
+    // #define LOG_LOCATION std::cout << "Method: " << __FUNCTION__ << " line: " << __LINE__ << ",
+    // Thread ID: " << std::this_thread::get_id() << std::endl; #define ProfileFunction ZoneScoped;
 
     class ScopedTimeLogger
     {
@@ -57,7 +57,7 @@ namespace gladius
     };
 #define LOG_SCOPE_DURATION ScopedTimeLogger scopedTimeLogger(__FUNCTION__);
 #define LOG_SCOPE_DURATION_NAMED(name) ScopedTimeLogger scopedTimeLogger(name);
-//#define ProfileFunction LOG_SCOPE_DURATION
-//#define ProfileFunction ZoneScoped;
-#define ProfileFunction 
+// #define ProfileFunction LOG_SCOPE_DURATION
+// #define ProfileFunction ZoneScoped;
+#define ProfileFunction
 }

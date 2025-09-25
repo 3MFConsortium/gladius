@@ -30,7 +30,8 @@ namespace gladius
     {
         if (stack.empty())
         {
-            throw std::runtime_error("ImageStackOCLBuffer::initializeFromImageStack: stack is empty");
+            throw std::runtime_error(
+              "ImageStackOCLBuffer::initializeFromImageStack: stack is empty");
         }
 
         auto const & firstImage = stack.front();
@@ -48,7 +49,6 @@ namespace gladius
         // m_image3dRGBA->allocateOnDevice();
 
         m_buffer = std::make_unique<buffer3dRGBA>(m_ComputeContext);
-
 
         int sheetIndex = 0;
         auto & targetData = m_buffer->getData();
@@ -131,7 +131,7 @@ namespace gladius
         return m_name;
     }
 
-    cl::Buffer const& ImageStackOCLBuffer::getBuffer() const
+    cl::Buffer const & ImageStackOCLBuffer::getBuffer() const
     {
         if (!m_isUploaded)
         {

@@ -2,7 +2,6 @@
 #include "imgui.h"
 #include "nodesfwd.h"
 
-
 namespace gladius::ui
 {
     struct LinkColors
@@ -22,5 +21,6 @@ namespace gladius::ui
         static constexpr ImVec4 DarkColorString = {0.5f, 0.3f, 0.5f, 1.f};
         static constexpr ImVec4 DarkColorInt = {0.3f, 0.5f, 0.5f, 1.f};
         static constexpr ImVec4 DarkColorInvalid = {0.5f, 0.f, 0.f, 1.f};
-    };;
+    };
+    ;
 } // namespace gladius::ui

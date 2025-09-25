@@ -1,11 +1,15 @@
 #include "CliExportDialog.h"
- 
+
 #include "imgui.h"
+
+#ifdef WIN32
+#include <shellapi.h>
+#endif
 
 namespace gladius::ui
 {
     void CliExportDialog::beginExport(std::filesystem::path stlFilename,
-                                       gladius::ComputeCore & core)
+                                      gladius::ComputeCore & core)
     {
         m_visible = true;
         m_cliWriter.beginExport(stlFilename, core);

@@ -220,9 +220,9 @@ namespace gladius::ui
          * @param beginId The begin node ID (excluded from correction)
          */
         void correctConstantNodeDepths(nodes::Model & model,
-                                     const nodes::graph::IDirectedGraph & graph,
-                                     std::unordered_map<nodes::NodeId, int> & depthMap,
-                                     nodes::NodeId beginId);
+                                       const nodes::graph::IDirectedGraph & graph,
+                                       std::unordered_map<nodes::NodeId, int> & depthMap,
+                                       nodes::NodeId beginId);
 
         /**
          * @brief Arrange entities into layers by depth

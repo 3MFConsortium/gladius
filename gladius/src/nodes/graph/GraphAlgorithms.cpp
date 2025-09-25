@@ -1,12 +1,12 @@
 ﻿#include "GraphAlgorithms.h"
-#include "graph/IDirectedGraph.h"
 #include "Profiling.h"
+#include "graph/IDirectedGraph.h"
 
+#include <algorithm>
 #include <list>
 #include <queue>
 #include <sstream>
 #include <stack>
-#include <algorithm>
 
 namespace gladius::nodes::graph
 {
@@ -121,7 +121,7 @@ namespace gladius::nodes::graph
         {
             return false;
         }
-        
+
         if (id < 0 || dependencyInQuestion < 0)
         {
             return false;
@@ -131,7 +131,6 @@ namespace gladius::nodes::graph
             return true;
         }
 
-      
         std::vector<bool> visited(graph.getSize() + 1u, false);
         std::queue<Identifier> nodesToVisit;
 

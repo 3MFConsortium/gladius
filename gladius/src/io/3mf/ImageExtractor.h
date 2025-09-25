@@ -33,7 +33,8 @@ namespace gladius::io
         ImageExtractor() = default;
         ~ImageExtractor();
 
-        openvdb::GridBase::Ptr loadAsVdbGrid(FileList const & filenames, FileLoaderType fileLoaderType) const;
+        openvdb::GridBase::Ptr loadAsVdbGrid(FileList const & filenames,
+                                             FileLoaderType fileLoaderType) const;
 
         bool loadFromArchive(std::filesystem::path const & filename);
 

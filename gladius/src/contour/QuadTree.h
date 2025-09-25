@@ -23,7 +23,6 @@ namespace gladius::contour
         {
             return point.x() >= startPos.x() && point.y() >= startPos.y() &&
                    point.x() <= endPos.x() && point.y() <= endPos.y();
-
         }
     };
 
@@ -52,8 +51,8 @@ namespace gladius::contour
 
         void removePoint();
 
-        
-        void removeEmptyChildren(); 
+        void removeEmptyChildren();
+
       private:
         void split();
         void insertToChild(PointWithNormal const & point) const;
@@ -87,21 +86,21 @@ namespace gladius::contour
         void remove(PointWithNormal const & point);
 
         /**
-         * \brief 
-         * \return a point, that can be used as start for polyline tracing, empty, if no point could be found. 
+         * \brief
+         * \return a point, that can be used as start for polyline tracing, empty, if no point could
+         * be found.
          */
         [[nodiscard]] OptionalPoint getAnyPoint() const;
+
       private:
         [[nodiscard]] std::optional<Quad *> find(Vector2 const & position,
-                                                           Quad const * currentQuad) const;
+                                                 Quad const * currentQuad) const;
 
-        [[nodiscard]] OptionalPoint getAnyPointImpl(Quad const& quad) const;
+        [[nodiscard]] OptionalPoint getAnyPointImpl(Quad const & quad) const;
 
-        void findNeighbors(Rect const & searchRect,
-                           Quad const * currentQuad,
-                           Points & candidates) const;
+        void
+        findNeighbors(Rect const & searchRect, Quad const * currentQuad, Points & candidates) const;
         Quad m_rootQuad;
-        
     };
 
 }

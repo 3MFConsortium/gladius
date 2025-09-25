@@ -1,6 +1,8 @@
 
 float4 cachedSdf(float3 pos, PAYLOAD_ARGS);
 float4 modelInternal(float3 pos, PAYLOAD_ARGS);
+// Model function - provided by dynamically generated code, called by static kernels
+float4 model(float3 pos, PAYLOAD_ARGS);
 struct DistanceColor map(float3 pos, PAYLOAD_ARGS);
 struct DistanceColor mapCached(float3 pos, PAYLOAD_ARGS);
 

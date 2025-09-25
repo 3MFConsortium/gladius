@@ -1,6 +1,6 @@
 #include "VdbResource.h"
 
-#include "VdbImporter.h"
+#include "io/VdbImporter.h"
 
 namespace gladius
 {
