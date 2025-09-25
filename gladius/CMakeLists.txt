@@ -312,7 +312,19 @@ install(
 # Install a lightweight launcher in /usr/bin that forwards to the real binary in /opt
 if(UNIX)
   set(GLADIUS_LAUNCHER "${PROJECT_BINARY_DIR}/gladius_launcher.sh")
-  file(WRITE "${GLADIUS_LAUNCHER}" "#!/bin/sh\nexec ${INSTALL_PREFIX}/gladius \"$@\"\n")
+  # Generate a launcher that ensures the bundled shared libraries (notably the version of lib3mf shipped with Gladius)
+  file(WRITE "${GLADIUS_LAUNCHER}" "#!/bin/sh\n"
+    "# Added by CMake: ensure Gladius' private libs (e.g., custom lib3mf) are found first.\n"
+    "GLADIUS_DIR=\"${INSTALL_PREFIX}\"\n"
+    "if [ -z \"\\$LD_LIBRARY_PATH\" ]; then\n"
+    "  export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR\\"\n"
+    "else\n"
+    "  case :\\$LD_LIBRARY_PATH: in\n"
+    "    *:\\$GLADIUS_DIR:*) ;;\n"
+    "    *) export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR:\\$LD_LIBRARY_PATH\\" ;;\n"
+    "  esac\n"
+    "fi\n"
+    "exec \"\\$GLADIUS_DIR/gladius\" \"$@\"\n")
   install(PROGRAMS "${GLADIUS_LAUNCHER}" DESTINATION ${SYMLINK_BIN_DIR} RENAME gladius)
 endif()
 
