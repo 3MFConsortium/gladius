@@ -568,18 +568,41 @@ namespace gladius::ui
                         }
                     }
 
-                    if (m_mainView.isFullScreen())
+                    // Cycle window mode: Windowed -> Single -> Span -> Windowed
                     {
-                        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
-                        {
-                            m_mainView.setFullScreen(false);
-                        }
-                    }
-                    else
-                    {
+                        using gladius::FullscreenMode;
+                        auto mode = m_mainView.getFullscreenMode();
+                        bool clicked = false;
+                        // Use big button style to match menu UI
                         if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
                         {
-                            m_mainView.setFullScreen(true);
+                            clicked = true;
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            const char * modeText = (mode == FullscreenMode::Windowed) ? "Windowed"
+                                                    : (mode == FullscreenMode::SingleMonitor)
+                                                      ? "Fullscreen (Current Display)"
+                                                      : "Fullscreen (Span Same Height Displays)";
+                            ImGui::SetTooltip("Window Mode: %s\nClick to cycle", modeText);
+                        }
+                        if (clicked)
+                        {
+                            FullscreenMode next = FullscreenMode::Windowed;
+                            switch (mode)
+                            {
+                            case FullscreenMode::Windowed:
+                                next = FullscreenMode::SingleMonitor;
+                                break;
+                            case FullscreenMode::SingleMonitor:
+                                next = FullscreenMode::SpanAllSameHeight;
+                                break;
+                            case FullscreenMode::SpanAllSameHeight:
+                            default:
+                                next = FullscreenMode::Windowed;
+                                break;
+                            }
+                            m_mainView.setFullscreenMode(next);
                         }
                     }
 
