@@ -125,4 +125,5 @@ add_dependencies(gladiusmcp ${BINARY}_lib_mcp)
 if (NOT WIN32)
     target_compile_options(gladiusmcp PRIVATE -mavx2 -mfma)
 endif()
-install(TARGETS gladiusmcp RUNTIME DESTINATION ${INSTALL_PREFIX}/)
+# Install MCP variant if it was built in this build tree; do not fail packaging if absent
+install(PROGRAMS "$<TARGET_FILE:gladiusmcp>" DESTINATION ${INSTALL_PREFIX}/ OPTIONAL)

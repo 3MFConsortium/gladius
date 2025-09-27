@@ -84,6 +84,10 @@ project(gladius)
 # Include coverage support after project declaration so compiler info is available
 include(cmake/Coverage.cmake)
 
+# Ensure the 'install' target depends on building all targets first
+# (so CPack does not try to install artifacts that were not built yet).
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY OFF)
+
 if (MSVC)
     add_compile_options(/bigobj /utf-8 /Zc:__cplusplus)
 
@@ -343,15 +347,15 @@ if(UNIX)
   file(WRITE "${GLADIUS_LAUNCHER}" "#!/bin/sh\n"
     "# Added by CMake: ensure Gladius' private libs (e.g., custom lib3mf) are found first.\n"
     "GLADIUS_DIR=\"${INSTALL_PREFIX}\"\n"
-    "if [ -z \"\\$LD_LIBRARY_PATH\" ]; then\n"
-    "  export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR\\"\n"
+    "if [ -z \"\$LD_LIBRARY_PATH\" ]; then\n"
+    "  export LD_LIBRARY_PATH=\"\$GLADIUS_DIR\"\n"
     "else\n"
-    "  case :\\$LD_LIBRARY_PATH: in\n"
-    "    *:\\$GLADIUS_DIR:*) ;;\n"
-    "    *) export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR:\\$LD_LIBRARY_PATH\\" ;;\n"
+    "  case :\$LD_LIBRARY_PATH: in\n"
+    "    *:\$GLADIUS_DIR:*) ;;\n"
+    "    *) export LD_LIBRARY_PATH=\"\$GLADIUS_DIR:\$LD_LIBRARY_PATH\" ;;\n"
     "  esac\n"
     "fi\n"
-    "exec \"\\$GLADIUS_DIR/gladius\" \"$@\"\n")
+    "exec \"\$GLADIUS_DIR/gladius\" \"$@\"\n")
   install(PROGRAMS "${GLADIUS_LAUNCHER}" DESTINATION ${SYMLINK_BIN_DIR} RENAME gladius)
 endif()
 
@@ -385,9 +389,12 @@ if (UNIX)
 endif()
 
 include(CPack)
-add_custom_target( Generate_Installer
-            COMMAND "${CMAKE_CPACK_COMMAND}"
-            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            DEPENDS gladius gladiuslib
-            COMMENT "Running CPack. Please wait...")
+
+# Convenience target to generate installer and ensure required binaries are built first
+add_custom_target(Generate_Installer
+  COMMAND "${CMAKE_CPACK_COMMAND}"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  # Make sure both desktop app variants are built before packaging
+  DEPENDS gladius gladiusmcp gladius_lib
+  COMMENT "Running CPack. Please wait...")
 
