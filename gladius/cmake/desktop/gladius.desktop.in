@@ -1,0 +1,15 @@
+[Desktop Entry]
+Version=@CPACK_PACKAGE_VERSION_MAJOR@.@CPACK_PACKAGE_VERSION_MINOR@.@CPACK_PACKAGE_VERSION_PATCH@
+Type=Application
+Name=Gladius
+GenericName=3MF Volumetric/Implicit Tool
+Comment=Work with 3MF Volumetric and Implicit extensions
+TryExec=@GLADIUS_EXEC@
+Exec=@GLADIUS_EXEC@ %F
+Icon=@GLADIUS_ICON@
+Terminal=true
+Categories=Graphics;3DGraphics;Engineering;
+Keywords=3MF;3D;Printing;Volumetric;Implicit;Gladius;
+StartupNotify=true
+# Uncomment when MIME is registered; left here for future integration
+# MimeType=application/3mf;

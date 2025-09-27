@@ -285,8 +285,24 @@ install(DIRECTORY components/licenses DESTINATION ${INSTALL_PREFIX}/doc/licenses
 # Install imgui.ini
 install(FILES src/imgui.ini DESTINATION ${INSTALL_PREFIX})
 
-# Install icon
-install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${INSTALL_PREFIX}/share/pixmaps/)
+# Icon installation and desktop integration assets (no build-time conversion)
+if(UNIX)
+  set(GLADIUS_ICON_NAME gladius)
+  # Install pre-generated PNG icon to hicolor so Icon=gladius works via theme
+  install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.png DESTINATION /usr/share/icons/hicolor/256x256/apps/ RENAME ${GLADIUS_ICON_NAME}.png)
+  set(GLADIUS_ICON ${GLADIUS_ICON_NAME})
+endif()
+
+# Linux desktop integration (GNOME/KDE): install .desktop file and icon into system directories
+if(UNIX)
+  # Generate desktop launcher file
+  set(GLADIUS_DESKTOP_FILE "${PROJECT_BINARY_DIR}/gladius.desktop")
+  # Paths used inside the desktop file
+  set(GLADIUS_EXEC "/usr/bin/gladius")
+  configure_file(${CMAKE_SOURCE_DIR}/cmake/desktop/gladius.desktop.in ${GLADIUS_DESKTOP_FILE} @ONLY)
+  # Install desktop entry for all users
+  install(FILES ${GLADIUS_DESKTOP_FILE} DESTINATION /usr/share/applications)
+endif()
 
 # Install documentation - not yet available
 # install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_PREFIX}/share/doc/)
@@ -374,3 +390,4 @@ add_custom_target( Generate_Installer
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             DEPENDS gladius gladiuslib
             COMMENT "Running CPack. Please wait...")
+
