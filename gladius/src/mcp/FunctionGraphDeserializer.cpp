@@ -10,6 +10,9 @@
 #include "../nodes/Port.h"
 #include "../nodes/nodesfwd.h"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <unordered_map>
 
@@ -46,6 +49,14 @@ namespace gladius
             // Keep handles to Begin/End for special mapping
             auto * beginNode = model.getBeginNode();
             auto * endNode = model.getEndNode();
+
+            // Track whether incoming graph provides meaningful layout positions
+            bool anyPosition = false;
+            bool allNearOrigin = true;
+            float minX = std::numeric_limits<float>::max();
+            float minY = std::numeric_limits<float>::max();
+            float maxX = -std::numeric_limits<float>::max();
+            float maxY = -std::numeric_limits<float>::max();
 
             // First pass: create nodes
             for (const auto & jn : graph["nodes"])
@@ -90,6 +101,13 @@ namespace gladius
                     auto pos = const_cast<nodes::NodeBase *>(created)->screenPos();
                     pos.x = static_cast<float>(jn["position"][0].get<double>());
                     pos.y = static_cast<float>(jn["position"][1].get<double>());
+
+                    anyPosition = true;
+                    allNearOrigin = allNearOrigin && (std::abs(pos.x) < 1e-3f) && (std::abs(pos.y) < 1e-3f);
+                    minX = std::min(minX, pos.x);
+                    minY = std::min(minY, pos.y);
+                    maxX = std::max(maxX, pos.x);
+                    maxY = std::max(maxY, pos.y);
                 }
 
                 if (clientId != 0 && created)
@@ -137,6 +155,17 @@ namespace gladius
 
             // Finalize
             model.updateGraphAndOrderIfNeeded();
+
+            if (anyPosition)
+            {
+                float const spanX = maxX - minX;
+                float const spanY = maxY - minY;
+                bool const degenerateSpan = (std::abs(spanX) < 1e-3f) && (std::abs(spanY) < 1e-3f);
+                if (!(allNearOrigin || degenerateSpan))
+                {
+                    model.markAsLayouted();
+                }
+            }
 
             json out;
             out["success"] = true;

@@ -2328,6 +2328,35 @@ namespace gladius::ui
                                               }
                                           });
 
+        // Model editor: History navigation (Back/Forward)
+        m_shortcutManager->registerAction(
+          "model.historyBack",
+          "Navigate Back",
+          "Go back to the previously viewed function",
+          ShortcutContext::ModelEditor,
+          ShortcutCombo(ImGuiKey_LeftArrow, false, true, false), // Alt+Left
+          [this]()
+          {
+              if (m_modelEditor.isHovered())
+              {
+                  m_modelEditor.goBack();
+              }
+          });
+
+        m_shortcutManager->registerAction(
+          "model.historyForward",
+          "Navigate Forward",
+          "Go forward to the next viewed function",
+          ShortcutContext::ModelEditor,
+          ShortcutCombo(ImGuiKey_RightArrow, false, true, false), // Alt+Right
+          [this]()
+          {
+              if (m_modelEditor.isHovered())
+              {
+                  m_modelEditor.goForward();
+              }
+          });
+
         // Standard CAD view shortcuts for RenderWindow
         // Based on industry standards (Blender, 3ds Max, Maya, AutoCAD, SolidWorks)
 

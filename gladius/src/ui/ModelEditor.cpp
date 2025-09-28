@@ -72,314 +72,36 @@ namespace gladius::ui
         if (m_editorContext != nullptr)
         {
             DestroyEditor(m_editorContext);
-            // Extract Function dialog
-            if (m_showExtractDialog)
-            {
-                ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f,
-                                    ImGui::GetIO().DisplaySize.y * 0.5f);
-                ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-                ImGui::OpenPopup("Extract Function");
-                if (ImGui::BeginPopupModal(
-                      "Extract Function", &m_showExtractDialog, ImGuiWindowFlags_AlwaysAutoResize))
-                {
-                    ImGui::Text("Create a new function from the selected nodes.");
-                    ImGui::Separator();
-                    ImGui::InputText("Function name", &m_extractFunctionName);
-
-                    // --- Validation helpers (local lambdas) ---
-                    auto trimCopy = [](std::string s)
-                    {
-                        auto notSpace = [](unsigned char c) { return !std::isspace(c); };
-                        s.erase(s.begin(), std::find_if(s.begin(), s.end(), notSpace));
-                        s.erase(std::find_if(s.rbegin(), s.rend(), notSpace).base(), s.end());
-                        return s;
-                    };
-                    auto isIdentifier = [](std::string const & name)
-                    {
-                        if (name.empty())
-                            return false;
-                        auto c0 = static_cast<unsigned char>(name[0]);
-                        if (!(std::isalpha(c0) || c0 == '_'))
-                            return false;
-                        for (size_t i = 1; i < name.size(); ++i)
-                        {
-                            unsigned char c = static_cast<unsigned char>(name[i]);
-                            if (!(std::isalnum(c) || c == '_'))
-                                return false;
-                        }
-                        return true;
-                    };
-                    auto isReserved = [](std::string const & name)
-                    {
-                        // Disallow known reserved parameter names
-                        return name == "FunctionId";
-                    };
-
-                    // Gather selection ids and compute name proposals on first open
-                    static bool initializedProposals = false;
-                    if (!initializedProposals)
-                    {
-                        initializedProposals = true;
-                        m_extractInputNames.clear();
-                        m_extractOutputNames.clear();
-
-                        auto selectionIds = selectedNodes(m_editorContext);
-                        std::set<nodes::NodeId> selection;
-                        for (auto const & nid : selectionIds)
-                            selection.insert(static_cast<nodes::NodeId>(nid.Get()));
-                        if (m_currentModel && !selection.empty())
-                        {
-                            auto props =
-                              nodes::FunctionExtractor::proposeNames(*m_currentModel, selection);
-                            for (auto const & e : props.inputs)
-                                m_extractInputNames.push_back({e.uniqueKey, e.defaultName, e.type});
-                            for (auto const & e : props.outputs)
-                                m_extractOutputNames.push_back(
-                                  {e.uniqueKey, e.defaultName, e.type});
-                        }
-                    }
-
-                    // Compute validation for current names
-                    std::vector<bool> inputValid(m_extractInputNames.size(), true);
-                    std::vector<bool> outputValid(m_extractOutputNames.size(), true);
-                    std::unordered_set<std::string> seenInputs;
-                    std::unordered_set<std::string> seenOutputs;
-                    bool allNamesValid = true;
-                    for (size_t i = 0; i < m_extractInputNames.size(); ++i)
-                    {
-                        auto nameTrim = trimCopy(m_extractInputNames[i].name);
-                        bool v =
-                          isIdentifier(nameTrim) && !isReserved(nameTrim) && !nameTrim.empty();
-                        if (v)
-                        {
-                            if (seenInputs.count(nameTrim))
-                                v = false; // duplicate in inputs
-                            else
-                                seenInputs.insert(nameTrim);
-                        }
-                        inputValid[i] = v;
-                        allNamesValid = allNamesValid && v;
-                    }
-                    for (size_t i = 0; i < m_extractOutputNames.size(); ++i)
-                    {
-                        auto nameTrim = trimCopy(m_extractOutputNames[i].name);
-                        bool v =
-                          isIdentifier(nameTrim) && !isReserved(nameTrim) && !nameTrim.empty();
-                        if (v)
-                        {
-                            if (seenOutputs.count(nameTrim))
-                                v = false; // duplicate in outputs
-                            else
-                                seenOutputs.insert(nameTrim);
-                        }
-                        outputValid[i] = v;
-                        allNamesValid = allNamesValid && v;
-                    }
-
-                    // Editable list of argument names
-                    if (!m_extractInputNames.empty())
-                    {
-                        ImGui::Separator();
-                        ImGui::Text("Inputs (arguments):");
-                        ImGui::BeginChild("##extract_inputs", ImVec2(500, 150), true);
-                        for (size_t i = 0; i < m_extractInputNames.size(); ++i)
-                        {
-                            ImGui::PushID(static_cast<int>(i));
-                            ImGui::Text("%s", m_extractInputNames[i].key.c_str());
-                            ImGui::SameLine();
-                            ImGui::PushItemWidth(260.0f * m_uiScale);
-                            ImGui::InputText("##argname", &m_extractInputNames[i].name);
-                            if (!inputValid[i])
-                            {
-                                ImGui::SameLine();
-                                ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "invalid");
-                            }
-                            ImGui::PopItemWidth();
-                            ImGui::PopID();
-                        }
-                        ImGui::EndChild();
-                    }
-
-                    // Editable list of output names
-                    if (!m_extractOutputNames.empty())
-                    {
-                        ImGui::Separator();
-                        ImGui::Text("Outputs:");
-                        ImGui::BeginChild("##extract_outputs", ImVec2(500, 150), true);
-                        for (size_t i = 0; i < m_extractOutputNames.size(); ++i)
-                        {
-                            ImGui::PushID(static_cast<int>(10000 + i));
-                            ImGui::Text("%s", m_extractOutputNames[i].key.c_str());
-                            ImGui::SameLine();
-                            ImGui::PushItemWidth(260.0f * m_uiScale);
-                            ImGui::InputText("##outname", &m_extractOutputNames[i].name);
-                            if (!outputValid[i])
-                            {
-                                ImGui::SameLine();
-                                ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "invalid");
-                            }
-                            ImGui::PopItemWidth();
-                            ImGui::PopID();
-                        }
-                        ImGui::EndChild();
-                    }
-
-                    // Validate function name
-                    std::string trimmedFuncName = trimCopy(m_extractFunctionName);
-                    bool validFunctionName =
-                      isIdentifier(trimmedFuncName) && !isReserved(trimmedFuncName);
-                    bool valid = validFunctionName && allNamesValid;
-                    if (!valid)
-                    {
-                        if (!validFunctionName)
-                            ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-                                               "Function name must match [A-Za-z_][A-Za-z0-9_]* "
-                                               "and not be reserved.");
-                        if (!allNamesValid)
-                            ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-                                               "Fix invalid names: use [A-Za-z_][A-Za-z0-9_]*, "
-                                               "avoid duplicates and reserved 'FunctionId'.");
-                    }
-
-                    if (valid && ImGui::Button("Extract", ImVec2(120, 0)))
-                    {
-                        // Build override maps from edited names
-                        std::unordered_map<std::string, std::string> inputOverrides;
-                        std::unordered_map<std::string, std::string> outputOverrides;
-                        for (auto const & e : m_extractInputNames)
-                            inputOverrides[e.key] = trimCopy(e.name);
-                        for (auto const & e : m_extractOutputNames)
-                            outputOverrides[e.key] = trimCopy(e.name);
-
-                        // Perform extraction with overrides
-                        if (m_doc && m_currentModel)
-                        {
-                            auto selectionIds = selectedNodes(m_editorContext);
-                            std::set<nodes::NodeId> selection;
-                            for (auto const & nid : selectionIds)
-                                selection.insert(static_cast<nodes::NodeId>(nid.Get()));
-                            nodes::Model & newModel = m_doc->createNewFunction();
-                            newModel.setDisplayName(trimmedFuncName);
-                            createUndoRestorePoint("Extract Function");
-                            nodes::FunctionExtractor::Result result;
-                            bool ok = nodes::FunctionExtractor::extractInto(*m_currentModel,
-                                                                            newModel,
-                                                                            selection,
-                                                                            inputOverrides,
-                                                                            outputOverrides,
-                                                                            result);
-                            if (!ok)
-                            {
-                                // rollback
-                                m_doc->deleteFunction(newModel.getResourceId());
-                            }
-                            else
-                            {
-                                if (result.functionCall)
-                                {
-                                    result.functionCall->setFunctionId(newModel.getResourceId());
-                                    result.functionCall->updateInputsAndOutputs(newModel);
-                                    m_currentModel->registerInputs(*result.functionCall);
-                                    m_currentModel->registerOutputs(*result.functionCall);
-                                    // Place the node near selection center
-                                    ImVec2 minP{std::numeric_limits<float>::max(),
-                                                std::numeric_limits<float>::max()};
-                                    ImVec2 maxP{-std::numeric_limits<float>::max(),
-                                                -std::numeric_limits<float>::max()};
-                                    for (auto sid : selection)
-                                    {
-                                        auto opt = m_currentModel->getNode(sid);
-                                        if (!opt.has_value())
-                                            continue;
-                                        auto p = opt.value()->screenPos();
-                                        minP.x = std::min(minP.x, p.x);
-                                        minP.y = std::min(minP.y, p.y);
-                                        maxP.x = std::max(maxP.x, p.x);
-                                        maxP.y = std::max(maxP.y, p.y);
-                                    }
-                                    ImVec2 center{(minP.x + maxP.x) * 0.5f,
-                                                  (minP.y + maxP.y) * 0.5f};
-                                    ed::SetNodePosition(result.functionCall->getId(), center);
-                                    requestNodeFocus(result.functionCall->getId());
-                                }
-
-                                if (m_assembly)
-                                {
-                                    m_assembly->updateInputsAndOutputs();
-                                }
-
-                                m_currentModel->setLogger(m_doc->getSharedLogger());
-                                m_currentModel->updateTypes();
-                                markModelAsModified();
-                                switchModel();
-                                m_nodePositionsNeedUpdate = true;
-                            }
-                        }
-                        m_showExtractDialog = false;
-                        initializedProposals = false;
-                        m_extractInputNames.clear();
-                        m_extractOutputNames.clear();
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Cancel", ImVec2(120, 0)))
-                    {
-                        m_showExtractDialog = false;
-                        initializedProposals = false;
-                        m_extractInputNames.clear();
-                        m_extractOutputNames.clear();
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::EndPopup();
-                }
-            }
-
-            // Render the library browser if visible
-            if (m_libraryBrowser.isVisible())
-            {
-                m_libraryBrowser.render(m_doc);
-            }
-
-            // Render the expression dialog if visible
-            if (m_expressionDialog.isVisible())
-            {
-                m_expressionDialog.render();
-            }
+            m_editorContext = nullptr;
         }
-                         "Beam Lattices\n\n"
-                         "Complex structural geometries made of interconnected beams and nodes.\n"
-                         "Beam lattices are ideal for lightweight structures, supports,\n"
-                         "and metamaterials with specific mechanical properties.\n\n"
-                         "Import beam lattices from 3MF files with embedded beam lattice data,\n"
-                         "or create them programmatically using beam and ball primitive data.\n");
-
-                         resourceOutline();
-
-                         ImGui::BeginGroup();
-                         if (ImGui::TreeNodeEx("Functions",
-                                               baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
-                         {
-                             functionOutline();
-                             ImGui::TreePop();
-                         }
-                         ImGui::EndGroup();
-                         frameOverlay(
-                           ImVec4(0.0f, 0.5f, 1.0f, 0.1f),
-                           "Functions\n\n"
-                           "These are the building blocks for creating implicit surfaces.\n"
-                           "Think of them as tools that let you combine basic shapes like\n"
-                           "spheres and cubes into more complex models.\n\n"
-                           "You can reference functions in a Level Set to define a geometry\n"
-                           "or in a Volume data to define the inner properties of your model.\n");
-
-                         ImGui::TreePop();
+        m_editorContext = ed::CreateEditor();
     }
 
-    ImGui::EndGroup();
-    frameOverlay(ImVec4(0.5f, 0.5f, 0.5f, 0.1f));
+    void ModelEditor::outline()
+    {
+        // Minimal, robust outline window that contains resources and functions
+        ImGui::Begin("Outline");
 
-    ImGui::End();
-}
+        // Resources section
+        resourceOutline();
+
+        ImGui::Separator();
+
+        // Functions section (expanded by default)
+        ImGui::BeginGroup();
+        ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
+                                             ImGuiTreeNodeFlags_OpenOnDoubleClick |
+                                             ImGuiTreeNodeFlags_SpanAvailWidth |
+                                             ImGuiTreeNodeFlags_DefaultOpen;
+        if (ImGui::TreeNodeEx("Functions", baseFlags))
+        {
+            functionOutline();
+            ImGui::TreePop();
+        }
+        ImGui::EndGroup();
+
+        ImGui::End();
+    }
 
 void ModelEditor::resourceOutline()
 {
@@ -482,7 +204,8 @@ void ModelEditor::functionOutline()
         if (ImGui::IsItemClicked())
         {
             readBackNodePositions();
-            m_currentModel = model.second;
+            // Use history-aware navigation
+            navigateToFunction(model.second->getResourceId());
             m_nodePositionsNeedUpdate = true;
         }
 
@@ -514,7 +237,7 @@ void ModelEditor::functionOutline()
                   ImGui::TreeNodeEx(node->getDisplayName().c_str(), nodeFlags);
                 if (ImGui::IsItemClicked())
                 {
-                    m_currentModel = model.second;
+                    navigateToFunction(model.second->getResourceId());
                     m_nodePositionsNeedUpdate = true;
                     ed::SelectNode(nodeId);
                     ed::NavigateToSelection(true);
@@ -723,6 +446,42 @@ void ModelEditor::newModelDialog()
             }
             ImGui::EndPopup();
         }
+    }
+}
+
+bool ModelEditor::isNodeSelected(nodes::NodeId nodeId)
+{
+    // Query selection state from the node editor
+    return ed::IsNodeSelected(ed::NodeId(static_cast<uint64_t>(nodeId)));
+}
+
+void ModelEditor::onCreateNode()
+{
+    // Intentionally left empty. Creation of nodes is handled via explicit UI/popups.
+}
+
+void ModelEditor::onDeleteNode()
+{
+    // Intentionally left empty. Deletion of nodes is handled elsewhere.
+}
+
+void ModelEditor::switchModel()
+{
+    // Mark the editor to re-apply node positions and refresh view on next frame
+    m_nodePositionsNeedUpdate = true;
+    m_dirty = true;
+    // Defer selection clearing until an editor is active to avoid calling NodeEditor APIs out of context
+    m_pendingClearSelection = true;
+
+    // Schedule an initial auto-layout for models that have no meaningful positions yet,
+    // but only once per function to preserve user edits.
+    if (m_currentModel)
+    {
+        m_pendingAutoLayout = !m_currentModel->hasBeenLayouted();
+    }
+    else
+    {
+        m_pendingAutoLayout = false;
     }
 }
 
@@ -1143,6 +902,13 @@ auto ModelEditor::showAndEdit() -> bool
 
             ed::Begin("Model Editor");
 
+            // Clear selection now that the editor context is active
+            if (m_pendingClearSelection)
+            {
+                ed::ClearSelection();
+                m_pendingClearSelection = false;
+            }
+
             // Handle any deferred paste request once editor is active
             if (m_pendingPasteRequest)
             {
@@ -1159,6 +925,14 @@ auto ModelEditor::showAndEdit() -> bool
 
                 // Update node groups after nodes are rendered and positioned
                 m_nodeViewVisitor.updateNodeGroups();
+
+                // Perform pending initial auto-layout after nodes are first rendered,
+                // so widths/metrics are available to the layout engine.
+                if (m_pendingAutoLayout && m_nodeWidthsInitialized)
+                {
+                    m_pendingAutoLayout = false;
+                    autoLayout();
+                }
             }
             onCreateNode();
             onDeleteNode();
@@ -1185,6 +959,20 @@ auto ModelEditor::showAndEdit() -> bool
 
             // Render node group last, to prioritize node interaction
             m_nodeViewVisitor.renderNodeGroups();
+
+            // Allow quick navigation with mouse back/forward buttons when editor is hovered
+            if (isHovered())
+            {
+                // Prefer key-based detection for mouse X buttons using ImGuiKey_* constants
+                if (ImGui::IsKeyPressed(ImGuiKey_MouseX1, false))
+                {
+                    goBack();
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_MouseX2, false))
+                {
+                    goForward();
+                }
+            }
 
             // Check for group double-clicks and handle them AFTER rendering (so bounds are
             // updated)
@@ -1465,36 +1253,10 @@ auto ModelEditor::showAndEdit() -> bool
                 m_extractOutputNames.clear();
                 ImGui::CloseCurrentPopup();
             }
-            if (!outputValid[i])
-            {
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "invalid");
-            }
             ImGui::EndPopup();
         }
     }
 
-    // Render the library browser if visible
-    bool valid = !m_extractFunctionName.empty() && allNamesValid;
-    {
-        m_libraryBrowser.render(m_doc);
-        if (m_extractFunctionName.empty())
-            ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "Please enter a function name.");
-        if (!allNamesValid)
-            ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f),
-                               "Fix invalid names: use [A-Za-z_][A-Za-z0-9_]*, avoid duplicates "
-                               "and reserved 'FunctionId'.");
-
-        // Render the expression dialog if visible
-        if (m_expressionDialog.isVisible())
-        {
-            m_expressionDialog.render();
-        }
-        for (auto const & e : m_extractInputNames)
-            inputOverrides[e.key] = trimCopy(e.name);
-        for (auto const & e : m_extractOutputNames)
-            outputOverrides[e.key] = trimCopy(e.name);
-    }
 
     m_parameterDirty = parameterChanged;
     return m_parameterDirty;
@@ -1564,6 +1326,8 @@ void ModelEditor::setAssembly(nodes::SharedAssembly assembly)
     m_nodePositionsNeedUpdate = true;
     m_history = History();
     switchModel();
+    // Initialize navigation history with the current model
+    initNavigationHistory();
 }
 
 bool ModelEditor::matchesNodeFilter(const std::string & text) const
@@ -2302,6 +2066,96 @@ bool ModelEditor::switchToFunction(nodes::ResourceId functionId)
     m_currentModel = functionModel;
     switchModel();
     return true;
+}
+
+bool ModelEditor::navigateToFunction(nodes::ResourceId functionId)
+{
+    if (!m_assembly)
+    {
+        return false;
+    }
+
+    auto target = m_assembly->findModel(functionId);
+    if (!target)
+    {
+        return false;
+    }
+
+    // Don't record no-op navigations
+    nodes::ResourceId const currentId = m_currentModel ? m_currentModel->getResourceId() : 0u;
+    if (currentId == functionId)
+    {
+        return true;
+    }
+
+    if (!m_inHistoryNav)
+    {
+        // If we're not at the end, truncate forward history
+        if (!m_navHistory.empty() && (m_navIndex + 1u) < m_navHistory.size())
+        {
+            m_navHistory.erase(m_navHistory.begin() + static_cast<long>(m_navIndex + 1u),
+                               m_navHistory.end());
+        }
+        // If history is empty, seed with current
+        if (m_navHistory.empty() && currentId != 0u)
+        {
+            m_navHistory.push_back(currentId);
+        }
+        // Push new target and advance index
+        m_navHistory.push_back(functionId);
+        m_navIndex = m_navHistory.size() - 1u;
+    }
+
+    return switchToFunction(functionId);
+}
+
+bool ModelEditor::canGoBack() const
+{
+    return !m_navHistory.empty() && m_navIndex > 0u;
+}
+
+bool ModelEditor::canGoForward() const
+{
+    return !m_navHistory.empty() && (m_navIndex + 1u) < m_navHistory.size();
+}
+
+bool ModelEditor::goBack()
+{
+    if (!canGoBack())
+    {
+        return false;
+    }
+    m_inHistoryNav = true;
+    m_navIndex -= 1u;
+    auto const targetId = m_navHistory[m_navIndex];
+    bool const ok = switchToFunction(targetId);
+    m_inHistoryNav = false;
+    return ok;
+}
+
+bool ModelEditor::goForward()
+{
+    if (!canGoForward())
+    {
+        return false;
+    }
+    m_inHistoryNav = true;
+    m_navIndex += 1u;
+    auto const targetId = m_navHistory[m_navIndex];
+    bool const ok = switchToFunction(targetId);
+    m_inHistoryNav = false;
+    return ok;
+}
+
+void ModelEditor::initNavigationHistory()
+{
+    m_navHistory.clear();
+    m_navIndex = 0u;
+    if (m_currentModel)
+    {
+        m_navHistory.push_back(m_currentModel->getResourceId());
+        m_navIndex = 0u;
+    }
 }
 
 bool ModelEditor::isHovered() const

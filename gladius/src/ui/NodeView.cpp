@@ -313,7 +313,8 @@ namespace gladius::ui
                 nodes::ResourceId functionId = functionCallNode->getFunctionId();
                 if (functionId != 0) // Check if function ID is valid
                 {
-                    m_modelEditor->switchToFunction(functionId);
+                    // Use navigateToFunction so history is recorded
+                    m_modelEditor->navigateToFunction(functionId);
                 }
             }
         }
