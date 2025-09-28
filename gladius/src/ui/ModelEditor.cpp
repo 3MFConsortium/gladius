@@ -8,6 +8,7 @@
 #include <fmt/format.h>
 #include <set>
 #include <unordered_map>
+#include <limits>
 
 // #include "../ExpressionToGraphConverter.h"
 // #include "../ExpressionParser.h"
@@ -897,6 +898,28 @@ namespace gladius::ui
 
                 if (ImGui::BeginMenuBar())
                 {
+                    // Function extraction refactoring
+                    {
+                        auto selection = selectedNodes(m_editorContext);
+                        bool canExtract = !selection.empty();
+                        if (!canExtract)
+                        {
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+                            ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_CODE_BRANCH
+                                                                           "\tExtract Function"));
+                            ImGui::PopStyleColor();
+                        }
+                        else
+                        {
+                            if (ImGui::MenuItem(reinterpret_cast<const char *>(ICON_FA_CODE_BRANCH
+                                                                               "\tExtract Function")))
+                            {
+                                m_showExtractDialog = true;
+                                m_extractFunctionName = "ExtractedFunction";
+                            }
+                        }
+                    }
+
                     if (ImGui::MenuItem("Autolayout"))
                     {
                         autoLayout();
@@ -1177,6 +1200,39 @@ namespace gladius::ui
         catch (std::exception & e)
         {
             std::cerr << e.what() << "\n";
+        }
+
+        // Extract Function dialog
+        if (m_showExtractDialog)
+        {
+            ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f,
+                                ImGui::GetIO().DisplaySize.y * 0.5f);
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            ImGui::OpenPopup("Extract Function");
+            if (ImGui::BeginPopupModal("Extract Function", &m_showExtractDialog, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Create a new function from the selected nodes.");
+                ImGui::Separator();
+                ImGui::InputText("Function name", &m_extractFunctionName);
+                bool valid = !m_extractFunctionName.empty();
+                if (!valid)
+                {
+                    ImGui::TextColored(ImVec4(1,0.5f,0,1), "Please enter a function name.");
+                }
+                if (valid && ImGui::Button("Extract", ImVec2(120,0)))
+                {
+                    extractSelectedNodesToFunction(m_extractFunctionName);
+                    m_showExtractDialog = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel", ImVec2(120,0)))
+                {
+                    m_showExtractDialog = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
         }
 
         // Render the library browser if visible
@@ -1865,6 +1921,80 @@ namespace gladius::ui
     void ModelEditor::showExpressionDialog()
     {
         m_expressionDialog.show();
+    }
+
+    void ModelEditor::extractSelectedNodesToFunction(const std::string & functionName)
+    {
+        if (!m_doc || !m_currentModel)
+        {
+            return;
+        }
+
+        auto selectionIds = selectedNodes(m_editorContext);
+        if (selectionIds.empty())
+        {
+            return;
+        }
+
+        std::set<nodes::NodeId> selection;
+        for (auto const & nid : selectionIds)
+        {
+            selection.insert(static_cast<nodes::NodeId>(nid.Get()));
+        }
+
+        // Create new function via Document to ensure 3MF resource exists
+        nodes::Model & newModel = m_doc->createNewFunction();
+        newModel.setDisplayName(functionName);
+
+        createUndoRestorePoint("Extract Function");
+
+        nodes::FunctionExtractor::Result result;
+        bool ok = nodes::FunctionExtractor::extractInto(*m_currentModel, newModel, selection, result);
+        if (!ok)
+        {
+            // Rollback by removing the created empty function
+            m_doc->deleteFunction(newModel.getResourceId());
+            return;
+        }
+
+        // Find the FunctionCall we just created and assign the function id
+        nodes::FunctionCall * fc = result.functionCall;
+        if (fc)
+        {
+            fc->setFunctionId(newModel.getResourceId());
+            fc->updateInputsAndOutputs(newModel);
+            m_currentModel->registerInputs(*fc);
+            m_currentModel->registerOutputs(*fc);
+            // Place the node near selection center
+            ImVec2 minP{std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+            ImVec2 maxP{-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()};
+            for (auto sid : selection)
+            {
+                auto opt = m_currentModel->getNode(sid);
+                if (!opt.has_value()) continue;
+                auto p = opt.value()->screenPos();
+                minP.x = std::min(minP.x, p.x);
+                minP.y = std::min(minP.y, p.y);
+                maxP.x = std::max(maxP.x, p.x);
+                maxP.y = std::max(maxP.y, p.y);
+            }
+            ImVec2 center{(minP.x + maxP.x) * 0.5f, (minP.y + maxP.y) * 0.5f};
+            ed::SetNodePosition(fc->getId(), ImVec2(center.x, center.y));
+            requestNodeFocus(fc->getId());
+        }
+
+        // After wiring, update assembly IOs so downstream validation doesn't crash
+        if (m_assembly)
+        {
+            m_assembly->updateInputsAndOutputs();
+        }
+
+        // Track state and UI
+        m_currentModel->setLogger(m_doc->getSharedLogger());
+        m_currentModel->updateTypes();
+        markModelAsModified();
+        switchModel();
+        m_nodePositionsNeedUpdate = true;
     }
 
     void

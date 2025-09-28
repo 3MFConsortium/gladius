@@ -15,6 +15,7 @@
 #include "Style.h"
 #include "compute/ComputeCore.h"
 #include "nodes/Assembly.h"
+#include "nodes/FunctionExtractor.h"
 #include "nodes/Model.h"
 #include "nodes/nodesfwd.h"
 
@@ -104,6 +105,9 @@ namespace gladius::ui
         bool isHovered() const;
 
       private:
+        // Extraction helper
+        void extractSelectedNodesToFunction(const std::string & functionName);
+
         // Copy/Paste helpers
         void copySelectionToClipboard();
         void pasteClipboardAtMouse();
@@ -192,6 +196,8 @@ namespace gladius::ui
         bool m_modelWasModified{false};
         bool m_outlineRenaming{true};
         bool m_showCreateNodePopUp{false};
+        bool m_showExtractDialog{false};
+        std::string m_extractFunctionName{"ExtractedFunction"};
 
         nodes::History m_history;
 

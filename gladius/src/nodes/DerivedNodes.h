@@ -551,7 +551,14 @@ namespace gladius::nodes
 
         void resolveFunctionId()
         {
-            auto functionIdParameter = m_parameter.at(FieldNames::FunctionId);
+            // Be robust in case parameter map hasn't been initialized yet
+            auto itFunc = m_parameter.find(FieldNames::FunctionId);
+            if (itFunc == m_parameter.end())
+            {
+                // Leave m_functionId unchanged; caller may set it later via setFunctionId()
+                return;
+            }
+            auto & functionIdParameter = itFunc->second;
 
             auto functionSource = functionIdParameter.getSource();
             if (!functionSource.has_value())
@@ -567,25 +574,30 @@ namespace gladius::nodes
             auto * sourcePort = functionSource.value().port;
             if (!sourcePort)
             {
-                throw std::runtime_error("The functionId of the FunctionCall node " +
-                                         getDisplayName() +
-                                         " needs the value of a Resource node as an input");
+                // Transient state or invalid wiring; keep previous m_functionId
+                return;
             }
 
             auto sourceNode = sourcePort->getParent();
 
             if (!sourceNode)
             {
-                throw std::runtime_error(
-                  fmt::format("The functionId of the FunctionCall node {} needs the value of a "
-                              "Resource node as an input",
-                              getDisplayName()));
+                // Transient state or invalid wiring; keep previous m_functionId
+                return;
             }
-            auto variantResId = sourceNode->parameter().at(FieldNames::ResourceId).getValue();
+
+            auto paramIt = sourceNode->parameter().find(FieldNames::ResourceId);
+            if (paramIt == sourceNode->parameter().end())
+            {
+                // Not a Resource node: ignore and keep previous m_functionId
+                return;
+            }
+            auto variantResId = paramIt->second.getValue();
             if (const auto resId = std::get_if<ResourceId>(&variantResId))
             {
                 m_functionId = *resId;
             }
+            // If variant does not hold ResourceId, leave m_functionId unchanged
         }
 
         [[nodiscard]] std::string getDescription() const override
