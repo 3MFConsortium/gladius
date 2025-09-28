@@ -37,6 +37,8 @@ if(buildcache_program)
 else()
   message("buildcache not found")
 endif()
+else()
+  message("Not using build cache. You can enable it by setting USE_CACHE=ON")
 endif() # USE_CACHE
 message("CMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}")
 message("VCPKG_ROOT=${VCPKG_ROOT}")

@@ -242,4 +242,65 @@ namespace gladius::tests
         bool ok = FunctionExtractor::extractInto(src, dst, selection, res);
         ASSERT_FALSE(ok);
     }
+
+    TEST(FunctionExtractorTests, FunctionExtractor_CustomNames_AreAppliedAndUnique)
+    {
+        Model src;
+        src.createBeginEndWithDefaultInAndOuts();
+
+        // Build: extConst -> Add.A, extConst -> Mul.A, intConst -> Add.B, intConst2 -> Mul.B
+        auto * extConst = src.create<ConstantScalar>();
+        auto * intConst = src.create<ConstantScalar>();
+        auto * intConst2 = src.create<ConstantScalar>();
+        auto * add = src.create<Addition>();
+        auto * mul = src.create<Multiplication>();
+
+        src.addLink(extConst->getOutputs().at(FieldNames::Value).getId(),
+                    add->parameter().at(FieldNames::A).getId(),
+                    true);
+        src.addLink(intConst->getOutputs().at(FieldNames::Value).getId(),
+                    add->parameter().at(FieldNames::B).getId(),
+                    true);
+        src.addLink(extConst->getOutputs().at(FieldNames::Value).getId(),
+                    mul->parameter().at(FieldNames::A).getId(),
+                    true);
+        src.addLink(intConst2->getOutputs().at(FieldNames::Value).getId(),
+                    mul->parameter().at(FieldNames::B).getId(),
+                    true);
+
+        // External consumer of mul -> End.shape to ensure an output exists
+        src.addLink(mul->getOutputs().at(FieldNames::Result).getId(),
+                    src.getEndNode()->parameter().at(FieldNames::Shape).getId(),
+                    true);
+
+        std::set<NodeId> selection{add->getId(), mul->getId()};
+        Model dst;
+        FunctionExtractor::Result result;
+
+        // Compute keys used by extractor for overrides
+        // ext input key = source port uniqueName of extConst.Value
+        std::string extKey = extConst->getOutputs().at(FieldNames::Value).getUniqueName();
+        // output key = selected source port uniqueName, choose mul.Result
+        std::string outKey = mul->getOutputs().at(FieldNames::Result).getUniqueName();
+
+        std::unordered_map<std::string, std::string> inOverrides{{extKey, "myArg"}};
+        std::unordered_map<std::string, std::string> outOverrides{{outKey, "myOut"}};
+
+        bool ok =
+          FunctionExtractor::extractInto(src, dst, selection, inOverrides, outOverrides, result);
+        ASSERT_TRUE(ok);
+        ASSERT_NE(result.functionCall, nullptr);
+
+        // Check argument name on function and callsite
+        auto & beginOuts = dst.getBeginNode()->getOutputs();
+        ASSERT_TRUE(beginOuts.find("myArg") != beginOuts.end());
+        ASSERT_TRUE(result.functionCall->parameter().find("myArg") !=
+                    result.functionCall->parameter().end());
+
+        // Check output name on function and callsite
+        auto & endParams = dst.getEndNode()->parameter();
+        ASSERT_TRUE(endParams.find("myOut") != endParams.end());
+        ASSERT_TRUE(result.functionCall->getOutputs().find("myOut") !=
+                    result.functionCall->getOutputs().end());
+    }
 } // namespace gladius::tests

@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <string>
+#include <typeindex>
 
 #include "Outline.h"
 #include "ResourceView.h"
@@ -198,6 +199,16 @@ namespace gladius::ui
         bool m_showCreateNodePopUp{false};
         bool m_showExtractDialog{false};
         std::string m_extractFunctionName{"ExtractedFunction"};
+
+        // Extraction name editing state
+        struct ExtractNameEntry
+        {
+            std::string key;                      // stable key (unique port name)
+            std::string name;                     // editable name
+            std::type_index type = typeid(float); // for potential future display
+        };
+        std::vector<ExtractNameEntry> m_extractInputNames;  // proposed + edited
+        std::vector<ExtractNameEntry> m_extractOutputNames; // proposed + edited
 
         nodes::History m_history;
 
