@@ -455,7 +455,7 @@ namespace gladius
 
         // Binary caching support
         std::filesystem::path m_cacheDirectory;
-        bool m_cacheEnabled = false; // Cache disabled by default
+        bool m_cacheEnabled = true; // Cache disabled by default
 
         // Static vs Dynamic source tracking
         cl::Program::Sources m_staticSources;  // Static kernel files (.cl files from resources)
@@ -468,6 +468,10 @@ namespace gladius
         bool loadProgramFromCache(size_t hash);
         void saveProgramToCache(size_t hash);
         std::string getDeviceSignature() const;
+        [[nodiscard]] std::string makeSingleLevelBuildSignature(size_t programHash) const;
+        [[nodiscard]] std::string makeStaticLibrarySignature(size_t staticHash) const;
+        [[nodiscard]] std::string makeLinkedProgramSignature(size_t staticHash,
+                                                             size_t dynamicHash) const;
 
         // Two-level caching helpers
         size_t computeStaticHash() const;
