@@ -84,6 +84,12 @@ namespace gladius
 
         void buildWithLibNonBlocking(BuildCallBack & callBack);
 
+        /// Enable or disable the experimental two-level (static/dynamic) pipeline.
+        void setEnableTwoLevelPipeline(bool enable)
+        {
+            m_enableTwoLevelPipeline = enable;
+        }
+
         /// blocks until an ongoing compilation has finished
         void finishCompilation();
 
@@ -453,9 +459,11 @@ namespace gladius
 
         SharedKernelReplacements m_kernelReplacements;
 
+        bool m_enableTwoLevelPipeline = false;
+
         // Binary caching support
         std::filesystem::path m_cacheDirectory;
-        bool m_cacheEnabled = true; // Cache disabled by default
+        bool m_cacheEnabled = true; // Cache enabled by default
 
         // Static vs Dynamic source tracking
         cl::Program::Sources m_staticSources;  // Static kernel files (.cl files from resources)

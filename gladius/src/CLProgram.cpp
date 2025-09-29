@@ -1023,8 +1023,9 @@ namespace gladius
         }
 
         // Check if we can load complete linked program from cache first
-        if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
-            !m_dynamicSources.empty() && loadLinkedProgramFromCache(staticHash, dynamicHash))
+        if (m_enableTwoLevelPipeline && m_cacheEnabled && !m_cacheDirectory.empty() &&
+            !m_staticSources.empty() && !m_dynamicSources.empty() &&
+            loadLinkedProgramFromCache(staticHash, dynamicHash))
         {
             if (m_logger)
             {
@@ -1092,8 +1093,8 @@ namespace gladius
                               ", staticSources: " + std::to_string(m_staticSources.size()) +
                               ", dynamicSources: " + std::to_string(m_dynamicSources.size()));
         }
-        if (m_cacheEnabled && !m_cacheDirectory.empty() && !m_staticSources.empty() &&
-            !m_dynamicSources.empty())
+        if (m_enableTwoLevelPipeline && m_cacheEnabled && !m_cacheDirectory.empty() &&
+            !m_staticSources.empty() && !m_dynamicSources.empty())
         {
             cl::Program staticLibrary;
             bool staticLoaded = loadStaticLibraryFromCache(staticHash, staticLibrary);
