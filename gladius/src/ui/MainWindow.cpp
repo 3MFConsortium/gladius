@@ -580,11 +580,13 @@ namespace gladius::ui
                         }
                         if (ImGui::IsItemHovered())
                         {
-                            const char * modeText = (mode == FullscreenMode::Windowed) ? "Windowed"
-                                                    : (mode == FullscreenMode::SingleMonitor)
-                                                      ? "Fullscreen (Current Display)"
-                                                      : "Fullscreen (Span Same Height Displays)";
-                            ImGui::SetTooltip("Window Mode: %s\nClick to cycle", modeText);
+                            // Show the NEXT mode, not the current mode
+                            const char * nextModeText = (mode == FullscreenMode::Windowed)
+                                                          ? "Fullscreen (Current Display)"
+                                                        : (mode == FullscreenMode::SingleMonitor)
+                                                          ? "Fullscreen (Span Same Height Displays)"
+                                                          : "Windowed";
+                            ImGui::SetTooltip("Click to switch to: %s", nextModeText);
                         }
                         if (clicked)
                         {

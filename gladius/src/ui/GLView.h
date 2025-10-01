@@ -152,8 +152,6 @@ namespace gladius
 
         FileDropCallBack m_fileDrop = noOpFileDrop;
 
-        // legacy boolean is mapped to tri-state API (SingleMonitor)
-        bool m_fullScreen = false;
         // applied tri-state fullscreen mode (current native window state)
         FullscreenMode m_appliedFullscreenMode{FullscreenMode::Windowed};
         WindowSettings m_windowSettings;
