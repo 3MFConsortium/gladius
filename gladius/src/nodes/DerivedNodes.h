@@ -380,7 +380,7 @@ namespace gladius::nodes
                                           {FieldNames::M31, ParameterTypeIndex::Float},
                                           {FieldNames::M32, ParameterTypeIndex::Float},
                                           {FieldNames::M33, ParameterTypeIndex::Float}},
-                             OutputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}}};
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Matrix4}}};
 
             m_typeRules = {rule};
             applyTypeRule(rule);
@@ -398,7 +398,7 @@ namespace gladius::nodes
         }
 
         explicit DecomposeMatrix(NodeId id)
-            : ClonableNode<DecomposeMatrix>(NodeName("DecomposeMatrix"), id, Category::Misc)
+            : ClonableNode<DecomposeMatrix>(NodeName("DecomposeMatrix"), id, Category::Internal)
         {
             TypeRule rule = {RuleType::Default,
                              InputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}},
@@ -444,7 +444,7 @@ namespace gladius::nodes
                                           {FieldNames::Col1, ParameterTypeIndex::Float3},
                                           {FieldNames::Col2, ParameterTypeIndex::Float3},
                                           {FieldNames::Col3, ParameterTypeIndex::Float3}},
-                             OutputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}}};
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Matrix4}}};
 
             m_typeRules = {rule};
             applyTypeRule(rule);
@@ -470,7 +470,7 @@ namespace gladius::nodes
                                           {FieldNames::Row1, ParameterTypeIndex::Float3},
                                           {FieldNames::Row2, ParameterTypeIndex::Float3},
                                           {FieldNames::Row3, ParameterTypeIndex::Float3}},
-                             OutputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}}};
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Matrix4}}};
 
             m_typeRules = {rule};
             applyTypeRule(rule);
