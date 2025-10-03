@@ -587,7 +587,35 @@ namespace gladius::ui
 
     void ModelEditor::onCreateNode()
     {
-        // Intentionally left empty. Creation of nodes is handled via explicit UI/popups.
+        // Re-introduce the node-editor creation block so the node-editor can
+        // query new-node/link gestures. The implementation was unintentionally
+        // removed in a refactor — this restores the behavior that opens the
+        // "Create Node" popup on right-click in the editor background and
+        // ensures pin-based new-node queries are handled.
+        if (ed::BeginCreate())
+        {
+            // Delegate pin-based "create node while dragging from a pin"
+            // to the dedicated helper that opens the Create Node popup when
+            // appropriate.
+            onQueryNewNode();
+        }
+        ed::EndCreate();
+
+        // Handle background (canvas) context menu. This is what allows the
+        // user to right-click on empty space in the node editor and choose
+        // a node to create.
+        if (ed::ShowBackgroundContextMenu())
+        {
+            // Suspend editor input to safely query ImGui mouse position,
+            // then resume editor interaction.
+            ed::Suspend();
+            auto const currentMousePos = ImGui::GetMousePos();
+            ed::Resume();
+
+            showPopupMenu([&, currentMousePos]() { createNodePopup(-1, currentMousePos); });
+            m_showCreateNodePopUp = true;
+            ImGui::OpenPopup("Create Node");
+        }
     }
 
     void ModelEditor::onDeleteNode()
@@ -2192,6 +2220,7 @@ namespace gladius::ui
         }
         catch (std::exception const & ex)
         {
+           
             // Handle conversion errors
             std::cerr << "Error creating function from expression: " << ex.what() << std::endl;
             // TODO: Show error message to user
