@@ -3,6 +3,7 @@
 
 #include "Model.h"
 #include "NodeBase.h"
+#include "OutputPortReferenceAnalyzer.h"
 #include "Visitor.h"
 #include "nodesfwd.h"
 
@@ -146,11 +147,28 @@ namespace gladius::nodes
         auto isOutPutOfNodeValid(NodeBase const & node) -> bool;
         void assemblyBegin(Begin & beginning);
 
+        /// @brief Check if an output should be inlined (used only once)
+        bool shouldInlineOutput(NodeBase const & node, std::string const & portName) const;
+        
+        /// @brief Get the OpenCL expression for a parameter, checking inline map first
+        /// @param param The parameter to resolve
+        /// @return The OpenCL expression string (either inlined or from toString())
+        std::string resolveParameter(IParameter const & param) const;
+
       private:
         std::stringstream m_definition;
         std::stringstream m_declaration;
         bool m_endReached = false;
         Assembly * m_assembly{};
         std::set<nodes::NodeId> m_visitedNodes;
+        Model * m_currentModel = nullptr;
+        
+        // Reference analyzer for optimization decisions
+        mutable OutputPortReferenceAnalyzer m_referenceAnalyzer;
+        mutable bool m_referenceAnalysisPerformed = false;
+        
+        // Map from (NodeId, PortName) to inline expression
+        // Used for single-use outputs that should be inlined
+        std::map<std::pair<NodeId, std::string>, std::string> m_inlineExpressions;
     };
 } // namespace gladius::nodes

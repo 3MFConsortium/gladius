@@ -16,6 +16,8 @@ namespace gladius::nodes
     {
         m_currentModel = model;
         m_visitedNodes.clear();
+        m_referenceAnalysisPerformed = false;
+        m_inlineExpressions.clear();
     }
 
     void ToOclVisitor::write(std::ostream & out) const
@@ -24,6 +26,39 @@ namespace gladius::nodes
         out << m_declaration.str();
         out << "\n";
         out << m_definition.str();
+    }
+
+    bool ToOclVisitor::shouldInlineOutput(NodeBase const & node, std::string const & portName) const
+    {
+        // Perform reference analysis if not yet done
+        if (!m_referenceAnalysisPerformed && m_currentModel)
+        {
+            m_referenceAnalyzer.setModel(m_currentModel);
+            m_referenceAnalyzer.analyze();
+            m_referenceAnalysisPerformed = true;
+        }
+
+        // Check if this output should be inlined
+        return m_referenceAnalyzer.shouldInline(node.getId(), portName);
+    }
+
+    std::string ToOclVisitor::resolveParameter(IParameter const & param) const
+    {
+        // Check if the parameter has a source (i.e., connected to an output port)
+        auto const & source = param.getConstSource();
+        if (source.has_value())
+        {
+            // Check if this source has an inline expression
+            auto const key = std::make_pair(source->nodeId, std::string(source->shortName));
+            auto const it = m_inlineExpressions.find(key);
+            if (it != m_inlineExpressions.end())
+            {
+                return it->second;
+            }
+        }
+        
+        // Fall back to the default toString() behavior
+        return const_cast<IParameter&>(param).toString();
     }
 
     auto ToOclVisitor::isOutPutOfNodeValid(NodeBase const & node) -> bool
@@ -468,41 +503,102 @@ namespace gladius::nodes
             return;
         }
 
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(addition.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(addition.parameter().at(FieldNames::B));
+        
+        // Build the addition expression
+        std::string expression;
+        std::string typeName;
+        
         if (addition.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} + {2};\n",
-                                        addition.getResultOutputPort().getUniqueName(),
-                                        addition.parameter().at(FieldNames::A).toString(),
-                                        addition.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} + {})", aExpr, bExpr);
         }
         else if (addition.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) + (float3)({2});\n",
-                                        addition.getResultOutputPort().getUniqueName(),
-                                        addition.parameter().at(FieldNames::A).toString(),
-                                        addition.parameter().at(FieldNames::B).toString());
+            typeName = "float3";
+            expression = fmt::format("({} + {})", aExpr, bExpr);
         }
-    }
-
-    void ToOclVisitor::visit(Subtraction & subtraction)
+        else
+        {
+            // Unknown type, skip
+            return;
+        }
+        
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(addition, FieldNames::Result);
+        
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(addition.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            
+            // Add a comment for debugging
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       addition.getResultOutputPort().getUniqueName(),
+                                       expression);
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                       typeName,
+                                       addition.getResultOutputPort().getUniqueName(),
+                                       expression);
+        }
+    }    void ToOclVisitor::visit(Subtraction & subtraction)
     {
         if (!isOutPutOfNodeValid(subtraction))
         {
             return;
         }
+        
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(subtraction.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(subtraction.parameter().at(FieldNames::B));
+        
+        // Build the subtraction expression
+        std::string expression;
+        std::string typeName;
+        
         if (subtraction.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} - {2};\n",
-                                        subtraction.getResultOutputPort().getUniqueName(),
-                                        subtraction.parameter().at(FieldNames::A).toString(),
-                                        subtraction.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} - {})", aExpr, bExpr);
         }
         else if (subtraction.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) - (float3)({2});\n",
-                                        subtraction.getResultOutputPort().getUniqueName(),
-                                        subtraction.parameter().at(FieldNames::A).toString(),
-                                        subtraction.parameter().at(FieldNames::B).toString());
+            typeName = "float3";
+            expression = fmt::format("((float3)({}) - (float3)({}))", aExpr, bExpr);
+        }
+        else
+        {
+            return;
+        }
+        
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(subtraction, FieldNames::Result);
+        
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(subtraction.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       subtraction.getResultOutputPort().getUniqueName(),
+                                       expression);
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                       typeName,
+                                       subtraction.getResultOutputPort().getUniqueName(),
+                                       expression);
         }
     }
 
@@ -512,19 +608,50 @@ namespace gladius::nodes
         {
             return;
         }
+        
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(multiplication.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(multiplication.parameter().at(FieldNames::B));
+        
+        // Build the multiplication expression
+        std::string expression;
+        std::string typeName;
+        
         if (multiplication.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} * {2};\n",
-                                        multiplication.getResultOutputPort().getUniqueName(),
-                                        multiplication.parameter().at(FieldNames::A).toString(),
-                                        multiplication.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} * {})", aExpr, bExpr);
         }
         else if (multiplication.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) * (float3)({2});\n",
-                                        multiplication.getResultOutputPort().getUniqueName(),
-                                        multiplication.parameter().at(FieldNames::A).toString(),
-                                        multiplication.parameter().at(FieldNames::B).toString());
+            typeName = "float3";
+            expression = fmt::format("((float3)({}) * (float3)({}))", aExpr, bExpr);
+        }
+        else
+        {
+            return;
+        }
+        
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(multiplication, FieldNames::Result);
+        
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(multiplication.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       multiplication.getResultOutputPort().getUniqueName(),
+                                       expression);
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                       typeName,
+                                       multiplication.getResultOutputPort().getUniqueName(),
+                                       expression);
         }
     }
 
@@ -534,19 +661,50 @@ namespace gladius::nodes
         {
             return;
         }
+        
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(division.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(division.parameter().at(FieldNames::B));
+        
+        // Build the division expression
+        std::string expression;
+        std::string typeName;
+        
         if (division.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} / {2};\n",
-                                        division.getResultOutputPort().getUniqueName(),
-                                        division.parameter().at(FieldNames::A).toString(),
-                                        division.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} / {})", aExpr, bExpr);
         }
         else if (division.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) / (float3)({2});\n",
-                                        division.getResultOutputPort().getUniqueName(),
-                                        division.parameter().at(FieldNames::A).toString(),
-                                        division.parameter().at(FieldNames::B).toString());
+            typeName = "float3";
+            expression = fmt::format("((float3)({}) / (float3)({}))", aExpr, bExpr);
+        }
+        else
+        {
+            return;
+        }
+        
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(division, FieldNames::Result);
+        
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(division.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       division.getResultOutputPort().getUniqueName(),
+                                       expression);
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                       typeName,
+                                       division.getResultOutputPort().getUniqueName(),
+                                       expression);
         }
     }
 

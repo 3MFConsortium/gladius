@@ -65,6 +65,11 @@ namespace gladius::nodes
             return m_source;
         };
 
+        virtual auto getConstSource() const -> OptionalSource const &
+        {
+            return m_source;
+        };
+
         void setId(ParameterId id)
         {
             m_parameterId = id;
@@ -312,7 +317,7 @@ namespace gladius::nodes
             return m_source;
         }
 
-        OptionalSource const & getConstSource() const
+        OptionalSource const & getConstSource() const override
         {
             return m_source;
         }
