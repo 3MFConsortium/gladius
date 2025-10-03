@@ -568,43 +568,51 @@ namespace gladius::ui
                         }
                     }
 
-                    // Cycle window mode: Windowed -> Single -> Span -> Windowed
+                    // Window mode buttons: toggle fullscreen and span (if available)
                     {
                         using gladius::FullscreenMode;
                         auto mode = m_mainView.getFullscreenMode();
-                        bool clicked = false;
-                        // Use big button style to match menu UI
-                        if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
+                        bool const isWindowed = (mode == FullscreenMode::Windowed);
+                        bool const isSpanning = (mode == FullscreenMode::SpanAllSameHeight);
+                        
+                        // Toggle between windowed and fullscreen (single monitor)
+                        if (bigMenuItem(reinterpret_cast<const char *>(
+                              isWindowed ? ICON_FA_EXPAND "" : ICON_FA_COMPRESS "")))
                         {
-                            clicked = true;
+                            m_mainView.setFullscreenMode(isWindowed ? FullscreenMode::SingleMonitor
+                                                                     : FullscreenMode::Windowed);
                         }
                         if (ImGui::IsItemHovered())
                         {
-                            // Show the NEXT mode, not the current mode
-                            const char * nextModeText = (mode == FullscreenMode::Windowed)
-                                                          ? "Fullscreen (Current Display)"
-                                                        : (mode == FullscreenMode::SingleMonitor)
-                                                          ? "Fullscreen (Span Same Height Displays)"
-                                                          : "Windowed";
-                            ImGui::SetTooltip("Click to switch to: %s", nextModeText);
+                            ImGui::SetTooltip("%s", isWindowed ? "Fullscreen" : "Windowed");
                         }
-                        if (clicked)
+                        
+                        // Span across monitors button (only show if available)
+                        if (m_mainView.isSpanModeAvailable())
                         {
-                            FullscreenMode next = FullscreenMode::Windowed;
-                            switch (mode)
+                            // Use different style when span mode is active
+                            if (isSpanning)
                             {
-                            case FullscreenMode::Windowed:
-                                next = FullscreenMode::SingleMonitor;
-                                break;
-                            case FullscreenMode::SingleMonitor:
-                                next = FullscreenMode::SpanAllSameHeight;
-                                break;
-                            case FullscreenMode::SpanAllSameHeight:
-                            default:
-                                next = FullscreenMode::Windowed;
-                                break;
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 0.6f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.0f, 0.0f, 0.8f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
                             }
-                            m_mainView.setFullscreenMode(next);
+                            
+                            if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_ARROWS_ALT_H "")))
+                            {
+                                m_mainView.setFullscreenMode(isSpanning ? FullscreenMode::Windowed
+                                                                         : FullscreenMode::SpanAllSameHeight);
+                            }
+                            
+                            if (isSpanning)
+                            {
+                                ImGui::PopStyleColor(3);
+                            }
+                            
+                            if (ImGui::IsItemHovered())
+                            {
+                                ImGui::SetTooltip("%s", isSpanning ? "Exit Span Mode" : "Span Across Displays");
+                            }
                         }
                     }
 

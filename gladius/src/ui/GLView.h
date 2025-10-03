@@ -123,6 +123,10 @@ namespace gladius
         }
 
         void setFullscreenMode(FullscreenMode mode);
+        
+        // Check if spanning across multiple monitors is available
+        [[nodiscard]] bool isSpanModeAvailable() const;
+        
         void startAnimationMode();
         void stopAnimationMode();
 

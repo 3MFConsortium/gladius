@@ -940,6 +940,22 @@ namespace gladius
         applyFullscreenMode();
     }
 
+    bool GLView::isSpanModeAvailable() const
+    {
+        if (!m_window || !m_initialized)
+        {
+            return false;
+        }
+        
+        auto * monitor = findCurrentMonitor(m_window);
+        if (!monitor)
+        {
+            monitor = glfwGetPrimaryMonitor();
+        }
+        
+        return monitor && isSpanAcrossSameHeightAvailable(monitor);
+    }
+
     void GLView::startAnimationMode()
     {
         m_isAnimationRunning = true;
