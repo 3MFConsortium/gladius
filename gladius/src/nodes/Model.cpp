@@ -320,6 +320,11 @@ namespace gladius::nodes
         return m_graph;
     }
 
+    graph::VertexList const & Model::getOutputOrder() const
+    {
+        return m_outputOrder;
+    }
+
     InputParameterRegistry & Model::getParameterRegistry()
     {
         return m_inputParameter;

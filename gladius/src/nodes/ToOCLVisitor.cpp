@@ -99,6 +99,121 @@ namespace gladius::nodes
         }
     }
 
+    void ToOclVisitor::emitUnaryOperation(NodeBase & node, std::string const & operation, 
+                                         std::string const & outputPortName)
+    {
+        if (!isOutPutOfNodeValid(node))
+        {
+            return;
+        }
+
+        auto const & outputPort = node.getOutputs().at(outputPortName);
+        std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
+        std::string const inputExpr = resolveParameter(node.parameter().at(FieldNames::A));
+        
+        // Build the expression
+        std::string const expression = fmt::format("{}(({})({}))", operation, typeName, inputExpr);
+        
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(node, outputPortName);
+        
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(node.getId(), outputPortName);
+            m_inlineExpressions[key] = expression;
+            
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       outputPort.getUniqueName(), expression);
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                       typeName, outputPort.getUniqueName(), expression);
+        }
+    }
+
+    void ToOclVisitor::emitBinaryOperation(NodeBase & node, std::string const & operation, 
+                                          std::string const & outputPortName,
+                                          std::string const & param1Name,
+                                          std::string const & param2Name)
+    {
+        if (!isOutPutOfNodeValid(node))
+        {
+            return;
+        }
+
+        auto const & outputPort = node.getOutputs().at(outputPortName);
+        std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
+        std::string const param1Expr = resolveParameter(node.parameter().at(param1Name));
+        std::string const param2Expr = resolveParameter(node.parameter().at(param2Name));
+        
+        // Build the expression
+        std::string const expression = fmt::format("{}(({})({}) , ({})({}))", 
+                                                   operation, typeName, param1Expr, typeName, param2Expr);
+        
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(node, outputPortName);
+        
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(node.getId(), outputPortName);
+            m_inlineExpressions[key] = expression;
+            
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       outputPort.getUniqueName(), expression);
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                       typeName, outputPort.getUniqueName(), expression);
+        }
+    }
+
+    void ToOclVisitor::emitTernaryOperation(NodeBase & node, std::string const & operation,
+                                           std::string const & outputPortName,
+                                           std::string const & param1Name,
+                                           std::string const & param2Name,
+                                           std::string const & param3Name)
+    {
+        if (!isOutPutOfNodeValid(node))
+        {
+            return;
+        }
+
+        auto const & outputPort = node.getOutputs().at(outputPortName);
+        std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
+        std::string const param1Expr = resolveParameter(node.parameter().at(param1Name));
+        std::string const param2Expr = resolveParameter(node.parameter().at(param2Name));
+        std::string const param3Expr = resolveParameter(node.parameter().at(param3Name));
+        
+        // Build the expression
+        std::string const expression = fmt::format("{}({}, {}, {})", 
+                                                   operation, param1Expr, param2Expr, param3Expr);
+        
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(node, outputPortName);
+        
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(node.getId(), outputPortName);
+            m_inlineExpressions[key] = expression;
+            
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       outputPort.getUniqueName(), expression);
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                       typeName, outputPort.getUniqueName(), expression);
+        }
+    }
+
     void ToOclVisitor::assemblyBegin(Begin & beginning)
     {
         m_declaration << fmt::format("float4 model(float3 {}, PAYLOAD_ARGS);\n",
@@ -205,15 +320,15 @@ namespace gladius::nodes
             {
                 m_definition << fmt::format(
                   "return (float4)((float3)({0}),isnan({1})|| isinf({1}) ? {2} : {1});\n}}\n",
-                  ending.parameter().at(FieldNames::Color).toString(),
-                  ending.parameter().at(FieldNames::Shape).toString(),
+                  resolveParameter(ending.parameter().at(FieldNames::Color)),
+                  resolveParameter(ending.parameter().at(FieldNames::Shape)),
                   *fallBackValue);
             }
             else
             {
                 m_definition << fmt::format("return (float4)((float3)({0}),{1});\n}}\n",
-                                            ending.parameter().at(FieldNames::Color).toString(),
-                                            ending.parameter().at(FieldNames::Shape).toString());
+                                            resolveParameter(ending.parameter().at(FieldNames::Color)),
+                                            resolveParameter(ending.parameter().at(FieldNames::Shape)));
             }
             return;
         }
@@ -714,10 +829,25 @@ namespace gladius::nodes
         {
             return;
         }
-        m_definition << fmt::format("float const {0} = dot({1}, {2});\n",
-                                    dotProduct.getResultOutputPort().getUniqueName(),
-                                    dotProduct.parameter()[FieldNames::A].toString(),
-                                    dotProduct.parameter()[FieldNames::B].toString());
+        
+        std::string const aExpr = resolveParameter(dotProduct.parameter()[FieldNames::A]);
+        std::string const bExpr = resolveParameter(dotProduct.parameter()[FieldNames::B]);
+        std::string const expression = fmt::format("dot({}, {})", aExpr, bExpr);
+        
+        bool const canInline = shouldInlineOutput(dotProduct, FieldNames::Result);
+        
+        if (canInline)
+        {
+            auto const key = std::make_pair(dotProduct.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       dotProduct.getResultOutputPort().getUniqueName(), expression);
+        }
+        else
+        {
+            m_definition << fmt::format("float const {} = {};\n",
+                                        dotProduct.getResultOutputPort().getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(CrossProduct & crossProduct)
@@ -726,10 +856,25 @@ namespace gladius::nodes
         {
             return;
         }
-        m_definition << fmt::format("float3 const {0} = cross({1}, {2});\n",
-                                    crossProduct.getResultOutputPort().getUniqueName(),
-                                    crossProduct.parameter()[FieldNames::A].toString(),
-                                    crossProduct.parameter()[FieldNames::B].toString());
+        
+        std::string const aExpr = resolveParameter(crossProduct.parameter()[FieldNames::A]);
+        std::string const bExpr = resolveParameter(crossProduct.parameter()[FieldNames::B]);
+        std::string const expression = fmt::format("cross({}, {})", aExpr, bExpr);
+        
+        bool const canInline = shouldInlineOutput(crossProduct, FieldNames::Result);
+        
+        if (canInline)
+        {
+            auto const key = std::make_pair(crossProduct.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       crossProduct.getResultOutputPort().getUniqueName(), expression);
+        }
+        else
+        {
+            m_definition << fmt::format("float3 const {} = {};\n",
+                                        crossProduct.getResultOutputPort().getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(MatrixVectorMultiplication & matrixVectorMultiplication)
@@ -759,123 +904,47 @@ namespace gladius::nodes
 
     void ToOclVisitor::visit(Sine & sine)
     {
-        if (!isOutPutOfNodeValid(sine))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = sin({2});\n",
-                                    typeIndexToOpenCl(sine.getResultOutputPort().getTypeIndex()),
-                                    sine.getResultOutputPort().getUniqueName(),
-                                    sine.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sine, "sin", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Cosine & cosine)
     {
-        if (!isOutPutOfNodeValid(cosine))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = cos({2});\n",
-                                    typeIndexToOpenCl(cosine.getResultOutputPort().getTypeIndex()),
-                                    cosine.getResultOutputPort().getUniqueName(),
-                                    cosine.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(cosine, "cos", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Tangent & tangent)
     {
-        if (!isOutPutOfNodeValid(tangent))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = tan({2});\n",
-                                    typeIndexToOpenCl(tangent.getResultOutputPort().getTypeIndex()),
-                                    tangent.getResultOutputPort().getUniqueName(),
-                                    tangent.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(tangent, "tan", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(ArcSin & arcSin)
     {
-        if (!isOutPutOfNodeValid(arcSin))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = asin({2});\n",
-                                    typeIndexToOpenCl(arcSin.getResultOutputPort().getTypeIndex()),
-                                    arcSin.getResultOutputPort().getUniqueName(),
-                                    arcSin.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(arcSin, "asin", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(ArcCos & arcCos)
     {
-        if (!isOutPutOfNodeValid(arcCos))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = acos({2});\n",
-                                    typeIndexToOpenCl(arcCos.getResultOutputPort().getTypeIndex()),
-                                    arcCos.getResultOutputPort().getUniqueName(),
-                                    arcCos.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(arcCos, "acos", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(ArcTan & arcTan)
     {
-        if (!isOutPutOfNodeValid(arcTan))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = atan({2});\n",
-                                    typeIndexToOpenCl(arcTan.getResultOutputPort().getTypeIndex()),
-                                    arcTan.getResultOutputPort().getUniqueName(),
-                                    arcTan.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(arcTan, "atan", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Pow & power)
     {
-        if (!isOutPutOfNodeValid(power))
-        {
-            return;
-        }
-
-        m_definition << fmt::format(
-          fmt::runtime("{0} const {1} = pow(({0})({2}), ({0})({3}));\n"),
-          typeIndexToOpenCl(power.getOutputs().at(FieldNames::Value).getTypeIndex()),
-          power.getOutputs().at(FieldNames::Value).getUniqueName(),
-          power.parameter().at(FieldNames::Base).toString(),
-          power.parameter().at(FieldNames::Exponent).toString());
+        emitBinaryOperation(power, "pow", FieldNames::Value, FieldNames::Base, FieldNames::Exponent);
     }
 
     void ToOclVisitor::visit(Sqrt & sqrtNode)
     {
-        if (!isOutPutOfNodeValid(sqrtNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format(
-          "{0} const {1} = sqrt(({0})({2}));\n",
-          typeIndexToOpenCl(sqrtNode.getResultOutputPort().getTypeIndex()),
-          sqrtNode.getResultOutputPort().getUniqueName(),
-          sqrtNode.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sqrtNode, "sqrt", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Fmod & modulus)
     {
-        if (!isOutPutOfNodeValid(modulus))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = fmod(({0})({2}), ({0})({3}));\n",
-                                    typeIndexToOpenCl(modulus.getResultOutputPort().getTypeIndex()),
-                                    modulus.getResultOutputPort().getUniqueName(),
-                                    modulus.parameter().at(FieldNames::A).toString(),
-                                    modulus.parameter().at(FieldNames::B).toString());
+        emitBinaryOperation(modulus, "fmod", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Mod & modulus)
@@ -897,43 +966,17 @@ namespace gladius::nodes
 
     void ToOclVisitor::visit(Max & maxNode)
     {
-        if (!isOutPutOfNodeValid(maxNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = max(({0})({2}), ({0})({3}));\n",
-                                    typeIndexToOpenCl(maxNode.getResultOutputPort().getTypeIndex()),
-                                    maxNode.getResultOutputPort().getUniqueName(),
-                                    maxNode.parameter().at(FieldNames::A).toString(),
-                                    maxNode.parameter().at(FieldNames::B).toString());
+        emitBinaryOperation(maxNode, "max", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Min & minNode)
     {
-        if (!isOutPutOfNodeValid(minNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = min(({0})({2}), ({0})({3}));\n",
-                                    typeIndexToOpenCl(minNode.getResultOutputPort().getTypeIndex()),
-                                    minNode.getResultOutputPort().getUniqueName(),
-                                    minNode.parameter().at(FieldNames::A).toString(),
-                                    minNode.parameter().at(FieldNames::B).toString());
+        emitBinaryOperation(minNode, "min", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Abs & absNode)
     {
-        if (!isOutPutOfNodeValid(absNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = fabs(({0})({2}));\n",
-                                    typeIndexToOpenCl(absNode.getResultOutputPort().getTypeIndex()),
-                                    absNode.getResultOutputPort().getUniqueName(),
-                                    absNode.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(absNode, "fabs", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Length & lengthNode)
@@ -942,24 +985,29 @@ namespace gladius::nodes
         {
             return;
         }
-        m_definition << fmt::format("float const {0} = length((float3)({1}));\n",
-                                    lengthNode.getResultOutputPort().getUniqueName(),
-                                    lengthNode.parameter().at(FieldNames::A).toString());
+        
+        std::string const inputExpr = resolveParameter(lengthNode.parameter().at(FieldNames::A));
+        std::string const expression = fmt::format("length((float3)({}))", inputExpr);
+        
+        bool const canInline = shouldInlineOutput(lengthNode, FieldNames::Result);
+        
+        if (canInline)
+        {
+            auto const key = std::make_pair(lengthNode.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            m_definition << fmt::format("// Inlined: {} {}\n", 
+                                       lengthNode.getResultOutputPort().getUniqueName(), expression);
+        }
+        else
+        {
+            m_definition << fmt::format("float const {} = {};\n",
+                                        lengthNode.getResultOutputPort().getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(Mix & mixNode)
     {
-        if (!isOutPutOfNodeValid(mixNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = mix(({0})({2}), ({0})({3}), ({0})({4}));\n",
-                                    typeIndexToOpenCl(mixNode.getResultOutputPort().getTypeIndex()),
-                                    mixNode.getResultOutputPort().getUniqueName(),
-                                    mixNode.parameter().at(FieldNames::A).toString(),
-                                    mixNode.parameter().at(FieldNames::B).toString(),
-                                    mixNode.parameter().at(FieldNames::Ratio).toString());
+        emitTernaryOperation(mixNode, "mix", FieldNames::Result, FieldNames::A, FieldNames::B, FieldNames::Ratio);
     }
 
     void ToOclVisitor::visit(Transformation & transformation)
@@ -1155,53 +1203,22 @@ namespace gladius::nodes
 
     void ToOclVisitor::visit(Exp & exp)
     {
-        if (!isOutPutOfNodeValid(exp))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = exp({2});\n",
-          typeIndexToOpenCl(exp.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          exp.getOutputs().at(FieldNames::Result).getUniqueName(),
-          exp.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(exp, "exp", FieldNames::Result);
     }
+    
     void ToOclVisitor::visit(Log & log)
     {
-        if (!isOutPutOfNodeValid(log))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = log({2});\n",
-          typeIndexToOpenCl(log.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          log.getOutputs().at(FieldNames::Result).getUniqueName(),
-          log.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(log, "log", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Log2 & log2)
     {
-        if (!isOutPutOfNodeValid(log2))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = log2({2});\n",
-          typeIndexToOpenCl(log2.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          log2.getOutputs().at(FieldNames::Result).getUniqueName(),
-          log2.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(log2, "log2", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Log10 & log10)
     {
-        if (!isOutPutOfNodeValid(log10))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = log10({2});\n",
-          typeIndexToOpenCl(log10.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          log10.getOutputs().at(FieldNames::Result).getUniqueName(),
-          log10.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(log10, "log10", FieldNames::Result);
     }
 
     // result = A < B ? C : D
@@ -1224,122 +1241,47 @@ namespace gladius::nodes
 
     void ToOclVisitor::visit(Clamp & clamp)
     {
-        if (!isOutPutOfNodeValid(clamp))
-        {
-            return;
-        }
-
-        m_definition << fmt::format(
-          "{0} const {1} = clamp({2}, {3}, {4});\n",
-          typeIndexToOpenCl(clamp.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          clamp.getOutputs().at(FieldNames::Result).getUniqueName(),
-          clamp.parameter().at(FieldNames::A).toString(),
-          clamp.parameter().at(FieldNames::Min).toString(),
-          clamp.parameter().at(FieldNames::Max).toString());
+        emitTernaryOperation(clamp, "clamp", FieldNames::Result, FieldNames::A, FieldNames::Min, FieldNames::Max);
     }
 
     void ToOclVisitor::visit(SinH & sinh)
     {
-        if (!isOutPutOfNodeValid(sinh))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = sinh({2});\n",
-          typeIndexToOpenCl(sinh.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          sinh.getOutputs().at(FieldNames::Result).getUniqueName(),
-          sinh.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sinh, "sinh", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(CosH & cosh)
     {
-        if (!isOutPutOfNodeValid(cosh))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = cosh({2});\n",
-          typeIndexToOpenCl(cosh.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          cosh.getOutputs().at(FieldNames::Result).getUniqueName(),
-          cosh.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(cosh, "cosh", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(TanH & tanh)
     {
-        if (!isOutPutOfNodeValid(tanh))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = tanh({2});\n",
-          typeIndexToOpenCl(tanh.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          tanh.getOutputs().at(FieldNames::Result).getUniqueName(),
-          tanh.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(tanh, "tanh", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Round & round)
     {
-        if (!isOutPutOfNodeValid(round))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = round({2});\n",
-          typeIndexToOpenCl(round.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          round.getOutputs().at(FieldNames::Result).getUniqueName(),
-          round.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(round, "round", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Ceil & ceil)
     {
-        if (!isOutPutOfNodeValid(ceil))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = ceil({2});\n",
-          typeIndexToOpenCl(ceil.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          ceil.getOutputs().at(FieldNames::Result).getUniqueName(),
-          ceil.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(ceil, "ceil", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Floor & floor)
     {
-        if (!isOutPutOfNodeValid(floor))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = floor({2});\n",
-          typeIndexToOpenCl(floor.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          floor.getOutputs().at(FieldNames::Result).getUniqueName(),
-          floor.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(floor, "floor", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Sign & sign)
     {
-        if (!isOutPutOfNodeValid(sign))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = sign({2});\n",
-          typeIndexToOpenCl(sign.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          sign.getOutputs().at(FieldNames::Result).getUniqueName(),
-          sign.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sign, "sign", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Fract & fract)
     {
-        if (!isOutPutOfNodeValid(fract))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = fract({2});\n",
-          typeIndexToOpenCl(fract.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          fract.getOutputs().at(FieldNames::Result).getUniqueName(),
-          fract.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(fract, "fract", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(VectorFromScalar & vectorFromScalar)

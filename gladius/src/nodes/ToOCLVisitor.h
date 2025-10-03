@@ -154,6 +154,23 @@ namespace gladius::nodes
         /// @param param The parameter to resolve
         /// @return The OpenCL expression string (either inlined or from toString())
         std::string resolveParameter(IParameter const & param) const;
+        
+        /// @brief Helper for unary operations (sin, cos, sqrt, etc.)
+        void emitUnaryOperation(NodeBase & node, std::string const & operation, 
+                               std::string const & outputPortName);
+        
+        /// @brief Helper for binary operations (min, max, pow, etc.)
+        void emitBinaryOperation(NodeBase & node, std::string const & operation, 
+                                std::string const & outputPortName,
+                                std::string const & param1Name = FieldNames::A,
+                                std::string const & param2Name = FieldNames::B);
+        
+        /// @brief Helper for ternary operations (mix, clamp, etc.)
+        void emitTernaryOperation(NodeBase & node, std::string const & operation,
+                                 std::string const & outputPortName,
+                                 std::string const & param1Name,
+                                 std::string const & param2Name,
+                                 std::string const & param3Name);
 
       private:
         std::stringstream m_definition;

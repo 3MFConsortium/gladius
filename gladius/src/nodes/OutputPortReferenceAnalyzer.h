@@ -81,11 +81,9 @@ namespace gladius::nodes
         /// @brief Record a reference from parameter to output port
         void recordReference(VariantParameter const & param, NodeId consumingNodeId);
 
-        /// @brief Mark all nodes reachable from End node via backward traversal
+        /// @brief Mark reachable nodes using reverse topological order iteration
+        /// This efficiently identifies which nodes can influence the End node
         void markReachableNodes();
-
-        /// @brief Backward traverse from a node to mark predecessors
-        void traverseBackward(NodeId nodeId);
 
         Model * m_model = nullptr;
         std::map<PortReference, size_t> m_referenceCounts;
