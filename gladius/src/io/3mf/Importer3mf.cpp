@@ -627,38 +627,6 @@ namespace gladius::io
             {
                 parameter->setInputFromPort(*sourcePort);
             }
-            // Handle legacy references to a "matrix" output (renamed to "result" in newer specs)
-            if (!sourcePort)
-            {
-                auto inputRef = input->GetReference();
-                std::string lowerRef = inputRef;
-                std::transform(lowerRef.begin(), lowerRef.end(), lowerRef.begin(), ::tolower);
-                
-                // Check if the reference contains ".matrix" (case-insensitive)
-                if (lowerRef.find(".matrix") != std::string::npos)
-                {
-                    auto legacyRef = inputRef;
-                    size_t matrixPos = lowerRef.find(".matrix");
-                    auto newRef = inputRef.substr(0, matrixPos) + ".result";
-
-                    // Temporarily modify the reference to try the new name
-                    input->SetReference(newRef);
-                    sourcePort = resolveInput(model, input);
-                    input->SetReference(legacyRef);
-                    
-                    if (sourcePort)
-                    {
-                        parameter->setInputFromPort(*sourcePort);
-                        if (m_eventLogger)
-                        {
-                            m_eventLogger->addEvent({fmt::format("Resolved legacy reference {} to {}",
-                                                                 legacyRef,
-                                                                 newRef),
-                                                     events::Severity::Info});
-                        }
-                    }
-                }
-            }
         }
 
         if (node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::Constant)
@@ -871,19 +839,58 @@ namespace gladius::io
             sourceNode = sourceNodeIter->second;
         }
 
+        auto & outputs = sourceNode->getOutputs();
         auto sourcePortName = makeValidVariableName(extractOutputName(refName));
-        auto sourcePortIter = sourceNode->getOutputs().find(sourcePortName);
-        if (sourcePortIter == sourceNode->getOutputs().end())
+        auto sourcePortIter = outputs.find(sourcePortName);
+        if (sourcePortIter == outputs.end())
         {
+            // Legacy files used ".matrix" as the output name; newer versions use "Result"
+            std::string lowerRef = refName;
+            std::transform(lowerRef.begin(), lowerRef.end(), lowerRef.begin(), ::tolower);
+            auto matrixPos = lowerRef.rfind(".matrix");
+            if (matrixPos != std::string::npos)
+            {
+                std::string legacyRef = refName;
+                std::string fallbackRef = refName.substr(0, matrixPos) + ".Result";
+                auto fallbackPortName = makeValidVariableName(extractOutputName(fallbackRef));
+                auto fallbackIter = outputs.find(fallbackPortName);
+
+                if (fallbackIter == outputs.end())
+                {
+                    // Also try lowercase variant for safety
+                    fallbackRef = refName.substr(0, matrixPos) + ".result";
+                    fallbackPortName = makeValidVariableName(extractOutputName(fallbackRef));
+                    fallbackIter = outputs.find(fallbackPortName);
+                }
+
+                if (fallbackIter != outputs.end())
+                {
+                    input->SetReference(fallbackRef);
+                    if (m_eventLogger)
+                    {
+                        m_eventLogger->addEvent({fmt::format("Resolved legacy reference {} to {}",
+                                                             legacyRef,
+                                                             fallbackRef),
+                                                 events::Severity::Info});
+                    }
+                    return &fallbackIter->second;
+                }
+            }
+
             if (m_eventLogger)
             {
+                std::string suggestion;
+                if (!outputs.empty())
+                {
+                    suggestion = outputs.begin()->first;
+                }
                 m_eventLogger->addEvent(
-                  {fmt::format(
-                     "Resolving {} failed. Port of node {} not found: {}. Did you mean {}?\n",
-                     refName,
-                     sourceNodeName,
-                     sourcePortName,
-                     sourceNode->getOutputs().begin()->first),
+                  {fmt::format("Resolving {} failed. Port of node {} not found: {}{}",
+                               refName,
+                               sourceNodeName,
+                               sourcePortName,
+                               suggestion.empty() ? std::string{}
+                                                  : fmt::format(". Did you mean {}?", suggestion)),
                    events::Severity::Error});
             }
 
