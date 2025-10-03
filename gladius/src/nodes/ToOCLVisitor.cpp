@@ -56,9 +56,9 @@ namespace gladius::nodes
                 return it->second;
             }
         }
-        
+
         // Fall back to the default toString() behavior
-        return const_cast<IParameter&>(param).toString();
+        return const_cast<IParameter &>(param).toString();
     }
 
     auto ToOclVisitor::isOutPutOfNodeValid(NodeBase const & node) -> bool
@@ -99,8 +99,9 @@ namespace gladius::nodes
         }
     }
 
-    void ToOclVisitor::emitUnaryOperation(NodeBase & node, std::string const & operation, 
-                                         std::string const & outputPortName)
+    void ToOclVisitor::emitUnaryOperation(NodeBase & node,
+                                          std::string const & operation,
+                                          std::string const & outputPortName)
     {
         if (!isOutPutOfNodeValid(node))
         {
@@ -110,34 +111,35 @@ namespace gladius::nodes
         auto const & outputPort = node.getOutputs().at(outputPortName);
         std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
         std::string const inputExpr = resolveParameter(node.parameter().at(FieldNames::A));
-        
+
         // Build the expression
         std::string const expression = fmt::format("{}(({})({}))", operation, typeName, inputExpr);
-        
+
         // Check if this result should be inlined
         bool const canInline = shouldInlineOutput(node, outputPortName);
-        
+
         if (canInline)
         {
             // Store the expression for inlining
             auto const key = std::make_pair(node.getId(), outputPortName);
             m_inlineExpressions[key] = expression;
-            
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       outputPort.getUniqueName(), expression);
+
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
             // Emit a variable declaration
-            m_definition << fmt::format("{} const {} = {};\n",
-                                       typeName, outputPort.getUniqueName(), expression);
+            m_definition << fmt::format(
+              "{} const {} = {};\n", typeName, outputPort.getUniqueName(), expression);
         }
     }
 
-    void ToOclVisitor::emitBinaryOperation(NodeBase & node, std::string const & operation, 
-                                          std::string const & outputPortName,
-                                          std::string const & param1Name,
-                                          std::string const & param2Name)
+    void ToOclVisitor::emitBinaryOperation(NodeBase & node,
+                                           std::string const & operation,
+                                           std::string const & outputPortName,
+                                           std::string const & param1Name,
+                                           std::string const & param2Name)
     {
         if (!isOutPutOfNodeValid(node))
         {
@@ -148,36 +150,37 @@ namespace gladius::nodes
         std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
         std::string const param1Expr = resolveParameter(node.parameter().at(param1Name));
         std::string const param2Expr = resolveParameter(node.parameter().at(param2Name));
-        
+
         // Build the expression
-        std::string const expression = fmt::format("{}(({})({}) , ({})({}))", 
-                                                   operation, typeName, param1Expr, typeName, param2Expr);
-        
+        std::string const expression = fmt::format(
+          "{}(({})({}) , ({})({}))", operation, typeName, param1Expr, typeName, param2Expr);
+
         // Check if this result should be inlined
         bool const canInline = shouldInlineOutput(node, outputPortName);
-        
+
         if (canInline)
         {
             // Store the expression for inlining
             auto const key = std::make_pair(node.getId(), outputPortName);
             m_inlineExpressions[key] = expression;
-            
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       outputPort.getUniqueName(), expression);
+
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
             // Emit a variable declaration
-            m_definition << fmt::format("{} const {} = {};\n",
-                                       typeName, outputPort.getUniqueName(), expression);
+            m_definition << fmt::format(
+              "{} const {} = {};\n", typeName, outputPort.getUniqueName(), expression);
         }
     }
 
-    void ToOclVisitor::emitTernaryOperation(NodeBase & node, std::string const & operation,
-                                           std::string const & outputPortName,
-                                           std::string const & param1Name,
-                                           std::string const & param2Name,
-                                           std::string const & param3Name)
+    void ToOclVisitor::emitTernaryOperation(NodeBase & node,
+                                            std::string const & operation,
+                                            std::string const & outputPortName,
+                                            std::string const & param1Name,
+                                            std::string const & param2Name,
+                                            std::string const & param3Name)
     {
         if (!isOutPutOfNodeValid(node))
         {
@@ -189,28 +192,28 @@ namespace gladius::nodes
         std::string const param1Expr = resolveParameter(node.parameter().at(param1Name));
         std::string const param2Expr = resolveParameter(node.parameter().at(param2Name));
         std::string const param3Expr = resolveParameter(node.parameter().at(param3Name));
-        
+
         // Build the expression
-        std::string const expression = fmt::format("{}({}, {}, {})", 
-                                                   operation, param1Expr, param2Expr, param3Expr);
-        
+        std::string const expression =
+          fmt::format("{}({}, {}, {})", operation, param1Expr, param2Expr, param3Expr);
+
         // Check if this result should be inlined
         bool const canInline = shouldInlineOutput(node, outputPortName);
-        
+
         if (canInline)
         {
             // Store the expression for inlining
             auto const key = std::make_pair(node.getId(), outputPortName);
             m_inlineExpressions[key] = expression;
-            
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       outputPort.getUniqueName(), expression);
+
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
             // Emit a variable declaration
-            m_definition << fmt::format("{} const {} = {};\n",
-                                       typeName, outputPort.getUniqueName(), expression);
+            m_definition << fmt::format(
+              "{} const {} = {};\n", typeName, outputPort.getUniqueName(), expression);
         }
     }
 
@@ -326,9 +329,10 @@ namespace gladius::nodes
             }
             else
             {
-                m_definition << fmt::format("return (float4)((float3)({0}),{1});\n}}\n",
-                                            resolveParameter(ending.parameter().at(FieldNames::Color)),
-                                            resolveParameter(ending.parameter().at(FieldNames::Shape)));
+                m_definition << fmt::format(
+                  "return (float4)((float3)({0}),{1});\n}}\n",
+                  resolveParameter(ending.parameter().at(FieldNames::Color)),
+                  resolveParameter(ending.parameter().at(FieldNames::Shape)));
             }
             return;
         }
@@ -413,11 +417,26 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(fmt::runtime("float3 const {0} = (float3)({1}, {2}, {3});\n"),
-                                    composeVector.getOutputs()[FieldNames::Result].getUniqueName(),
-                                    composeVector.parameter()[FieldNames::X].toString(),
-                                    composeVector.parameter()[FieldNames::Y].toString(),
-                                    composeVector.parameter()[FieldNames::Z].toString());
+        auto const & outputPort = composeVector.getOutputs().at(FieldNames::Result);
+        std::string const xExpr = resolveParameter(composeVector.parameter().at(FieldNames::X));
+        std::string const yExpr = resolveParameter(composeVector.parameter().at(FieldNames::Y));
+        std::string const zExpr = resolveParameter(composeVector.parameter().at(FieldNames::Z));
+
+        std::string const expression = fmt::format("(float3)({}, {}, {})", xExpr, yExpr, zExpr);
+
+        bool const canInline = shouldInlineOutput(composeVector, FieldNames::Result);
+        if (canInline)
+        {
+            auto const key = std::make_pair(composeVector.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float3 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(ComposeMatrix & composeMatrix)
@@ -427,26 +446,56 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          fmt::runtime("float16 const {0} = (float16)({1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, "
-                       "{10}, {11}, {12}, {13}, {14}, {15}, {16});\n"),
-          composeMatrix.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          composeMatrix.parameter()[FieldNames::M00].toString(),
-          composeMatrix.parameter()[FieldNames::M01].toString(),
-          composeMatrix.parameter()[FieldNames::M02].toString(),
-          composeMatrix.parameter()[FieldNames::M03].toString(),
-          composeMatrix.parameter()[FieldNames::M10].toString(),
-          composeMatrix.parameter()[FieldNames::M11].toString(),
-          composeMatrix.parameter()[FieldNames::M12].toString(),
-          composeMatrix.parameter()[FieldNames::M13].toString(),
-          composeMatrix.parameter()[FieldNames::M20].toString(),
-          composeMatrix.parameter()[FieldNames::M21].toString(),
-          composeMatrix.parameter()[FieldNames::M22].toString(),
-          composeMatrix.parameter()[FieldNames::M23].toString(),
-          composeMatrix.parameter()[FieldNames::M30].toString(),
-          composeMatrix.parameter()[FieldNames::M31].toString(),
-          composeMatrix.parameter()[FieldNames::M32].toString(),
-          composeMatrix.parameter()[FieldNames::M33].toString());
+        auto const & outputPort = composeMatrix.getOutputs().at(FieldNames::Matrix);
+        auto const m00 = resolveParameter(composeMatrix.parameter().at(FieldNames::M00));
+        auto const m01 = resolveParameter(composeMatrix.parameter().at(FieldNames::M01));
+        auto const m02 = resolveParameter(composeMatrix.parameter().at(FieldNames::M02));
+        auto const m03 = resolveParameter(composeMatrix.parameter().at(FieldNames::M03));
+        auto const m10 = resolveParameter(composeMatrix.parameter().at(FieldNames::M10));
+        auto const m11 = resolveParameter(composeMatrix.parameter().at(FieldNames::M11));
+        auto const m12 = resolveParameter(composeMatrix.parameter().at(FieldNames::M12));
+        auto const m13 = resolveParameter(composeMatrix.parameter().at(FieldNames::M13));
+        auto const m20 = resolveParameter(composeMatrix.parameter().at(FieldNames::M20));
+        auto const m21 = resolveParameter(composeMatrix.parameter().at(FieldNames::M21));
+        auto const m22 = resolveParameter(composeMatrix.parameter().at(FieldNames::M22));
+        auto const m23 = resolveParameter(composeMatrix.parameter().at(FieldNames::M23));
+        auto const m30 = resolveParameter(composeMatrix.parameter().at(FieldNames::M30));
+        auto const m31 = resolveParameter(composeMatrix.parameter().at(FieldNames::M31));
+        auto const m32 = resolveParameter(composeMatrix.parameter().at(FieldNames::M32));
+        auto const m33 = resolveParameter(composeMatrix.parameter().at(FieldNames::M33));
+
+        std::string const expression =
+          fmt::format("(float16)({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+                      m00,
+                      m01,
+                      m02,
+                      m03,
+                      m10,
+                      m11,
+                      m12,
+                      m13,
+                      m20,
+                      m21,
+                      m22,
+                      m23,
+                      m30,
+                      m31,
+                      m32,
+                      m33);
+
+        bool const canInline = shouldInlineOutput(composeMatrix, FieldNames::Matrix);
+        if (canInline)
+        {
+            auto const key = std::make_pair(composeMatrix.getId(), std::string(FieldNames::Matrix));
+            m_inlineExpressions[key] = expression;
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float16 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(ComposeMatrixFromColumns & composeMatrixFromColumns)
@@ -456,14 +505,38 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          fmt::runtime("float16 const {0} = (float16)({1}.x, {2}.x, {3}.x, {4}.x, {1}.y, {2}.y, "
-                       "{3}.y, {4}.y, {1}.z, {2}.z, {3}.z, {4}.z, 0.f, 0.f, 0.f, 1.f);\n"),
-          composeMatrixFromColumns.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col0].toString(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col1].toString(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col2].toString(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col3].toString());
+        auto const & outputPort = composeMatrixFromColumns.getOutputs().at(FieldNames::Matrix);
+        auto const col0 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col0));
+        auto const col1 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col1));
+        auto const col2 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col2));
+        auto const col3 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col3));
+
+        std::string const expression =
+          fmt::format("(float16)(({0}).x, ({1}).x, ({2}).x, ({3}).x, ({0}).y, ({1}).y, ({2}).y, "
+                      "({3}).y, ({0}).z, ({1}).z, ({2}).z, ({3}).z, 0.f, 0.f, 0.f, 1.f)",
+                      col0,
+                      col1,
+                      col2,
+                      col3);
+
+        bool const canInline = shouldInlineOutput(composeMatrixFromColumns, FieldNames::Matrix);
+        if (canInline)
+        {
+            auto const key =
+              std::make_pair(composeMatrixFromColumns.getId(), std::string(FieldNames::Matrix));
+            m_inlineExpressions[key] = expression;
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float16 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(ComposeMatrixFromRows & composeMatrixFromRows)
@@ -473,14 +546,34 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          fmt::runtime("float16 const {0} = (float16)({1}.x, {1}.y, {1}.z, 0.f, {2}.x, {2}.y, "
-                       "{2}.z, 0.f, {3}.x, {3}.y, {3}.z, 0.f, {4}.x, {4}.y, {4}.z, 1.f);\n"),
-          composeMatrixFromRows.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          composeMatrixFromRows.parameter()[FieldNames::Row0].toString(),
-          composeMatrixFromRows.parameter()[FieldNames::Row1].toString(),
-          composeMatrixFromRows.parameter()[FieldNames::Row2].toString(),
-          composeMatrixFromRows.parameter()[FieldNames::Row3].toString());
+        auto const & outputPort = composeMatrixFromRows.getOutputs().at(FieldNames::Matrix);
+        auto const row0 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row0));
+        auto const row1 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row1));
+        auto const row2 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row2));
+        auto const row3 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row3));
+
+        std::string const expression =
+          fmt::format("(float16)(({0}).x, ({0}).y, ({0}).z, 0.f, ({1}).x, ({1}).y, ({1}).z, 0.f, "
+                      "({2}).x, ({2}).y, ({2}).z, 0.f, ({3}).x, ({3}).y, ({3}).z, 1.f)",
+                      row0,
+                      row1,
+                      row2,
+                      row3);
+
+        bool const canInline = shouldInlineOutput(composeMatrixFromRows, FieldNames::Matrix);
+        if (canInline)
+        {
+            auto const key =
+              std::make_pair(composeMatrixFromRows.getId(), std::string(FieldNames::Matrix));
+            m_inlineExpressions[key] = expression;
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float16 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(DecomposeVector & decomposeVector)
@@ -621,11 +714,11 @@ namespace gladius::nodes
         // Resolve input parameters (may use inlined expressions)
         std::string const aExpr = resolveParameter(addition.parameter().at(FieldNames::A));
         std::string const bExpr = resolveParameter(addition.parameter().at(FieldNames::B));
-        
+
         // Build the addition expression
         std::string expression;
         std::string typeName;
-        
+
         if (addition.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
             typeName = "float";
@@ -641,44 +734,44 @@ namespace gladius::nodes
             // Unknown type, skip
             return;
         }
-        
+
         // Check if this result should be inlined
         bool const canInline = shouldInlineOutput(addition, FieldNames::Result);
-        
+
         if (canInline)
         {
             // Store the expression for inlining
             auto const key = std::make_pair(addition.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            
+
             // Add a comment for debugging
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       addition.getResultOutputPort().getUniqueName(),
-                                       expression);
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", addition.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
             // Emit a variable declaration
             m_definition << fmt::format("{} const {} = {};\n",
-                                       typeName,
-                                       addition.getResultOutputPort().getUniqueName(),
-                                       expression);
+                                        typeName,
+                                        addition.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
-    }    void ToOclVisitor::visit(Subtraction & subtraction)
+    }
+    void ToOclVisitor::visit(Subtraction & subtraction)
     {
         if (!isOutPutOfNodeValid(subtraction))
         {
             return;
         }
-        
+
         // Resolve input parameters (may use inlined expressions)
         std::string const aExpr = resolveParameter(subtraction.parameter().at(FieldNames::A));
         std::string const bExpr = resolveParameter(subtraction.parameter().at(FieldNames::B));
-        
+
         // Build the subtraction expression
         std::string expression;
         std::string typeName;
-        
+
         if (subtraction.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
             typeName = "float";
@@ -693,27 +786,26 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         // Check if this result should be inlined
         bool const canInline = shouldInlineOutput(subtraction, FieldNames::Result);
-        
+
         if (canInline)
         {
             // Store the expression for inlining
             auto const key = std::make_pair(subtraction.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       subtraction.getResultOutputPort().getUniqueName(),
-                                       expression);
+
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", subtraction.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
             // Emit a variable declaration
             m_definition << fmt::format("{} const {} = {};\n",
-                                       typeName,
-                                       subtraction.getResultOutputPort().getUniqueName(),
-                                       expression);
+                                        typeName,
+                                        subtraction.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
     }
 
@@ -723,15 +815,15 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         // Resolve input parameters (may use inlined expressions)
         std::string const aExpr = resolveParameter(multiplication.parameter().at(FieldNames::A));
         std::string const bExpr = resolveParameter(multiplication.parameter().at(FieldNames::B));
-        
+
         // Build the multiplication expression
         std::string expression;
         std::string typeName;
-        
+
         if (multiplication.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
             typeName = "float";
@@ -746,27 +838,28 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         // Check if this result should be inlined
         bool const canInline = shouldInlineOutput(multiplication, FieldNames::Result);
-        
+
         if (canInline)
         {
             // Store the expression for inlining
-            auto const key = std::make_pair(multiplication.getId(), std::string(FieldNames::Result));
+            auto const key =
+              std::make_pair(multiplication.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       multiplication.getResultOutputPort().getUniqueName(),
-                                       expression);
+
+            m_definition << fmt::format("// Inlined: {} {}\n",
+                                        multiplication.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
         else
         {
             // Emit a variable declaration
             m_definition << fmt::format("{} const {} = {};\n",
-                                       typeName,
-                                       multiplication.getResultOutputPort().getUniqueName(),
-                                       expression);
+                                        typeName,
+                                        multiplication.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
     }
 
@@ -776,15 +869,15 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         // Resolve input parameters (may use inlined expressions)
         std::string const aExpr = resolveParameter(division.parameter().at(FieldNames::A));
         std::string const bExpr = resolveParameter(division.parameter().at(FieldNames::B));
-        
+
         // Build the division expression
         std::string expression;
         std::string typeName;
-        
+
         if (division.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
             typeName = "float";
@@ -799,27 +892,26 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         // Check if this result should be inlined
         bool const canInline = shouldInlineOutput(division, FieldNames::Result);
-        
+
         if (canInline)
         {
             // Store the expression for inlining
             auto const key = std::make_pair(division.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       division.getResultOutputPort().getUniqueName(),
-                                       expression);
+
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", division.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
             // Emit a variable declaration
             m_definition << fmt::format("{} const {} = {};\n",
-                                       typeName,
-                                       division.getResultOutputPort().getUniqueName(),
-                                       expression);
+                                        typeName,
+                                        division.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
     }
 
@@ -829,24 +921,25 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         std::string const aExpr = resolveParameter(dotProduct.parameter()[FieldNames::A]);
         std::string const bExpr = resolveParameter(dotProduct.parameter()[FieldNames::B]);
         std::string const expression = fmt::format("dot({}, {})", aExpr, bExpr);
-        
+
         bool const canInline = shouldInlineOutput(dotProduct, FieldNames::Result);
-        
+
         if (canInline)
         {
             auto const key = std::make_pair(dotProduct.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       dotProduct.getResultOutputPort().getUniqueName(), expression);
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", dotProduct.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
             m_definition << fmt::format("float const {} = {};\n",
-                                        dotProduct.getResultOutputPort().getUniqueName(), expression);
+                                        dotProduct.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
     }
 
@@ -856,24 +949,26 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         std::string const aExpr = resolveParameter(crossProduct.parameter()[FieldNames::A]);
         std::string const bExpr = resolveParameter(crossProduct.parameter()[FieldNames::B]);
         std::string const expression = fmt::format("cross({}, {})", aExpr, bExpr);
-        
+
         bool const canInline = shouldInlineOutput(crossProduct, FieldNames::Result);
-        
+
         if (canInline)
         {
             auto const key = std::make_pair(crossProduct.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       crossProduct.getResultOutputPort().getUniqueName(), expression);
+            m_definition << fmt::format("// Inlined: {} {}\n",
+                                        crossProduct.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
         else
         {
             m_definition << fmt::format("float3 const {} = {};\n",
-                                        crossProduct.getResultOutputPort().getUniqueName(), expression);
+                                        crossProduct.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
     }
 
@@ -934,7 +1029,8 @@ namespace gladius::nodes
 
     void ToOclVisitor::visit(Pow & power)
     {
-        emitBinaryOperation(power, "pow", FieldNames::Value, FieldNames::Base, FieldNames::Exponent);
+        emitBinaryOperation(
+          power, "pow", FieldNames::Value, FieldNames::Base, FieldNames::Exponent);
     }
 
     void ToOclVisitor::visit(Sqrt & sqrtNode)
@@ -985,29 +1081,31 @@ namespace gladius::nodes
         {
             return;
         }
-        
+
         std::string const inputExpr = resolveParameter(lengthNode.parameter().at(FieldNames::A));
         std::string const expression = fmt::format("length((float3)({}))", inputExpr);
-        
+
         bool const canInline = shouldInlineOutput(lengthNode, FieldNames::Result);
-        
+
         if (canInline)
         {
             auto const key = std::make_pair(lengthNode.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format("// Inlined: {} {}\n", 
-                                       lengthNode.getResultOutputPort().getUniqueName(), expression);
+            m_definition << fmt::format(
+              "// Inlined: {} {}\n", lengthNode.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
             m_definition << fmt::format("float const {} = {};\n",
-                                        lengthNode.getResultOutputPort().getUniqueName(), expression);
+                                        lengthNode.getResultOutputPort().getUniqueName(),
+                                        expression);
         }
     }
 
     void ToOclVisitor::visit(Mix & mixNode)
     {
-        emitTernaryOperation(mixNode, "mix", FieldNames::Result, FieldNames::A, FieldNames::B, FieldNames::Ratio);
+        emitTernaryOperation(
+          mixNode, "mix", FieldNames::Result, FieldNames::A, FieldNames::B, FieldNames::Ratio);
     }
 
     void ToOclVisitor::visit(Transformation & transformation)
@@ -1205,7 +1303,7 @@ namespace gladius::nodes
     {
         emitUnaryOperation(exp, "exp", FieldNames::Result);
     }
-    
+
     void ToOclVisitor::visit(Log & log)
     {
         emitUnaryOperation(log, "log", FieldNames::Result);
@@ -1241,7 +1339,8 @@ namespace gladius::nodes
 
     void ToOclVisitor::visit(Clamp & clamp)
     {
-        emitTernaryOperation(clamp, "clamp", FieldNames::Result, FieldNames::A, FieldNames::Min, FieldNames::Max);
+        emitTernaryOperation(
+          clamp, "clamp", FieldNames::Result, FieldNames::A, FieldNames::Min, FieldNames::Max);
     }
 
     void ToOclVisitor::visit(SinH & sinh)
