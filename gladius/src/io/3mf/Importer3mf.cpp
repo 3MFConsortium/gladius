@@ -6,6 +6,7 @@
 #include "Lib3mfLoader.h"
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
+#include <algorithm>
 #include <map>
 #include <set>
 #include <vector>
@@ -547,6 +548,21 @@ namespace gladius::io
                                            typeIndexFrom3mfType(output->GetType()));
                 }
             }
+
+            // For ComposeMatrix, MatrixFromColumns and MatrixFromRows replace "Matrix" output with "Result"
+            if (node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::ComposeMatrix ||
+                node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::MatrixFromColumns ||
+                node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::MatrixFromRows)
+            {
+                auto * port = newNode->findOutputPort("Matrix");
+                if (port)
+                {
+                    newNode->getOutputs().erase("Matrix");
+                    port->setUniqueName(newNode->getUniqueName() + "_" + "Result");
+                    port->setShortName("Result");
+                    newNode->getOutputs()["Result"] = *port;
+                }
+            }
             newNode->setUniqueName(node3mf->GetIdentifier());
             // tag
             newNode->setTag(node3mf->GetTag());
@@ -610,6 +626,38 @@ namespace gladius::io
             if (sourcePort)
             {
                 parameter->setInputFromPort(*sourcePort);
+            }
+            // Handle legacy references to a "matrix" output (renamed to "result" in newer specs)
+            if (!sourcePort)
+            {
+                auto inputRef = input->GetReference();
+                std::string lowerRef = inputRef;
+                std::transform(lowerRef.begin(), lowerRef.end(), lowerRef.begin(), ::tolower);
+                
+                // Check if the reference contains ".matrix" (case-insensitive)
+                if (lowerRef.find(".matrix") != std::string::npos)
+                {
+                    auto legacyRef = inputRef;
+                    size_t matrixPos = lowerRef.find(".matrix");
+                    auto newRef = inputRef.substr(0, matrixPos) + ".result";
+
+                    // Temporarily modify the reference to try the new name
+                    input->SetReference(newRef);
+                    sourcePort = resolveInput(model, input);
+                    input->SetReference(legacyRef);
+                    
+                    if (sourcePort)
+                    {
+                        parameter->setInputFromPort(*sourcePort);
+                        if (m_eventLogger)
+                        {
+                            m_eventLogger->addEvent({fmt::format("Resolved legacy reference {} to {}",
+                                                                 legacyRef,
+                                                                 newRef),
+                                                     events::Severity::Info});
+                        }
+                    }
+                }
             }
         }
 
