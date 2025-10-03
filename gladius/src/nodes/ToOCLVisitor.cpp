@@ -446,7 +446,7 @@ namespace gladius::nodes
             return;
         }
 
-        auto const & outputPort = composeMatrix.getOutputs().at(FieldNames::Matrix);
+    auto const & outputPort = composeMatrix.getOutputs().at(FieldNames::Result);
         auto const m00 = resolveParameter(composeMatrix.parameter().at(FieldNames::M00));
         auto const m01 = resolveParameter(composeMatrix.parameter().at(FieldNames::M01));
         auto const m02 = resolveParameter(composeMatrix.parameter().at(FieldNames::M02));
@@ -483,10 +483,11 @@ namespace gladius::nodes
                       m32,
                       m33);
 
-        bool const canInline = shouldInlineOutput(composeMatrix, FieldNames::Matrix);
+                bool const canInline = shouldInlineOutput(composeMatrix, FieldNames::Result);
         if (canInline)
         {
-            auto const key = std::make_pair(composeMatrix.getId(), std::string(FieldNames::Matrix));
+                        auto const key =
+                            std::make_pair(composeMatrix.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
             m_definition << fmt::format(
               "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
@@ -505,7 +506,8 @@ namespace gladius::nodes
             return;
         }
 
-        auto const & outputPort = composeMatrixFromColumns.getOutputs().at(FieldNames::Matrix);
+                auto const & outputPort =
+                    composeMatrixFromColumns.getOutputs().at(FieldNames::Result);
         auto const col0 =
           resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col0));
         auto const col1 =
@@ -523,11 +525,12 @@ namespace gladius::nodes
                       col2,
                       col3);
 
-        bool const canInline = shouldInlineOutput(composeMatrixFromColumns, FieldNames::Matrix);
+                bool const canInline =
+                    shouldInlineOutput(composeMatrixFromColumns, FieldNames::Result);
         if (canInline)
         {
-            auto const key =
-              std::make_pair(composeMatrixFromColumns.getId(), std::string(FieldNames::Matrix));
+                        auto const key =
+                            std::make_pair(composeMatrixFromColumns.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
             m_definition << fmt::format(
               "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
@@ -546,7 +549,8 @@ namespace gladius::nodes
             return;
         }
 
-        auto const & outputPort = composeMatrixFromRows.getOutputs().at(FieldNames::Matrix);
+                auto const & outputPort =
+                    composeMatrixFromRows.getOutputs().at(FieldNames::Result);
         auto const row0 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row0));
         auto const row1 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row1));
         auto const row2 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row2));
@@ -560,11 +564,12 @@ namespace gladius::nodes
                       row2,
                       row3);
 
-        bool const canInline = shouldInlineOutput(composeMatrixFromRows, FieldNames::Matrix);
+                bool const canInline =
+                    shouldInlineOutput(composeMatrixFromRows, FieldNames::Result);
         if (canInline)
         {
-            auto const key =
-              std::make_pair(composeMatrixFromRows.getId(), std::string(FieldNames::Matrix));
+                        auto const key =
+                            std::make_pair(composeMatrixFromRows.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
             m_definition << fmt::format(
               "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
@@ -582,18 +587,19 @@ namespace gladius::nodes
         {
             return;
         }
-
+        
+        auto const inputVec = resolveParameter(decomposeVector.parameter()[FieldNames::A]);
         m_definition << fmt::format("float const {0} = ((float3)({1})).x;\n",
                                     decomposeVector.getOutputs()[FieldNames::X].getUniqueName(),
-                                    decomposeVector.parameter()[FieldNames::A].toString());
+                                    inputVec);
 
         m_definition << fmt::format("float const {0} = ((float3)({1})).y;\n",
                                     decomposeVector.getOutputs()[FieldNames::Y].getUniqueName(),
-                                    decomposeVector.parameter()[FieldNames::A].toString());
+                                    inputVec);
 
         m_definition << fmt::format("float const {0} = ((float3)({1})).z;\n",
                                     decomposeVector.getOutputs()[FieldNames::Z].getUniqueName(),
-                                    decomposeVector.parameter()[FieldNames::A].toString());
+                                    inputVec);
     }
 
     void ToOclVisitor::visit(SignedDistanceToMesh & signedDistanceToMesh)
@@ -606,9 +612,9 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float const {0} = payload((float3)({1}), (int)({2}), (int)({3}), PASS_PAYLOAD_ARGS);\n",
           signedDistanceToMesh.getOutputs()[FieldNames::Distance].getUniqueName(),
-          signedDistanceToMesh.parameter()[FieldNames::Pos].toString(),
-          signedDistanceToMesh.parameter()[FieldNames::Start].toString(),
-          signedDistanceToMesh.parameter()[FieldNames::End].toString());
+          resolveParameter(signedDistanceToMesh.parameter()[FieldNames::Pos]),
+          resolveParameter(signedDistanceToMesh.parameter()[FieldNames::Start]),
+          resolveParameter(signedDistanceToMesh.parameter()[FieldNames::End]));
     }
 
     void ToOclVisitor::visit(SignedDistanceToBeamLattice & signedDistanceToBeamLattice)
@@ -621,9 +627,9 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float const {0} = payload((float3)({1}), (int)({2}), (int)({3}), PASS_PAYLOAD_ARGS);\n",
           signedDistanceToBeamLattice.getOutputs()[FieldNames::Distance].getUniqueName(),
-          signedDistanceToBeamLattice.parameter()[FieldNames::Pos].toString(),
-          signedDistanceToBeamLattice.parameter()[FieldNames::Start].toString(),
-          signedDistanceToBeamLattice.parameter()[FieldNames::End].toString());
+          resolveParameter(signedDistanceToBeamLattice.parameter()[FieldNames::Pos]),
+          resolveParameter(signedDistanceToBeamLattice.parameter()[FieldNames::Start]),
+          resolveParameter(signedDistanceToBeamLattice.parameter()[FieldNames::End]));
     }
 
     void ToOclVisitor::visit(FunctionCall & functionCall)
@@ -981,8 +987,8 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float3 const {0} = matrixVectorMul3f((float16)({1}), {2});\n",
           matrixVectorMultiplication.getResultOutputPort().getUniqueName(),
-          matrixVectorMultiplication.parameter().at(FieldNames::A).toString(),
-          matrixVectorMultiplication.parameter().at(FieldNames::B).toString());
+          resolveParameter(matrixVectorMultiplication.parameter().at(FieldNames::A)),
+          resolveParameter(matrixVectorMultiplication.parameter().at(FieldNames::B)));
     }
 
     void ToOclVisitor::visit(Transpose & transpose)
@@ -994,7 +1000,7 @@ namespace gladius::nodes
         m_definition << fmt::format(
           fmt::runtime("float16 const {0} = transpose((float16)({1}));\n"),
           transpose.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          transpose.parameter()[FieldNames::Matrix].toString());
+          resolveParameter(transpose.parameter()[FieldNames::Matrix]));
     }
 
     void ToOclVisitor::visit(Sine & sine)
@@ -1055,8 +1061,8 @@ namespace gladius::nodes
         m_definition << fmt::format("{0} const {1} = glsl_mod{4}f(({0})({2}), ({0})({3}));\n",
                                     typeIndexToOpenCl(modulus.getResultOutputPort().getTypeIndex()),
                                     modulus.getResultOutputPort().getUniqueName(),
-                                    modulus.parameter().at(FieldNames::A).toString(),
-                                    modulus.parameter().at(FieldNames::B).toString(),
+                                    resolveParameter(modulus.parameter().at(FieldNames::A)),
+                                    resolveParameter(modulus.parameter().at(FieldNames::B)),
                                     numCopmonents);
     }
 
@@ -1119,8 +1125,8 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float3 const {0} = matrixVectorMul3f((float16)({1}), {2});\n",
           transformation.getOutputs()[FieldNames::Pos].getUniqueName(),
-          transformation.parameter()[FieldNames::Transformation].toString(),
-          transformation.parameter()[FieldNames::Pos].toString());
+          resolveParameter(transformation.parameter()[FieldNames::Transformation]),
+          resolveParameter(transformation.parameter()[FieldNames::Pos]));
     }
 
     // Resource
@@ -1169,9 +1175,9 @@ namespace gladius::nodes
                                     "{4}, {5}_tileStyle, PASS_PAYLOAD_ARGS);\n",
                                     imageSampler.getOutputs().at(FieldNames::Color).getUniqueName(),
                                     samplerName,
-                                    imageSampler.parameter().at(FieldNames::UVW).toString(),
-                                    imageSampler.parameter().at(FieldNames::Dimensions).toString(),
-                                    imageSampler.parameter().at(FieldNames::Start).toString(),
+                                    resolveParameter(imageSampler.parameter().at(FieldNames::UVW)),
+                                    resolveParameter(imageSampler.parameter().at(FieldNames::Dimensions)),
+                                    resolveParameter(imageSampler.parameter().at(FieldNames::Start)),
                                     imageSampler.getUniqueName());
 
         m_definition << fmt::format(
@@ -1191,86 +1197,87 @@ namespace gladius::nodes
         {
             return;
         }
-
+        
+        auto const matrixParam = resolveParameter(decomposeMatrixNode.parameter()[FieldNames::Matrix]);
         m_definition << fmt::format(
           "float const {0} = {1}.s0;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M00].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s1;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M01].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s2;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M02].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s3;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M03].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s4;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M10].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s5;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M11].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s6;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M12].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s7;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M13].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s8;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M20].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s9;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M21].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sa;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M22].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sb;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M23].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sc;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M30].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sd;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M31].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.se;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M32].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sf;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M33].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
     }
 
     void ToOclVisitor::visit(Inverse & inverse)
@@ -1282,7 +1289,7 @@ namespace gladius::nodes
 
         m_definition << fmt::format("float16 const {0} = inverse((float16)({1}));\n",
                                     inverse.getOutputs()[FieldNames::Result].getUniqueName(),
-                                    inverse.parameter()[FieldNames::Matrix].toString());
+                                    resolveParameter(inverse.parameter()[FieldNames::Matrix]));
     }
 
     void ToOclVisitor::visit(ArcTan2 & arcTan2)
@@ -1295,8 +1302,8 @@ namespace gladius::nodes
           "{0} const {1} = atan2({2}, {3});\n",
           typeIndexToOpenCl(arcTan2.getOutputs().at(FieldNames::Result).getTypeIndex()),
           arcTan2.getOutputs().at(FieldNames::Result).getUniqueName(),
-          arcTan2.parameter().at(FieldNames::A).toString(),
-          arcTan2.parameter().at(FieldNames::B).toString());
+          resolveParameter(arcTan2.parameter().at(FieldNames::A)),
+          resolveParameter(arcTan2.parameter().at(FieldNames::B)));
     }
 
     void ToOclVisitor::visit(Exp & exp)
@@ -1331,10 +1338,10 @@ namespace gladius::nodes
           "{0} const {1} = {2} < {3} ? {4} : {5};\n",
           typeIndexToOpenCl(select.getOutputs().at(FieldNames::Result).getTypeIndex()),
           select.getOutputs().at(FieldNames::Result).getUniqueName(),
-          select.parameter().at(FieldNames::A).toString(),
-          select.parameter().at(FieldNames::B).toString(),
-          select.parameter().at(FieldNames::C).toString(),
-          select.parameter().at(FieldNames::D).toString());
+          resolveParameter(select.parameter().at(FieldNames::A)),
+          resolveParameter(select.parameter().at(FieldNames::B)),
+          resolveParameter(select.parameter().at(FieldNames::C)),
+          resolveParameter(select.parameter().at(FieldNames::D)));
     }
 
     void ToOclVisitor::visit(Clamp & clamp)
@@ -1392,7 +1399,7 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float3 const {0} = (float3)({1},{1},{1});\n",
           vectorFromScalar.getOutputs().at(FieldNames::Result).getUniqueName(),
-          vectorFromScalar.parameter().at(FieldNames::A).toString());
+          resolveParameter(vectorFromScalar.parameter().at(FieldNames::A)));
     }
 
     void ToOclVisitor::visit(UnsignedDistanceToMesh & unsignedDistanceToMesh)
@@ -1406,9 +1413,9 @@ namespace gladius::nodes
           "float const {0} = fabs(payload((float3)({1}), (int)({2}), (int)({3}), "
           "PASS_PAYLOAD_ARGS));\n", // Todo: Use optimized method for unsigned distance
           unsignedDistanceToMesh.getOutputs()[FieldNames::Distance].getUniqueName(),
-          unsignedDistanceToMesh.parameter()[FieldNames::Pos].toString(),
-          unsignedDistanceToMesh.parameter()[FieldNames::Start].toString(),
-          unsignedDistanceToMesh.parameter()[FieldNames::End].toString());
+          resolveParameter(unsignedDistanceToMesh.parameter()[FieldNames::Pos]),
+          resolveParameter(unsignedDistanceToMesh.parameter()[FieldNames::Start]),
+          resolveParameter(unsignedDistanceToMesh.parameter()[FieldNames::End]));
     }
 
     void ToOclVisitor::visit(BoxMinMax & boxMinMax)
@@ -1420,8 +1427,8 @@ namespace gladius::nodes
 
         m_definition << fmt::format("float const {0} = bbBox({1}, {2}, {3});\n",
                                     boxMinMax.getOutputs().at(FieldNames::Shape).getUniqueName(),
-                                    boxMinMax.parameter().at(FieldNames::Pos).toString(),
-                                    boxMinMax.parameter().at(FieldNames::Min).toString(),
-                                    boxMinMax.parameter().at(FieldNames::Max).toString());
+                                    resolveParameter(boxMinMax.parameter().at(FieldNames::Pos)),
+                                    resolveParameter(boxMinMax.parameter().at(FieldNames::Min)),
+                                    resolveParameter(boxMinMax.parameter().at(FieldNames::Max)));
     }
 } // namespace gladius::nodes

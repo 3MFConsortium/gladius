@@ -222,14 +222,28 @@ namespace gladius::nodes
 
     void Model::registerInput(VariantParameter & parameter)
     {
-        if (m_inputParameter.find(parameter.getId()) != m_inputParameter.end())
+        for (auto iter = m_inputParameter.begin(); iter != m_inputParameter.end();)
         {
-            return;
+            if (iter->second == &parameter)
+            {
+                if (iter->first == parameter.getId())
+                {
+                    return;
+                }
+
+                iter = m_inputParameter.erase(iter);
+            }
+            else
+            {
+                ++iter;
+            }
         }
+
         if (parameter.getId() < 1)
         {
             parameter.setId(20000 + ++m_lastParameterId);
         }
+
         m_inputParameter[parameter.getId()] = &parameter;
     }
 

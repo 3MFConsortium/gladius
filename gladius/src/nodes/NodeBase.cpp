@@ -30,6 +30,8 @@ namespace gladius::nodes
         if (m_typeRules.size() == 1)
         {
             applyTypeRule(m_typeRules.front());
+            model.registerOutputs(*this);
+            model.registerInputs(*this);
             return true;
         }
 
@@ -91,6 +93,8 @@ namespace gladius::nodes
         if (ruleIter != m_typeRules.end())
         {
             applyTypeRule(*ruleIter);
+            model.registerOutputs(*this);
+            model.registerInputs(*this);
             return true;
         }
         return false;
