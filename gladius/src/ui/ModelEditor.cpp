@@ -594,6 +594,32 @@ namespace gladius::ui
         // ensures pin-based new-node queries are handled.
         if (ed::BeginCreate())
         {
+            ed::PinId inputPinId, outputPinId;
+            if (ed::QueryNewLink(&inputPinId, &outputPinId))
+            {
+                // A new link is being created between two pins.
+                // Attempt to add the link if both pins are valid.
+                if (inputPinId && outputPinId)
+                {
+                    auto const inId = static_cast<nodes::ParameterId>(inputPinId.Get());
+                    auto const outId = static_cast<nodes::PortId>(outputPinId.Get());
+
+                    if (ed::AcceptNewItem())
+                    {
+                        createUndoRestorePoint("Add link");
+                        if (!m_currentModel->addLink(inId, outId) &&
+                            !m_currentModel->addLink(outId, inId))
+                        {
+                            ed::RejectNewItem();
+                        }
+                        else
+                        {
+                            markModelAsModified();
+                        }
+                    }
+                }
+            }
+
             // Delegate pin-based "create node while dragging from a pin"
             // to the dedicated helper that opens the Create Node popup when
             // appropriate.
@@ -620,7 +646,19 @@ namespace gladius::ui
 
     void ModelEditor::onDeleteNode()
     {
-        // Intentionally left empty. Deletion of nodes is handled elsewhere.
+        if (ed::BeginDelete())
+        {
+            ed::NodeId deletedNodeId = 0;
+            while (ed::QueryDeletedNode(&deletedNodeId))
+            {
+                if (ed::AcceptDeletedItem())
+                {
+                    m_currentModel->remove(static_cast<nodes::NodeId>(deletedNodeId.Get()));
+                    markModelAsModified();
+                }
+            }
+        }
+        ed::EndDelete();
     }
 
     void ModelEditor::switchModel()
