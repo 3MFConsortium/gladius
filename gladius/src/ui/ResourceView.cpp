@@ -120,7 +120,7 @@ namespace gladius::ui
         return propertiesChanged;
     }
 
-    void ResourceView::render(SharedDocument document) const
+    void ResourceView::render(SharedDocument document)
     {
         if (!document)
         {
@@ -156,12 +156,65 @@ namespace gladius::ui
                 document->addBoundingBoxAsMesh();
             }
 
-            if (ImGui::Button("Add 400x400x400 box"))
+            if (ImGui::Button("Add custom box..."))
             {
-                document->addFixedBoxMesh();
+                m_showCustomBoxDialog = true;
             }
 
             ImGui::Unindent();
+
+            // Custom box creation dialog
+            if (m_showCustomBoxDialog)
+            {
+                ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f,
+                                    ImGui::GetIO().DisplaySize.y * 0.5f);
+                ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+                ImGui::OpenPopup("Create Custom Box");
+
+                if (ImGui::BeginPopupModal("Create Custom Box",
+                                           &m_showCustomBoxDialog,
+                                           ImGuiWindowFlags_AlwaysAutoResize))
+                {
+                    ImGui::Text("Box Dimensions:");
+                    ImGui::Separator();
+
+                    ImGui::InputFloat("Width", &m_boxWidth, 1.0f, 10.0f, "%.2f");
+                    ImGui::InputFloat("Height", &m_boxHeight, 1.0f, 10.0f, "%.2f");
+                    ImGui::InputFloat("Depth", &m_boxDepth, 1.0f, 10.0f, "%.2f");
+
+                    ImGui::Spacing();
+                    ImGui::Text("Starting Position:");
+                    ImGui::Separator();
+
+                    ImGui::InputFloat("Start X", &m_boxStartX, 1.0f, 10.0f, "%.2f");
+                    ImGui::InputFloat("Start Y", &m_boxStartY, 1.0f, 10.0f, "%.2f");
+                    ImGui::InputFloat("Start Z", &m_boxStartZ, 1.0f, 10.0f, "%.2f");
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+
+                    if (ImGui::Button("Create", ImVec2(120, 0)))
+                    {
+                        document->addCustomBoxMesh(m_boxWidth,
+                                                   m_boxHeight,
+                                                   m_boxDepth,
+                                                   m_boxStartX,
+                                                   m_boxStartY,
+                                                   m_boxStartZ);
+                        m_showCustomBoxDialog = false;
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::SetItemDefaultFocus();
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel", ImVec2(120, 0)))
+                    {
+                        m_showCustomBoxDialog = false;
+                        ImGui::CloseCurrentPopup();
+                    }
+
+                    ImGui::EndPopup();
+                }
+            }
 
             for (auto const & [key, res] : resources)
             {

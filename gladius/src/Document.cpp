@@ -1194,13 +1194,22 @@ namespace gladius
         addMeshResource(std::move(mesh), "bounding box");
     }
 
-    void Document::addFixedBoxMesh()
+    void Document::addCustomBoxMesh(float width,
+                                    float height,
+                                    float depth,
+                                    float startX,
+                                    float startY,
+                                    float startZ)
     {
-        // Create a 400x400x400 box starting at (0,0,0)
+        // Create a custom box mesh with user-defined dimensions
         vdb::TriangleMesh mesh;
 
-        float minX = 0.0f, minY = 0.0f, minZ = 0.0f;
-        float maxX = 400.0f, maxY = 400.0f, maxZ = 400.0f;
+        float minX = startX;
+        float minY = startY;
+        float minZ = startZ;
+        float maxX = startX + width;
+        float maxY = startY + height;
+        float maxZ = startZ + depth;
 
         // Top (z = maxZ)
         mesh.addTriangle({minX, minY, maxZ}, {maxX, minY, maxZ}, {maxX, maxY, maxZ});
@@ -1232,7 +1241,8 @@ namespace gladius
 
         mesh.addTriangle({maxX, minY, minZ}, {maxX, maxY, maxZ}, {maxX, maxY, minZ});
 
-        addMeshResource(std::move(mesh), "400x400x400 box");
+        std::string name = fmt::format("{}x{}x{} box", width, height, depth);
+        addMeshResource(std::move(mesh), name);
     }
 
     ResourceKey Document::addImageStackResource(std::filesystem::path const & path)

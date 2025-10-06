@@ -8,7 +8,7 @@ namespace gladius::ui
     class ResourceView
     {
       public:
-        void render(SharedDocument document) const;
+        void render(SharedDocument document);
 
       private:
         void addMesh(SharedDocument document) const;
@@ -25,5 +25,14 @@ namespace gladius::ui
         bool renderVolumeDataDropdown(SharedDocument document,
                                       Lib3MF::PModel model3mf,
                                       std::shared_ptr<Lib3MF::CMeshObject> mesh) const;
+
+        // Dialog state for custom box creation
+        bool m_showCustomBoxDialog = false;
+        float m_boxWidth = 400.0f;
+        float m_boxHeight = 400.0f;
+        float m_boxDepth = 400.0f;
+        float m_boxStartX = 0.0f;
+        float m_boxStartY = 0.0f;
+        float m_boxStartZ = 0.0f;
     };
 }

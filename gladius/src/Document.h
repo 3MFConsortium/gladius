@@ -211,7 +211,12 @@ namespace gladius
         ResourceManager & getResourceManager();
 
         void addBoundingBoxAsMesh();
-        void addFixedBoxMesh();
+        void addCustomBoxMesh(float width,
+                              float height,
+                              float depth,
+                              float startX = 0.0f,
+                              float startY = 0.0f,
+                              float startZ = 0.0f);
 
         ResourceKey addImageStackResource(std::filesystem::path const & path);
 
