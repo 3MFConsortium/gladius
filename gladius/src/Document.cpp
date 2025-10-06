@@ -1365,9 +1365,9 @@ namespace gladius
         auto key = ResourceKey{new3mfMesh->GetModelResourceID(), ResourceType::BeamLattice};
         key.setDisplayName(resourceName);
 
-        // Create beam lattice resource
+        // Create beam lattice resource with BVH acceleration
         auto beamLatticeResource = std::make_unique<BeamLatticeResource>(
-          key, std::move(beams), std::move(balls), ballConfig, true);
+          key, std::move(beams), std::move(balls), ballConfig, BeamLatticeAcceleration::BVH);
 
         resourceManager.addResource(key, std::move(beamLatticeResource));
         resourceManager.loadResources();
