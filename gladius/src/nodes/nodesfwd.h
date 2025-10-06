@@ -242,7 +242,7 @@ namespace gladius::nodes
         static auto constexpr Filename = "filename";
         static auto constexpr ResourceId = "resourceid";
         static auto constexpr Mesh = "mesh";
-        static auto constexpr BeamLattice = "beamlattice";
+        static auto constexpr BeamLattice = "beamlatticeid";
 
         static auto constexpr Image = "image";
         static auto constexpr Red = "red";
