@@ -156,6 +156,11 @@ namespace gladius::ui
                 document->addBoundingBoxAsMesh();
             }
 
+            if (ImGui::Button("Add 400x400x400 box"))
+            {
+                document->addFixedBoxMesh();
+            }
+
             ImGui::Unindent();
 
             for (auto const & [key, res] : resources)

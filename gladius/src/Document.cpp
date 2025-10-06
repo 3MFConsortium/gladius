@@ -1194,6 +1194,47 @@ namespace gladius
         addMeshResource(std::move(mesh), "bounding box");
     }
 
+    void Document::addFixedBoxMesh()
+    {
+        // Create a 400x400x400 box starting at (0,0,0)
+        vdb::TriangleMesh mesh;
+
+        float minX = 0.0f, minY = 0.0f, minZ = 0.0f;
+        float maxX = 400.0f, maxY = 400.0f, maxZ = 400.0f;
+
+        // Top (z = maxZ)
+        mesh.addTriangle({minX, minY, maxZ}, {maxX, minY, maxZ}, {maxX, maxY, maxZ});
+
+        mesh.addTriangle({minX, minY, maxZ}, {maxX, maxY, maxZ}, {minX, maxY, maxZ});
+
+        // Bottom (z = minZ)
+        mesh.addTriangle({minX, minY, minZ}, {maxX, minY, minZ}, {maxX, maxY, minZ});
+
+        mesh.addTriangle({minX, minY, minZ}, {maxX, maxY, minZ}, {minX, maxY, minZ});
+
+        // Front (y = minY)
+        mesh.addTriangle({minX, minY, minZ}, {maxX, minY, minZ}, {maxX, minY, maxZ});
+
+        mesh.addTriangle({minX, minY, minZ}, {maxX, minY, maxZ}, {minX, minY, maxZ});
+
+        // Back (y = maxY)
+        mesh.addTriangle({minX, maxY, minZ}, {maxX, maxY, minZ}, {maxX, maxY, maxZ});
+
+        mesh.addTriangle({minX, maxY, minZ}, {maxX, maxY, maxZ}, {minX, maxY, maxZ});
+
+        // Left (x = minX)
+        mesh.addTriangle({minX, minY, minZ}, {minX, minY, maxZ}, {minX, maxY, maxZ});
+
+        mesh.addTriangle({minX, minY, minZ}, {minX, maxY, maxZ}, {minX, maxY, minZ});
+
+        // Right (x = maxX)
+        mesh.addTriangle({maxX, minY, minZ}, {maxX, minY, maxZ}, {maxX, maxY, maxZ});
+
+        mesh.addTriangle({maxX, minY, minZ}, {maxX, maxY, maxZ}, {maxX, maxY, minZ});
+
+        addMeshResource(std::move(mesh), "400x400x400 box");
+    }
+
     ResourceKey Document::addImageStackResource(std::filesystem::path const & path)
     {
         io::ImageStackCreator creator;
