@@ -785,6 +785,7 @@ namespace gladius::ui
             // Filter function and mesh resources using the filter text
             functionToolBox(mousePos);
             meshResourceToolBox(mousePos);
+            beamLatticeResourceToolBox(mousePos);
 
             for (auto & [cat, catName] : nodes::CategoryNames)
             {
@@ -1645,6 +1646,64 @@ namespace gladius::ui
         }
     }
 
+    void ModelEditor::beamLatticeResourceToolBox(ImVec2 mousePos)
+    {
+        // Similar to meshResourceToolBox: for each BeamLatticeResource create a quick action
+        // button that spawns a Resource node plus a SignedDistanceToBeamLattice node already
+        // linked to it. This streamlines inserting signed distance queries for beam lattices.
+        if (!m_doc)
+        {
+            return;
+        }
+
+        auto & resourceManager = m_doc->getResourceManager();
+        auto const & resources = resourceManager.getResourceMap();
+
+        for (auto const & [key, res] : resources)
+        {
+            auto const * beamLattice =
+              dynamic_cast<gladius::BeamLatticeResource const *>(res.get());
+            if (!beamLattice)
+            {
+                continue;
+            }
+
+            // Display name for the resource
+            std::string displayName = key.getDisplayName();
+
+            if (!matchesNodeFilter(displayName))
+            {
+                continue; // Skip if it doesn't match filter
+            }
+
+            if (ImGui::Button(displayName.c_str()))
+            {
+                createUndoRestorePoint("Create beam lattice SD node");
+                auto posOnCanvas = ed::ScreenToCanvas(mousePos);
+
+                // Create the resource node first (same pattern as meshes)
+                auto createdResourceNode = m_currentModel->create<nodes::Resource>();
+                createdResourceNode->setResourceId(key.getResourceId().value());
+                ed::SetNodePosition(createdResourceNode->getId(), posOnCanvas);
+
+                // Create the signed distance to beam lattice node and connect
+                auto signedDistanceNode =
+                  m_currentModel->create<nodes::SignedDistanceToBeamLattice>();
+                ImVec2 const offsetPos = ImVec2(posOnCanvas.x + 400, posOnCanvas.y);
+                m_currentModel->addLink(createdResourceNode->getOutputValue().getId(),
+                                        signedDistanceNode->parameter().at("beamLattice").getId());
+
+                signedDistanceNode->setDisplayName("SD to " + key.getDisplayName());
+                ed::SetNodePosition(signedDistanceNode->getId(), offsetPos);
+
+                // Focus the distance node as primary interaction target
+                requestNodeFocus(signedDistanceNode->getId());
+
+                markModelAsModified();
+            }
+        }
+    }
+
     void ModelEditor::undo()
     {
         if (m_history.canUnDo())
@@ -2258,7 +2317,7 @@ namespace gladius::ui
         }
         catch (std::exception const & ex)
         {
-           
+
             // Handle conversion errors
             std::cerr << "Error creating function from expression: " << ex.what() << std::endl;
             // TODO: Show error message to user
