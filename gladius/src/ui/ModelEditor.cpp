@@ -185,8 +185,7 @@ namespace gladius::ui
             ImGui::BeginGroup();
             if (ImGui::TreeNodeEx("Beam Lattices", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
             {
-                BeamLatticeView beamLatticeView;
-                if (beamLatticeView.render(m_doc))
+                if (m_beamLatticeView.render(m_doc))
                 {
                     markModelAsModified();
                 }

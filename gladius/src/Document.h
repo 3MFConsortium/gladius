@@ -218,6 +218,8 @@ namespace gladius
                               float startY = 0.0f,
                               float startZ = 0.0f);
 
+        void addMeshAsBeamLattice(std::filesystem::path const & stlFilename, float beamRadius);
+
         ResourceKey addImageStackResource(std::filesystem::path const & path);
 
         // syncing of the 3MF model with the document

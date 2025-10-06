@@ -34,5 +34,10 @@ namespace gladius::ui
         float m_boxStartX = 0.0f;
         float m_boxStartY = 0.0f;
         float m_boxStartZ = 0.0f;
+
+        // Dialog state for STL to beam lattice import
+        bool m_showStlToBeamLatticeDialog = false;
+        std::string m_beamLatticeStlFilename;
+        float m_beamDiameter = 1.0f;
     };
 }

@@ -2,6 +2,7 @@
 
 #include "../ExpressionToGraphConverter.h"
 #include "../nodes/History.h"
+#include "BeamLatticeView.h"
 #include "ExpressionDialog.h"
 #include "LibraryBrowser.h"
 #include "NodeView.h"
@@ -234,6 +235,7 @@ namespace gladius::ui
         std::shared_ptr<Document> m_doc;
 
         ResourceView m_resourceView;
+        BeamLatticeView m_beamLatticeView;
 
         Outline m_outline;
 

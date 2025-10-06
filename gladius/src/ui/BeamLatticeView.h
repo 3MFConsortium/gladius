@@ -24,9 +24,11 @@ namespace gladius::ui
          *
          * @return true if the beam lattice properties were modified
          */
-        bool render(SharedDocument document) const;
+        bool render(SharedDocument document);
 
       private:
+        void renderImportDialog(SharedDocument document, bool & propertiesChanged);
+
         /**
          * @brief Gets the name of a beam lattice resource
          *
@@ -35,5 +37,10 @@ namespace gladius::ui
          * @return std::string The display name of the beam lattice
          */
         static std::string getBeamLatticeName(const ResourceKey & key);
+
+        // Dialog state for importing STL as beam lattice
+        bool m_showImportDialog = false;
+        std::string m_filename;
+        float m_beamDiameter = 2.0f;
     };
 }
