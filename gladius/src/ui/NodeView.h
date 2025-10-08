@@ -12,6 +12,11 @@
 #include <unordered_map>
 #include <vector>
 
+namespace gladius::nodes
+{
+    class FunctionGradient;
+}
+
 namespace gladius::ui
 {
     class ModelEditor;
@@ -203,6 +208,8 @@ namespace gladius::ui
         void viewInt(nodes::NodeBase const & node,
                      nodes::ParameterMap::reference parameter,
                      nodes::VariantType & val);
+
+        void functionGradientControls(nodes::FunctionGradient & node);
 
         bool typeControl(std::string const & label, std::type_index & typeIndex);
 

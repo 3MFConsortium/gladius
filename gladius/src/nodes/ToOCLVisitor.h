@@ -90,6 +90,8 @@ namespace gladius::nodes
 
         void visit(FunctionCall & functionCall) override;
 
+        void visit(FunctionGradient & functionGradient) override;
+
         // gladius extensions
         void visit(Mix & mix) override;
 
@@ -149,28 +151,31 @@ namespace gladius::nodes
 
         /// @brief Check if an output should be inlined (used only once)
         bool shouldInlineOutput(NodeBase const & node, std::string const & portName) const;
-        
+
         /// @brief Get the OpenCL expression for a parameter, checking inline map first
         /// @param param The parameter to resolve
         /// @return The OpenCL expression string (either inlined or from toString())
         std::string resolveParameter(IParameter const & param) const;
-        
+
         /// @brief Helper for unary operations (sin, cos, sqrt, etc.)
-        void emitUnaryOperation(NodeBase & node, std::string const & operation, 
-                               std::string const & outputPortName);
-        
+        void emitUnaryOperation(NodeBase & node,
+                                std::string const & operation,
+                                std::string const & outputPortName);
+
         /// @brief Helper for binary operations (min, max, pow, etc.)
-        void emitBinaryOperation(NodeBase & node, std::string const & operation, 
-                                std::string const & outputPortName,
-                                std::string const & param1Name = FieldNames::A,
-                                std::string const & param2Name = FieldNames::B);
-        
-        /// @brief Helper for ternary operations (mix, clamp, etc.)
-        void emitTernaryOperation(NodeBase & node, std::string const & operation,
+        void emitBinaryOperation(NodeBase & node,
+                                 std::string const & operation,
                                  std::string const & outputPortName,
-                                 std::string const & param1Name,
-                                 std::string const & param2Name,
-                                 std::string const & param3Name);
+                                 std::string const & param1Name = FieldNames::A,
+                                 std::string const & param2Name = FieldNames::B);
+
+        /// @brief Helper for ternary operations (mix, clamp, etc.)
+        void emitTernaryOperation(NodeBase & node,
+                                  std::string const & operation,
+                                  std::string const & outputPortName,
+                                  std::string const & param1Name,
+                                  std::string const & param2Name,
+                                  std::string const & param3Name);
 
       private:
         std::stringstream m_definition;
@@ -179,11 +184,11 @@ namespace gladius::nodes
         Assembly * m_assembly{};
         std::set<nodes::NodeId> m_visitedNodes;
         Model * m_currentModel = nullptr;
-        
+
         // Reference analyzer for optimization decisions
         mutable OutputPortReferenceAnalyzer m_referenceAnalyzer;
         mutable bool m_referenceAnalysisPerformed = false;
-        
+
         // Map from (NodeId, PortName) to inline expression
         // Used for single-use outputs that should be inlined
         std::map<std::pair<NodeId, std::string>, std::string> m_inlineExpressions;

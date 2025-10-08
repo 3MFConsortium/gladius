@@ -111,5 +111,50 @@ namespace gladius::nodes
           });
 
         model.visitNodes(functionCallVisitor);
+
+        // Find all FunctionGradient nodes and mark their selected scalar output as consumed
+        auto functionGradientVisitor = OnTypeVisitor<FunctionGradient>(
+          [&](FunctionGradient & gradientNode)
+          {
+              auto const funcId = gradientNode.getFunctionId();
+              auto func = m_assembly->findModel(funcId);
+              if (!func)
+              {
+                  // Silently skip if function not found - node may not be fully configured yet
+                  return;
+              }
+
+              auto * endNode = func->getEndNode();
+              if (!endNode)
+              {
+                  return;
+              }
+
+              // Mark the selected scalar output as consumed if the gradient node's output is used
+              auto const & selectedOutputName = gradientNode.getSelectedScalarOutput();
+              if (selectedOutputName.empty())
+              {
+                  // No output selected yet, skip
+                  return;
+              }
+
+              auto & endNodeParams = endNode->parameter();
+              auto iter = endNodeParams.find(selectedOutputName);
+              if (iter == endNodeParams.end())
+              {
+                  return;
+              }
+
+              // The gradient output is always consumed if the gradient node exists
+              // (it needs to evaluate the function to compute the gradient)
+              auto const & gradientOutputs = gradientNode.getOutputs();
+              auto gradientOutIter = gradientOutputs.find(FieldNames::Vector);
+              if (gradientOutIter != gradientOutputs.end() && gradientOutIter->second.isUsed())
+              {
+                  iter->second.setConsumedByFunction(true);
+              }
+          });
+
+        model.visitNodes(functionGradientVisitor);
     }
 } // namespace gladius::nodes

@@ -185,6 +185,11 @@ namespace gladius::nodes
         visit(static_cast<NodeBase &>(functionCall));
     }
 
+    void Visitor::visit(FunctionGradient & functionGradient)
+    {
+        visit(static_cast<NodeBase &>(functionGradient));
+    }
+
     void Visitor::visit(Mix & mix)
     {
         visit(static_cast<NodeBase &>(mix));

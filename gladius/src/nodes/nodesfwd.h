@@ -62,6 +62,7 @@ namespace gladius::nodes
     class SignedDistanceToMesh;
     class SignedDistanceToBeamLattice;
     class FunctionCall;
+    class FunctionGradient;
     class Length;
     class DecomposeVector;
     class Resource;
@@ -126,6 +127,7 @@ namespace gladius::nodes
                                  SignedDistanceToMesh,
                                  SignedDistanceToBeamLattice,
                                  FunctionCall,
+                                 FunctionGradient,
                                  Transformation,
                                  Length,
                                  DecomposeVector,
@@ -236,6 +238,7 @@ namespace gladius::nodes
         static auto constexpr End = "end";
         // static auto constexpr Part = "part";
         static auto constexpr FunctionId = "functionID";
+        static auto constexpr StepSize = "stepsize";
         static auto constexpr Source = "source";
         static auto constexpr sharpness = "sharpness";
 

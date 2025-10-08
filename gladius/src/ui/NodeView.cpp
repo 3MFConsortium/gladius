@@ -307,15 +307,23 @@ namespace gladius::ui
         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
             ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
         {
-            auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode);
-            if (functionCallNode && m_modelEditor)
+            nodes::ResourceId functionId = 0;
+
+            if (auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode))
             {
-                nodes::ResourceId functionId = functionCallNode->getFunctionId();
-                if (functionId != 0) // Check if function ID is valid
-                {
-                    // Use navigateToFunction so history is recorded
-                    m_modelEditor->navigateToFunction(functionId);
-                }
+                functionId = functionCallNode->getFunctionId();
+            }
+            else if (auto * functionGradientNode =
+                       dynamic_cast<nodes::FunctionGradient *>(&baseNode))
+            {
+                functionGradientNode->resolveFunctionId();
+                functionId = functionGradientNode->getFunctionId();
+            }
+
+            if (m_modelEditor && functionId != 0)
+            {
+                // Use navigateToFunction so history is recorded
+                m_modelEditor->navigateToFunction(functionId);
             }
         }
 
@@ -367,9 +375,201 @@ namespace gladius::ui
     void NodeView::content(NodeBase & baseNode)
     {
         showInputAndOutputs(baseNode);
+
+        if (auto * functionGradientNode = dynamic_cast<nodes::FunctionGradient *>(&baseNode))
+        {
+            functionGradientControls(*functionGradientNode);
+        }
+
         if (baseNode.parameterChangeInvalidatesPayload() && m_parameterChanged)
         {
             m_modelEditor->invalidatePrimitiveData();
+        }
+    }
+
+    void NodeView::functionGradientControls(nodes::FunctionGradient & node)
+    {
+        ImGui::Spacing();
+        ImGui::SeparatorText("Gradient Configuration");
+
+        if (m_assembly == nullptr)
+        {
+            ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f),
+                               "Assembly not available – cannot resolve function outputs.");
+            return;
+        }
+
+        node.resolveFunctionId();
+        auto const functionId = node.getFunctionId();
+        if (functionId == 0)
+        {
+            ImGui::TextColored(ImVec4(1.f, 0.6f, 0.2f, 1.f),
+                               "Select a function to compute its gradient.");
+            return;
+        }
+
+        auto referencedModel = m_assembly->findModel(functionId);
+        if (!referencedModel)
+        {
+            ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f),
+                               "Referenced function not found in the assembly.");
+            return;
+        }
+
+        auto const & functionOutputs = referencedModel->getOutputs();
+        std::vector<std::string> scalarOutputs;
+        scalarOutputs.reserve(functionOutputs.size());
+        for (auto const & [name, parameter] : functionOutputs)
+        {
+            if (parameter.getTypeIndex() == ParameterTypeIndex::Float)
+            {
+                scalarOutputs.push_back(name);
+            }
+        }
+
+        std::vector<std::string> vectorInputs;
+        vectorInputs.reserve(node.parameter().size());
+        for (auto const & [name, parameter] : node.constParameter())
+        {
+            if (!parameter.isArgument())
+            {
+                continue;
+            }
+            if (parameter.getTypeIndex() == ParameterTypeIndex::Float3)
+            {
+                vectorInputs.push_back(name);
+            }
+        }
+
+        auto const warningColor = ImVec4(1.f, 0.6f, 0.2f, 1.f);
+
+        bool selectionChanged = false;
+
+        std::string selectedScalar = node.getSelectedScalarOutput();
+        std::string scalarPreview =
+          selectedScalar.empty() ? "Select scalar output" : selectedScalar;
+        bool const hasScalarOutputs = !scalarOutputs.empty();
+
+        if (!hasScalarOutputs)
+        {
+            scalarPreview = "No scalar outputs available";
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::BeginCombo("Scalar Output", scalarPreview.c_str()))
+        {
+            bool const isNoneSelected = selectedScalar.empty();
+            if (ImGui::Selectable("None", isNoneSelected))
+            {
+                if (!isNoneSelected)
+                {
+                    node.setSelectedScalarOutput("");
+                    selectionChanged = true;
+                }
+            }
+
+            for (auto const & option : scalarOutputs)
+            {
+                bool const isSelected = (option == selectedScalar);
+                if (ImGui::Selectable(option.c_str(), isSelected))
+                {
+                    node.setSelectedScalarOutput(option);
+                    selectionChanged = true;
+                }
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+
+        if (!hasScalarOutputs)
+        {
+            ImGui::EndDisabled();
+            ImGui::TextColored(warningColor, "The referenced function exposes no scalar outputs.");
+        }
+        else if (!selectedScalar.empty() &&
+                 std::find(scalarOutputs.begin(), scalarOutputs.end(), selectedScalar) ==
+                   scalarOutputs.end())
+        {
+            ImGui::TextColored(warningColor,
+                               "Previously selected scalar output is no longer available.");
+        }
+
+        std::string selectedVector = node.getSelectedVectorInput();
+        std::string vectorPreview = selectedVector.empty() ? "Select vector input" : selectedVector;
+        bool const hasVectorInputs = !vectorInputs.empty();
+
+        if (!hasVectorInputs)
+        {
+            vectorPreview = "No vector inputs available";
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::BeginCombo("Vector Input", vectorPreview.c_str()))
+        {
+            bool const isNoneSelected = selectedVector.empty();
+            if (ImGui::Selectable("None", isNoneSelected))
+            {
+                if (!isNoneSelected)
+                {
+                    node.setSelectedVectorInput("");
+                    selectionChanged = true;
+                }
+            }
+
+            for (auto const & option : vectorInputs)
+            {
+                bool const isSelected = (option == selectedVector);
+                if (ImGui::Selectable(option.c_str(), isSelected))
+                {
+                    node.setSelectedVectorInput(option);
+                    selectionChanged = true;
+                }
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+
+        if (!hasVectorInputs)
+        {
+            ImGui::EndDisabled();
+            ImGui::TextColored(warningColor, "The mirrored arguments provide no vector inputs.");
+        }
+        else if (!selectedVector.empty() &&
+                 std::find(vectorInputs.begin(), vectorInputs.end(), selectedVector) ==
+                   vectorInputs.end())
+        {
+            ImGui::TextColored(warningColor,
+                               "Previously selected vector input is no longer available.");
+        }
+
+        if (selectionChanged)
+        {
+            m_parameterChanged = true;
+            if (m_modelEditor)
+            {
+                m_modelEditor->markModelAsModified();
+            }
+        }
+
+        if (!node.hasValidConfiguration())
+        {
+            ImGui::TextColored(
+              warningColor,
+              "Select both a scalar output and a vector input to enable the gradient.");
+        }
+        else
+        {
+            ImGui::TextColored(
+              ImVec4(0.6f, 0.8f, 1.f, 1.f),
+              "Gradient output is normalized and falls back to zero for near-zero magnitudes.");
         }
     }
 
@@ -658,6 +858,30 @@ namespace gladius::ui
                                   if (functionCallNode)
                                   {
                                       functionCallNode->setFunctionId(id);
+                                      if (m_assembly)
+                                      {
+                                          if (auto referencedModel = m_assembly->findModel(id))
+                                          {
+                                              functionCallNode->updateInputsAndOutputs(
+                                                *referencedModel);
+                                          }
+                                      }
+                                      m_parameterChanged = true;
+                                      m_modelEditor->markModelAsModified();
+                                      m_modelEditor->closePopupMenu();
+                                  }
+                                  else if (auto * functionGradientNode =
+                                             dynamic_cast<nodes::FunctionGradient *>(&node))
+                                  {
+                                      functionGradientNode->setFunctionId(id);
+                                      if (m_assembly)
+                                      {
+                                          if (auto referencedModel = m_assembly->findModel(id))
+                                          {
+                                              functionGradientNode->updateInputsAndOutputs(
+                                                *referencedModel);
+                                          }
+                                      }
                                       m_parameterChanged = true;
                                       m_modelEditor->markModelAsModified();
                                       m_modelEditor->closePopupMenu();

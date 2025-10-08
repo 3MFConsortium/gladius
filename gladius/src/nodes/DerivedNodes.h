@@ -634,6 +634,68 @@ namespace gladius::nodes
         }
     };
 
+    class FunctionGradient : public ClonableNode<FunctionGradient>
+    {
+      public:
+        FunctionGradient()
+            : FunctionGradient({})
+        {
+        }
+
+        explicit FunctionGradient(NodeId id);
+
+        void resolveFunctionId();
+
+        [[nodiscard]] ResourceId getFunctionId() const
+        {
+            return m_functionId;
+        }
+
+        void setFunctionId(ResourceId functionId);
+
+        void setSelectedScalarOutput(const std::string & name);
+        void setSelectedVectorInput(const std::string & name);
+
+        [[nodiscard]] const std::string & getSelectedScalarOutput() const
+        {
+            return m_selectedScalarOutputName;
+        }
+
+        [[nodiscard]] const std::string & getSelectedVectorInput() const
+        {
+            return m_selectedVectorInputName;
+        }
+
+        void setStepSize(float h);
+        [[nodiscard]] float getStepSize() const;
+
+        void updateInputsAndOutputs(Model & referencedModel);
+
+        [[nodiscard]] std::string getDescription() const override
+        {
+            return "Computes the normalized gradient of a referenced function.";
+        }
+
+        [[nodiscard]] bool hasValidConfiguration() const;
+
+        VariantParameter * findArgumentParameter(const std::string & name);
+        [[nodiscard]] const VariantParameter *
+        findArgumentParameter(const std::string & name) const;
+
+        VariantParameter * getSelectedVectorParameter();
+        [[nodiscard]] const VariantParameter * getSelectedVectorParameter() const;
+
+      private:
+        void initializeBaseParameters();
+        void updateInternalOutputs();
+        void applyMirroredInputs(Model & referencedModel);
+        void validateSelections(Model & referencedModel);
+
+        ResourceId m_functionId{};
+        std::string m_selectedScalarOutputName;
+        std::string m_selectedVectorInputName;
+    };
+
     class Addition : public CloneableABtoResult<Addition>
     {
       public:
