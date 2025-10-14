@@ -390,7 +390,7 @@ namespace gladius::ui
     void NodeView::functionGradientControls(nodes::FunctionGradient & node)
     {
         ImGui::Spacing();
-        ImGui::SeparatorText("Gradient Configuration");
+        ImGui::TextUnformatted("Gradient Configuration");
 
         if (m_assembly == nullptr)
         {
@@ -456,33 +456,56 @@ namespace gladius::ui
             ImGui::BeginDisabled();
         }
 
-        if (ImGui::BeginCombo("Scalar Output", scalarPreview.c_str()))
+        // Popup-based selector for scalar output (more reliable in node editor)
+        if (ImGui::Button(scalarPreview.c_str()))
         {
-            bool const isNoneSelected = selectedScalar.empty();
-            if (ImGui::Selectable("None", isNoneSelected))
-            {
-                if (!isNoneSelected)
-                {
-                    node.setSelectedScalarOutput("");
-                    selectionChanged = true;
-                }
-            }
+            m_showContextMenu = true;
+            auto popupName = fmt::format("FG_ScalarOutput_{}", node.getId());
+            // Capture copies to avoid dangling references across frames
+            auto scalarOutputsCopy = scalarOutputs;   // by-value
+            auto selectedScalarCopy = selectedScalar; // by-value
+            auto * nodePtr = &node;                   // pointer is stable while node exists
+            m_modelEditor->showPopupMenu(
+              [this, popupName, scalarOutputsCopy, selectedScalarCopy, nodePtr]()
+              {
+                  if (m_showContextMenu)
+                  {
+                      ImGui::OpenPopup(popupName.c_str());
+                      m_showContextMenu = false;
+                  }
 
-            for (auto const & option : scalarOutputs)
-            {
-                bool const isSelected = (option == selectedScalar);
-                if (ImGui::Selectable(option.c_str(), isSelected))
-                {
-                    node.setSelectedScalarOutput(option);
-                    selectionChanged = true;
-                }
-                if (isSelected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
+                  if (ImGui::BeginPopup(popupName.c_str()))
+                  {
+                      bool const isNoneSelected = selectedScalarCopy.empty();
+                      if (ImGui::Selectable("None", isNoneSelected))
+                      {
+                          if (!isNoneSelected)
+                          {
+                              nodePtr->setSelectedScalarOutput("");
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                      }
 
-            ImGui::EndCombo();
+                      for (auto const & option : scalarOutputsCopy)
+                      {
+                          bool const isSelected = (option == selectedScalarCopy);
+                          if (ImGui::Selectable(option.c_str(), isSelected))
+                          {
+                              nodePtr->setSelectedScalarOutput(option);
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                          if (isSelected)
+                          {
+                              ImGui::SetItemDefaultFocus();
+                          }
+                      }
+                      ImGui::EndPopup();
+                  }
+              });
         }
 
         if (!hasScalarOutputs)
@@ -508,33 +531,55 @@ namespace gladius::ui
             ImGui::BeginDisabled();
         }
 
-        if (ImGui::BeginCombo("Vector Input", vectorPreview.c_str()))
+        // Popup-based selector for vector input
+        if (ImGui::Button(vectorPreview.c_str()))
         {
-            bool const isNoneSelected = selectedVector.empty();
-            if (ImGui::Selectable("None", isNoneSelected))
-            {
-                if (!isNoneSelected)
-                {
-                    node.setSelectedVectorInput("");
-                    selectionChanged = true;
-                }
-            }
+            m_showContextMenu = true;
+            auto popupName = fmt::format("FG_VectorInput_{}", node.getId());
+            auto vectorInputsCopy = vectorInputs;     // by-value
+            auto selectedVectorCopy = selectedVector; // by-value
+            auto * nodePtr = &node;                   // pointer is stable while node exists
+            m_modelEditor->showPopupMenu(
+              [this, popupName, vectorInputsCopy, selectedVectorCopy, nodePtr]()
+              {
+                  if (m_showContextMenu)
+                  {
+                      ImGui::OpenPopup(popupName.c_str());
+                      m_showContextMenu = false;
+                  }
 
-            for (auto const & option : vectorInputs)
-            {
-                bool const isSelected = (option == selectedVector);
-                if (ImGui::Selectable(option.c_str(), isSelected))
-                {
-                    node.setSelectedVectorInput(option);
-                    selectionChanged = true;
-                }
-                if (isSelected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
+                  if (ImGui::BeginPopup(popupName.c_str()))
+                  {
+                      bool const isNoneSelected = selectedVectorCopy.empty();
+                      if (ImGui::Selectable("None", isNoneSelected))
+                      {
+                          if (!isNoneSelected)
+                          {
+                              nodePtr->setSelectedVectorInput("");
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                      }
 
-            ImGui::EndCombo();
+                      for (auto const & option : vectorInputsCopy)
+                      {
+                          bool const isSelected = (option == selectedVectorCopy);
+                          if (ImGui::Selectable(option.c_str(), isSelected))
+                          {
+                              nodePtr->setSelectedVectorInput(option);
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                          if (isSelected)
+                          {
+                              ImGui::SetItemDefaultFocus();
+                          }
+                      }
+                      ImGui::EndPopup();
+                  }
+              });
         }
 
         if (!hasVectorInputs)
@@ -556,6 +601,33 @@ namespace gladius::ui
             if (m_modelEditor)
             {
                 m_modelEditor->markModelAsModified();
+            }
+        }
+
+        // Step size control
+        if (auto it = node.parameter().find(FieldNames::StepSize); it != node.parameter().end())
+        {
+            auto & stepVar = it->second.Value();
+            if (auto pStep = std::get_if<float>(&stepVar))
+            {
+                float prev = *pStep;
+                ImGui::SetNextItemWidth(150.f * m_uiScale);
+                if (ImGui::DragFloat("Step Size", pStep, 0.001f, 0.0f, 1000.0f, "%.6f"))
+                {
+                    if (*pStep < 0.0f)
+                    {
+                        *pStep = 0.0f; // keep non-negative; kernel clamps to >= 1e-8
+                    }
+                    if (!it->second.isModifiable())
+                    {
+                        it->second.setModifiable(true);
+                    }
+                    m_parameterChanged = true;
+                    if (m_modelEditor)
+                    {
+                        m_modelEditor->markModelAsModified();
+                    }
+                }
             }
         }
 
