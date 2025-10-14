@@ -2,9 +2,9 @@ vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO 3MFConsortium/lib3mf
-    REF "3dJan/Beamlattice_namespace_fix"
-    SHA512 1a3ea4dcc7c837c79f161ec2bce6c561b353bc9a0b78e2090246b1a34eb365af21eac8dc9eeff7494b8302d852b63112e0df7b6e890a6d5bd5947ec9da67dd5c
+    REPO 3DJan/lib3mf
+    REF "3djan/FixResourceOrder"
+    SHA512 11d6fbe24a98ea07fdc5fe9942160a14f20dc4f5d129e9440b48ebec48220463d3bd837e5b4dcc595b8b74a98073940d715e8205a389d8110521f3781f342e73
 )
 
 # Normalize target_link_libraries signature by inserting PRIVATE for plain-signature lines
