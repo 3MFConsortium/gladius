@@ -182,4 +182,44 @@ namespace gladius_tests
         EXPECT_NE(source.find("> 1e-8f"), std::string::npos);
         EXPECT_NE(source.find("FG_neg_"), std::string::npos);
     }
+
+    TEST(FunctionGradientTests, ToOclVisitorFallsBackWhenConfigurationIncomplete)
+    {
+        gladius::nodes::Assembly assembly;
+        auto mainModel = assembly.assemblyModel();
+        mainModel->createBeginEndWithDefaultInAndOuts();
+
+        assembly.addModelIfNotExisting(ReferencedFunctionId);
+        auto referencedModel = assembly.findModel(ReferencedFunctionId).get();
+        ASSERT_NE(referencedModel, nullptr);
+        configureReferencedModel(*referencedModel);
+
+        auto * gradientNode = mainModel->create<FunctionGradient>();
+        ASSERT_NE(gradientNode, nullptr);
+        gradientNode->setFunctionId(ReferencedFunctionId);
+        gradientNode->updateInputsAndOutputs(*referencedModel);
+        mainModel->registerInputs(*gradientNode);
+        mainModel->registerOutputs(*gradientNode);
+
+        auto * endNode = mainModel->getEndNode();
+        ASSERT_NE(endNode, nullptr);
+        endNode->parameter()[FieldNames::Color].setInputFromPort(
+          gradientNode->getOutputs().at(FieldNames::Vector));
+
+        gladius::nodes::OptimizeOutputs optimizer{&assembly};
+        optimizer.optimize();
+
+        gladius::nodes::ToOclVisitor visitor;
+        visitor.setAssembly(&assembly);
+        visitor.setModel(mainModel.get());
+
+        EXPECT_NO_THROW(mainModel->visitNodes(visitor));
+
+        std::ostringstream stream;
+        visitor.write(stream);
+        auto const source = stream.str();
+
+        EXPECT_NE(source.find("fallback"), std::string::npos);
+        EXPECT_NE(source.find("(float3)(0.0f)"), std::string::npos);
+    }
 }
