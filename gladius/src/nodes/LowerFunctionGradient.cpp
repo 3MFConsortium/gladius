@@ -496,16 +496,16 @@ namespace gladius::nodes
         auto * maskSelect = model->create<Select>();
         maskSelect->setDisplayName("length_mask");
         linkOrThrow(*model,
-                    lengthNode->getOutputs().at(FieldNames::Result),
+                    epsilonScalar->getOutputs().at(FieldNames::Value),
                     maskSelect->parameter().at(FieldNames::A));
         linkOrThrow(*model,
-                    epsilonScalar->getOutputs().at(FieldNames::Value),
+                    lengthNode->getOutputs().at(FieldNames::Result),
                     maskSelect->parameter().at(FieldNames::B));
         linkOrThrow(*model,
-                    oneScalar->getOutputs().at(FieldNames::Value),
+                    zeroScalar->getOutputs().at(FieldNames::Value),
                     maskSelect->parameter().at(FieldNames::C));
         linkOrThrow(*model,
-                    zeroScalar->getOutputs().at(FieldNames::Value),
+                    oneScalar->getOutputs().at(FieldNames::Value),
                     maskSelect->parameter().at(FieldNames::D));
 
         auto * maskVector = model->create<VectorFromScalar>();
