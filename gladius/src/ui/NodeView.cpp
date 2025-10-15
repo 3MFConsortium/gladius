@@ -9,6 +9,7 @@
 #include "Style.h"
 #include "Widgets.h"
 #include "nodes/DerivedNodes.h"
+#include "nodes/LowerFunctionGradient.h"
 #include "nodesfwd.h"
 
 #include "imguinodeeditor.h"
@@ -18,6 +19,7 @@
 #include <imgui_stdlib.h>
 
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <fmt/format.h>
 #include <set>
@@ -381,6 +383,11 @@ namespace gladius::ui
             functionGradientControls(*functionGradientNode);
         }
 
+        if (auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode))
+        {
+            functionCallControls(*functionCallNode);
+        }
+
         if (baseNode.parameterChangeInvalidatesPayload() && m_parameterChanged)
         {
             m_modelEditor->invalidatePrimitiveData();
@@ -643,6 +650,160 @@ namespace gladius::ui
               ImVec4(0.6f, 0.8f, 1.f, 1.f),
               "Gradient output is normalized and falls back to zero for near-zero magnitudes.");
         }
+
+        ImGui::Spacing();
+        if (ImGui::Button("Lower Function Gradients"))
+        {
+            if (!m_assembly)
+            {
+                m_lowerGradientMessage = "Assembly not available.";
+                m_lowerGradientMessageIsError = true;
+            }
+            else
+            {
+                try
+                {
+                    std::vector<std::string> errorMessages;
+                    nodes::LowerFunctionGradient lowering{*m_assembly,
+                                                          {},
+                                                          [&](std::string const & message)
+                                                          { errorMessages.push_back(message); }};
+                    lowering.run();
+                    m_assembly->updateInputsAndOutputs();
+
+                    if (lowering.hadErrors())
+                    {
+                        if (!errorMessages.empty())
+                        {
+                            m_lowerGradientMessage = errorMessages.back();
+                        }
+                        else
+                        {
+                            m_lowerGradientMessage = "Lowering reported errors.";
+                        }
+                        m_lowerGradientMessageIsError = true;
+                    }
+                    else
+                    {
+                        m_lowerGradientMessage = "Function gradients lowered.";
+                        m_lowerGradientMessageIsError = false;
+                    }
+
+                    m_parameterChanged = true;
+                    m_modelChanged = true;
+                    if (m_modelEditor)
+                    {
+                        m_modelEditor->markModelAsModified();
+                        m_modelEditor->invalidatePrimitiveData();
+                    }
+                }
+                catch (std::exception const & e)
+                {
+                    m_lowerGradientMessage = e.what();
+                    m_lowerGradientMessageIsError = true;
+                }
+            }
+        }
+
+        if (!m_lowerGradientMessage.empty())
+        {
+            auto const color = m_lowerGradientMessageIsError ? ImVec4(1.f, 0.4f, 0.4f, 1.f)
+                                                             : ImVec4(0.6f, 0.8f, 1.f, 1.f);
+            ImGui::TextColored(color, "%s", m_lowerGradientMessage.c_str());
+        }
+    }
+
+    void NodeView::functionCallControls(nodes::FunctionCall & node)
+    {
+        ImGui::Spacing();
+        if (ImGui::Button("Create Function Gradient"))
+        {
+            if (!m_assembly || !m_currentModel)
+            {
+                return;
+            }
+
+            try
+            {
+                // Create a new FunctionGradient node
+                auto * gradientNode = m_currentModel->create<nodes::FunctionGradient>();
+                if (!gradientNode)
+                {
+                    return;
+                }
+
+                // Configure the gradient node with the same function ID as the call
+                gradientNode->setFunctionId(node.getFunctionId());
+
+                // Get the referenced model to update inputs/outputs
+                auto referencedModel = m_assembly->findModel(node.getFunctionId());
+                if (referencedModel)
+                {
+                    gradientNode->updateInputsAndOutputs(*referencedModel);
+                }
+
+                // Register the new node
+                m_currentModel->registerInputs(*gradientNode);
+                m_currentModel->registerOutputs(*gradientNode);
+
+                // Copy parameter links from FunctionCall to FunctionGradient
+                auto & functionCallParams = node.parameter();
+                auto & gradientParams = gradientNode->parameter();
+
+                for (auto & [paramName, gradientParam] : gradientParams)
+                {
+                    // Skip the FunctionId parameter as it's already set
+                    if (paramName == nodes::FieldNames::FunctionId)
+                    {
+                        continue;
+                    }
+
+                    // Find corresponding parameter in FunctionCall
+                    auto callParamIter = functionCallParams.find(paramName);
+                    if (callParamIter != functionCallParams.end())
+                    {
+                        auto const & callParam = callParamIter->second;
+
+                        // Copy the source link if it exists
+                        auto const & source = callParam.getConstSource();
+                        if (source.has_value() && source->port)
+                        {
+                            m_currentModel->addLink(source->port->getId(), gradientParam.getId());
+                        }
+                        else
+                        {
+                            // Copy the parameter value if no link exists
+                            gradientParam.setValue(callParam.getValue());
+                        }
+                    }
+                }
+
+                // Mark outputs as used
+                auto & outputs = gradientNode->getOutputs();
+                for (auto & [name, port] : outputs)
+                {
+                    port.setIsUsed(true);
+                }
+
+                // Notify of changes
+                m_parameterChanged = true;
+                m_modelChanged = true;
+                if (m_modelEditor)
+                {
+                    m_modelEditor->markModelAsModified();
+                    m_modelEditor->invalidatePrimitiveData();
+                }
+            }
+            catch (std::exception const & e)
+            {
+                // Could add error reporting here if needed
+                std::cerr << "Failed to create FunctionGradient: " << e.what() << std::endl;
+            }
+        }
+
+        ImGui::TextColored(
+          ImVec4(0.6f, 0.8f, 1.f, 1.f),
+          "Creates a FunctionGradient node that computes the gradient of this function call.");
     }
 
     void NodeView::footer(NodeBase & baseNode)

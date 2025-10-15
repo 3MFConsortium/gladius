@@ -210,6 +210,7 @@ namespace gladius::ui
                      nodes::VariantType & val);
 
         void functionGradientControls(nodes::FunctionGradient & node);
+        void functionCallControls(nodes::FunctionCall & node);
 
         bool typeControl(std::string const & label, std::type_index & typeIndex);
 
@@ -275,6 +276,9 @@ namespace gladius::ui
         std::string m_editingTag;
         std::string m_editingTagBuffer;
         bool m_isEditingTag = false;
+
+        std::string m_lowerGradientMessage;
+        bool m_lowerGradientMessageIsError{false};
 
         /// Group node position tracking for group movement (stores positions of group nodes, not
         /// individual model nodes)
