@@ -126,9 +126,6 @@ namespace gladius::nodes
             // Store the expression for inlining
             auto const key = std::make_pair(node.getId(), outputPortName);
             m_inlineExpressions[key] = expression;
-
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
@@ -166,9 +163,6 @@ namespace gladius::nodes
             // Store the expression for inlining
             auto const key = std::make_pair(node.getId(), outputPortName);
             m_inlineExpressions[key] = expression;
-
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
@@ -208,9 +202,6 @@ namespace gladius::nodes
             // Store the expression for inlining
             auto const key = std::make_pair(node.getId(), outputPortName);
             m_inlineExpressions[key] = expression;
-
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
@@ -432,8 +423,6 @@ namespace gladius::nodes
         {
             auto const key = std::make_pair(composeVector.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
@@ -491,8 +480,6 @@ namespace gladius::nodes
         {
             auto const key = std::make_pair(composeMatrix.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
@@ -532,8 +519,6 @@ namespace gladius::nodes
             auto const key =
               std::make_pair(composeMatrixFromColumns.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
@@ -569,8 +554,6 @@ namespace gladius::nodes
             auto const key =
               std::make_pair(composeMatrixFromRows.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", outputPort.getUniqueName(), expression);
         }
         else
         {
@@ -730,8 +713,6 @@ namespace gladius::nodes
         auto emitFallback = [&](std::string reason)
         {
             std::string const fallbackExpr = "(float3)(0.0f)";
-            m_definition << fmt::format(
-              "// FunctionGradient {} fallback: {}\n", functionGradient.getUniqueName(), reason);
 
             bool const canInline = shouldInlineOutput(functionGradient, FieldNames::Vector);
             auto const key =
@@ -740,8 +721,6 @@ namespace gladius::nodes
             if (canInline)
             {
                 m_inlineExpressions[key] = fallbackExpr;
-                m_definition << fmt::format(
-                  "// Inlined: {} {}\n", gradientOutput.getUniqueName(), fallbackExpr);
             }
             else
             {
@@ -974,8 +953,6 @@ namespace gladius::nodes
             auto const key =
               std::make_pair(functionGradient.getId(), std::string(FieldNames::Vector));
             m_inlineExpressions[key] = normalizedVarName;
-            m_definition << fmt::format(
-              "// Inlined: {0} {1}\n", gradientOutput.getUniqueName(), normalizedVarName);
         }
         else
         {
@@ -1023,10 +1000,6 @@ namespace gladius::nodes
             // Store the expression for inlining
             auto const key = std::make_pair(addition.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-
-            // Add a comment for debugging
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", addition.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
@@ -1075,9 +1048,6 @@ namespace gladius::nodes
             // Store the expression for inlining
             auto const key = std::make_pair(subtraction.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", subtraction.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
@@ -1128,10 +1098,6 @@ namespace gladius::nodes
             auto const key =
               std::make_pair(multiplication.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-
-            m_definition << fmt::format("// Inlined: {} {}\n",
-                                        multiplication.getResultOutputPort().getUniqueName(),
-                                        expression);
         }
         else
         {
@@ -1181,9 +1147,6 @@ namespace gladius::nodes
             // Store the expression for inlining
             auto const key = std::make_pair(division.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", division.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
@@ -1212,8 +1175,6 @@ namespace gladius::nodes
         {
             auto const key = std::make_pair(dotProduct.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", dotProduct.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
@@ -1240,9 +1201,6 @@ namespace gladius::nodes
         {
             auto const key = std::make_pair(crossProduct.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format("// Inlined: {} {}\n",
-                                        crossProduct.getResultOutputPort().getUniqueName(),
-                                        expression);
         }
         else
         {
@@ -1371,8 +1329,6 @@ namespace gladius::nodes
         {
             auto const key = std::make_pair(lengthNode.getId(), std::string(FieldNames::Result));
             m_inlineExpressions[key] = expression;
-            m_definition << fmt::format(
-              "// Inlined: {} {}\n", lengthNode.getResultOutputPort().getUniqueName(), expression);
         }
         else
         {
