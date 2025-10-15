@@ -619,6 +619,11 @@ namespace gladius::io
                 {
                     found = true;
                 }
+
+                void visit(nodes::NodeBase & /*nb*/) override
+                {
+                    return; // Do nothing for other nodes
+                }
                 // Inherit other visits from base (which will traverse children via
                 // Model::visitNodes)
             } detector;
