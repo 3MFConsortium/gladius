@@ -97,7 +97,7 @@ namespace gladius
         {
             return;
         }
-        saveBackup();
+        // saveBackup();
         {
             m_futureModelRefresh = std::async(std::launch::async, [&]() { refreshWorker(); });
         }

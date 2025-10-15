@@ -3,6 +3,7 @@
 #include <array>
 #include <fmt/format.h>
 #include <iostream>
+#include <string>
 #include <unordered_map>
 
 #include <nodes/Assembly.h>
@@ -714,10 +715,51 @@ namespace gladius::nodes
             return;
         }
 
+        auto gradientOutputIter = functionGradient.getOutputs().find(FieldNames::Vector);
+        if (gradientOutputIter == functionGradient.getOutputs().end())
+        {
+            return;
+        }
+
+        auto & gradientOutput = gradientOutputIter->second;
+        if (!gradientOutput.isUsed())
+        {
+            return;
+        }
+
+        auto emitFallback = [&](std::string reason)
+        {
+            std::string const fallbackExpr = "(float3)(0.0f)";
+            m_definition << fmt::format(
+              "// FunctionGradient {} fallback: {}\n", functionGradient.getUniqueName(), reason);
+
+            bool const canInline = shouldInlineOutput(functionGradient, FieldNames::Vector);
+            auto const key =
+              std::make_pair(functionGradient.getId(), std::string(FieldNames::Vector));
+
+            if (canInline)
+            {
+                m_inlineExpressions[key] = fallbackExpr;
+                m_definition << fmt::format(
+                  "// Inlined: {} {}\n", gradientOutput.getUniqueName(), fallbackExpr);
+            }
+            else
+            {
+                m_definition << fmt::format(
+                  "float3 const {0} = {1};\n", gradientOutput.getUniqueName(), fallbackExpr);
+            }
+        };
+
         if (!functionGradient.hasValidConfiguration())
         {
-            throw std::runtime_error(fmt::format("FunctionGradient node {} is not fully configured",
-                                                 functionGradient.getUniqueName()));
+            emitFallback("node not fully configured");
+            return;
+        }
+
+        if (m_assembly == nullptr)
+        {
+            emitFallback("assembly is null");
+            return;
         }
 
         functionGradient.resolveFunctionId();
@@ -726,8 +768,8 @@ namespace gladius::nodes
 
         if (!referencedModel)
         {
-            throw std::runtime_error(fmt::format(
-              "Model {} referenced by {} not found", functionId, functionGradient.getUniqueName()));
+            emitFallback(fmt::format("referenced model {} not found", functionId));
+            return;
         }
 
         auto const & selectedOutputName = functionGradient.getSelectedScalarOutput();
@@ -737,40 +779,40 @@ namespace gladius::nodes
         auto referencedOutputIter = referencedOutputs.find(selectedOutputName);
         if (referencedOutputIter == referencedOutputs.end())
         {
-            throw std::runtime_error(
-              fmt::format("FunctionGradient node {} references missing output '{}'",
-                          functionGradient.getUniqueName(),
-                          selectedOutputName));
+            emitFallback(fmt::format("missing output '{}'", selectedOutputName));
+            return;
         }
 
         if (referencedOutputIter->second.getTypeIndex() != ParameterTypeIndex::Float)
         {
-            throw std::runtime_error(
-              fmt::format("FunctionGradient node {} expects scalar output '{}' to be float",
-                          functionGradient.getUniqueName(),
-                          selectedOutputName));
+            emitFallback(fmt::format("output '{}' is not float", selectedOutputName));
+            return;
+        }
+
+        if (!referencedOutputIter->second.isConsumedByFunction())
+        {
+            emitFallback(fmt::format("output '{}' is not marked as consumed", selectedOutputName));
+            return;
         }
 
         auto * vectorParameter = functionGradient.getSelectedVectorParameter();
         if (vectorParameter == nullptr)
         {
-            throw std::runtime_error(
-              fmt::format("FunctionGradient node {} has no vector input selected",
-                          functionGradient.getUniqueName()));
+            emitFallback(fmt::format("vector input '{}' not selected", selectedVectorParamName));
+            return;
         }
 
         if (vectorParameter->getTypeIndex() != ParameterTypeIndex::Float3)
         {
-            throw std::runtime_error(
-              fmt::format("FunctionGradient node {} expects vector input '{}' to be float3",
-                          functionGradient.getUniqueName(),
-                          selectedVectorParamName));
+            emitFallback(fmt::format("vector input '{}' is not float3", selectedVectorParamName));
+            return;
         }
 
         auto stepIter = functionGradient.parameter().find(FieldNames::StepSize);
         if (stepIter == functionGradient.parameter().end())
         {
-            throw std::runtime_error("FunctionGradient node missing step size parameter");
+            emitFallback("step size parameter missing");
+            return;
         }
 
         auto const functionName = referencedModel->getModelName();
@@ -925,7 +967,6 @@ namespace gladius::nodes
           gradientLenVarName,
           gradientVarName);
 
-        auto & gradientOutput = functionGradient.getOutputs().at(FieldNames::Vector);
         bool const canInline = shouldInlineOutput(functionGradient, FieldNames::Vector);
 
         if (canInline)

@@ -608,6 +608,33 @@ namespace gladius::io
                 continue; // dont write functions that represent other aspects the 3mf model
             }
 
+            // Detect unsupported FunctionGradient nodes and skip serialization for such models
+            // until 3MF specification & lib3mf support is available.
+            // TODO(FunctionGradient-3MF): Add full serialization support for FunctionGradient
+            // nodes once the 3MF implicit function extension defines a corresponding node type.
+            struct FunctionGradientDetector : nodes::Visitor
+            {
+                bool found = false;
+                void visit(nodes::FunctionGradient & /*fg*/) override
+                {
+                    found = true;
+                }
+                // Inherit other visits from base (which will traverse children via
+                // Model::visitNodes)
+            } detector;
+
+            model->visitNodes(detector);
+            if (detector.found)
+            {
+                m_logger->addEvent(
+                  {fmt::format(
+                     "Skipping function '{}' during 3MF export: contains FunctionGradient node(s) "
+                     "which are not yet supported in 3MF serialization.",
+                     name),
+                   events::Severity::Warning});
+                continue; // Skip this function to avoid runtime error in NodeTypeMap
+            }
+
             try
             {
                 auto function3mf = findExistingFunction(model3mf, *model);
