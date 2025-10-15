@@ -740,6 +740,54 @@ namespace gladius::ui
                 if (referencedModel)
                 {
                     gradientNode->updateInputsAndOutputs(*referencedModel);
+
+                    // Auto-select vector input if there's only one float3 input
+                    std::string vectorInputCandidate;
+                    int vectorInputCount = 0;
+                    auto & inputs = referencedModel->getInputs();
+                    for (auto & [inputName, inputPort] : inputs)
+                    {
+                        if (inputPort.getTypeIndex() == nodes::ParameterTypeIndex::Float3)
+                        {
+                            vectorInputCandidate = inputName;
+                            vectorInputCount++;
+                        }
+                    }
+                    if (vectorInputCount == 1)
+                    {
+                        gradientNode->setSelectedVectorInput(vectorInputCandidate);
+                    }
+
+                    // Auto-select scalar output if there's only one float output
+                    std::string scalarOutputCandidate;
+                    int scalarOutputCount = 0;
+                    auto & outputs = referencedModel->getOutputs();
+                    for (auto & [outputName, outputParam] : outputs)
+                    {
+                        if (outputParam.getTypeIndex() == nodes::ParameterTypeIndex::Float)
+                        {
+                            scalarOutputCandidate = outputName;
+                            scalarOutputCount++;
+                        }
+                    }
+                    if (scalarOutputCount == 1)
+                    {
+                        gradientNode->setSelectedScalarOutput(scalarOutputCandidate);
+                    }
+                }
+
+                // Create a constant scalar node for step size
+                auto * stepSizeConstant = m_currentModel->create<nodes::ConstantScalar>();
+                if (stepSizeConstant)
+                {
+                    stepSizeConstant->setDisplayName("gradient_step_size");
+                    auto & valueParam = stepSizeConstant->parameter()[nodes::FieldNames::Value];
+                    valueParam.setValue(nodes::VariantType{1e-5f});
+                    valueParam.setInputSourceRequired(false);
+                    valueParam.setModifiable(true);
+
+                    m_currentModel->registerInputs(*stepSizeConstant);
+                    m_currentModel->registerOutputs(*stepSizeConstant);
                 }
 
                 // Register the new node
@@ -755,6 +803,15 @@ namespace gladius::ui
                     // Skip the FunctionId parameter as it's already set
                     if (paramName == nodes::FieldNames::FunctionId)
                     {
+                        continue;
+                    }
+
+                    // Connect StepSize to the constant node we created
+                    if (paramName == nodes::FieldNames::StepSize && stepSizeConstant)
+                    {
+                        auto & constantOutput =
+                          stepSizeConstant->getOutputs().at(nodes::FieldNames::Value);
+                        m_currentModel->addLink(constantOutput.getId(), gradientParam.getId());
                         continue;
                     }
 

@@ -20,6 +20,7 @@
 #include "io/ImporterVdb.h"
 #include "io/VdbImporter.h"
 #include "nodes/GraphFlattener.h"
+#include "nodes/LowerFunctionGradient.h"
 #include "nodes/Model.h"
 #include "nodes/OptimizeOutputs.h"
 #include "nodes/ToCommandStreamVisitor.h"
@@ -151,21 +152,20 @@ namespace gladius
         ProfileFunction;
         using namespace gladius::events;
 
-        nodes::Assembly assemblyToFlat;
+        if (!m_assembly)
         {
-
-            if (!m_assembly)
-            {
-                return;
-            }
-
-            if (!validateAssembly())
-            {
-                return;
-            }
-
-            assemblyToFlat = *m_assembly;
+            return;
         }
+
+        if (!validateAssembly())
+        {
+            return;
+        }
+
+        nodes::Assembly assemblyToFlat{*m_assembly};
+
+        nodes::LowerFunctionGradient lowering{assemblyToFlat, getSharedLogger()};
+        lowering.run();
 
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();
