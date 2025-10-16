@@ -141,6 +141,8 @@ namespace gladius_tests
         EXPECT_TRUE(loweredModel->getInputs().contains(VectorInputName));
         EXPECT_TRUE(loweredModel->getInputs().contains(gladius::nodes::FieldNames::StepSize));
         EXPECT_TRUE(loweredModel->getOutputs().contains(gladius::nodes::FieldNames::Vector));
+        EXPECT_TRUE(loweredModel->getOutputs().contains(gladius::nodes::FieldNames::Gradient));
+        EXPECT_TRUE(loweredModel->getOutputs().contains(gladius::nodes::FieldNames::Magnitude));
 
         auto const & functionIdParam =
           loweredCall->parameter().at(gladius::nodes::FieldNames::FunctionId);

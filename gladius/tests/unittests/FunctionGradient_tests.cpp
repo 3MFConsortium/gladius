@@ -92,7 +92,11 @@ namespace gladius_tests
         auto & outputs = gradientNode.getOutputs();
         ASSERT_TRUE(outputs.contains(FieldNames::Vector));
         EXPECT_EQ(outputs.at(FieldNames::Vector).getTypeIndex(), ParameterTypeIndex::Float3);
-        EXPECT_EQ(outputs.size(), 1);
+        ASSERT_TRUE(outputs.contains(FieldNames::Gradient));
+        EXPECT_EQ(outputs.at(FieldNames::Gradient).getTypeIndex(), ParameterTypeIndex::Float3);
+        ASSERT_TRUE(outputs.contains(FieldNames::Magnitude));
+        EXPECT_EQ(outputs.at(FieldNames::Magnitude).getTypeIndex(), ParameterTypeIndex::Float);
+        EXPECT_EQ(outputs.size(), 3);
     }
 
     TEST(FunctionGradientTests, ClearsScalarSelectionWhenOutputMissing)
@@ -221,5 +225,65 @@ namespace gladius_tests
 
         EXPECT_NE(source.find("fallback"), std::string::npos);
         EXPECT_NE(source.find("(float3)(0.0f)"), std::string::npos);
+    }
+
+    TEST(FunctionGradientTests, ExposesGradientAndMagnitudeOutputs)
+    {
+        gladius::nodes::Assembly assembly;
+        Model * referencedModel = nullptr;
+        FunctionGradient * gradientNode = nullptr;
+        setupAssemblyWithGradient(assembly, referencedModel, gradientNode);
+        ASSERT_NE(gradientNode, nullptr);
+
+        auto & outputs = gradientNode->getOutputs();
+
+        // Check all three outputs are present
+        ASSERT_TRUE(outputs.contains(FieldNames::Vector));
+        EXPECT_EQ(outputs.at(FieldNames::Vector).getTypeIndex(), ParameterTypeIndex::Float3);
+
+        ASSERT_TRUE(outputs.contains(FieldNames::Gradient));
+        EXPECT_EQ(outputs.at(FieldNames::Gradient).getTypeIndex(), ParameterTypeIndex::Float3);
+
+        ASSERT_TRUE(outputs.contains(FieldNames::Magnitude));
+        EXPECT_EQ(outputs.at(FieldNames::Magnitude).getTypeIndex(), ParameterTypeIndex::Float);
+
+        EXPECT_EQ(outputs.size(), 3);
+    }
+
+    TEST(FunctionGradientTests, ToOclVisitorEmitsGradientAndMagnitudeWhenUsed)
+    {
+        gladius::nodes::Assembly assembly;
+        Model * referencedModel = nullptr;
+        FunctionGradient * gradientNode = nullptr;
+        setupAssemblyWithGradient(assembly, referencedModel, gradientNode);
+        ASSERT_NE(gradientNode, nullptr);
+        ASSERT_NE(referencedModel, nullptr);
+
+        // Mark gradient and magnitude outputs as used
+        gradientNode->getOutputs().at(FieldNames::Gradient).setIsUsed(true);
+        gradientNode->getOutputs().at(FieldNames::Magnitude).setIsUsed(true);
+
+        gladius::nodes::OptimizeOutputs optimizer{&assembly};
+        optimizer.optimize();
+
+        gladius::nodes::ToOclVisitor visitor;
+        auto mainModel = assembly.assemblyModel();
+        visitor.setAssembly(&assembly);
+        visitor.setModel(mainModel.get());
+
+        ASSERT_NO_THROW(mainModel->visitNodes(visitor));
+
+        std::ostringstream stream;
+        ASSERT_NO_THROW(visitor.write(stream));
+        auto source = stream.str();
+
+        // Check that gradient variable is emitted
+        EXPECT_NE(source.find("FG_gradient_"), std::string::npos);
+
+        // Check that gradient length variable is emitted
+        EXPECT_NE(source.find("FG_gradient_len_"), std::string::npos);
+
+        // Check that normalized gradient is emitted
+        EXPECT_NE(source.find("FG_gradient_norm_"), std::string::npos);
     }
 }
