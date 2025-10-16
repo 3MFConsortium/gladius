@@ -946,9 +946,9 @@ namespace gladius::nodes
           gradientLenVarName,
           gradientVarName);
 
-        bool const canInline = shouldInlineOutput(functionGradient, FieldNames::Vector);
-
-        if (canInline)
+        // Emit normalized vector output (backward compatible)
+        bool const canInlineVector = shouldInlineOutput(functionGradient, FieldNames::Vector);
+        if (canInlineVector)
         {
             auto const key =
               std::make_pair(functionGradient.getId(), std::string(FieldNames::Vector));
@@ -958,6 +958,48 @@ namespace gladius::nodes
         {
             m_definition << fmt::format(
               "float3 const {0} = {1};\n", gradientOutput.getUniqueName(), normalizedVarName);
+        }
+
+        // Emit raw gradient output (new)
+        auto gradientRawOutputIter = functionGradient.getOutputs().find(FieldNames::Gradient);
+        if (gradientRawOutputIter != functionGradient.getOutputs().end() &&
+            gradientRawOutputIter->second.isUsed())
+        {
+            bool const canInlineGradient =
+              shouldInlineOutput(functionGradient, FieldNames::Gradient);
+            if (canInlineGradient)
+            {
+                auto const key =
+                  std::make_pair(functionGradient.getId(), std::string(FieldNames::Gradient));
+                m_inlineExpressions[key] = gradientVarName;
+            }
+            else
+            {
+                m_definition << fmt::format("float3 const {0} = {1};\n",
+                                            gradientRawOutputIter->second.getUniqueName(),
+                                            gradientVarName);
+            }
+        }
+
+        // Emit magnitude output (new)
+        auto magnitudeOutputIter = functionGradient.getOutputs().find(FieldNames::Magnitude);
+        if (magnitudeOutputIter != functionGradient.getOutputs().end() &&
+            magnitudeOutputIter->second.isUsed())
+        {
+            bool const canInlineMagnitude =
+              shouldInlineOutput(functionGradient, FieldNames::Magnitude);
+            if (canInlineMagnitude)
+            {
+                auto const key =
+                  std::make_pair(functionGradient.getId(), std::string(FieldNames::Magnitude));
+                m_inlineExpressions[key] = gradientLenVarName;
+            }
+            else
+            {
+                m_definition << fmt::format("float const {0} = {1};\n",
+                                            magnitudeOutputIter->second.getUniqueName(),
+                                            gradientLenVarName);
+            }
         }
     }
 

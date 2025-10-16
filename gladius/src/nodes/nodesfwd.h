@@ -207,6 +207,8 @@ namespace gladius::nodes
         static auto constexpr Result = "result";
         static auto constexpr Scaling = "scaling";
         static auto constexpr Vector = "vector";
+        static auto constexpr Gradient = "gradient";
+        static auto constexpr Magnitude = "magnitude";
         static auto constexpr Matrix = "matrix";
         static auto constexpr X = "x";
         static auto constexpr Y = "y";

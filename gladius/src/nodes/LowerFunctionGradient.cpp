@@ -297,6 +297,20 @@ namespace gladius::nodes
         end->parameter()[FieldNames::Vector] = vectorOutput;
         model->registerInput(end->parameter()[FieldNames::Vector]);
 
+        VariantParameter gradientOutput =
+          createVariantTypeFromTypeIndex(ParameterTypeIndex::Float3);
+        gradientOutput.setInputSourceRequired(true);
+        gradientOutput.setParentId(end->getId());
+        end->parameter()[FieldNames::Gradient] = gradientOutput;
+        model->registerInput(end->parameter()[FieldNames::Gradient]);
+
+        VariantParameter magnitudeOutput =
+          createVariantTypeFromTypeIndex(ParameterTypeIndex::Float);
+        magnitudeOutput.setInputSourceRequired(true);
+        magnitudeOutput.setParentId(end->getId());
+        end->parameter()[FieldNames::Magnitude] = magnitudeOutput;
+        model->registerInput(end->parameter()[FieldNames::Magnitude]);
+
         auto * zeroScalar = makeScalar(*model, 0.0f, "zero");
         auto * oneScalar = makeScalar(*model, 1.0f, "one");
         auto * minusOneScalar = makeScalar(*model, -1.0f, "neg_one");
@@ -526,6 +540,34 @@ namespace gladius::nodes
         linkOrThrow(*model,
                     finalProduct->getOutputs().at(FieldNames::Result),
                     end->parameter().at(FieldNames::Vector));
+
+        // Wire raw gradient output
+        auto * rawGradientMasked = model->create<Multiplication>();
+        rawGradientMasked->setDisplayName("raw_gradient_output");
+        linkOrThrow(*model,
+                    composeGradient->getOutputs().at(FieldNames::Result),
+                    rawGradientMasked->parameter().at(FieldNames::A));
+        linkOrThrow(*model,
+                    maskVector->getOutputs().at(FieldNames::Result),
+                    rawGradientMasked->parameter().at(FieldNames::B));
+
+        linkOrThrow(*model,
+                    rawGradientMasked->getOutputs().at(FieldNames::Result),
+                    end->parameter().at(FieldNames::Gradient));
+
+        // Wire magnitude output
+        auto * magnitudeMasked = model->create<Multiplication>();
+        magnitudeMasked->setDisplayName("magnitude_output");
+        linkOrThrow(*model,
+                    lengthNode->getOutputs().at(FieldNames::Result),
+                    magnitudeMasked->parameter().at(FieldNames::A));
+        linkOrThrow(*model,
+                    maskSelect->getOutputs().at(FieldNames::Result),
+                    magnitudeMasked->parameter().at(FieldNames::B));
+
+        linkOrThrow(*model,
+                    magnitudeMasked->getOutputs().at(FieldNames::Result),
+                    end->parameter().at(FieldNames::Magnitude));
 
         model->invalidateGraph();
         model->updateGraphAndOrderIfNeeded();

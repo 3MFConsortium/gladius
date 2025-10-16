@@ -410,7 +410,9 @@ namespace gladius::nodes
         TypeRule rule = {RuleType::Default,
                          InputTypeMap{{FieldNames::FunctionId, ParameterTypeIndex::ResourceId},
                                       {FieldNames::StepSize, ParameterTypeIndex::Float}},
-                         OutputTypeMap{{FieldNames::Vector, ParameterTypeIndex::Float3}}};
+                         OutputTypeMap{{FieldNames::Vector, ParameterTypeIndex::Float3},
+                                       {FieldNames::Gradient, ParameterTypeIndex::Float3},
+                                       {FieldNames::Magnitude, ParameterTypeIndex::Float}}};
         m_typeRules = {rule};
         applyTypeRule(rule);
 
@@ -431,7 +433,8 @@ namespace gladius::nodes
     {
         for (auto iter = m_outputs.begin(); iter != m_outputs.end();)
         {
-            if (iter->first != FieldNames::Vector)
+            if (iter->first != FieldNames::Vector && iter->first != FieldNames::Gradient &&
+                iter->first != FieldNames::Magnitude)
             {
                 iter = m_outputs.erase(iter);
             }
@@ -444,6 +447,16 @@ namespace gladius::nodes
         if (m_outputs.find(FieldNames::Vector) == m_outputs.end())
         {
             addOutputPort(FieldNames::Vector, ParameterTypeIndex::Float3);
+        }
+
+        if (m_outputs.find(FieldNames::Gradient) == m_outputs.end())
+        {
+            addOutputPort(FieldNames::Gradient, ParameterTypeIndex::Float3);
+        }
+
+        if (m_outputs.find(FieldNames::Magnitude) == m_outputs.end())
+        {
+            addOutputPort(FieldNames::Magnitude, ParameterTypeIndex::Float);
         }
 
         updateNodeIds();
