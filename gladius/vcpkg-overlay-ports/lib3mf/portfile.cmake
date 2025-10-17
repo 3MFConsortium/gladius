@@ -3,8 +3,8 @@ vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO 3DJan/lib3mf
-    REF "3djan/FixResourceOrder"
-    SHA512 11d6fbe24a98ea07fdc5fe9942160a14f20dc4f5d129e9440b48ebec48220463d3bd837e5b4dcc595b8b74a98073940d715e8205a389d8110521f3781f342e73
+    REF "3djan/volumetric_beamlattice_gradient"
+    SHA512 b65032c81d05423713f2cda5fd8e80d7fcd4b0a225ca0192582678727d1be7d397dfed39c598ad07bc75ab8eddc7d8b1fd10c832c4d05adc81c266742c189d32
 )
 
 # Normalize target_link_libraries signature by inserting PRIVATE for plain-signature lines

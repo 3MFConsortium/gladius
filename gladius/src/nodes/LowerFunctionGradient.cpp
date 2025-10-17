@@ -291,11 +291,12 @@ namespace gladius::nodes
         auto & basePort = baseIter->second;
         auto & stepPort = mirroredInputs.at(FieldNames::StepSize);
 
-        VariantParameter vectorOutput = createVariantTypeFromTypeIndex(ParameterTypeIndex::Float3);
-        vectorOutput.setInputSourceRequired(true);
-        vectorOutput.setParentId(end->getId());
-        end->parameter()[FieldNames::Vector] = vectorOutput;
-        model->registerInput(end->parameter()[FieldNames::Vector]);
+        VariantParameter normalizedOutput =
+          createVariantTypeFromTypeIndex(ParameterTypeIndex::Float3);
+        normalizedOutput.setInputSourceRequired(true);
+        normalizedOutput.setParentId(end->getId());
+        end->parameter()[FieldNames::NormalizedGradient] = normalizedOutput;
+        model->registerInput(end->parameter()[FieldNames::NormalizedGradient]);
 
         VariantParameter gradientOutput =
           createVariantTypeFromTypeIndex(ParameterTypeIndex::Float3);
@@ -539,7 +540,7 @@ namespace gladius::nodes
 
         linkOrThrow(*model,
                     finalProduct->getOutputs().at(FieldNames::Result),
-                    end->parameter().at(FieldNames::Vector));
+                    end->parameter().at(FieldNames::NormalizedGradient));
 
         // Wire raw gradient output
         auto * rawGradientMasked = model->create<Multiplication>();
@@ -609,8 +610,8 @@ namespace gladius::nodes
 
         call->resolveFunctionId();
 
-        auto & gradientOut = gradient.getOutputs().at(FieldNames::Vector);
-        auto & callOut = call->getOutputs().at(FieldNames::Vector);
+        auto & gradientOut = gradient.getOutputs().at(FieldNames::NormalizedGradient);
+        auto & callOut = call->getOutputs().at(FieldNames::NormalizedGradient);
         callOut.setIsUsed(gradientOut.isUsed());
         rewireConsumers(parentModel, gradientOut, callOut);
 

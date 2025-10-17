@@ -148,7 +148,7 @@ namespace gladius::nodes
               // The gradient output is always consumed if the gradient node exists
               // (it needs to evaluate the function to compute the gradient)
               auto const & gradientOutputs = gradientNode.getOutputs();
-              auto gradientOutIter = gradientOutputs.find(FieldNames::Vector);
+              auto gradientOutIter = gradientOutputs.find(FieldNames::NormalizedGradient);
               if (gradientOutIter != gradientOutputs.end() && gradientOutIter->second.isUsed())
               {
                   iter->second.setConsumedByFunction(true);

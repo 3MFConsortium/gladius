@@ -400,11 +400,275 @@ namespace gladius::ui
         }
     }
 
-    void NodeView::normalizeDistanceFieldControls(nodes::NormalizeDistanceField & /*node*/)
+    void NodeView::normalizeDistanceFieldControls(nodes::NormalizeDistanceField & node)
     {
         ImGui::Spacing();
         ImGui::TextUnformatted("Normalize Distance Field");
 
+        auto const errorColor = ImVec4(1.f, 0.4f, 0.4f, 1.f);
+        auto const warningColor = ImVec4(1.f, 0.6f, 0.2f, 1.f);
+
+        bool canConfigure = true;
+        if (!m_assembly)
+        {
+            ImGui::TextColored(errorColor,
+                               "Assembly not available – cannot resolve function outputs.");
+            canConfigure = false;
+        }
+
+        nodes::SharedModel referencedModel;
+        if (canConfigure)
+        {
+            node.resolveFunctionId();
+            auto const functionId = node.getFunctionId();
+            if (functionId == 0)
+            {
+                ImGui::TextColored(warningColor, "Select a function to normalize.");
+                canConfigure = false;
+            }
+            else
+            {
+                referencedModel = m_assembly->findModel(functionId);
+                if (!referencedModel)
+                {
+                    ImGui::TextColored(errorColor,
+                                       "Referenced function not found in the assembly.");
+                    canConfigure = false;
+                }
+            }
+        }
+
+        if (canConfigure && referencedModel)
+        {
+            auto const & functionOutputs = referencedModel->getOutputs();
+            std::vector<std::string> scalarOutputs;
+            scalarOutputs.reserve(functionOutputs.size());
+            for (auto const & [name, parameter] : functionOutputs)
+            {
+                if (parameter.getTypeIndex() == ParameterTypeIndex::Float)
+                {
+                    scalarOutputs.push_back(name);
+                }
+            }
+
+            std::vector<std::string> vectorInputs;
+            vectorInputs.reserve(node.parameter().size());
+            for (auto const & [name, parameter] : node.constParameter())
+            {
+                if (!parameter.isArgument())
+                {
+                    continue;
+                }
+                if (parameter.getTypeIndex() == ParameterTypeIndex::Float3)
+                {
+                    vectorInputs.push_back(name);
+                }
+            }
+
+            std::string selectedScalar = node.getSelectedScalarOutput();
+            std::string scalarPreview =
+              selectedScalar.empty() ? "Select scalar output" : selectedScalar;
+            bool const hasScalarOutputs = !scalarOutputs.empty();
+
+            if (!hasScalarOutputs)
+            {
+                scalarPreview = "No scalar outputs available";
+                ImGui::BeginDisabled();
+            }
+
+            if (ImGui::Button(scalarPreview.c_str()))
+            {
+                m_showContextMenu = true;
+                auto popupName = fmt::format("NDF_ScalarOutput_{}", node.getId());
+                auto scalarOutputsCopy = scalarOutputs;
+                auto selectedScalarCopy = selectedScalar;
+                auto * nodePtr = &node;
+                m_modelEditor->showPopupMenu(
+                  [this, popupName, scalarOutputsCopy, selectedScalarCopy, nodePtr]()
+                  {
+                      if (m_showContextMenu)
+                      {
+                          ImGui::OpenPopup(popupName.c_str());
+                          m_showContextMenu = false;
+                      }
+
+                      if (ImGui::BeginPopup(popupName.c_str()))
+                      {
+                          bool const isNoneSelected = selectedScalarCopy.empty();
+                          if (ImGui::Selectable("None", isNoneSelected))
+                          {
+                              if (!isNoneSelected)
+                              {
+                                  nodePtr->setSelectedScalarOutput("");
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                          }
+
+                          for (auto const & option : scalarOutputsCopy)
+                          {
+                              bool const isSelected = (option == selectedScalarCopy);
+                              if (ImGui::Selectable(option.c_str(), isSelected))
+                              {
+                                  nodePtr->setSelectedScalarOutput(option);
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                              if (isSelected)
+                              {
+                                  ImGui::SetItemDefaultFocus();
+                              }
+                          }
+                          ImGui::EndPopup();
+                      }
+                  });
+            }
+
+            if (!hasScalarOutputs)
+            {
+                ImGui::EndDisabled();
+                ImGui::TextColored(warningColor,
+                                   "The referenced function exposes no scalar outputs.");
+            }
+            else if (!selectedScalar.empty() &&
+                     std::find(scalarOutputs.begin(), scalarOutputs.end(), selectedScalar) ==
+                       scalarOutputs.end())
+            {
+                ImGui::TextColored(warningColor,
+                                   "Previously selected scalar output is no longer available.");
+            }
+
+            std::string selectedVector = node.getSelectedVectorInput();
+            std::string vectorPreview =
+              selectedVector.empty() ? "Select vector input" : selectedVector;
+            bool const hasVectorInputs = !vectorInputs.empty();
+
+            if (!hasVectorInputs)
+            {
+                vectorPreview = "No vector inputs available";
+                ImGui::BeginDisabled();
+            }
+
+            if (ImGui::Button(vectorPreview.c_str()))
+            {
+                m_showContextMenu = true;
+                auto popupName = fmt::format("NDF_VectorInput_{}", node.getId());
+                auto vectorInputsCopy = vectorInputs;
+                auto selectedVectorCopy = selectedVector;
+                auto * nodePtr = &node;
+                m_modelEditor->showPopupMenu(
+                  [this, popupName, vectorInputsCopy, selectedVectorCopy, nodePtr]()
+                  {
+                      if (m_showContextMenu)
+                      {
+                          ImGui::OpenPopup(popupName.c_str());
+                          m_showContextMenu = false;
+                      }
+
+                      if (ImGui::BeginPopup(popupName.c_str()))
+                      {
+                          bool const isNoneSelected = selectedVectorCopy.empty();
+                          if (ImGui::Selectable("None", isNoneSelected))
+                          {
+                              if (!isNoneSelected)
+                              {
+                                  nodePtr->setSelectedVectorInput("");
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                          }
+
+                          for (auto const & option : vectorInputsCopy)
+                          {
+                              bool const isSelected = (option == selectedVectorCopy);
+                              if (ImGui::Selectable(option.c_str(), isSelected))
+                              {
+                                  nodePtr->setSelectedVectorInput(option);
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                              if (isSelected)
+                              {
+                                  ImGui::SetItemDefaultFocus();
+                              }
+                          }
+                          ImGui::EndPopup();
+                      }
+                  });
+            }
+
+            if (!hasVectorInputs)
+            {
+                ImGui::EndDisabled();
+                ImGui::TextColored(warningColor,
+                                   "The mirrored arguments provide no vector inputs.");
+            }
+            else if (!selectedVector.empty() &&
+                     std::find(vectorInputs.begin(), vectorInputs.end(), selectedVector) ==
+                       vectorInputs.end())
+            {
+                ImGui::TextColored(warningColor,
+                                   "Previously selected vector input is no longer available.");
+            }
+
+            if (auto it = node.parameter().find(FieldNames::StepSize); it != node.parameter().end())
+            {
+                auto & stepVar = it->second.Value();
+                if (auto pStep = std::get_if<float>(&stepVar))
+                {
+                    ImGui::SetNextItemWidth(150.f * m_uiScale);
+                    if (ImGui::DragFloat("Step Size", pStep, 0.001f, 0.0f, 1000.0f, "%.6f"))
+                    {
+                        if (*pStep < 0.0f)
+                        {
+                            *pStep = 0.0f;
+                        }
+                        if (!it->second.isModifiable())
+                        {
+                            it->second.setModifiable(true);
+                        }
+                        m_parameterChanged = true;
+                        if (m_modelEditor)
+                        {
+                            m_modelEditor->markModelAsModified();
+                        }
+                    }
+                }
+            }
+
+            if (!node.hasValidConfiguration())
+            {
+                ImGui::TextColored(
+                  warningColor,
+                  "Select both a scalar output and a vector input to enable normalization.");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.f, 1.f),
+                                   "Distance values will be divided by the gradient magnitude.");
+            }
+        }
+
+        bool const canLower = canConfigure && node.hasValidConfiguration();
+
+        ImGui::Spacing();
+        ImGui::BeginDisabled(!canLower);
         if (ImGui::Button("Lower Normalize Distance"))
         {
             if (!m_assembly)
@@ -457,6 +721,7 @@ namespace gladius::ui
                 }
             }
         }
+        ImGui::EndDisabled();
 
         if (!m_lowerNormalizeMessage.empty())
         {

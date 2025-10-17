@@ -263,6 +263,12 @@ namespace gladius::io
             return model.create<nodes::UnsignedDistanceToMesh>();
         case Lib3MF::eImplicitNodeType::Mod:
             return model.create<nodes::Mod>();
+        case Lib3MF::eImplicitNodeType::BeamLattice:
+            return model.create<nodes::SignedDistanceToBeamLattice>();
+        case Lib3MF::eImplicitNodeType::FunctionGradient:
+            return model.create<nodes::FunctionGradient>();
+        case Lib3MF::eImplicitNodeType::NormalizeDistance:
+            return model.create<nodes::NormalizeDistanceField>();
         default:
             throw std::runtime_error("Unknown node type");
             return nullptr;
@@ -609,11 +615,18 @@ namespace gladius::io
             auto input = inputIter->GetCurrent();
             auto parameterName = makeValidVariableName(input->GetIdentifier());
             auto * parameter = node->getParameter(parameterName);
-            bool const nodeIsFunctionCall =
-              node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::FunctionCall;
-            if (!parameter && nodeIsFunctionCall)
+            auto const nodeType = node3mf.GetNodeType();
+            bool const nodeIsFunctionCall = nodeType == Lib3MF::eImplicitNodeType::FunctionCall;
+            bool const nodeIsFunctionGradient =
+              nodeType == Lib3MF::eImplicitNodeType::FunctionGradient;
+            bool const nodeIsNormalizeDistance =
+              nodeType == Lib3MF::eImplicitNodeType::NormalizeDistance;
+
+            bool const allowDynamicInputs =
+              nodeIsFunctionCall || nodeIsFunctionGradient || nodeIsNormalizeDistance;
+
+            if (!parameter && allowDynamicInputs)
             {
-                // create the parameter
                 parameter = node->addInput(parameterName);
             }
 
@@ -631,6 +644,23 @@ namespace gladius::io
 
             *parameter = parameterFromType(input->GetType());
             parameter->setParentId(node->getId());
+
+            if (parameterName == nodes::FieldNames::FunctionId)
+            {
+                parameter->setInputSourceRequired(false);
+            }
+            else if (parameterName == nodes::FieldNames::StepSize)
+            {
+                parameter->setInputSourceRequired(false);
+                parameter->setModifiable(true);
+                parameter->setValue(1e-3f);
+            }
+            else if (allowDynamicInputs)
+            {
+                parameter->marksAsArgument();
+                parameter->setInputSourceRequired(true);
+            }
+
             auto sourcePort = resolveInput(model, input);
             if (sourcePort)
             {
@@ -746,6 +776,29 @@ namespace gladius::io
             }
             auto resourceId = resource->GetModelResourceID();
             resourceNode->setResourceId(resourceId);
+        }
+
+        if (node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::FunctionGradient)
+        {
+            auto gradientNode3mf = dynamic_cast<Lib3MF::CFunctionGradientNode *>(&node3mf);
+            auto gradientNode = dynamic_cast<nodes::FunctionGradient *>(node);
+            if (gradientNode && gradientNode3mf)
+            {
+                gradientNode->setSelectedScalarOutput(gradientNode3mf->GetScalarOutputName());
+                gradientNode->setSelectedVectorInput(gradientNode3mf->GetVectorInputName());
+                gradientNode->resolveFunctionId();
+            }
+        }
+        else if (node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::NormalizeDistance)
+        {
+            auto normalizeNode3mf = dynamic_cast<Lib3MF::CNormalizeDistanceNode *>(&node3mf);
+            auto normalizeNode = dynamic_cast<nodes::NormalizeDistanceField *>(node);
+            if (normalizeNode && normalizeNode3mf)
+            {
+                normalizeNode->setSelectedScalarOutput(normalizeNode3mf->GetScalarOutputName());
+                normalizeNode->setSelectedVectorInput(normalizeNode3mf->GetVectorInputName());
+                normalizeNode->resolveFunctionId();
+            }
         }
     }
 

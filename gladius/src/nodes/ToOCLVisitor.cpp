@@ -698,7 +698,8 @@ namespace gladius::nodes
             return;
         }
 
-        auto gradientOutputIter = functionGradient.getOutputs().find(FieldNames::Vector);
+        auto gradientOutputIter =
+          functionGradient.getOutputs().find(FieldNames::NormalizedGradient);
         if (gradientOutputIter == functionGradient.getOutputs().end())
         {
             return;
@@ -714,9 +715,10 @@ namespace gladius::nodes
         {
             std::string const fallbackExpr = "(float3)(0.0f)";
 
-            bool const canInline = shouldInlineOutput(functionGradient, FieldNames::Vector);
+            bool const canInline =
+              shouldInlineOutput(functionGradient, FieldNames::NormalizedGradient);
             auto const key =
-              std::make_pair(functionGradient.getId(), std::string(FieldNames::Vector));
+              std::make_pair(functionGradient.getId(), std::string(FieldNames::NormalizedGradient));
 
             // Always annotate generated source with a fallback comment for diagnostics
             m_definition << fmt::format("// FunctionGradient fallback: {}\n", reason);
@@ -950,11 +952,12 @@ namespace gladius::nodes
           gradientVarName);
 
         // Emit normalized vector output (backward compatible)
-        bool const canInlineVector = shouldInlineOutput(functionGradient, FieldNames::Vector);
+        bool const canInlineVector =
+          shouldInlineOutput(functionGradient, FieldNames::NormalizedGradient);
         if (canInlineVector)
         {
             auto const key =
-              std::make_pair(functionGradient.getId(), std::string(FieldNames::Vector));
+              std::make_pair(functionGradient.getId(), std::string(FieldNames::NormalizedGradient));
             m_inlineExpressions[key] = normalizedVarName;
         }
         else

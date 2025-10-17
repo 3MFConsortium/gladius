@@ -410,7 +410,7 @@ namespace gladius::nodes
         TypeRule rule = {RuleType::Default,
                          InputTypeMap{{FieldNames::FunctionId, ParameterTypeIndex::ResourceId},
                                       {FieldNames::StepSize, ParameterTypeIndex::Float}},
-                         OutputTypeMap{{FieldNames::Vector, ParameterTypeIndex::Float3},
+                         OutputTypeMap{{FieldNames::NormalizedGradient, ParameterTypeIndex::Float3},
                                        {FieldNames::Gradient, ParameterTypeIndex::Float3},
                                        {FieldNames::Magnitude, ParameterTypeIndex::Float}}};
         m_typeRules = {rule};
@@ -433,8 +433,8 @@ namespace gladius::nodes
     {
         for (auto iter = m_outputs.begin(); iter != m_outputs.end();)
         {
-            if (iter->first != FieldNames::Vector && iter->first != FieldNames::Gradient &&
-                iter->first != FieldNames::Magnitude)
+            if (iter->first != FieldNames::NormalizedGradient &&
+                iter->first != FieldNames::Gradient && iter->first != FieldNames::Magnitude)
             {
                 iter = m_outputs.erase(iter);
             }
@@ -444,9 +444,9 @@ namespace gladius::nodes
             }
         }
 
-        if (m_outputs.find(FieldNames::Vector) == m_outputs.end())
+        if (m_outputs.find(FieldNames::NormalizedGradient) == m_outputs.end())
         {
-            addOutputPort(FieldNames::Vector, ParameterTypeIndex::Float3);
+            addOutputPort(FieldNames::NormalizedGradient, ParameterTypeIndex::Float3);
         }
 
         if (m_outputs.find(FieldNames::Gradient) == m_outputs.end())
@@ -847,15 +847,15 @@ namespace gladius::nodes
     {
         applyMirroredInputs(referencedModel);
         validateSelections(referencedModel);
-        // Outputs remain: Distance (float)
+        // Outputs remain: Result (float) per CT_NormalizeDistance specification
         auto & outs = getOutputs();
-        if (!outs.contains(FieldNames::Distance))
+        if (!outs.contains(FieldNames::Result))
         {
-            addOutputPort(FieldNames::Distance, ParameterTypeIndex::Float);
+            addOutputPort(FieldNames::Result, ParameterTypeIndex::Float);
         }
         else
         {
-            outs.at(FieldNames::Distance).setTypeIndex(ParameterTypeIndex::Float);
+            outs.at(FieldNames::Result).setTypeIndex(ParameterTypeIndex::Float);
         }
         updateNodeIds();
     }
