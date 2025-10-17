@@ -1,12 +1,12 @@
 #include "Importer3mf.h"
 #include "BeamLatticeImporter.h"
 
+#include "Lib3mfLoader.h"
+#include <algorithm>
 #include <fmt/format.h>
 #include <lib3mf_abi.hpp>
-#include "Lib3mfLoader.h"
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
-#include <algorithm>
 #include <map>
 #include <set>
 #include <vector>
@@ -85,8 +85,11 @@ namespace gladius::io
         }
         catch (std::exception & e)
         {
-            if (m_eventLogger) {
-                m_eventLogger->addEvent({fmt::format("Error initializing Importer3mf: {}", e.what()), events::Severity::Error});
+            if (m_eventLogger)
+            {
+                m_eventLogger->addEvent(
+                  {fmt::format("Error initializing Importer3mf: {}", e.what()),
+                   events::Severity::Error});
             }
             return;
         }
@@ -150,6 +153,11 @@ namespace gladius::io
     gladius::nodes::NodeBase * createNode(gladius::nodes::Model & model,
                                           Lib3MF::eImplicitNodeType type)
     {
+        // TODO(NormalizeDistanceField-3MF): Add import support for NormalizeDistanceField
+        // nodes once the 3MF implicit function extension defines a corresponding node type.
+        // TODO(FunctionGradient-3MF): Add import support for FunctionGradient nodes once
+        // the 3MF implicit function extension defines a corresponding node type.
+
         ProfileFunction using namespace gladius;
         switch (type)
         {
@@ -549,7 +557,8 @@ namespace gladius::io
                 }
             }
 
-            // For ComposeMatrix, MatrixFromColumns and MatrixFromRows replace "Matrix" output with "Result"
+            // For ComposeMatrix, MatrixFromColumns and MatrixFromRows replace "Matrix" output with
+            // "Result"
             if (node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::ComposeMatrix ||
                 node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::MatrixFromColumns ||
                 node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::MatrixFromRows)
@@ -1628,7 +1637,7 @@ namespace gladius::io
         {
             throw std::runtime_error(fmt::format("Could not open file {}", filename.string()));
         }
-        
+
         try
         {
             while (image3dIterator->MoveNext())

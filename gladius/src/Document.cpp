@@ -21,6 +21,7 @@
 #include "io/VdbImporter.h"
 #include "nodes/GraphFlattener.h"
 #include "nodes/LowerFunctionGradient.h"
+#include "nodes/LowerNormalizeDistanceField.h"
 #include "nodes/Model.h"
 #include "nodes/OptimizeOutputs.h"
 #include "nodes/ToCommandStreamVisitor.h"
@@ -164,8 +165,11 @@ namespace gladius
 
         nodes::Assembly assemblyToFlat{*m_assembly};
 
-        nodes::LowerFunctionGradient lowering{assemblyToFlat, getSharedLogger()};
-        lowering.run();
+        nodes::LowerFunctionGradient gradientLowering{assemblyToFlat, getSharedLogger()};
+        gradientLowering.run();
+
+        nodes::LowerNormalizeDistanceField normalizeLowering{assemblyToFlat, getSharedLogger()};
+        normalizeLowering.run();
 
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();

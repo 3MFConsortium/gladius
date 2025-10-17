@@ -190,6 +190,11 @@ namespace gladius::nodes
         visit(static_cast<NodeBase &>(functionGradient));
     }
 
+    void Visitor::visit(NormalizeDistanceField & normalizeDistanceField)
+    {
+        visit(static_cast<NodeBase &>(normalizeDistanceField));
+    }
+
     void Visitor::visit(Mix & mix)
     {
         visit(static_cast<NodeBase &>(mix));

@@ -10,6 +10,7 @@
 #include "Widgets.h"
 #include "nodes/DerivedNodes.h"
 #include "nodes/LowerFunctionGradient.h"
+#include "nodes/LowerNormalizeDistanceField.h"
 #include "nodesfwd.h"
 
 #include "imguinodeeditor.h"
@@ -383,6 +384,11 @@ namespace gladius::ui
             functionGradientControls(*functionGradientNode);
         }
 
+        if (auto * normalizeNode = dynamic_cast<nodes::NormalizeDistanceField *>(&baseNode))
+        {
+            normalizeDistanceFieldControls(*normalizeNode);
+        }
+
         if (auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode))
         {
             functionCallControls(*functionCallNode);
@@ -391,6 +397,72 @@ namespace gladius::ui
         if (baseNode.parameterChangeInvalidatesPayload() && m_parameterChanged)
         {
             m_modelEditor->invalidatePrimitiveData();
+        }
+    }
+
+    void NodeView::normalizeDistanceFieldControls(nodes::NormalizeDistanceField & /*node*/)
+    {
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Normalize Distance Field");
+
+        if (ImGui::Button("Lower Normalize Distance"))
+        {
+            if (!m_assembly)
+            {
+                m_lowerNormalizeMessage = "Assembly not available.";
+                m_lowerNormalizeMessageIsError = true;
+            }
+            else
+            {
+                try
+                {
+                    std::vector<std::string> errorMessages;
+                    nodes::LowerNormalizeDistanceField lowering{
+                      *m_assembly,
+                      {},
+                      [&](std::string const & message) { errorMessages.push_back(message); }};
+                    lowering.run();
+                    m_assembly->updateInputsAndOutputs();
+
+                    if (lowering.hadErrors())
+                    {
+                        if (!errorMessages.empty())
+                        {
+                            m_lowerNormalizeMessage = errorMessages.back();
+                        }
+                        else
+                        {
+                            m_lowerNormalizeMessage = "Lowering reported errors.";
+                        }
+                        m_lowerNormalizeMessageIsError = true;
+                    }
+                    else
+                    {
+                        m_lowerNormalizeMessage = "Normalize distance nodes lowered.";
+                        m_lowerNormalizeMessageIsError = false;
+                    }
+
+                    m_parameterChanged = true;
+                    m_modelChanged = true;
+                    if (m_modelEditor)
+                    {
+                        m_modelEditor->markModelAsModified();
+                        m_modelEditor->invalidatePrimitiveData();
+                    }
+                }
+                catch (std::exception const & e)
+                {
+                    m_lowerNormalizeMessage = e.what();
+                    m_lowerNormalizeMessageIsError = true;
+                }
+            }
+        }
+
+        if (!m_lowerNormalizeMessage.empty())
+        {
+            auto const color = m_lowerNormalizeMessageIsError ? ImVec4(1.f, 0.4f, 0.4f, 1.f)
+                                                              : ImVec4(0.6f, 0.8f, 1.f, 1.f);
+            ImGui::TextColored(color, "%s", m_lowerNormalizeMessage.c_str());
         }
     }
 
@@ -861,6 +933,114 @@ namespace gladius::ui
         ImGui::TextColored(
           ImVec4(0.6f, 0.8f, 1.f, 1.f),
           "Creates a FunctionGradient node that computes the gradient of this function call.");
+
+        ImGui::Spacing();
+        if (ImGui::Button("Normalize Distance"))
+        {
+            if (!m_assembly || !m_currentModel)
+            {
+                return;
+            }
+
+            try
+            {
+                // Create a new NormalizeDistanceField node
+                auto * normalizeNode = m_currentModel->create<nodes::NormalizeDistanceField>();
+                if (!normalizeNode)
+                {
+                    return;
+                }
+
+                // Set the FunctionId from the FunctionCall node
+                auto functionId = node.getFunctionId();
+                normalizeNode->setFunctionId(functionId);
+
+                // Configure selections: Distance output and Pos input by default
+                normalizeNode->setSelectedScalarOutput(nodes::FieldNames::Distance);
+                normalizeNode->setSelectedVectorInput(nodes::FieldNames::Pos);
+
+                // Update inputs and outputs to mirror the referenced function
+                if (auto referencedModel = m_assembly->findModel(functionId))
+                {
+                    normalizeNode->updateInputsAndOutputs(*referencedModel);
+                }
+
+                // Register the new node
+                m_currentModel->registerInputs(*normalizeNode);
+                m_currentModel->registerOutputs(*normalizeNode);
+
+                // Copy parameter links from FunctionCall to NormalizeDistanceField
+                // (mirrored arguments should have matching names)
+                auto & functionCallParams = node.parameter();
+                auto & normalizeParams = normalizeNode->parameter();
+
+                for (auto & [name, normalizeParam] : normalizeParams)
+                {
+                    if (!normalizeParam.isArgument())
+                    {
+                        continue; // Skip non-argument parameters (FunctionId, StepSize, etc.)
+                    }
+
+                    auto callParamIter = functionCallParams.find(name);
+                    if (callParamIter != functionCallParams.end())
+                    {
+                        auto const & source = callParamIter->second.getConstSource();
+                        if (source.has_value() && source->port)
+                        {
+                            m_currentModel->addLink(source->port->getId(), normalizeParam.getId());
+                        }
+                    }
+                }
+
+                // Create constant node for step size with default
+                auto * stepSizeConstant = m_currentModel->create<nodes::ConstantScalar>();
+                if (stepSizeConstant)
+                {
+                    stepSizeConstant->setDisplayName("normalize_step_size");
+                    auto & valueParam = stepSizeConstant->parameter()[nodes::FieldNames::Value];
+                    valueParam.setValue(nodes::VariantType{1e-3f});
+                    valueParam.setInputSourceRequired(false);
+                    valueParam.setModifiable(true);
+
+                    m_currentModel->registerInputs(*stepSizeConstant);
+                    m_currentModel->registerOutputs(*stepSizeConstant);
+
+                    auto & constantOutput =
+                      stepSizeConstant->getOutputs().at(nodes::FieldNames::Value);
+                    auto stepParamIter = normalizeParams.find(nodes::FieldNames::StepSize);
+                    if (stepParamIter != normalizeParams.end())
+                    {
+                        m_currentModel->addLink(constantOutput.getId(),
+                                                stepParamIter->second.getId());
+                    }
+                }
+
+                // Mark output as used
+                auto & outputs = normalizeNode->getOutputs();
+                for (auto & [name, port] : outputs)
+                {
+                    port.setIsUsed(true);
+                }
+
+                // Notify of changes
+                m_parameterChanged = true;
+                m_modelChanged = true;
+                if (m_modelEditor)
+                {
+                    m_modelEditor->markModelAsModified();
+                    m_modelEditor->invalidatePrimitiveData();
+                }
+            }
+            catch (std::exception const & e)
+            {
+                // Could add error reporting here if needed
+                std::cerr << "Failed to create NormalizeDistanceField: " << e.what() << std::endl;
+            }
+        }
+
+        ImGui::TextColored(
+          ImVec4(0.6f, 0.8f, 1.f, 1.f),
+          "Creates a NormalizeDistanceField node that normalizes the distance field gradient.");
     }
 
     void NodeView::footer(NodeBase & baseNode)

@@ -696,6 +696,111 @@ namespace gladius::nodes
         std::string m_selectedVectorInputName;
     };
 
+    class NormalizeDistanceField : public ClonableNode<NormalizeDistanceField>
+    {
+      public:
+        NormalizeDistanceField()
+            : NormalizeDistanceField({})
+        {
+        }
+
+        explicit NormalizeDistanceField(NodeId id)
+            : ClonableNode<NormalizeDistanceField>(NodeName("NormalizeDistanceField"),
+                                                   id,
+                                                   Category::Math)
+        {
+            // Base parameters; function id + config. Function arguments mirrored dynamically.
+            // Per XSD spec: epsilon is hardcoded to 1e-8, no maxdistance parameter
+            // Output identifier is "result" per XSD spec
+            TypeRule rule = {RuleType::Default,
+                             InputTypeMap{{FieldNames::FunctionId, ParameterTypeIndex::ResourceId},
+                                          {FieldNames::StepSize, ParameterTypeIndex::Float}},
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float}}};
+
+            m_typeRules = {rule};
+            applyTypeRule(rule);
+
+            // Defaults
+            m_parameter[FieldNames::FunctionId].setInputSourceRequired(false);
+
+            m_parameter[FieldNames::StepSize].setValue(VariantType{1e-3f});
+            m_parameter[FieldNames::StepSize].setInputSourceRequired(false);
+            m_parameter[FieldNames::StepSize].setModifiable(true);
+
+            updateNodeIds();
+        }
+
+        // Configuration akin to FunctionGradient
+        void resolveFunctionId();
+        [[nodiscard]] ResourceId getFunctionId() const
+        {
+            return m_functionId;
+        }
+        void setFunctionId(ResourceId functionId);
+
+        void setSelectedScalarOutput(const std::string & name)
+        {
+            m_selectedScalarOutputName = name;
+        }
+        void setSelectedVectorInput(const std::string & name)
+        {
+            m_selectedVectorInputName = name;
+        }
+
+        [[nodiscard]] const std::string & getSelectedScalarOutput() const
+        {
+            return m_selectedScalarOutputName;
+        }
+
+        [[nodiscard]] const std::string & getSelectedVectorInput() const
+        {
+            return m_selectedVectorInputName;
+        }
+
+        void setStepSize(float h);
+        [[nodiscard]] float getStepSize() const;
+
+        void updateInputsAndOutputs(Model & referencedModel);
+
+        [[nodiscard]] std::string getDescription() const override
+        {
+            return "Normalizes a function's distance-like scalar output by the gradient magnitude.";
+        }
+
+        [[nodiscard]] bool hasValidConfiguration() const
+        {
+            return !m_selectedScalarOutputName.empty() && !m_selectedVectorInputName.empty() &&
+                   m_functionId != 0;
+        }
+
+        VariantParameter * findArgumentParameter(const std::string & name)
+        {
+            auto iter = m_parameter.find(name);
+            if (iter == m_parameter.end())
+                return nullptr;
+            if (!iter->second.isArgument())
+                return nullptr;
+            return &iter->second;
+        }
+        [[nodiscard]] const VariantParameter * findArgumentParameter(const std::string & name) const
+        {
+            auto iter = m_parameter.find(name);
+            if (iter == m_parameter.end())
+                return nullptr;
+            if (!iter->second.isArgument())
+                return nullptr;
+            return &iter->second;
+        }
+
+      private:
+        void applyMirroredInputs(Model & referencedModel);
+        void validateSelections(Model & referencedModel);
+
+        ResourceId m_functionId{};
+        std::string m_selectedScalarOutputName;
+        std::string m_selectedVectorInputName;
+    };
+
     class Addition : public CloneableABtoResult<Addition>
     {
       public:

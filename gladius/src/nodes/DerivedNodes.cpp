@@ -681,4 +681,182 @@ namespace gladius::nodes
         validateSelections(referencedModel);
         updateInternalOutputs();
     }
+
+    // --- NormalizeDistanceField (mirror configuration akin to FunctionGradient) ---
+    void NormalizeDistanceField::resolveFunctionId()
+    {
+        auto itFunc = m_parameter.find(FieldNames::FunctionId);
+        if (itFunc == m_parameter.end())
+        {
+            return;
+        }
+
+        auto & functionIdParameter = itFunc->second;
+        auto functionSource = functionIdParameter.getSource();
+        if (!functionSource.has_value())
+        {
+            auto variantResId = functionIdParameter.getValue();
+            if (const auto resId = std::get_if<ResourceId>(&variantResId))
+            {
+                m_functionId = *resId;
+            }
+            return;
+        }
+
+        auto * sourcePort = functionSource.value().port;
+        if (!sourcePort)
+        {
+            return;
+        }
+
+        auto sourceNode = sourcePort->getParent();
+        if (!sourceNode)
+        {
+            return;
+        }
+
+        auto paramIt = sourceNode->parameter().find(FieldNames::ResourceId);
+        if (paramIt == sourceNode->parameter().end())
+        {
+            return;
+        }
+
+        auto variantResId = paramIt->second.getValue();
+        if (const auto resId = std::get_if<ResourceId>(&variantResId))
+        {
+            m_functionId = *resId;
+        }
+    }
+
+    void NormalizeDistanceField::setFunctionId(ResourceId functionId)
+    {
+        m_functionId = functionId;
+        auto & functionIdParameter = m_parameter.at(FieldNames::FunctionId);
+        functionIdParameter.setValue(VariantType{ResourceId(functionId)});
+    }
+
+    void NormalizeDistanceField::setStepSize(float h)
+    {
+        auto & stepSizeParameter = m_parameter.at(FieldNames::StepSize);
+        float const clamped = std::max(std::abs(h), 1e-8f);
+        stepSizeParameter.setValue(VariantType{clamped});
+    }
+
+    float NormalizeDistanceField::getStepSize() const
+    {
+        auto const iter = m_parameter.find(FieldNames::StepSize);
+        if (iter == m_parameter.end())
+        {
+            return 1e-3f;
+        }
+
+        auto value = iter->second.getValue();
+        if (auto const step = std::get_if<float>(&value))
+        {
+            return *step;
+        }
+        return 1e-3f;
+    }
+
+    void NormalizeDistanceField::applyMirroredInputs(Model & referencedModel)
+    {
+        ParameterMap const oldParameters = m_parameter;
+
+        auto getPreservedParameter = [&](std::string const & key,
+                                         VariantParameter defaultValue) -> VariantParameter
+        {
+            auto iter = oldParameters.find(key);
+            if (iter != oldParameters.end())
+            {
+                return iter->second;
+            }
+            return defaultValue;
+        };
+
+        ParameterMap newParameters;
+        newParameters[FieldNames::FunctionId] =
+          getPreservedParameter(FieldNames::FunctionId, VariantParameter(ResourceId{0}));
+
+        VariantParameter defaultStepSize = VariantParameter(VariantType{1e-3f});
+        defaultStepSize.setInputSourceRequired(false);
+        newParameters[FieldNames::StepSize] =
+          getPreservedParameter(FieldNames::StepSize, defaultStepSize);
+
+        // Mirror all inputs from referenced model as arguments
+        for (auto & [name, input] : referencedModel.getInputs())
+        {
+            VariantParameter parameter = createVariantTypeFromTypeIndex(input.getTypeIndex());
+
+            auto oldIter = oldParameters.find(name);
+            if (oldIter != oldParameters.end())
+            {
+                auto const & oldParam = oldIter->second;
+                if (oldParam.getTypeIndex() == input.getTypeIndex())
+                {
+                    parameter = oldParam;
+                }
+                else if (oldParam.getConstSource().has_value())
+                {
+                    parameter.setSource(oldParam.getConstSource());
+                    parameter.setModifiable(oldParam.isModifiable());
+                }
+            }
+
+            parameter.marksAsArgument();
+            parameter.setParentId(getId());
+            parameter.setInputSourceRequired(true);
+            newParameters[name] = parameter;
+        }
+
+        m_parameter = std::move(newParameters);
+
+        auto & fid = m_parameter.at(FieldNames::FunctionId);
+        fid.setParentId(getId());
+        fid.setInputSourceRequired(false);
+
+        auto & step = m_parameter.at(FieldNames::StepSize);
+        step.setParentId(getId());
+        step.setInputSourceRequired(false);
+        if (!std::holds_alternative<float>(step.getValue()))
+        {
+            step.setValue(VariantType{1e-3f});
+        }
+
+        updateNodeIds();
+    }
+
+    void NormalizeDistanceField::validateSelections(Model & referencedModel)
+    {
+        auto & outputs = referencedModel.getOutputs();
+        auto scalarIter = outputs.find(m_selectedScalarOutputName);
+        if (scalarIter == outputs.end() ||
+            scalarIter->second.getTypeIndex() != ParameterTypeIndex::Float)
+        {
+            m_selectedScalarOutputName.clear();
+        }
+
+        auto iterVec = m_parameter.find(m_selectedVectorInputName);
+        if (iterVec == m_parameter.end() ||
+            iterVec->second.getTypeIndex() != ParameterTypeIndex::Float3)
+        {
+            m_selectedVectorInputName.clear();
+        }
+    }
+
+    void NormalizeDistanceField::updateInputsAndOutputs(Model & referencedModel)
+    {
+        applyMirroredInputs(referencedModel);
+        validateSelections(referencedModel);
+        // Outputs remain: Distance (float)
+        auto & outs = getOutputs();
+        if (!outs.contains(FieldNames::Distance))
+        {
+            addOutputPort(FieldNames::Distance, ParameterTypeIndex::Float);
+        }
+        else
+        {
+            outs.at(FieldNames::Distance).setTypeIndex(ParameterTypeIndex::Float);
+        }
+        updateNodeIds();
+    }
 } // namespace gladius::nodes

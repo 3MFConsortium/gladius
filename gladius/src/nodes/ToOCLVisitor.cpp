@@ -718,6 +718,9 @@ namespace gladius::nodes
             auto const key =
               std::make_pair(functionGradient.getId(), std::string(FieldNames::Vector));
 
+            // Always annotate generated source with a fallback comment for diagnostics
+            m_definition << fmt::format("// FunctionGradient fallback: {}\n", reason);
+
             if (canInline)
             {
                 m_inlineExpressions[key] = fallbackExpr;

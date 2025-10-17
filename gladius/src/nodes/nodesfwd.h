@@ -63,6 +63,7 @@ namespace gladius::nodes
     class SignedDistanceToBeamLattice;
     class FunctionCall;
     class FunctionGradient;
+    class NormalizeDistanceField;
     class Length;
     class DecomposeVector;
     class Resource;
@@ -128,6 +129,7 @@ namespace gladius::nodes
                                  SignedDistanceToBeamLattice,
                                  FunctionCall,
                                  FunctionGradient,
+                                 NormalizeDistanceField,
                                  Transformation,
                                  Length,
                                  DecomposeVector,
@@ -241,6 +243,8 @@ namespace gladius::nodes
         // static auto constexpr Part = "part";
         static auto constexpr FunctionId = "functionID";
         static auto constexpr StepSize = "stepsize";
+        static auto constexpr Epsilon = "epsilon";
+        static auto constexpr MaxDistance = "maxdistance";
         static auto constexpr Source = "source";
         static auto constexpr sharpness = "sharpness";
 
