@@ -465,18 +465,10 @@ namespace gladius
         float xscale, yscale;
         glfwGetWindowContentScale(m_window, &xscale, &yscale);
 
-        // Debug output to help diagnose issues
-#ifdef DEBUG
-        std::cout << "GLFW Content Scale: " << xscale << " x " << yscale << std::endl;
-#endif
-
         // GLFW's content scale is more reliable as it considers system DPI settings
         if (xscale > 0.0f && yscale > 0.0f)
         {
             m_baseScale = (xscale + yscale) / 2.0f;
-#ifdef DEBUG
-            std::cout << "Using GLFW content scale (base): " << m_baseScale << std::endl;
-#endif
             recomputeTotalScale();
             return;
         }
@@ -487,27 +479,16 @@ namespace gladius
         int fbWidth, fbHeight;
         glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
 
-#ifdef DEBUG
-        std::cout << "Window size: " << width << " x " << height << std::endl;
-        std::cout << "Framebuffer size: " << fbWidth << " x " << fbHeight << std::endl;
-#endif
-
         if (width > 0 && height > 0 && fbWidth > 0 && fbHeight > 0)
         {
             float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
             float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
             m_baseScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
-#ifdef DEBUG
-            std::cout << "Using framebuffer ratio (base): " << m_baseScale << std::endl;
-#endif
         }
         else
         {
             // Final fallback
             m_baseScale = 1.0f;
-#ifdef DEBUG
-            std::cout << "Using fallback base scale: " << m_baseScale << std::endl;
-#endif
         }
 
         recomputeTotalScale();
@@ -946,13 +927,13 @@ namespace gladius
         {
             return false;
         }
-        
+
         auto * monitor = findCurrentMonitor(m_window);
         if (!monitor)
         {
             monitor = glfwGetPrimaryMonitor();
         }
-        
+
         return monitor && isSpanAcrossSameHeightAvailable(monitor);
     }
 
