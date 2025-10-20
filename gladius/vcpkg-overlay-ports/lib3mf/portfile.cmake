@@ -4,7 +4,7 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO 3DJan/lib3mf
     REF "3djan/volumetric_beamlattice_gradient"
-    SHA512 b65032c81d05423713f2cda5fd8e80d7fcd4b0a225ca0192582678727d1be7d397dfed39c598ad07bc75ab8eddc7d8b1fd10c832c4d05adc81c266742c189d32
+    SHA512 912107f0f4221d95424765acc329ffddffca2bb284ea1dbb10746c4022ae496e1168a21abe243edb37cbbe9857817246033162d7bf49422fec91789aee0dd46e
 )
 
 # Normalize target_link_libraries signature by inserting PRIVATE for plain-signature lines
