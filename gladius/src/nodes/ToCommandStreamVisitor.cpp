@@ -2725,4 +2725,13 @@ namespace gladius::nodes
     {
         return;
     }
+
+    void ToCommandStreamVisitor::visit(FunctionGradient &)
+    {
+        // TODO: Command stream support for FunctionGradient is not yet implemented.
+        // FunctionGradient requires multiple function evaluations (central differences)
+        // which would need special command stream handling. For now, this node is only
+        // supported in OpenCL code generation (ToOCLVisitor).
+        return;
+    }
 } // namespace gladius::nodes

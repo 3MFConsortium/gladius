@@ -380,7 +380,7 @@ namespace gladius::nodes
                                           {FieldNames::M31, ParameterTypeIndex::Float},
                                           {FieldNames::M32, ParameterTypeIndex::Float},
                                           {FieldNames::M33, ParameterTypeIndex::Float}},
-                             OutputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}}};
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Matrix4}}};
 
             m_typeRules = {rule};
             applyTypeRule(rule);
@@ -398,7 +398,7 @@ namespace gladius::nodes
         }
 
         explicit DecomposeMatrix(NodeId id)
-            : ClonableNode<DecomposeMatrix>(NodeName("DecomposeMatrix"), id, Category::Misc)
+            : ClonableNode<DecomposeMatrix>(NodeName("DecomposeMatrix"), id, Category::Internal)
         {
             TypeRule rule = {RuleType::Default,
                              InputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}},
@@ -444,7 +444,7 @@ namespace gladius::nodes
                                           {FieldNames::Col1, ParameterTypeIndex::Float3},
                                           {FieldNames::Col2, ParameterTypeIndex::Float3},
                                           {FieldNames::Col3, ParameterTypeIndex::Float3}},
-                             OutputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}}};
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Matrix4}}};
 
             m_typeRules = {rule};
             applyTypeRule(rule);
@@ -470,7 +470,7 @@ namespace gladius::nodes
                                           {FieldNames::Row1, ParameterTypeIndex::Float3},
                                           {FieldNames::Row2, ParameterTypeIndex::Float3},
                                           {FieldNames::Row3, ParameterTypeIndex::Float3}},
-                             OutputTypeMap{{FieldNames::Matrix, ParameterTypeIndex::Matrix4}}};
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Matrix4}}};
 
             m_typeRules = {rule};
             applyTypeRule(rule);
@@ -551,7 +551,14 @@ namespace gladius::nodes
 
         void resolveFunctionId()
         {
-            auto functionIdParameter = m_parameter.at(FieldNames::FunctionId);
+            // Be robust in case parameter map hasn't been initialized yet
+            auto itFunc = m_parameter.find(FieldNames::FunctionId);
+            if (itFunc == m_parameter.end())
+            {
+                // Leave m_functionId unchanged; caller may set it later via setFunctionId()
+                return;
+            }
+            auto & functionIdParameter = itFunc->second;
 
             auto functionSource = functionIdParameter.getSource();
             if (!functionSource.has_value())
@@ -567,25 +574,30 @@ namespace gladius::nodes
             auto * sourcePort = functionSource.value().port;
             if (!sourcePort)
             {
-                throw std::runtime_error("The functionId of the FunctionCall node " +
-                                         getDisplayName() +
-                                         " needs the value of a Resource node as an input");
+                // Transient state or invalid wiring; keep previous m_functionId
+                return;
             }
 
             auto sourceNode = sourcePort->getParent();
 
             if (!sourceNode)
             {
-                throw std::runtime_error(
-                  fmt::format("The functionId of the FunctionCall node {} needs the value of a "
-                              "Resource node as an input",
-                              getDisplayName()));
+                // Transient state or invalid wiring; keep previous m_functionId
+                return;
             }
-            auto variantResId = sourceNode->parameter().at(FieldNames::ResourceId).getValue();
+
+            auto paramIt = sourceNode->parameter().find(FieldNames::ResourceId);
+            if (paramIt == sourceNode->parameter().end())
+            {
+                // Not a Resource node: ignore and keep previous m_functionId
+                return;
+            }
+            auto variantResId = paramIt->second.getValue();
             if (const auto resId = std::get_if<ResourceId>(&variantResId))
             {
                 m_functionId = *resId;
             }
+            // If variant does not hold ResourceId, leave m_functionId unchanged
         }
 
         [[nodiscard]] std::string getDescription() const override
@@ -620,6 +632,173 @@ namespace gladius::nodes
         {
             updateNodeIds();
         }
+    };
+
+    class FunctionGradient : public ClonableNode<FunctionGradient>
+    {
+      public:
+        FunctionGradient()
+            : FunctionGradient({})
+        {
+        }
+
+        explicit FunctionGradient(NodeId id);
+
+        void resolveFunctionId();
+
+        [[nodiscard]] ResourceId getFunctionId() const
+        {
+            return m_functionId;
+        }
+
+        void setFunctionId(ResourceId functionId);
+
+        void setSelectedScalarOutput(const std::string & name);
+        void setSelectedVectorInput(const std::string & name);
+
+        [[nodiscard]] const std::string & getSelectedScalarOutput() const
+        {
+            return m_selectedScalarOutputName;
+        }
+
+        [[nodiscard]] const std::string & getSelectedVectorInput() const
+        {
+            return m_selectedVectorInputName;
+        }
+
+        void setStepSize(float h);
+        [[nodiscard]] float getStepSize() const;
+
+        void updateInputsAndOutputs(Model & referencedModel);
+
+        [[nodiscard]] std::string getDescription() const override
+        {
+            return "Computes the normalized gradient of a referenced function.";
+        }
+
+        [[nodiscard]] bool hasValidConfiguration() const;
+
+        VariantParameter * findArgumentParameter(const std::string & name);
+        [[nodiscard]] const VariantParameter *
+        findArgumentParameter(const std::string & name) const;
+
+        VariantParameter * getSelectedVectorParameter();
+        [[nodiscard]] const VariantParameter * getSelectedVectorParameter() const;
+
+      private:
+        void initializeBaseParameters();
+        void updateInternalOutputs();
+        void applyMirroredInputs(Model & referencedModel);
+        void validateSelections(Model & referencedModel);
+
+        ResourceId m_functionId{};
+        std::string m_selectedScalarOutputName;
+        std::string m_selectedVectorInputName;
+    };
+
+    class NormalizeDistanceField : public ClonableNode<NormalizeDistanceField>
+    {
+      public:
+        NormalizeDistanceField()
+            : NormalizeDistanceField({})
+        {
+        }
+
+        explicit NormalizeDistanceField(NodeId id)
+            : ClonableNode<NormalizeDistanceField>(NodeName("NormalizeDistanceField"),
+                                                   id,
+                                                   Category::Math)
+        {
+            // Base parameters; function id + config. Function arguments mirrored dynamically.
+            // Per XSD spec: epsilon is hardcoded to 1e-8, no maxdistance parameter
+            // Output identifier is "result" per XSD spec
+            TypeRule rule = {RuleType::Default,
+                             InputTypeMap{{FieldNames::FunctionId, ParameterTypeIndex::ResourceId},
+                                          {FieldNames::StepSize, ParameterTypeIndex::Float}},
+                             OutputTypeMap{{FieldNames::Result, ParameterTypeIndex::Float}}};
+
+            m_typeRules = {rule};
+            applyTypeRule(rule);
+
+            // Defaults
+            m_parameter[FieldNames::FunctionId].setInputSourceRequired(false);
+
+            m_parameter[FieldNames::StepSize].setValue(VariantType{1e-3f});
+            m_parameter[FieldNames::StepSize].setInputSourceRequired(false);
+            m_parameter[FieldNames::StepSize].setModifiable(true);
+
+            updateNodeIds();
+        }
+
+        // Configuration akin to FunctionGradient
+        void resolveFunctionId();
+        [[nodiscard]] ResourceId getFunctionId() const
+        {
+            return m_functionId;
+        }
+        void setFunctionId(ResourceId functionId);
+
+        void setSelectedScalarOutput(const std::string & name)
+        {
+            m_selectedScalarOutputName = name;
+        }
+        void setSelectedVectorInput(const std::string & name)
+        {
+            m_selectedVectorInputName = name;
+        }
+
+        [[nodiscard]] const std::string & getSelectedScalarOutput() const
+        {
+            return m_selectedScalarOutputName;
+        }
+
+        [[nodiscard]] const std::string & getSelectedVectorInput() const
+        {
+            return m_selectedVectorInputName;
+        }
+
+        void setStepSize(float h);
+        [[nodiscard]] float getStepSize() const;
+
+        void updateInputsAndOutputs(Model & referencedModel);
+
+        [[nodiscard]] std::string getDescription() const override
+        {
+            return "Normalizes a function's distance-like scalar output by the gradient magnitude.";
+        }
+
+        [[nodiscard]] bool hasValidConfiguration() const
+        {
+            return !m_selectedScalarOutputName.empty() && !m_selectedVectorInputName.empty() &&
+                   m_functionId != 0;
+        }
+
+        VariantParameter * findArgumentParameter(const std::string & name)
+        {
+            auto iter = m_parameter.find(name);
+            if (iter == m_parameter.end())
+                return nullptr;
+            if (!iter->second.isArgument())
+                return nullptr;
+            return &iter->second;
+        }
+        [[nodiscard]] const VariantParameter * findArgumentParameter(const std::string & name) const
+        {
+            auto iter = m_parameter.find(name);
+            if (iter == m_parameter.end())
+                return nullptr;
+            if (!iter->second.isArgument())
+                return nullptr;
+            return &iter->second;
+        }
+
+      private:
+        void applyMirroredInputs(Model & referencedModel);
+        void validateSelections(Model & referencedModel);
+
+        ResourceId m_functionId{};
+        std::string m_selectedScalarOutputName;
+        std::string m_selectedVectorInputName;
     };
 
     class Addition : public CloneableABtoResult<Addition>

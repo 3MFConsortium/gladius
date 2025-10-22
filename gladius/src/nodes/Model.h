@@ -178,6 +178,10 @@ namespace gladius::nodes
 
         [[nodiscard]] graph::AdjacencyListDirectedGraph const & getGraph() const;
 
+        /// @brief Returns the topologically sorted list of node IDs in the model
+        /// @note All nodes in this list are reachable from Begin to End
+        [[nodiscard]] graph::VertexList const & getOutputOrder() const;
+
         auto getPortRegistry() -> PortRegistry &;
 
         void addArgument(ParameterName name, VariantParameter parameter);

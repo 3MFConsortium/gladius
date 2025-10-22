@@ -15,6 +15,7 @@
 #include <GLFW/glfw3native.h>
 #endif
 #include "Profiling.h"
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fmt/format.h>
@@ -381,7 +382,15 @@ namespace gladius
             ImGui::Begin("Settings", &m_showViewSettings);
             if (ImGui::CollapsingHeader("Misc"))
             {
-                ImGui::Checkbox("Fullscreen", &m_fullScreen);
+                // Window mode selector
+                static const char * items[] = {"Windowed",
+                                               "Fullscreen (Current Display)",
+                                               "Fullscreen (Span Same Height Displays)"};
+                int modeIndex = static_cast<int>(m_windowSettings.fullscreenMode);
+                if (ImGui::Combo("Window Mode", &modeIndex, items, IM_ARRAYSIZE(items)))
+                {
+                    setFullscreenMode(static_cast<FullscreenMode>(modeIndex));
+                }
                 ImGui::Checkbox("Demo Window", &m_show_demo_window);
                 if (m_show_demo_window)
                 {
@@ -456,18 +465,10 @@ namespace gladius
         float xscale, yscale;
         glfwGetWindowContentScale(m_window, &xscale, &yscale);
 
-        // Debug output to help diagnose issues
-#ifdef DEBUG
-        std::cout << "GLFW Content Scale: " << xscale << " x " << yscale << std::endl;
-#endif
-
         // GLFW's content scale is more reliable as it considers system DPI settings
         if (xscale > 0.0f && yscale > 0.0f)
         {
             m_baseScale = (xscale + yscale) / 2.0f;
-#ifdef DEBUG
-            std::cout << "Using GLFW content scale (base): " << m_baseScale << std::endl;
-#endif
             recomputeTotalScale();
             return;
         }
@@ -478,27 +479,16 @@ namespace gladius
         int fbWidth, fbHeight;
         glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
 
-#ifdef DEBUG
-        std::cout << "Window size: " << width << " x " << height << std::endl;
-        std::cout << "Framebuffer size: " << fbWidth << " x " << fbHeight << std::endl;
-#endif
-
         if (width > 0 && height > 0 && fbWidth > 0 && fbHeight > 0)
         {
             float hdpiScalingX = static_cast<float>(fbWidth) / static_cast<float>(width);
             float hdpiScalingY = static_cast<float>(fbHeight) / static_cast<float>(height);
             m_baseScale = (hdpiScalingX + hdpiScalingY) / 2.0f;
-#ifdef DEBUG
-            std::cout << "Using framebuffer ratio (base): " << m_baseScale << std::endl;
-#endif
         }
         else
         {
             // Final fallback
             m_baseScale = 1.0f;
-#ifdef DEBUG
-            std::cout << "Using fallback base scale: " << m_baseScale << std::endl;
-#endif
         }
 
         recomputeTotalScale();
@@ -597,6 +587,91 @@ namespace gladius
         return bestmonitor;
     }
 
+    // Helper: compute union rectangle across monitors that match the reference monitor height
+    // and are horizontally aligned (same Y position). This avoids spanning vertically when
+    // monitors are stacked.
+    static bool computeSpanAcrossSameHeightMonitors(GLFWmonitor * reference,
+                                                    int & outX,
+                                                    int & outY,
+                                                    int & outW,
+                                                    int & outH)
+    {
+        if (!reference)
+        {
+            return false;
+        }
+
+        const GLFWvidmode * refMode = glfwGetVideoMode(reference);
+        if (!refMode)
+        {
+            return false;
+        }
+
+        int count = 0;
+        GLFWmonitor ** monitors = glfwGetMonitors(&count);
+        if (!monitors || count <= 0)
+        {
+            return false;
+        }
+
+        // Initialize with reference monitor rect
+        int refX = 0, refY = 0;
+        glfwGetMonitorPos(reference, &refX, &refY);
+        int minX = refX;
+        int maxX = refX + refMode->width;
+
+        for (int i = 0; i < count; ++i)
+        {
+            GLFWmonitor * m = monitors[i];
+            if (!m)
+                continue;
+            const GLFWvidmode * mode = glfwGetVideoMode(m);
+            if (!mode)
+                continue;
+            // Only consider monitors with exactly the same height
+            if (mode->height != refMode->height)
+                continue;
+            int mx = 0, my = 0;
+            glfwGetMonitorPos(m, &mx, &my);
+            // Allow some tolerance in vertical alignment (e.g., WM rounding or fractional scaling)
+            // Span only monitors whose Y differs at most by 100 px from the reference row
+            int const deltaY = my - refY;
+            if (deltaY < -100 || deltaY > 100)
+                continue;
+            minX = std::min(minX, mx);
+            maxX = std::max(maxX, mx + mode->width);
+        }
+
+        outX = minX;
+        outY = refY;
+        outW = maxX - minX;
+        outH = refMode->height;
+
+        return true;
+    }
+
+    // Determine if spanning across multiple monitors is actually available.
+    // We consider it available if the computed spanning rectangle is wider than the reference
+    // monitor.
+    static bool isSpanAcrossSameHeightAvailable(GLFWmonitor * reference)
+    {
+        if (!reference)
+        {
+            return false;
+        }
+        auto const * refMode = glfwGetVideoMode(reference);
+        if (!refMode)
+        {
+            return false;
+        }
+        int x = 0, y = 0, w = 0, h = 0;
+        if (!computeSpanAcrossSameHeightMonitors(reference, x, y, w, h))
+        {
+            return false;
+        }
+        return w > refMode->width;
+    }
+
     void GLView::applyFullscreenMode()
     {
         if (!m_window || !m_initialized)
@@ -604,45 +679,101 @@ namespace gladius
             return;
         }
 
-        if (m_fullScreen != m_glFullScreen)
+        const bool modeChanged = (m_windowSettings.fullscreenMode != m_appliedFullscreenMode);
+
+        if (!modeChanged)
         {
-            auto * monitor = findCurrentMonitor(m_window);
-            if (!monitor)
-            {
-                monitor = glfwGetPrimaryMonitor();
-            }
+            return;
+        }
 
-            if (!monitor)
-            {
-                std::cerr << "Warning: No monitor available for fullscreen mode\n";
-                return;
-            }
+        // Find appropriate monitor
+        auto * monitor = findCurrentMonitor(m_window);
+        if (!monitor)
+        {
+            monitor = glfwGetPrimaryMonitor();
+        }
+        if (!monitor)
+        {
+            std::cerr << "Warning: No monitor available for fullscreen mode\n";
+            return;
+        }
 
-            if (m_fullScreen)
+        // If span mode is selected but not available, fall back to single-monitor fullscreen
+        auto desiredMode = m_windowSettings.fullscreenMode;
+        if (desiredMode == FullscreenMode::SpanAllSameHeight &&
+            !isSpanAcrossSameHeightAvailable(monitor))
+        {
+            desiredMode = FullscreenMode::SingleMonitor;
+            m_windowSettings.fullscreenMode = desiredMode;
+        }
+
+        // Helper lambda to switch to single-monitor fullscreen
+        auto switchToSingleMonitor = [&]()
+        {
+            const GLFWvidmode * mode = glfwGetVideoMode(monitor);
+            if (!mode)
             {
-                storeWindowSettings();
-                const GLFWvidmode * mode = glfwGetVideoMode(monitor);
-                if (!mode)
+                std::cerr << "Warning: Could not get video mode for monitor\n";
+                return false;
+            }
+            glfwSetWindowMonitor(
+              m_window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+            return true;
+        };
+
+        // Apply the desired mode
+        switch (desiredMode)
+        {
+        case FullscreenMode::SingleMonitor:
+            if (switchToSingleMonitor())
+            {
+                m_appliedFullscreenMode = FullscreenMode::SingleMonitor;
+            }
+            break;
+
+        case FullscreenMode::SpanAllSameHeight:
+        {
+            int x = 0, y = 0, w = 0, h = 0;
+            if (!computeSpanAcrossSameHeightMonitors(monitor, x, y, w, h))
+            {
+                // Spanning not possible; fall back to single-monitor fullscreen
+                if (switchToSingleMonitor())
                 {
-                    std::cerr << "Warning: Could not get video mode for monitor\n";
-                    return;
+                    m_windowSettings.fullscreenMode = FullscreenMode::SingleMonitor;
+                    m_appliedFullscreenMode = FullscreenMode::SingleMonitor;
                 }
-
-                glfwSetWindowMonitor(
-                  m_window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
             }
             else
             {
-                glfwSetWindowMonitor(m_window,
-                                     nullptr,
-                                     m_windowSettings.x,
-                                     m_windowSettings.y,
-                                     m_windowSettings.width,
-                                     m_windowSettings.height,
-                                     GLFW_DONT_CARE);
+                // Borderless fullscreen window across all matching-height monitors
+                glfwSetWindowMonitor(m_window, nullptr, x, y, w, h, GLFW_DONT_CARE);
+                glfwSetWindowAttrib(m_window, GLFW_DECORATED, GLFW_FALSE);
+                glfwSetWindowAttrib(m_window, GLFW_RESIZABLE, GLFW_FALSE);
+                glfwSetWindowPos(m_window, x, y);
+                glfwSetWindowSize(m_window, w, h);
+                m_appliedFullscreenMode = FullscreenMode::SpanAllSameHeight;
             }
+            break;
+        }
 
-            m_glFullScreen = m_fullScreen;
+        case FullscreenMode::Windowed:
+        default:
+            // Set window attributes before changing mode
+            glfwSetWindowAttrib(m_window, GLFW_DECORATED, GLFW_TRUE);
+            glfwSetWindowAttrib(m_window, GLFW_RESIZABLE, GLFW_TRUE);
+            // Switch to windowed mode
+            glfwSetWindowMonitor(m_window,
+                                 nullptr,
+                                 m_windowSettings.x,
+                                 m_windowSettings.y,
+                                 m_windowSettings.width,
+                                 m_windowSettings.height,
+                                 GLFW_DONT_CARE);
+            // Force the window manager to recognize the changes (X11 workaround)
+            glfwHideWindow(m_window);
+            glfwShowWindow(m_window);
+            m_appliedFullscreenMode = FullscreenMode::Windowed;
+            break;
         }
     }
 
@@ -666,7 +797,7 @@ namespace gladius
         FrameMark;
 
         glfwMakeContextCurrent(m_window);
-        applyFullscreenMode();
+        // applyFullscreenMode is now only called when mode changes via setFullscreenMode()
         m_render();
         glFlush();
         glFinish();
@@ -711,8 +842,11 @@ namespace gladius
             {
                 if (glfwWindowShouldClose(m_window))
                 {
-                    // Save window settings before handling close request
-                    storeWindowSettings();
+                    // Save window settings only if we're in windowed mode
+                    if (m_appliedFullscreenMode == FullscreenMode::Windowed)
+                    {
+                        storeWindowSettings();
+                    }
 
                     glfwSetWindowShouldClose(m_window, GLFW_FALSE);
                     m_close();
@@ -771,13 +905,36 @@ namespace gladius
 
     auto GLView::isFullScreen() const -> bool
     {
-        return m_fullScreen;
+        return m_windowSettings.fullscreenMode != FullscreenMode::Windowed;
     }
 
     void GLView::setFullScreen(bool enableFullscreen)
     {
-        m_fullScreen = enableFullscreen;
+        m_windowSettings.fullscreenMode =
+          enableFullscreen ? FullscreenMode::SingleMonitor : FullscreenMode::Windowed;
         applyFullscreenMode();
+    }
+
+    void GLView::setFullscreenMode(FullscreenMode mode)
+    {
+        m_windowSettings.fullscreenMode = mode;
+        applyFullscreenMode();
+    }
+
+    bool GLView::isSpanModeAvailable() const
+    {
+        if (!m_window || !m_initialized)
+        {
+            return false;
+        }
+
+        auto * monitor = findCurrentMonitor(m_window);
+        if (!monitor)
+        {
+            monitor = glfwGetPrimaryMonitor();
+        }
+
+        return monitor && isSpanAcrossSameHeightAvailable(monitor);
     }
 
     void GLView::startAnimationMode()

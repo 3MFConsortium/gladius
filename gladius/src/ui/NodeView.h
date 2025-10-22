@@ -12,6 +12,12 @@
 #include <unordered_map>
 #include <vector>
 
+namespace gladius::nodes
+{
+    class FunctionGradient;
+    class NormalizeDistanceField;
+}
+
 namespace gladius::ui
 {
     class ModelEditor;
@@ -204,6 +210,10 @@ namespace gladius::ui
                      nodes::ParameterMap::reference parameter,
                      nodes::VariantType & val);
 
+        void functionGradientControls(nodes::FunctionGradient & node);
+        void functionCallControls(nodes::FunctionCall & node);
+        void normalizeDistanceFieldControls(nodes::NormalizeDistanceField & node);
+
         bool typeControl(std::string const & label, std::type_index & typeIndex);
 
         /**
@@ -268,6 +278,13 @@ namespace gladius::ui
         std::string m_editingTag;
         std::string m_editingTagBuffer;
         bool m_isEditingTag = false;
+
+        std::string m_lowerGradientMessage;
+        bool m_lowerGradientMessageIsError{false};
+
+        // Status messaging for NormalizeDistanceField lowering
+        std::string m_lowerNormalizeMessage;
+        bool m_lowerNormalizeMessageIsError{false};
 
         /// Group node position tracking for group movement (stores positions of group nodes, not
         /// individual model nodes)

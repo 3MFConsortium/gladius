@@ -138,6 +138,7 @@ namespace gladius::nodes
 
         void visit(Length & length) override;
         void visit(FunctionCall & functionCall) override;
+        void visit(FunctionGradient & functionGradient) override;
 
         // gladius extensions
         void visit(Mix & mix) override;

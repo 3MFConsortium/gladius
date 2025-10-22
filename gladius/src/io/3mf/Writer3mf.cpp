@@ -318,6 +318,71 @@ namespace gladius::io
             createNode(node);
         }
 
+        void visit(nodes::FunctionGradient & node) override
+        {
+            if (!m_targetFunc)
+            {
+                throw std::runtime_error("No target function set");
+            }
+
+            if (!m_model)
+            {
+                throw std::runtime_error("No model set");
+            }
+
+            auto gradientNode = m_targetFunc->AddFunctionGradientNode(
+              node.getUniqueName(), node.getDisplayName(), node.getTag());
+
+            initNode(node, gradientNode);
+
+            if (!node.getSelectedScalarOutput().empty())
+            {
+                gradientNode->SetScalarOutputName(node.getSelectedScalarOutput());
+            }
+
+            if (!node.getSelectedVectorInput().empty())
+            {
+                gradientNode->SetVectorInputName(node.getSelectedVectorInput());
+            }
+
+            auto funcIdIter = node.parameter().find(nodes::FieldNames::FunctionId);
+            if (funcIdIter != node.parameter().end() && !funcIdIter->second.getSource())
+            {
+                node.resolveFunctionId();
+                auto const functionId = node.getFunctionId();
+
+                auto resource = findResourceByModelResourceId(m_model, functionId);
+                if (!resource)
+                {
+                    throw std::runtime_error(
+                      fmt::format("Could not find resource with id {}", functionId));
+                }
+
+                auto resIdNode = m_targetFunc->AddResourceIdNode(
+                  fmt::format("{}_{}", node.getUniqueName(), nodes::FieldNames::FunctionId),
+                  fmt::format("{}_{}", node.getDisplayName(), nodes::FieldNames::FunctionId),
+                  node.getTag());
+
+                resIdNode->SetResource(resource);
+                m_targetFunc->AddLink(resIdNode->GetOutputValue(),
+                                      gradientNode->GetInputFunctionID());
+            }
+
+            auto stepIter = node.parameter().find(nodes::FieldNames::StepSize);
+            if (stepIter != node.parameter().end() && !stepIter->second.getSource())
+            {
+                auto const stepValue = static_cast<double>(node.getStepSize());
+
+                auto constantNode = m_targetFunc->AddConstantNode(
+                  fmt::format("{}_{}", node.getUniqueName(), nodes::FieldNames::StepSize),
+                  fmt::format("{}_{}", node.getDisplayName(), nodes::FieldNames::StepSize),
+                  node.getTag());
+
+                constantNode->SetConstant(stepValue);
+                m_targetFunc->AddLink(constantNode->GetOutputValue(), gradientNode->GetInputStep());
+            }
+        }
+
       private:
         Lib3MF::PImplicitFunction m_targetFunc;
         Lib3MF::PModel m_model;
@@ -606,6 +671,40 @@ namespace gladius::io
             {
                 m_logger->logInfo(fmt::format("Skipping managed function: {}", name));
                 continue; // dont write functions that represent other aspects the 3mf model
+            }
+
+            // Detect unsupported NormalizeDistanceField nodes and skip serialization until
+            // support is implemented.
+            // TODO(NormalizeDistanceField-3MF): Add full serialization support for
+            // NormalizeDistanceField nodes once the 3MF implicit function extension defines a
+            // corresponding node type.
+            struct UnsupportedNodeDetector : nodes::Visitor
+            {
+                bool found = false;
+
+                void visit(nodes::NormalizeDistanceField & /*ndf*/) override
+                {
+                    found = true;
+                }
+
+                void visit(nodes::NodeBase & /*nb*/) override
+                {
+                    return; // Do nothing for other nodes
+                }
+                // Inherit other visits from base (which will traverse children via
+                // Model::visitNodes)
+            } detector;
+
+            model->visitNodes(detector);
+            if (detector.found)
+            {
+                m_logger->addEvent(
+                  {fmt::format(
+                     "Skipping function '{}' during 3MF export: contains NormalizeDistanceField "
+                     "node(s) which are not yet supported in 3MF serialization.",
+                     name),
+                   events::Severity::Warning});
+                continue; // Skip this function until NormalizeDistance serialization exists
             }
 
             try

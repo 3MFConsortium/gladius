@@ -97,6 +97,8 @@ namespace gladius::nodes
             return std::make_unique<Sign>();
         if (nodeType == "VectorFromScalar")
             return std::make_unique<VectorFromScalar>();
+        if (nodeType == "FunctionGradient")
+            return std::make_unique<FunctionGradient>();
 
         return nullptr;
     }
@@ -148,6 +150,7 @@ namespace gladius::nodes
                 "Floor",
                 "Fract",
                 "Sign",
-                "VectorFromScalar"};
+                "VectorFromScalar",
+                "FunctionGradient"};
     }
 }

@@ -9,6 +9,13 @@
 
 namespace gladius
 {
+    /// @brief Acceleration structure type for beam lattice traversal
+    enum class BeamLatticeAcceleration : int
+    {
+        BVH = 0,  ///< Use Bounding Volume Hierarchy for acceleration
+        Voxel = 1 ///< Use voxel grid for acceleration
+    };
+
     /// @brief Ball mode enumeration matching 3MF specification
     enum class BallMode : int
     {
@@ -41,12 +48,12 @@ namespace gladius
         /// @param beams Vector of beam primitive data (moved for efficiency)
         /// @param balls Vector of ball primitive data (moved for efficiency)
         /// @param ballConfig Ball configuration matching 3MF specification
-        /// @param useVoxelAcceleration Whether to use voxel or BVH acceleration
+        /// @param acceleration Acceleration structure type (BVH or Voxel)
         BeamLatticeResource(ResourceKey key,
                             std::vector<BeamData> && beams,
                             std::vector<BallData> && balls,
                             BeamLatticeBallConfig ballConfig,
-                            bool useVoxelAcceleration = false);
+                            BeamLatticeAcceleration acceleration = BeamLatticeAcceleration::BVH);
 
         /// @brief Get read-only access to beam data
         /// @return Const reference to beam vector
@@ -97,18 +104,25 @@ namespace gladius
             return m_ballConfig;
         }
 
-        /// @brief Enable or disable voxel acceleration
-        /// @param enable Whether to use voxel acceleration instead of BVH
-        void setUseVoxelAcceleration(bool enable)
+        /// @brief Set acceleration structure type
+        /// @param acceleration Acceleration structure type to use
+        void setAcceleration(BeamLatticeAcceleration acceleration)
         {
-            m_useVoxelAcceleration = enable;
+            m_acceleration = acceleration;
         }
 
-        /// @brief Check if voxel acceleration is enabled
+        /// @brief Get current acceleration structure type
+        /// @return Current acceleration structure type
+        BeamLatticeAcceleration getAcceleration() const
+        {
+            return m_acceleration;
+        }
+
+        /// @brief Check if using voxel acceleration
         /// @return True if using voxel acceleration, false if using BVH
         bool isUsingVoxelAcceleration() const
         {
-            return m_useVoxelAcceleration;
+            return m_acceleration == BeamLatticeAcceleration::Voxel;
         }
 
         /// @brief Write beam lattice data to primitives collection
@@ -166,7 +180,8 @@ namespace gladius
         BeamBVHBuilder::BuildParams m_bvhParams; ///< BVH builder parameters for construction
 
         // Acceleration method selection
-        bool m_useVoxelAcceleration = true; ///< Whether to use voxel acceleration instead of BVH
+        BeamLatticeAcceleration m_acceleration =
+          BeamLatticeAcceleration::Voxel; ///< Acceleration structure type
 
         // GPU data management
         PrimitiveBuffer m_payloadData; ///< Prepared data for GPU transfer

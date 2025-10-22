@@ -9,6 +9,8 @@
 #include "Style.h"
 #include "Widgets.h"
 #include "nodes/DerivedNodes.h"
+#include "nodes/LowerFunctionGradient.h"
+#include "nodes/LowerNormalizeDistanceField.h"
 #include "nodesfwd.h"
 
 #include "imguinodeeditor.h"
@@ -18,6 +20,7 @@
 #include <imgui_stdlib.h>
 
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <fmt/format.h>
 #include <set>
@@ -307,14 +310,23 @@ namespace gladius::ui
         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
             ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
         {
-            auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode);
-            if (functionCallNode && m_modelEditor)
+            nodes::ResourceId functionId = 0;
+
+            if (auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode))
             {
-                nodes::ResourceId functionId = functionCallNode->getFunctionId();
-                if (functionId != 0) // Check if function ID is valid
-                {
-                    m_modelEditor->switchToFunction(functionId);
-                }
+                functionId = functionCallNode->getFunctionId();
+            }
+            else if (auto * functionGradientNode =
+                       dynamic_cast<nodes::FunctionGradient *>(&baseNode))
+            {
+                functionGradientNode->resolveFunctionId();
+                functionId = functionGradientNode->getFunctionId();
+            }
+
+            if (m_modelEditor && functionId != 0)
+            {
+                // Use navigateToFunction so history is recorded
+                m_modelEditor->navigateToFunction(functionId);
             }
         }
 
@@ -366,10 +378,934 @@ namespace gladius::ui
     void NodeView::content(NodeBase & baseNode)
     {
         showInputAndOutputs(baseNode);
+
+        if (auto * functionGradientNode = dynamic_cast<nodes::FunctionGradient *>(&baseNode))
+        {
+            functionGradientControls(*functionGradientNode);
+        }
+
+        if (auto * normalizeNode = dynamic_cast<nodes::NormalizeDistanceField *>(&baseNode))
+        {
+            normalizeDistanceFieldControls(*normalizeNode);
+        }
+
+        if (auto * functionCallNode = dynamic_cast<nodes::FunctionCall *>(&baseNode))
+        {
+            functionCallControls(*functionCallNode);
+        }
+
         if (baseNode.parameterChangeInvalidatesPayload() && m_parameterChanged)
         {
             m_modelEditor->invalidatePrimitiveData();
         }
+    }
+
+    void NodeView::normalizeDistanceFieldControls(nodes::NormalizeDistanceField & node)
+    {
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Normalize Distance Field");
+
+        auto const errorColor = ImVec4(1.f, 0.4f, 0.4f, 1.f);
+        auto const warningColor = ImVec4(1.f, 0.6f, 0.2f, 1.f);
+
+        bool canConfigure = true;
+        if (!m_assembly)
+        {
+            ImGui::TextColored(errorColor,
+                               "Assembly not available – cannot resolve function outputs.");
+            canConfigure = false;
+        }
+
+        nodes::SharedModel referencedModel;
+        if (canConfigure)
+        {
+            node.resolveFunctionId();
+            auto const functionId = node.getFunctionId();
+            if (functionId == 0)
+            {
+                ImGui::TextColored(warningColor, "Select a function to normalize.");
+                canConfigure = false;
+            }
+            else
+            {
+                referencedModel = m_assembly->findModel(functionId);
+                if (!referencedModel)
+                {
+                    ImGui::TextColored(errorColor,
+                                       "Referenced function not found in the assembly.");
+                    canConfigure = false;
+                }
+            }
+        }
+
+        if (canConfigure && referencedModel)
+        {
+            auto const & functionOutputs = referencedModel->getOutputs();
+            std::vector<std::string> scalarOutputs;
+            scalarOutputs.reserve(functionOutputs.size());
+            for (auto const & [name, parameter] : functionOutputs)
+            {
+                if (parameter.getTypeIndex() == ParameterTypeIndex::Float)
+                {
+                    scalarOutputs.push_back(name);
+                }
+            }
+
+            std::vector<std::string> vectorInputs;
+            vectorInputs.reserve(node.parameter().size());
+            for (auto const & [name, parameter] : node.constParameter())
+            {
+                if (!parameter.isArgument())
+                {
+                    continue;
+                }
+                if (parameter.getTypeIndex() == ParameterTypeIndex::Float3)
+                {
+                    vectorInputs.push_back(name);
+                }
+            }
+
+            std::string selectedScalar = node.getSelectedScalarOutput();
+            std::string scalarPreview =
+              selectedScalar.empty() ? "Select scalar output" : selectedScalar;
+            bool const hasScalarOutputs = !scalarOutputs.empty();
+
+            if (!hasScalarOutputs)
+            {
+                scalarPreview = "No scalar outputs available";
+                ImGui::BeginDisabled();
+            }
+
+            if (ImGui::Button(scalarPreview.c_str()))
+            {
+                m_showContextMenu = true;
+                auto popupName = fmt::format("NDF_ScalarOutput_{}", node.getId());
+                auto scalarOutputsCopy = scalarOutputs;
+                auto selectedScalarCopy = selectedScalar;
+                auto * nodePtr = &node;
+                m_modelEditor->showPopupMenu(
+                  [this, popupName, scalarOutputsCopy, selectedScalarCopy, nodePtr]()
+                  {
+                      if (m_showContextMenu)
+                      {
+                          ImGui::OpenPopup(popupName.c_str());
+                          m_showContextMenu = false;
+                      }
+
+                      if (ImGui::BeginPopup(popupName.c_str()))
+                      {
+                          bool const isNoneSelected = selectedScalarCopy.empty();
+                          if (ImGui::Selectable("None", isNoneSelected))
+                          {
+                              if (!isNoneSelected)
+                              {
+                                  nodePtr->setSelectedScalarOutput("");
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                          }
+
+                          for (auto const & option : scalarOutputsCopy)
+                          {
+                              bool const isSelected = (option == selectedScalarCopy);
+                              if (ImGui::Selectable(option.c_str(), isSelected))
+                              {
+                                  nodePtr->setSelectedScalarOutput(option);
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                              if (isSelected)
+                              {
+                                  ImGui::SetItemDefaultFocus();
+                              }
+                          }
+                          ImGui::EndPopup();
+                      }
+                  });
+            }
+
+            if (!hasScalarOutputs)
+            {
+                ImGui::EndDisabled();
+                ImGui::TextColored(warningColor,
+                                   "The referenced function exposes no scalar outputs.");
+            }
+            else if (!selectedScalar.empty() &&
+                     std::find(scalarOutputs.begin(), scalarOutputs.end(), selectedScalar) ==
+                       scalarOutputs.end())
+            {
+                ImGui::TextColored(warningColor,
+                                   "Previously selected scalar output is no longer available.");
+            }
+
+            std::string selectedVector = node.getSelectedVectorInput();
+            std::string vectorPreview =
+              selectedVector.empty() ? "Select vector input" : selectedVector;
+            bool const hasVectorInputs = !vectorInputs.empty();
+
+            if (!hasVectorInputs)
+            {
+                vectorPreview = "No vector inputs available";
+                ImGui::BeginDisabled();
+            }
+
+            if (ImGui::Button(vectorPreview.c_str()))
+            {
+                m_showContextMenu = true;
+                auto popupName = fmt::format("NDF_VectorInput_{}", node.getId());
+                auto vectorInputsCopy = vectorInputs;
+                auto selectedVectorCopy = selectedVector;
+                auto * nodePtr = &node;
+                m_modelEditor->showPopupMenu(
+                  [this, popupName, vectorInputsCopy, selectedVectorCopy, nodePtr]()
+                  {
+                      if (m_showContextMenu)
+                      {
+                          ImGui::OpenPopup(popupName.c_str());
+                          m_showContextMenu = false;
+                      }
+
+                      if (ImGui::BeginPopup(popupName.c_str()))
+                      {
+                          bool const isNoneSelected = selectedVectorCopy.empty();
+                          if (ImGui::Selectable("None", isNoneSelected))
+                          {
+                              if (!isNoneSelected)
+                              {
+                                  nodePtr->setSelectedVectorInput("");
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                          }
+
+                          for (auto const & option : vectorInputsCopy)
+                          {
+                              bool const isSelected = (option == selectedVectorCopy);
+                              if (ImGui::Selectable(option.c_str(), isSelected))
+                              {
+                                  nodePtr->setSelectedVectorInput(option);
+                                  m_parameterChanged = true;
+                                  m_modelChanged = true;
+                                  if (m_modelEditor)
+                                  {
+                                      m_modelEditor->markModelAsModified();
+                                  }
+                              }
+                              if (isSelected)
+                              {
+                                  ImGui::SetItemDefaultFocus();
+                              }
+                          }
+                          ImGui::EndPopup();
+                      }
+                  });
+            }
+
+            if (!hasVectorInputs)
+            {
+                ImGui::EndDisabled();
+                ImGui::TextColored(warningColor,
+                                   "The mirrored arguments provide no vector inputs.");
+            }
+            else if (!selectedVector.empty() &&
+                     std::find(vectorInputs.begin(), vectorInputs.end(), selectedVector) ==
+                       vectorInputs.end())
+            {
+                ImGui::TextColored(warningColor,
+                                   "Previously selected vector input is no longer available.");
+            }
+
+            if (auto it = node.parameter().find(FieldNames::StepSize); it != node.parameter().end())
+            {
+                auto & stepVar = it->second.Value();
+                if (auto pStep = std::get_if<float>(&stepVar))
+                {
+                    ImGui::SetNextItemWidth(150.f * m_uiScale);
+                    if (ImGui::DragFloat("Step Size", pStep, 0.001f, 0.0f, 1000.0f, "%.6f"))
+                    {
+                        if (*pStep < 0.0f)
+                        {
+                            *pStep = 0.0f;
+                        }
+                        if (!it->second.isModifiable())
+                        {
+                            it->second.setModifiable(true);
+                        }
+                        m_parameterChanged = true;
+                        if (m_modelEditor)
+                        {
+                            m_modelEditor->markModelAsModified();
+                        }
+                    }
+                }
+            }
+
+            if (!node.hasValidConfiguration())
+            {
+                ImGui::TextColored(
+                  warningColor,
+                  "Select both a scalar output and a vector input to enable normalization.");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.f, 1.f),
+                                   "Distance values will be divided by the gradient magnitude.");
+            }
+        }
+
+        bool const canLower = canConfigure && node.hasValidConfiguration();
+
+        ImGui::Spacing();
+        ImGui::BeginDisabled(!canLower);
+        if (ImGui::Button("Lower Normalize Distance"))
+        {
+            if (!m_assembly)
+            {
+                m_lowerNormalizeMessage = "Assembly not available.";
+                m_lowerNormalizeMessageIsError = true;
+            }
+            else
+            {
+                try
+                {
+                    std::vector<std::string> errorMessages;
+                    nodes::LowerNormalizeDistanceField lowering{
+                      *m_assembly,
+                      {},
+                      [&](std::string const & message) { errorMessages.push_back(message); }};
+                    lowering.run();
+                    m_assembly->updateInputsAndOutputs();
+
+                    if (lowering.hadErrors())
+                    {
+                        if (!errorMessages.empty())
+                        {
+                            m_lowerNormalizeMessage = errorMessages.back();
+                        }
+                        else
+                        {
+                            m_lowerNormalizeMessage = "Lowering reported errors.";
+                        }
+                        m_lowerNormalizeMessageIsError = true;
+                    }
+                    else
+                    {
+                        m_lowerNormalizeMessage = "Normalize distance nodes lowered.";
+                        m_lowerNormalizeMessageIsError = false;
+                    }
+
+                    m_parameterChanged = true;
+                    m_modelChanged = true;
+                    if (m_modelEditor)
+                    {
+                        m_modelEditor->markModelAsModified();
+                        m_modelEditor->invalidatePrimitiveData();
+                    }
+                }
+                catch (std::exception const & e)
+                {
+                    m_lowerNormalizeMessage = e.what();
+                    m_lowerNormalizeMessageIsError = true;
+                }
+            }
+        }
+        ImGui::EndDisabled();
+
+        if (!m_lowerNormalizeMessage.empty())
+        {
+            auto const color = m_lowerNormalizeMessageIsError ? ImVec4(1.f, 0.4f, 0.4f, 1.f)
+                                                              : ImVec4(0.6f, 0.8f, 1.f, 1.f);
+            ImGui::TextColored(color, "%s", m_lowerNormalizeMessage.c_str());
+        }
+    }
+
+    void NodeView::functionGradientControls(nodes::FunctionGradient & node)
+    {
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Gradient Configuration");
+
+        if (m_assembly == nullptr)
+        {
+            ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f),
+                               "Assembly not available – cannot resolve function outputs.");
+            return;
+        }
+
+        node.resolveFunctionId();
+        auto const functionId = node.getFunctionId();
+        if (functionId == 0)
+        {
+            ImGui::TextColored(ImVec4(1.f, 0.6f, 0.2f, 1.f),
+                               "Select a function to compute its gradient.");
+            return;
+        }
+
+        auto referencedModel = m_assembly->findModel(functionId);
+        if (!referencedModel)
+        {
+            ImGui::TextColored(ImVec4(1.f, 0.4f, 0.4f, 1.f),
+                               "Referenced function not found in the assembly.");
+            return;
+        }
+
+        auto const & functionOutputs = referencedModel->getOutputs();
+        std::vector<std::string> scalarOutputs;
+        scalarOutputs.reserve(functionOutputs.size());
+        for (auto const & [name, parameter] : functionOutputs)
+        {
+            if (parameter.getTypeIndex() == ParameterTypeIndex::Float)
+            {
+                scalarOutputs.push_back(name);
+            }
+        }
+
+        std::vector<std::string> vectorInputs;
+        vectorInputs.reserve(node.parameter().size());
+        for (auto const & [name, parameter] : node.constParameter())
+        {
+            if (!parameter.isArgument())
+            {
+                continue;
+            }
+            if (parameter.getTypeIndex() == ParameterTypeIndex::Float3)
+            {
+                vectorInputs.push_back(name);
+            }
+        }
+
+        auto const warningColor = ImVec4(1.f, 0.6f, 0.2f, 1.f);
+
+        bool selectionChanged = false;
+
+        std::string selectedScalar = node.getSelectedScalarOutput();
+        std::string scalarPreview =
+          selectedScalar.empty() ? "Select scalar output" : selectedScalar;
+        bool const hasScalarOutputs = !scalarOutputs.empty();
+
+        if (!hasScalarOutputs)
+        {
+            scalarPreview = "No scalar outputs available";
+            ImGui::BeginDisabled();
+        }
+
+        // Popup-based selector for scalar output (more reliable in node editor)
+        if (ImGui::Button(scalarPreview.c_str()))
+        {
+            m_showContextMenu = true;
+            auto popupName = fmt::format("FG_ScalarOutput_{}", node.getId());
+            // Capture copies to avoid dangling references across frames
+            auto scalarOutputsCopy = scalarOutputs;   // by-value
+            auto selectedScalarCopy = selectedScalar; // by-value
+            auto * nodePtr = &node;                   // pointer is stable while node exists
+            m_modelEditor->showPopupMenu(
+              [this, popupName, scalarOutputsCopy, selectedScalarCopy, nodePtr]()
+              {
+                  if (m_showContextMenu)
+                  {
+                      ImGui::OpenPopup(popupName.c_str());
+                      m_showContextMenu = false;
+                  }
+
+                  if (ImGui::BeginPopup(popupName.c_str()))
+                  {
+                      bool const isNoneSelected = selectedScalarCopy.empty();
+                      if (ImGui::Selectable("None", isNoneSelected))
+                      {
+                          if (!isNoneSelected)
+                          {
+                              nodePtr->setSelectedScalarOutput("");
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                      }
+
+                      for (auto const & option : scalarOutputsCopy)
+                      {
+                          bool const isSelected = (option == selectedScalarCopy);
+                          if (ImGui::Selectable(option.c_str(), isSelected))
+                          {
+                              nodePtr->setSelectedScalarOutput(option);
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                          if (isSelected)
+                          {
+                              ImGui::SetItemDefaultFocus();
+                          }
+                      }
+                      ImGui::EndPopup();
+                  }
+              });
+        }
+
+        if (!hasScalarOutputs)
+        {
+            ImGui::EndDisabled();
+            ImGui::TextColored(warningColor, "The referenced function exposes no scalar outputs.");
+        }
+        else if (!selectedScalar.empty() &&
+                 std::find(scalarOutputs.begin(), scalarOutputs.end(), selectedScalar) ==
+                   scalarOutputs.end())
+        {
+            ImGui::TextColored(warningColor,
+                               "Previously selected scalar output is no longer available.");
+        }
+
+        std::string selectedVector = node.getSelectedVectorInput();
+        std::string vectorPreview = selectedVector.empty() ? "Select vector input" : selectedVector;
+        bool const hasVectorInputs = !vectorInputs.empty();
+
+        if (!hasVectorInputs)
+        {
+            vectorPreview = "No vector inputs available";
+            ImGui::BeginDisabled();
+        }
+
+        // Popup-based selector for vector input
+        if (ImGui::Button(vectorPreview.c_str()))
+        {
+            m_showContextMenu = true;
+            auto popupName = fmt::format("FG_VectorInput_{}", node.getId());
+            auto vectorInputsCopy = vectorInputs;     // by-value
+            auto selectedVectorCopy = selectedVector; // by-value
+            auto * nodePtr = &node;                   // pointer is stable while node exists
+            m_modelEditor->showPopupMenu(
+              [this, popupName, vectorInputsCopy, selectedVectorCopy, nodePtr]()
+              {
+                  if (m_showContextMenu)
+                  {
+                      ImGui::OpenPopup(popupName.c_str());
+                      m_showContextMenu = false;
+                  }
+
+                  if (ImGui::BeginPopup(popupName.c_str()))
+                  {
+                      bool const isNoneSelected = selectedVectorCopy.empty();
+                      if (ImGui::Selectable("None", isNoneSelected))
+                      {
+                          if (!isNoneSelected)
+                          {
+                              nodePtr->setSelectedVectorInput("");
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                      }
+
+                      for (auto const & option : vectorInputsCopy)
+                      {
+                          bool const isSelected = (option == selectedVectorCopy);
+                          if (ImGui::Selectable(option.c_str(), isSelected))
+                          {
+                              nodePtr->setSelectedVectorInput(option);
+                              m_parameterChanged = true;
+                              if (m_modelEditor)
+                                  m_modelEditor->markModelAsModified();
+                          }
+                          if (isSelected)
+                          {
+                              ImGui::SetItemDefaultFocus();
+                          }
+                      }
+                      ImGui::EndPopup();
+                  }
+              });
+        }
+
+        if (!hasVectorInputs)
+        {
+            ImGui::EndDisabled();
+            ImGui::TextColored(warningColor, "The mirrored arguments provide no vector inputs.");
+        }
+        else if (!selectedVector.empty() &&
+                 std::find(vectorInputs.begin(), vectorInputs.end(), selectedVector) ==
+                   vectorInputs.end())
+        {
+            ImGui::TextColored(warningColor,
+                               "Previously selected vector input is no longer available.");
+        }
+
+        if (selectionChanged)
+        {
+            m_parameterChanged = true;
+            if (m_modelEditor)
+            {
+                m_modelEditor->markModelAsModified();
+            }
+        }
+
+        // Step size control
+        if (auto it = node.parameter().find(FieldNames::StepSize); it != node.parameter().end())
+        {
+            auto & stepVar = it->second.Value();
+            if (auto pStep = std::get_if<float>(&stepVar))
+            {
+                float prev = *pStep;
+                ImGui::SetNextItemWidth(150.f * m_uiScale);
+                if (ImGui::DragFloat("Step Size", pStep, 0.001f, 0.0f, 1000.0f, "%.6f"))
+                {
+                    if (*pStep < 0.0f)
+                    {
+                        *pStep = 0.0f; // keep non-negative; kernel clamps to >= 1e-8
+                    }
+                    if (!it->second.isModifiable())
+                    {
+                        it->second.setModifiable(true);
+                    }
+                    m_parameterChanged = true;
+                    if (m_modelEditor)
+                    {
+                        m_modelEditor->markModelAsModified();
+                    }
+                }
+            }
+        }
+
+        if (!node.hasValidConfiguration())
+        {
+            ImGui::TextColored(
+              warningColor,
+              "Select both a scalar output and a vector input to enable the gradient.");
+        }
+        else
+        {
+            ImGui::TextColored(
+              ImVec4(0.6f, 0.8f, 1.f, 1.f),
+              "Gradient output is normalized and falls back to zero for near-zero magnitudes.");
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button("Lower Function Gradients"))
+        {
+            if (!m_assembly)
+            {
+                m_lowerGradientMessage = "Assembly not available.";
+                m_lowerGradientMessageIsError = true;
+            }
+            else
+            {
+                try
+                {
+                    std::vector<std::string> errorMessages;
+                    nodes::LowerFunctionGradient lowering{*m_assembly,
+                                                          {},
+                                                          [&](std::string const & message)
+                                                          { errorMessages.push_back(message); }};
+                    lowering.run();
+                    m_assembly->updateInputsAndOutputs();
+
+                    if (lowering.hadErrors())
+                    {
+                        if (!errorMessages.empty())
+                        {
+                            m_lowerGradientMessage = errorMessages.back();
+                        }
+                        else
+                        {
+                            m_lowerGradientMessage = "Lowering reported errors.";
+                        }
+                        m_lowerGradientMessageIsError = true;
+                    }
+                    else
+                    {
+                        m_lowerGradientMessage = "Function gradients lowered.";
+                        m_lowerGradientMessageIsError = false;
+                    }
+
+                    m_parameterChanged = true;
+                    m_modelChanged = true;
+                    if (m_modelEditor)
+                    {
+                        m_modelEditor->markModelAsModified();
+                        m_modelEditor->invalidatePrimitiveData();
+                    }
+                }
+                catch (std::exception const & e)
+                {
+                    m_lowerGradientMessage = e.what();
+                    m_lowerGradientMessageIsError = true;
+                }
+            }
+        }
+
+        if (!m_lowerGradientMessage.empty())
+        {
+            auto const color = m_lowerGradientMessageIsError ? ImVec4(1.f, 0.4f, 0.4f, 1.f)
+                                                             : ImVec4(0.6f, 0.8f, 1.f, 1.f);
+            ImGui::TextColored(color, "%s", m_lowerGradientMessage.c_str());
+        }
+    }
+
+    void NodeView::functionCallControls(nodes::FunctionCall & node)
+    {
+        ImGui::Spacing();
+        if (ImGui::Button("Create Function Gradient"))
+        {
+            if (!m_assembly || !m_currentModel)
+            {
+                return;
+            }
+
+            try
+            {
+                // Create a new FunctionGradient node
+                auto * gradientNode = m_currentModel->create<nodes::FunctionGradient>();
+                if (!gradientNode)
+                {
+                    return;
+                }
+
+                // Configure the gradient node with the same function ID as the call
+                gradientNode->setFunctionId(node.getFunctionId());
+
+                // Get the referenced model to update inputs/outputs
+                auto referencedModel = m_assembly->findModel(node.getFunctionId());
+                if (referencedModel)
+                {
+                    gradientNode->updateInputsAndOutputs(*referencedModel);
+
+                    // Auto-select vector input if there's only one float3 input
+                    std::string vectorInputCandidate;
+                    int vectorInputCount = 0;
+                    auto & inputs = referencedModel->getInputs();
+                    for (auto & [inputName, inputPort] : inputs)
+                    {
+                        if (inputPort.getTypeIndex() == nodes::ParameterTypeIndex::Float3)
+                        {
+                            vectorInputCandidate = inputName;
+                            vectorInputCount++;
+                        }
+                    }
+                    if (vectorInputCount == 1)
+                    {
+                        gradientNode->setSelectedVectorInput(vectorInputCandidate);
+                    }
+
+                    // Auto-select scalar output if there's only one float output
+                    std::string scalarOutputCandidate;
+                    int scalarOutputCount = 0;
+                    auto & outputs = referencedModel->getOutputs();
+                    for (auto & [outputName, outputParam] : outputs)
+                    {
+                        if (outputParam.getTypeIndex() == nodes::ParameterTypeIndex::Float)
+                        {
+                            scalarOutputCandidate = outputName;
+                            scalarOutputCount++;
+                        }
+                    }
+                    if (scalarOutputCount == 1)
+                    {
+                        gradientNode->setSelectedScalarOutput(scalarOutputCandidate);
+                    }
+                }
+
+                // Create a constant scalar node for step size
+                auto * stepSizeConstant = m_currentModel->create<nodes::ConstantScalar>();
+                if (stepSizeConstant)
+                {
+                    stepSizeConstant->setDisplayName("gradient_step_size");
+                    auto & valueParam = stepSizeConstant->parameter()[nodes::FieldNames::Value];
+                    valueParam.setValue(nodes::VariantType{1e-5f});
+                    valueParam.setInputSourceRequired(false);
+                    valueParam.setModifiable(true);
+
+                    m_currentModel->registerInputs(*stepSizeConstant);
+                    m_currentModel->registerOutputs(*stepSizeConstant);
+                }
+
+                // Register the new node
+                m_currentModel->registerInputs(*gradientNode);
+                m_currentModel->registerOutputs(*gradientNode);
+
+                // Copy parameter links from FunctionCall to FunctionGradient
+                auto & functionCallParams = node.parameter();
+                auto & gradientParams = gradientNode->parameter();
+
+                for (auto & [paramName, gradientParam] : gradientParams)
+                {
+                    // Skip the FunctionId parameter as it's already set
+                    if (paramName == nodes::FieldNames::FunctionId)
+                    {
+                        continue;
+                    }
+
+                    // Connect StepSize to the constant node we created
+                    if (paramName == nodes::FieldNames::StepSize && stepSizeConstant)
+                    {
+                        auto & constantOutput =
+                          stepSizeConstant->getOutputs().at(nodes::FieldNames::Value);
+                        m_currentModel->addLink(constantOutput.getId(), gradientParam.getId());
+                        continue;
+                    }
+
+                    // Find corresponding parameter in FunctionCall
+                    auto callParamIter = functionCallParams.find(paramName);
+                    if (callParamIter != functionCallParams.end())
+                    {
+                        auto const & callParam = callParamIter->second;
+
+                        // Copy the source link if it exists
+                        auto const & source = callParam.getConstSource();
+                        if (source.has_value() && source->port)
+                        {
+                            m_currentModel->addLink(source->port->getId(), gradientParam.getId());
+                        }
+                        else
+                        {
+                            // Copy the parameter value if no link exists
+                            gradientParam.setValue(callParam.getValue());
+                        }
+                    }
+                }
+
+                // Mark outputs as used
+                auto & outputs = gradientNode->getOutputs();
+                for (auto & [name, port] : outputs)
+                {
+                    port.setIsUsed(true);
+                }
+
+                // Notify of changes
+                m_parameterChanged = true;
+                m_modelChanged = true;
+                if (m_modelEditor)
+                {
+                    m_modelEditor->markModelAsModified();
+                    m_modelEditor->invalidatePrimitiveData();
+                }
+            }
+            catch (std::exception const & e)
+            {
+                // Could add error reporting here if needed
+                std::cerr << "Failed to create FunctionGradient: " << e.what() << std::endl;
+            }
+        }
+
+        ImGui::TextColored(
+          ImVec4(0.6f, 0.8f, 1.f, 1.f),
+          "Creates a FunctionGradient node that computes the gradient of this function call.");
+
+        ImGui::Spacing();
+        if (ImGui::Button("Normalize Distance"))
+        {
+            if (!m_assembly || !m_currentModel)
+            {
+                return;
+            }
+
+            try
+            {
+                // Create a new NormalizeDistanceField node
+                auto * normalizeNode = m_currentModel->create<nodes::NormalizeDistanceField>();
+                if (!normalizeNode)
+                {
+                    return;
+                }
+
+                // Set the FunctionId from the FunctionCall node
+                auto functionId = node.getFunctionId();
+                normalizeNode->setFunctionId(functionId);
+
+                // Configure selections: Distance output and Pos input by default
+                normalizeNode->setSelectedScalarOutput(nodes::FieldNames::Distance);
+                normalizeNode->setSelectedVectorInput(nodes::FieldNames::Pos);
+
+                // Update inputs and outputs to mirror the referenced function
+                if (auto referencedModel = m_assembly->findModel(functionId))
+                {
+                    normalizeNode->updateInputsAndOutputs(*referencedModel);
+                }
+
+                // Register the new node
+                m_currentModel->registerInputs(*normalizeNode);
+                m_currentModel->registerOutputs(*normalizeNode);
+
+                // Copy parameter links from FunctionCall to NormalizeDistanceField
+                // (mirrored arguments should have matching names)
+                auto & functionCallParams = node.parameter();
+                auto & normalizeParams = normalizeNode->parameter();
+
+                for (auto & [name, normalizeParam] : normalizeParams)
+                {
+                    if (!normalizeParam.isArgument())
+                    {
+                        continue; // Skip non-argument parameters (FunctionId, StepSize, etc.)
+                    }
+
+                    auto callParamIter = functionCallParams.find(name);
+                    if (callParamIter != functionCallParams.end())
+                    {
+                        auto const & source = callParamIter->second.getConstSource();
+                        if (source.has_value() && source->port)
+                        {
+                            m_currentModel->addLink(source->port->getId(), normalizeParam.getId());
+                        }
+                    }
+                }
+
+                // Create constant node for step size with default
+                auto * stepSizeConstant = m_currentModel->create<nodes::ConstantScalar>();
+                if (stepSizeConstant)
+                {
+                    stepSizeConstant->setDisplayName("normalize_step_size");
+                    auto & valueParam = stepSizeConstant->parameter()[nodes::FieldNames::Value];
+                    valueParam.setValue(nodes::VariantType{1e-3f});
+                    valueParam.setInputSourceRequired(false);
+                    valueParam.setModifiable(true);
+
+                    m_currentModel->registerInputs(*stepSizeConstant);
+                    m_currentModel->registerOutputs(*stepSizeConstant);
+
+                    auto & constantOutput =
+                      stepSizeConstant->getOutputs().at(nodes::FieldNames::Value);
+                    auto stepParamIter = normalizeParams.find(nodes::FieldNames::StepSize);
+                    if (stepParamIter != normalizeParams.end())
+                    {
+                        m_currentModel->addLink(constantOutput.getId(),
+                                                stepParamIter->second.getId());
+                    }
+                }
+
+                // Mark output as used
+                auto & outputs = normalizeNode->getOutputs();
+                for (auto & [name, port] : outputs)
+                {
+                    port.setIsUsed(true);
+                }
+
+                // Notify of changes
+                m_parameterChanged = true;
+                m_modelChanged = true;
+                if (m_modelEditor)
+                {
+                    m_modelEditor->markModelAsModified();
+                    m_modelEditor->invalidatePrimitiveData();
+                }
+            }
+            catch (std::exception const & e)
+            {
+                // Could add error reporting here if needed
+                std::cerr << "Failed to create NormalizeDistanceField: " << e.what() << std::endl;
+            }
+        }
+
+        ImGui::TextColored(
+          ImVec4(0.6f, 0.8f, 1.f, 1.f),
+          "Creates a NormalizeDistanceField node that normalizes the distance field gradient.");
     }
 
     void NodeView::footer(NodeBase & baseNode)
@@ -657,6 +1593,30 @@ namespace gladius::ui
                                   if (functionCallNode)
                                   {
                                       functionCallNode->setFunctionId(id);
+                                      if (m_assembly)
+                                      {
+                                          if (auto referencedModel = m_assembly->findModel(id))
+                                          {
+                                              functionCallNode->updateInputsAndOutputs(
+                                                *referencedModel);
+                                          }
+                                      }
+                                      m_parameterChanged = true;
+                                      m_modelEditor->markModelAsModified();
+                                      m_modelEditor->closePopupMenu();
+                                  }
+                                  else if (auto * functionGradientNode =
+                                             dynamic_cast<nodes::FunctionGradient *>(&node))
+                                  {
+                                      functionGradientNode->setFunctionId(id);
+                                      if (m_assembly)
+                                      {
+                                          if (auto referencedModel = m_assembly->findModel(id))
+                                          {
+                                              functionGradientNode->updateInputsAndOutputs(
+                                                *referencedModel);
+                                          }
+                                      }
                                       m_parameterChanged = true;
                                       m_modelEditor->markModelAsModified();
                                       m_modelEditor->closePopupMenu();

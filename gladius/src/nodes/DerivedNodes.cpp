@@ -5,10 +5,12 @@
 #include "Model.h"
 #include "Parameter.h"
 #include "nodesfwd.h"
+#include <cmath>
 #include <filesystem>
 #include <fmt/format.h>
 #include <limits>
 #include <map>
+#include <variant>
 
 namespace gladius::nodes
 {
@@ -393,6 +395,467 @@ namespace gladius::nodes
             {
                 iter->second.setTypeIndex(output.getTypeIndex());
             }
+        }
+        updateNodeIds();
+    }
+
+    FunctionGradient::FunctionGradient(NodeId id)
+        : ClonableNode<FunctionGradient>(NodeName("FunctionGradient"), id, Category::Misc)
+    {
+        initializeBaseParameters();
+    }
+
+    void FunctionGradient::initializeBaseParameters()
+    {
+        TypeRule rule = {RuleType::Default,
+                         InputTypeMap{{FieldNames::FunctionId, ParameterTypeIndex::ResourceId},
+                                      {FieldNames::StepSize, ParameterTypeIndex::Float}},
+                         OutputTypeMap{{FieldNames::NormalizedGradient, ParameterTypeIndex::Float3},
+                                       {FieldNames::Gradient, ParameterTypeIndex::Float3},
+                                       {FieldNames::Magnitude, ParameterTypeIndex::Float}}};
+        m_typeRules = {rule};
+        applyTypeRule(rule);
+
+        auto & functionIdParameter = m_parameter.at(FieldNames::FunctionId);
+        functionIdParameter.setInputSourceRequired(false);
+        functionIdParameter.setParentId(getId());
+
+        auto & stepSizeParameter = m_parameter.at(FieldNames::StepSize);
+        stepSizeParameter.setInputSourceRequired(false);
+        stepSizeParameter.setParentId(getId());
+        stepSizeParameter.setModifiable(true);
+        stepSizeParameter.setValue(VariantType{1e-3f});
+
+        updateInternalOutputs();
+    }
+
+    void FunctionGradient::updateInternalOutputs()
+    {
+        for (auto iter = m_outputs.begin(); iter != m_outputs.end();)
+        {
+            if (iter->first != FieldNames::NormalizedGradient &&
+                iter->first != FieldNames::Gradient && iter->first != FieldNames::Magnitude)
+            {
+                iter = m_outputs.erase(iter);
+            }
+            else
+            {
+                ++iter;
+            }
+        }
+
+        if (m_outputs.find(FieldNames::NormalizedGradient) == m_outputs.end())
+        {
+            addOutputPort(FieldNames::NormalizedGradient, ParameterTypeIndex::Float3);
+        }
+
+        if (m_outputs.find(FieldNames::Gradient) == m_outputs.end())
+        {
+            addOutputPort(FieldNames::Gradient, ParameterTypeIndex::Float3);
+        }
+
+        if (m_outputs.find(FieldNames::Magnitude) == m_outputs.end())
+        {
+            addOutputPort(FieldNames::Magnitude, ParameterTypeIndex::Float);
+        }
+
+        updateNodeIds();
+    }
+
+    void FunctionGradient::resolveFunctionId()
+    {
+        auto itFunc = m_parameter.find(FieldNames::FunctionId);
+        if (itFunc == m_parameter.end())
+        {
+            return;
+        }
+
+        auto & functionIdParameter = itFunc->second;
+        auto functionSource = functionIdParameter.getSource();
+        if (!functionSource.has_value())
+        {
+            auto variantResId = functionIdParameter.getValue();
+            if (const auto resId = std::get_if<ResourceId>(&variantResId))
+            {
+                m_functionId = *resId;
+            }
+            return;
+        }
+
+        auto * sourcePort = functionSource.value().port;
+        if (!sourcePort)
+        {
+            return;
+        }
+
+        auto sourceNode = sourcePort->getParent();
+        if (!sourceNode)
+        {
+            return;
+        }
+
+        auto paramIt = sourceNode->parameter().find(FieldNames::ResourceId);
+        if (paramIt == sourceNode->parameter().end())
+        {
+            return;
+        }
+
+        auto variantResId = paramIt->second.getValue();
+        if (const auto resId = std::get_if<ResourceId>(&variantResId))
+        {
+            m_functionId = *resId;
+        }
+    }
+
+    void FunctionGradient::setFunctionId(ResourceId functionId)
+    {
+        m_functionId = functionId;
+        auto & functionIdParameter = m_parameter.at(FieldNames::FunctionId);
+        functionIdParameter.setValue(VariantType{ResourceId(functionId)});
+    }
+
+    void FunctionGradient::setSelectedScalarOutput(const std::string & name)
+    {
+        m_selectedScalarOutputName = name;
+    }
+
+    void FunctionGradient::setSelectedVectorInput(const std::string & name)
+    {
+        m_selectedVectorInputName = name;
+    }
+
+    void FunctionGradient::setStepSize(float h)
+    {
+        auto & stepSizeParameter = m_parameter.at(FieldNames::StepSize);
+        float const clamped = std::max(std::abs(h), 1e-8f);
+        stepSizeParameter.setValue(VariantType{clamped});
+    }
+
+    float FunctionGradient::getStepSize() const
+    {
+        auto const iter = m_parameter.find(FieldNames::StepSize);
+        if (iter == m_parameter.end())
+        {
+            return 1e-3f;
+        }
+
+        auto value = iter->second.getValue();
+        if (auto const step = std::get_if<float>(&value))
+        {
+            return *step;
+        }
+        return 1e-3f;
+    }
+
+    bool FunctionGradient::hasValidConfiguration() const
+    {
+        return !m_selectedScalarOutputName.empty() && !m_selectedVectorInputName.empty() &&
+               m_functionId != 0;
+    }
+
+    VariantParameter * FunctionGradient::findArgumentParameter(const std::string & name)
+    {
+        auto iter = m_parameter.find(name);
+        if (iter == m_parameter.end())
+        {
+            return nullptr;
+        }
+        if (!iter->second.isArgument())
+        {
+            return nullptr;
+        }
+        return &iter->second;
+    }
+
+    const VariantParameter * FunctionGradient::findArgumentParameter(const std::string & name) const
+    {
+        auto iter = m_parameter.find(name);
+        if (iter == m_parameter.end())
+        {
+            return nullptr;
+        }
+        if (!iter->second.isArgument())
+        {
+            return nullptr;
+        }
+        return &iter->second;
+    }
+
+    VariantParameter * FunctionGradient::getSelectedVectorParameter()
+    {
+        return findArgumentParameter(m_selectedVectorInputName);
+    }
+
+    const VariantParameter * FunctionGradient::getSelectedVectorParameter() const
+    {
+        return findArgumentParameter(m_selectedVectorInputName);
+    }
+
+    void FunctionGradient::applyMirroredInputs(Model & referencedModel)
+    {
+        ParameterMap const oldParameters = m_parameter;
+
+        auto getPreservedParameter = [&](std::string const & key,
+                                         VariantParameter defaultValue) -> VariantParameter
+        {
+            auto iter = oldParameters.find(key);
+            if (iter != oldParameters.end())
+            {
+                return iter->second;
+            }
+            return defaultValue;
+        };
+
+        ParameterMap newParameters;
+        newParameters[FieldNames::FunctionId] =
+          getPreservedParameter(FieldNames::FunctionId, VariantParameter(ResourceId{0}));
+
+        VariantParameter defaultStepSize = VariantParameter(VariantType{1e-3f});
+        defaultStepSize.setInputSourceRequired(false);
+        newParameters[FieldNames::StepSize] =
+          getPreservedParameter(FieldNames::StepSize, defaultStepSize);
+
+        for (auto & [name, input] : referencedModel.getInputs())
+        {
+            VariantParameter parameter = createVariantTypeFromTypeIndex(input.getTypeIndex());
+
+            auto oldIter = oldParameters.find(name);
+            if (oldIter != oldParameters.end())
+            {
+                auto const & oldParam = oldIter->second;
+                if (oldParam.getTypeIndex() == input.getTypeIndex())
+                {
+                    parameter = oldParam;
+                }
+                else if (oldParam.getConstSource().has_value())
+                {
+                    parameter.setSource(oldParam.getConstSource());
+                    parameter.setModifiable(oldParam.isModifiable());
+                }
+            }
+
+            parameter.marksAsArgument();
+            parameter.setParentId(getId());
+            parameter.setInputSourceRequired(true);
+            newParameters[name] = parameter;
+        }
+
+        m_parameter = std::move(newParameters);
+
+        auto & functionIdParameter = m_parameter.at(FieldNames::FunctionId);
+        functionIdParameter.setParentId(getId());
+        functionIdParameter.setInputSourceRequired(false);
+
+        auto & stepSizeParameter = m_parameter.at(FieldNames::StepSize);
+        stepSizeParameter.setParentId(getId());
+        stepSizeParameter.setInputSourceRequired(false);
+        auto stepValue = stepSizeParameter.getValue();
+        if (!std::holds_alternative<float>(stepValue))
+        {
+            stepSizeParameter.setValue(VariantType{1e-3f});
+        }
+
+        updateNodeIds();
+    }
+
+    void FunctionGradient::validateSelections(Model & referencedModel)
+    {
+        auto & outputs = referencedModel.getOutputs();
+        auto scalarIter = outputs.find(m_selectedScalarOutputName);
+        if (scalarIter == outputs.end() ||
+            scalarIter->second.getTypeIndex() != ParameterTypeIndex::Float)
+        {
+            m_selectedScalarOutputName.clear();
+        }
+
+        auto * vectorParam = getSelectedVectorParameter();
+        if (!vectorParam || vectorParam->getTypeIndex() != ParameterTypeIndex::Float3)
+        {
+            m_selectedVectorInputName.clear();
+        }
+    }
+
+    void FunctionGradient::updateInputsAndOutputs(Model & referencedModel)
+    {
+        applyMirroredInputs(referencedModel);
+        validateSelections(referencedModel);
+        updateInternalOutputs();
+    }
+
+    // --- NormalizeDistanceField (mirror configuration akin to FunctionGradient) ---
+    void NormalizeDistanceField::resolveFunctionId()
+    {
+        auto itFunc = m_parameter.find(FieldNames::FunctionId);
+        if (itFunc == m_parameter.end())
+        {
+            return;
+        }
+
+        auto & functionIdParameter = itFunc->second;
+        auto functionSource = functionIdParameter.getSource();
+        if (!functionSource.has_value())
+        {
+            auto variantResId = functionIdParameter.getValue();
+            if (const auto resId = std::get_if<ResourceId>(&variantResId))
+            {
+                m_functionId = *resId;
+            }
+            return;
+        }
+
+        auto * sourcePort = functionSource.value().port;
+        if (!sourcePort)
+        {
+            return;
+        }
+
+        auto sourceNode = sourcePort->getParent();
+        if (!sourceNode)
+        {
+            return;
+        }
+
+        auto paramIt = sourceNode->parameter().find(FieldNames::ResourceId);
+        if (paramIt == sourceNode->parameter().end())
+        {
+            return;
+        }
+
+        auto variantResId = paramIt->second.getValue();
+        if (const auto resId = std::get_if<ResourceId>(&variantResId))
+        {
+            m_functionId = *resId;
+        }
+    }
+
+    void NormalizeDistanceField::setFunctionId(ResourceId functionId)
+    {
+        m_functionId = functionId;
+        auto & functionIdParameter = m_parameter.at(FieldNames::FunctionId);
+        functionIdParameter.setValue(VariantType{ResourceId(functionId)});
+    }
+
+    void NormalizeDistanceField::setStepSize(float h)
+    {
+        auto & stepSizeParameter = m_parameter.at(FieldNames::StepSize);
+        float const clamped = std::max(std::abs(h), 1e-8f);
+        stepSizeParameter.setValue(VariantType{clamped});
+    }
+
+    float NormalizeDistanceField::getStepSize() const
+    {
+        auto const iter = m_parameter.find(FieldNames::StepSize);
+        if (iter == m_parameter.end())
+        {
+            return 1e-3f;
+        }
+
+        auto value = iter->second.getValue();
+        if (auto const step = std::get_if<float>(&value))
+        {
+            return *step;
+        }
+        return 1e-3f;
+    }
+
+    void NormalizeDistanceField::applyMirroredInputs(Model & referencedModel)
+    {
+        ParameterMap const oldParameters = m_parameter;
+
+        auto getPreservedParameter = [&](std::string const & key,
+                                         VariantParameter defaultValue) -> VariantParameter
+        {
+            auto iter = oldParameters.find(key);
+            if (iter != oldParameters.end())
+            {
+                return iter->second;
+            }
+            return defaultValue;
+        };
+
+        ParameterMap newParameters;
+        newParameters[FieldNames::FunctionId] =
+          getPreservedParameter(FieldNames::FunctionId, VariantParameter(ResourceId{0}));
+
+        VariantParameter defaultStepSize = VariantParameter(VariantType{1e-3f});
+        defaultStepSize.setInputSourceRequired(false);
+        newParameters[FieldNames::StepSize] =
+          getPreservedParameter(FieldNames::StepSize, defaultStepSize);
+
+        // Mirror all inputs from referenced model as arguments
+        for (auto & [name, input] : referencedModel.getInputs())
+        {
+            VariantParameter parameter = createVariantTypeFromTypeIndex(input.getTypeIndex());
+
+            auto oldIter = oldParameters.find(name);
+            if (oldIter != oldParameters.end())
+            {
+                auto const & oldParam = oldIter->second;
+                if (oldParam.getTypeIndex() == input.getTypeIndex())
+                {
+                    parameter = oldParam;
+                }
+                else if (oldParam.getConstSource().has_value())
+                {
+                    parameter.setSource(oldParam.getConstSource());
+                    parameter.setModifiable(oldParam.isModifiable());
+                }
+            }
+
+            parameter.marksAsArgument();
+            parameter.setParentId(getId());
+            parameter.setInputSourceRequired(true);
+            newParameters[name] = parameter;
+        }
+
+        m_parameter = std::move(newParameters);
+
+        auto & fid = m_parameter.at(FieldNames::FunctionId);
+        fid.setParentId(getId());
+        fid.setInputSourceRequired(false);
+
+        auto & step = m_parameter.at(FieldNames::StepSize);
+        step.setParentId(getId());
+        step.setInputSourceRequired(false);
+        if (!std::holds_alternative<float>(step.getValue()))
+        {
+            step.setValue(VariantType{1e-3f});
+        }
+
+        updateNodeIds();
+    }
+
+    void NormalizeDistanceField::validateSelections(Model & referencedModel)
+    {
+        auto & outputs = referencedModel.getOutputs();
+        auto scalarIter = outputs.find(m_selectedScalarOutputName);
+        if (scalarIter == outputs.end() ||
+            scalarIter->second.getTypeIndex() != ParameterTypeIndex::Float)
+        {
+            m_selectedScalarOutputName.clear();
+        }
+
+        auto iterVec = m_parameter.find(m_selectedVectorInputName);
+        if (iterVec == m_parameter.end() ||
+            iterVec->second.getTypeIndex() != ParameterTypeIndex::Float3)
+        {
+            m_selectedVectorInputName.clear();
+        }
+    }
+
+    void NormalizeDistanceField::updateInputsAndOutputs(Model & referencedModel)
+    {
+        applyMirroredInputs(referencedModel);
+        validateSelections(referencedModel);
+        // Outputs remain: Result (float) per CT_NormalizeDistance specification
+        auto & outs = getOutputs();
+        if (!outs.contains(FieldNames::Result))
+        {
+            addOutputPort(FieldNames::Result, ParameterTypeIndex::Float);
+        }
+        else
+        {
+            outs.at(FieldNames::Result).setTypeIndex(ParameterTypeIndex::Float);
         }
         updateNodeIds();
     }
