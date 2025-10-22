@@ -197,6 +197,31 @@ namespace gladius::nodes
               });
             model->visitNodes(visitor);
 
+            auto gradientVisitor = OnTypeVisitor<nodes::FunctionGradient>(
+              [&](auto & functionGradient)
+              {
+                  functionGradient.resolveFunctionId();
+                  auto referencedId = functionGradient.getFunctionId();
+                  if (referencedId == 0)
+                  {
+                      return;
+                  }
+
+                  auto referencedModel = findModel(referencedId);
+                  if (!referencedModel)
+                  {
+                      throw std::runtime_error(fmt::format(
+                        "{} references a function with the id {} that could not be found",
+                        functionGradient.getDisplayName(),
+                        referencedId));
+                  }
+
+                  functionGradient.updateInputsAndOutputs(*referencedModel);
+                  model->registerInputs(functionGradient);
+                  model->registerOutputs(functionGradient);
+              });
+            model->visitNodes(gradientVisitor);
+
             model->updateGraphAndOrderIfNeeded();
         }
     }

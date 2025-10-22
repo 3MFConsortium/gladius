@@ -11,6 +11,7 @@
 #include "compute/ComputeCore.h"
 #include "exceptions.h"
 #include "imguinodeeditor.h"
+#include "io/3mf/BeamLatticeExporter.h"
 #include "io/3mf/ImageExtractor.h"
 #include "io/3mf/ImageStackCreator.h"
 #include "io/3mf/ResourceDependencyGraph.h"
@@ -19,6 +20,8 @@
 #include "io/ImporterVdb.h"
 #include "io/VdbImporter.h"
 #include "nodes/GraphFlattener.h"
+#include "nodes/LowerFunctionGradient.h"
+#include "nodes/LowerNormalizeDistanceField.h"
 #include "nodes/Model.h"
 #include "nodes/OptimizeOutputs.h"
 #include "nodes/ToCommandStreamVisitor.h"
@@ -96,7 +99,7 @@ namespace gladius
         {
             return;
         }
-        saveBackup();
+        // saveBackup();
         {
             m_futureModelRefresh = std::async(std::launch::async, [&]() { refreshWorker(); });
         }
@@ -150,21 +153,23 @@ namespace gladius
         ProfileFunction;
         using namespace gladius::events;
 
-        nodes::Assembly assemblyToFlat;
+        if (!m_assembly)
         {
-
-            if (!m_assembly)
-            {
-                return;
-            }
-
-            if (!validateAssembly())
-            {
-                return;
-            }
-
-            assemblyToFlat = *m_assembly;
+            return;
         }
+
+        if (!validateAssembly())
+        {
+            return;
+        }
+
+        nodes::Assembly assemblyToFlat{*m_assembly};
+
+        nodes::LowerFunctionGradient gradientLowering{assemblyToFlat, getSharedLogger()};
+        gradientLowering.run();
+
+        nodes::LowerNormalizeDistanceField normalizeLowering{assemblyToFlat, getSharedLogger()};
+        normalizeLowering.run();
 
         nodes::OptimizeOutputs optimizer{&assemblyToFlat};
         optimizer.optimize();
@@ -1192,6 +1197,192 @@ namespace gladius
                          {bbox.max.x, bbox.max.y, bbox.min.z});
 
         addMeshResource(std::move(mesh), "bounding box");
+    }
+
+    void Document::addCustomBoxMesh(float width,
+                                    float height,
+                                    float depth,
+                                    float startX,
+                                    float startY,
+                                    float startZ)
+    {
+        // Create a custom box mesh with user-defined dimensions
+        vdb::TriangleMesh mesh;
+
+        float minX = startX;
+        float minY = startY;
+        float minZ = startZ;
+        float maxX = startX + width;
+        float maxY = startY + height;
+        float maxZ = startZ + depth;
+
+        // Top (z = maxZ)
+        mesh.addTriangle({minX, minY, maxZ}, {maxX, minY, maxZ}, {maxX, maxY, maxZ});
+
+        mesh.addTriangle({minX, minY, maxZ}, {maxX, maxY, maxZ}, {minX, maxY, maxZ});
+
+        // Bottom (z = minZ)
+        mesh.addTriangle({minX, minY, minZ}, {maxX, minY, minZ}, {maxX, maxY, minZ});
+
+        mesh.addTriangle({minX, minY, minZ}, {maxX, maxY, minZ}, {minX, maxY, minZ});
+
+        // Front (y = minY)
+        mesh.addTriangle({minX, minY, minZ}, {maxX, minY, minZ}, {maxX, minY, maxZ});
+
+        mesh.addTriangle({minX, minY, minZ}, {maxX, minY, maxZ}, {minX, minY, maxZ});
+
+        // Back (y = maxY)
+        mesh.addTriangle({minX, maxY, minZ}, {maxX, maxY, minZ}, {maxX, maxY, maxZ});
+
+        mesh.addTriangle({minX, maxY, minZ}, {maxX, maxY, maxZ}, {minX, maxY, maxZ});
+
+        // Left (x = minX)
+        mesh.addTriangle({minX, minY, minZ}, {minX, minY, maxZ}, {minX, maxY, maxZ});
+
+        mesh.addTriangle({minX, minY, minZ}, {minX, maxY, maxZ}, {minX, maxY, minZ});
+
+        // Right (x = maxX)
+        mesh.addTriangle({maxX, minY, minZ}, {maxX, minY, maxZ}, {maxX, maxY, maxZ});
+
+        mesh.addTriangle({maxX, minY, minZ}, {maxX, maxY, maxZ}, {maxX, maxY, minZ});
+
+        std::string name = fmt::format("{}x{}x{} box", width, height, depth);
+        addMeshResource(std::move(mesh), name);
+    }
+
+    void Document::addMeshAsBeamLattice(std::filesystem::path const & stlFilename, float beamRadius)
+    {
+        // Load the STL file
+        vdb::VdbImporter reader;
+        auto logger = getSharedLogger();
+
+        try
+        {
+            reader.loadStl(stlFilename);
+        }
+        catch (const std::exception & e)
+        {
+            if (logger)
+            {
+                logger->addEvent({std::string("STL load error for beam lattice: ") + e.what(),
+                                  events::Severity::Error});
+            }
+            return;
+        }
+
+        auto const & mesh = reader.getMesh();
+
+        // Extract unique edges from the mesh triangles
+        // Use a map to store unique edges (always store with smaller vertex index first)
+        std::map<std::pair<size_t, size_t>, std::pair<openvdb::Vec3s, openvdb::Vec3s>> uniqueEdges;
+
+        for (auto const & triangle : mesh.indices)
+        {
+            // Get the three vertices of the triangle
+            auto const & v0 = mesh.vertices[triangle.x()];
+            auto const & v1 = mesh.vertices[triangle.y()];
+            auto const & v2 = mesh.vertices[triangle.z()];
+
+            // Add the three edges of the triangle
+            auto addEdge =
+              [&](size_t idx1, size_t idx2, openvdb::Vec3s const & p1, openvdb::Vec3s const & p2)
+            {
+                // Always store edge with smaller index first to ensure uniqueness
+                if (idx1 > idx2)
+                {
+                    std::swap(idx1, idx2);
+                }
+                uniqueEdges[{idx1, idx2}] = {p1, p2};
+            };
+
+            addEdge(triangle.x(), triangle.y(), v0, v1);
+            addEdge(triangle.y(), triangle.z(), v1, v2);
+            addEdge(triangle.z(), triangle.x(), v2, v0);
+        }
+
+        // Create beam data from unique edges
+        std::vector<BeamData> beams;
+        beams.reserve(uniqueEdges.size());
+
+        for (auto const & [edgeIndices, edgePoints] : uniqueEdges)
+        {
+            BeamData beam{};
+
+            // Set start and end positions
+            beam.startPos =
+              float4{{edgePoints.first.x(), edgePoints.first.y(), edgePoints.first.z(), 0.0f}};
+            beam.endPos =
+              float4{{edgePoints.second.x(), edgePoints.second.y(), edgePoints.second.z(), 0.0f}};
+
+            // Set uniform radius for both ends
+            beam.startRadius = beamRadius;
+            beam.endRadius = beamRadius;
+
+            // Set default cap styles (hemisphere = 0)
+            beam.startCapStyle = 0;
+            beam.endCapStyle = 0;
+
+            // Default material ID
+            beam.materialId = 0;
+            beam.padding = 0;
+
+            beams.push_back(beam);
+        }
+
+        // Create empty ball vector (no balls at vertices)
+        std::vector<BallData> balls;
+
+        // Configure ball mode as None
+        BeamLatticeBallConfig ballConfig;
+        ballConfig.mode = BallMode::None;
+        ballConfig.defaultRadius = 0.0f;
+
+        // Create a 3MF mesh object to hold the beam lattice
+        if (!m_3mfmodel)
+        {
+            if (logger)
+            {
+                logger->addEvent({"No 3mf model loaded", events::Severity::Error});
+            }
+            return;
+        }
+
+        auto const new3mfMesh = m_3mfmodel->AddMeshObject();
+        std::string resourceName =
+          fmt::format("{} (beam lattice)", stlFilename.filename().string());
+        new3mfMesh->SetName(resourceName);
+
+        // Use the BeamLatticeExporter to properly export beam data to 3MF format
+        io::BeamLatticeExporter exporter(logger);
+        if (!exporter.exportToMeshObject(new3mfMesh, beams, balls, ballConfig))
+        {
+            if (logger)
+            {
+                logger->addEvent(
+                  {"Failed to export beam lattice to 3MF format", events::Severity::Error});
+            }
+            return;
+        }
+
+        // Create resource key using the 3MF object's ID
+        auto & resourceManager = getGeneratorContext().resourceManager;
+        auto key = ResourceKey{new3mfMesh->GetModelResourceID(), ResourceType::BeamLattice};
+        key.setDisplayName(resourceName);
+
+        // Create beam lattice resource with BVH acceleration
+        auto beamLatticeResource = std::make_unique<BeamLatticeResource>(
+          key, std::move(beams), std::move(balls), ballConfig, BeamLatticeAcceleration::BVH);
+
+        resourceManager.addResource(key, std::move(beamLatticeResource));
+        resourceManager.loadResources();
+
+        if (logger)
+        {
+            logger->addEvent({fmt::format("Created beam lattice with {} beams from {}",
+                                          uniqueEdges.size(),
+                                          stlFilename.filename().string()),
+                              events::Severity::Info});
+        }
     }
 
     ResourceKey Document::addImageStackResource(std::filesystem::path const & path)

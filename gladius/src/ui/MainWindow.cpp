@@ -568,18 +568,51 @@ namespace gladius::ui
                         }
                     }
 
-                    if (m_mainView.isFullScreen())
+                    // Window mode buttons: toggle fullscreen and span (if available)
                     {
-                        if (ImGui::Button(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
+                        using gladius::FullscreenMode;
+                        auto mode = m_mainView.getFullscreenMode();
+                        bool const isWindowed = (mode == FullscreenMode::Windowed);
+                        bool const isSpanning = (mode == FullscreenMode::SpanAllSameHeight);
+                        
+                        // Toggle between windowed and fullscreen (single monitor)
+                        if (bigMenuItem(reinterpret_cast<const char *>(
+                              isWindowed ? ICON_FA_EXPAND "" : ICON_FA_COMPRESS "")))
                         {
-                            m_mainView.setFullScreen(false);
+                            m_mainView.setFullscreenMode(isWindowed ? FullscreenMode::SingleMonitor
+                                                                     : FullscreenMode::Windowed);
                         }
-                    }
-                    else
-                    {
-                        if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_EXPAND "")))
+                        if (ImGui::IsItemHovered())
                         {
-                            m_mainView.setFullScreen(true);
+                            ImGui::SetTooltip("%s", isWindowed ? "Fullscreen" : "Windowed");
+                        }
+                        
+                        // Span across monitors button (only show if available)
+                        if (m_mainView.isSpanModeAvailable())
+                        {
+                            // Use different style when span mode is active
+                            if (isSpanning)
+                            {
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.0f, 0.0f, 0.6f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.0f, 0.0f, 0.8f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+                            }
+                            
+                            if (bigMenuItem(reinterpret_cast<const char *>(ICON_FA_ARROWS_ALT_H "")))
+                            {
+                                m_mainView.setFullscreenMode(isSpanning ? FullscreenMode::Windowed
+                                                                         : FullscreenMode::SpanAllSameHeight);
+                            }
+                            
+                            if (isSpanning)
+                            {
+                                ImGui::PopStyleColor(3);
+                            }
+                            
+                            if (ImGui::IsItemHovered())
+                            {
+                                ImGui::SetTooltip("%s", isSpanning ? "Exit Span Mode" : "Span Across Displays");
+                            }
                         }
                     }
 
@@ -2304,6 +2337,35 @@ namespace gladius::ui
                                                   // UI visibility
                                               }
                                           });
+
+        // Model editor: History navigation (Back/Forward)
+        m_shortcutManager->registerAction(
+          "model.historyBack",
+          "Navigate Back",
+          "Go back to the previously viewed function",
+          ShortcutContext::ModelEditor,
+          ShortcutCombo(ImGuiKey_LeftArrow, false, true, false), // Alt+Left
+          [this]()
+          {
+              if (m_modelEditor.isHovered())
+              {
+                  m_modelEditor.goBack();
+              }
+          });
+
+        m_shortcutManager->registerAction(
+          "model.historyForward",
+          "Navigate Forward",
+          "Go forward to the next viewed function",
+          ShortcutContext::ModelEditor,
+          ShortcutCombo(ImGuiKey_RightArrow, false, true, false), // Alt+Right
+          [this]()
+          {
+              if (m_modelEditor.isHovered())
+              {
+                  m_modelEditor.goForward();
+              }
+          });
 
         // Standard CAD view shortcuts for RenderWindow
         // Based on industry standards (Blender, 3ds Max, Maya, AutoCAD, SolidWorks)
