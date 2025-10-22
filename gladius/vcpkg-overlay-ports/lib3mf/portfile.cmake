@@ -2,7 +2,7 @@ vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO 3DJan/lib3mf
+    REPO 3MFConsortium/lib3mf
     REF "3djan/volumetric_beamlattice_gradient"
     SHA512 912107f0f4221d95424765acc329ffddffca2bb284ea1dbb10746c4022ae496e1168a21abe243edb37cbbe9857817246033162d7bf49422fec91789aee0dd46e
 )
