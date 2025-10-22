@@ -2,6 +2,7 @@
 
 #include "../ExpressionToGraphConverter.h"
 #include "../nodes/History.h"
+#include "BeamLatticeView.h"
 #include "ExpressionDialog.h"
 #include "LibraryBrowser.h"
 #include "NodeView.h"
@@ -9,12 +10,14 @@
 
 #include <filesystem>
 #include <string>
+#include <typeindex>
 
 #include "Outline.h"
 #include "ResourceView.h"
 #include "Style.h"
 #include "compute/ComputeCore.h"
 #include "nodes/Assembly.h"
+#include "nodes/FunctionExtractor.h"
 #include "nodes/Model.h"
 #include "nodes/nodesfwd.h"
 
@@ -98,12 +101,27 @@ namespace gladius::ui
         bool switchToFunction(nodes::ResourceId functionId);
 
         /**
+         * @brief Navigate to a function and record the navigation in history.
+         *        Use this instead of switchToFunction() for user-triggered navigation.
+         */
+        bool navigateToFunction(nodes::ResourceId functionId);
+
+        // Navigation history controls
+        bool canGoBack() const;
+        bool canGoForward() const;
+        bool goBack();
+        bool goForward();
+
+        /**
          * @brief Check if mouse is hovering over the model editor
          * @return true if the model editor is being hovered
          */
         bool isHovered() const;
 
       private:
+        // Extraction helper
+        void extractSelectedNodesToFunction(const std::string & functionName);
+
         // Copy/Paste helpers
         void copySelectionToClipboard();
         void pasteClipboardAtMouse();
@@ -140,6 +158,7 @@ namespace gladius::ui
         nodes::Model & copyExistingFunction(nodes::Model const & sourceModel,
                                             std::string const & name);
         void meshResourceToolBox(ImVec2 mousePos);
+        void beamLatticeResourceToolBox(ImVec2 mousePos);
         void showDeleteUnusedResourcesDialog();
         void validate();
 
@@ -192,6 +211,18 @@ namespace gladius::ui
         bool m_modelWasModified{false};
         bool m_outlineRenaming{true};
         bool m_showCreateNodePopUp{false};
+        bool m_showExtractDialog{false};
+        std::string m_extractFunctionName{"ExtractedFunction"};
+
+        // Extraction name editing state
+        struct ExtractNameEntry
+        {
+            std::string key;                      // stable key (unique port name)
+            std::string name;                     // editable name
+            std::type_index type = typeid(float); // for potential future display
+        };
+        std::vector<ExtractNameEntry> m_extractInputNames;  // proposed + edited
+        std::vector<ExtractNameEntry> m_extractOutputNames; // proposed + edited
 
         nodes::History m_history;
 
@@ -204,6 +235,7 @@ namespace gladius::ui
         std::shared_ptr<Document> m_doc;
 
         ResourceView m_resourceView;
+        BeamLatticeView m_beamLatticeView;
 
         Outline m_outline;
 
@@ -232,6 +264,19 @@ namespace gladius::ui
 
         // Clipboard buffer for copy/paste of nodes
         nodes::UniqueModel m_clipboardModel;
+
+        // --- Navigation history ---
+        std::vector<nodes::ResourceId> m_navHistory; // sequence of visited function ids
+        std::size_t m_navIndex{0};                   // current index in history
+        bool m_inHistoryNav{false};                  // guard to avoid recording during back/forward
+
+        // Defer selection clearing to when an editor context is active
+        bool m_pendingClearSelection{false};
+
+        // One-time auto layout helper state
+        bool m_pendingAutoLayout{false};
+
+        void initNavigationHistory();
     };
 
     std::vector<ed::NodeId> selectedNodes(ed::EditorContext * editorContext);

@@ -154,7 +154,7 @@ namespace gladius
             for (int i = primitive.start; i < primitive.end; i += 2)
             {
                 const auto point =
-                  cl_float2{{primitives.data.getData()[i], primitives.data.getData()[i + 1]}};
+                  cl_float2{primitives.data.getData()[i], primitives.data.getData()[i + 1]};
                 primitive.center.x += point.x;
                 primitive.center.y += point.y;
 

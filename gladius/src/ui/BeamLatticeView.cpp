@@ -1,14 +1,16 @@
 #include "BeamLatticeView.h"
 #include "BeamLatticeResource.h"
+#include "FileChooser.h"
 #include "ResourceManager.h"
 #include "Widgets.h"
 
 #include "imgui.h"
+#include <cstring>
 #include <fmt/format.h>
 
 namespace gladius::ui
 {
-    bool BeamLatticeView::render(SharedDocument document) const
+    bool BeamLatticeView::render(SharedDocument document)
     {
         if (!document)
         {
@@ -24,6 +26,8 @@ namespace gladius::ui
 
         bool propertiesChanged = false;
 
+        renderImportDialog(document, propertiesChanged);
+
         ImGuiTreeNodeFlags const baseFlags = ImGuiTreeNodeFlags_OpenOnArrow |
                                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                              ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -33,6 +37,12 @@ namespace gladius::ui
         ImGui::BeginGroup();
         if (ImGui::TreeNodeEx("Beam Lattices", baseFlags | ImGuiTreeNodeFlags_DefaultOpen))
         {
+            // Import button
+            if (ImGui::Button("Import STL as Beam Lattice..."))
+            {
+                m_showImportDialog = true;
+            }
+
             bool hasBeamLattices = false;
 
             for (auto const & [key, res] : resources)
@@ -182,6 +192,82 @@ namespace gladius::ui
                      "and metamaterials with specific mechanical properties.");
 
         return propertiesChanged;
+    }
+
+    void BeamLatticeView::renderImportDialog(SharedDocument document, bool & propertiesChanged)
+    {
+        if (!m_showImportDialog)
+        {
+            return;
+        }
+
+        ImVec2 const center(ImGui::GetIO().DisplaySize.x * 0.5f,
+                            ImGui::GetIO().DisplaySize.y * 0.5f);
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        ImGui::OpenPopup("Import STL as Beam Lattice");
+
+        if (ImGui::BeginPopupModal(
+              "Import STL as Beam Lattice", &m_showImportDialog, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Select an STL file to import as a beam lattice structure.");
+            ImGui::Separator();
+
+            // Filename input with browse button
+            ImGui::Text("File:");
+            ImGui::PushItemWidth(300);
+            char filenameBuf[512];
+            size_t copyLen = std::min(m_filename.length(), sizeof(filenameBuf) - 1);
+            std::memcpy(filenameBuf, m_filename.c_str(), copyLen);
+            filenameBuf[copyLen] = '\0';
+            if (ImGui::InputText("##filename", filenameBuf, sizeof(filenameBuf)))
+            {
+                m_filename = filenameBuf;
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            if (ImGui::Button("Browse..."))
+            {
+                auto result = queryLoadFilename({{"*.stl"}});
+                if (result)
+                {
+                    m_filename = result->generic_string();
+                }
+            }
+
+            // Beam diameter input
+            ImGui::Text("Beam Diameter:");
+            ImGui::PushItemWidth(150);
+            ImGui::InputFloat("##beamDiameter", &m_beamDiameter, 0.1f, 1.0f, "%.2f");
+            ImGui::PopItemWidth();
+
+            ImGui::Separator();
+
+            // Create and Cancel buttons
+            if (ImGui::Button("Create", ImVec2(120, 0)))
+            {
+                if (!m_filename.empty() && m_beamDiameter > 0.0f)
+                {
+                    document->addMeshAsBeamLattice(m_filename, m_beamDiameter);
+                    m_showImportDialog = false;
+                    m_filename.clear();
+                    m_beamDiameter = 2.0f;
+                    propertiesChanged = true;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 0)))
+            {
+                m_showImportDialog = false;
+                m_filename.clear();
+                m_beamDiameter = 2.0f;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
     }
 
     std::string BeamLatticeView::getBeamLatticeName(const ResourceKey & key)

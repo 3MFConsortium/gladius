@@ -11,6 +11,12 @@ struct GLFWwindow;
 
 namespace gladius
 {
+    enum class FullscreenMode
+    {
+        Windowed = 0,
+        SingleMonitor = 1,
+        SpanAllSameHeight = 2
+    };
     using ViewCallBack = std::function<void()>;
     using RequestCloseCallBack = std::function<void()>;
     using FileDropCallBack = std::function<void(const std::filesystem::path &)>;
@@ -21,6 +27,7 @@ namespace gladius
         int height = 720;
         int x = 50;
         int y = 50;
+        FullscreenMode fullscreenMode{FullscreenMode::Windowed};
     };
 
     class GLView
@@ -108,6 +115,18 @@ namespace gladius
 
         [[nodiscard]] bool isFullScreen() const;
         void setFullScreen(bool enableFullscreen);
+
+        // New tri-state fullscreen API
+        [[nodiscard]] FullscreenMode getFullscreenMode() const
+        {
+            return m_windowSettings.fullscreenMode;
+        }
+
+        void setFullscreenMode(FullscreenMode mode);
+        
+        // Check if spanning across multiple monitors is available
+        [[nodiscard]] bool isSpanModeAvailable() const;
+        
         void startAnimationMode();
         void stopAnimationMode();
 
@@ -137,8 +156,8 @@ namespace gladius
 
         FileDropCallBack m_fileDrop = noOpFileDrop;
 
-        bool m_fullScreen = false;
-        bool m_glFullScreen = false;
+        // applied tri-state fullscreen mode (current native window state)
+        FullscreenMode m_appliedFullscreenMode{FullscreenMode::Windowed};
         WindowSettings m_windowSettings;
 
         std::vector<ViewCallBack> m_viewCallBacks;

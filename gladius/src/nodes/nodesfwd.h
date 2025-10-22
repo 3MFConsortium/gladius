@@ -62,6 +62,8 @@ namespace gladius::nodes
     class SignedDistanceToMesh;
     class SignedDistanceToBeamLattice;
     class FunctionCall;
+    class FunctionGradient;
+    class NormalizeDistanceField;
     class Length;
     class DecomposeVector;
     class Resource;
@@ -126,6 +128,8 @@ namespace gladius::nodes
                                  SignedDistanceToMesh,
                                  SignedDistanceToBeamLattice,
                                  FunctionCall,
+                                 FunctionGradient,
+                                 NormalizeDistanceField,
                                  Transformation,
                                  Length,
                                  DecomposeVector,
@@ -205,6 +209,8 @@ namespace gladius::nodes
         static auto constexpr Result = "result";
         static auto constexpr Scaling = "scaling";
         static auto constexpr Vector = "vector";
+        static auto constexpr Gradient = "gradient";
+        static auto constexpr Magnitude = "magnitude";
         static auto constexpr Matrix = "matrix";
         static auto constexpr X = "x";
         static auto constexpr Y = "y";
@@ -236,13 +242,17 @@ namespace gladius::nodes
         static auto constexpr End = "end";
         // static auto constexpr Part = "part";
         static auto constexpr FunctionId = "functionID";
+        static auto constexpr StepSize = "step";
+        static auto constexpr NormalizedGradient = "normalizedgradient";
+        static auto constexpr Epsilon = "epsilon";
+        static auto constexpr MaxDistance = "maxdistance";
         static auto constexpr Source = "source";
         static auto constexpr sharpness = "sharpness";
 
         static auto constexpr Filename = "filename";
         static auto constexpr ResourceId = "resourceid";
         static auto constexpr Mesh = "mesh";
-        static auto constexpr BeamLattice = "beamlattice";
+        static auto constexpr BeamLattice = "beamlatticeid";
 
         static auto constexpr Image = "image";
         static auto constexpr Red = "red";

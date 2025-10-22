@@ -12,12 +12,12 @@ namespace gladius
                                              std::vector<BeamData> && beams,
                                              std::vector<BallData> && balls,
                                              BeamLatticeBallConfig ballConfig,
-                                             bool useVoxelAcceleration)
+                                             BeamLatticeAcceleration acceleration)
         : ResourceBase(std::move(key))
         , m_beams(std::move(beams))
         , m_balls(std::move(balls))
         , m_ballConfig(ballConfig)
-        , m_useVoxelAcceleration(useVoxelAcceleration)
+        , m_acceleration(acceleration)
     {
         // Validate ball configuration per 3MF specification
         if (!m_ballConfig.isValid())
@@ -55,7 +55,7 @@ namespace gladius
 
     void BeamLatticeResource::buildAccelerationStructure()
     {
-        if (m_useVoxelAcceleration)
+        if (m_acceleration == BeamLatticeAcceleration::Voxel)
         {
             buildVoxelAcceleration();
         }

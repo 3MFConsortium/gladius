@@ -290,7 +290,7 @@ namespace gladius::ui
     auto OrbitalCamera::getEyePosition() const -> cl_float3
     {
         auto const eyePos = computeEyePosition();
-        return {{eyePos.x(), eyePos.y(), eyePos.z()}};
+        return {eyePos.x(), eyePos.y(), eyePos.z()};
     }
 
     auto OrbitalCamera::computeEyePosition() const -> Position
@@ -303,7 +303,7 @@ namespace gladius::ui
 
     auto OrbitalCamera::getLookAt() -> cl_float3
     {
-        return {{m_lookAt.x(), m_lookAt.y(), m_lookAt.z()}};
+        return {m_lookAt.x(), m_lookAt.y(), m_lookAt.z()};
     }
 
     void OrbitalCamera::setLookAt(Position const & lookAt)

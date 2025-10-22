@@ -38,3 +38,8 @@ build/
 gladius/vcpkg_installed/*
 gladius/.serena/cache/
 gladius/compile_commands.json
+build/build_test/
+vcpkg/buildtrees/
+**/vcpkg_installed/
+_CPack_Packages/*
+*.deb

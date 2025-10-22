@@ -51,6 +51,8 @@ namespace gladius::nodes
         virtual void visit(SignedDistanceToMesh & signedDistanceToMesh);
         virtual void visit(SignedDistanceToBeamLattice & signedDistanceToBeamLattice);
         virtual void visit(FunctionCall & functionCall);
+        virtual void visit(FunctionGradient & functionGradient);
+        virtual void visit(NormalizeDistanceField & normalizeDistanceField);
         virtual void visit(Length & length);
         virtual void visit(DecomposeVector & decomposeVector);
         virtual void visit(Resource & resource);

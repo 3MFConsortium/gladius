@@ -16,7 +16,7 @@ option(ENABLE_OPENCL_TESTS "Enable tests that require OpenCL" ON)
 
 set(CPACK_PACKAGE_VERSION_MAJOR "1")
 set(CPACK_PACKAGE_VERSION_MINOR "2")
-set(CPACK_PACKAGE_VERSION_PATCH "14")
+set(CPACK_PACKAGE_VERSION_PATCH "15")
 
 # Set the version of the package in src/version.h
 configure_file(
@@ -37,6 +37,8 @@ if(buildcache_program)
 else()
   message("buildcache not found")
 endif()
+else()
+  message("Not using build cache. You can enable it by setting USE_CACHE=ON")
 endif() # USE_CACHE
 message("CMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}")
 message("VCPKG_ROOT=${VCPKG_ROOT}")
@@ -84,6 +86,10 @@ project(gladius)
 # Include coverage support after project declaration so compiler info is available
 include(cmake/Coverage.cmake)
 
+# Ensure the 'install' target depends on building all targets first
+# (so CPack does not try to install artifacts that were not built yet).
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY OFF)
+
 if (MSVC)
     add_compile_options(/bigobj /utf-8 /Zc:__cplusplus)
 
@@ -124,11 +130,15 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Ensure installed binaries look for co-located shared libraries first
 if(UNIX)
-  # Use $ORIGIN so binaries in /opt/gladius/<version> can find bundled .so
+  # Install tree: Use $ORIGIN so installed binaries in /opt/gladius/<version> resolve
+  # bundled shared objects (e.g. our patched lib3mf) placed alongside them.
   set(CMAKE_INSTALL_RPATH "$ORIGIN")
-  # Build artifacts will already carry the final install RPATH, avoiding RPATH rewrite during install
-  set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-  set(CMAKE_SKIP_BUILD_RPATH  OFF)
+  # Build tree: DO NOT force build RPATH to install RPATH. Tests run from the
+  # build tree (e.g. build/tests/unittests) and previously failed to locate
+  # lib3mf.so.2 when we set CMAKE_BUILD_WITH_INSTALL_RPATH ON (RPATH became
+  # just $ORIGIN which points to the test directory that does not contain lib3mf).
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+  set(CMAKE_SKIP_BUILD_RPATH OFF)
   set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 endif()
 
@@ -212,10 +222,17 @@ if(UNIX)
   if(_lib3mf_resolved)
     get_filename_component(_lib3mf_dir "${_lib3mf_resolved}" DIRECTORY)
     if(EXISTS "${_lib3mf_dir}")
+      # Bundle all versioned variants (lib3mf.so, lib3mf.so.2, etc.) into install prefix.
       file(GLOB _lib3mf_so_files "${_lib3mf_dir}/lib3mf.so*")
       if(_lib3mf_so_files)
         install(FILES ${_lib3mf_so_files} DESTINATION ${INSTALL_PREFIX})
       endif()
+      # Ensure build-tree executables (tests, tools) can locate lib3mf at runtime
+      # by appending its directory to the build RPATH. This fixes CI failures like:
+      #   error while loading shared libraries: lib3mf.so.2: cannot open shared object file
+      list(APPEND CMAKE_BUILD_RPATH "${_lib3mf_dir}")
+      list(REMOVE_DUPLICATES CMAKE_BUILD_RPATH)
+      set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" CACHE STRING "RPATH for build tree executables" FORCE)
     endif()
   endif()
 endif()
@@ -274,8 +291,24 @@ install(DIRECTORY components/licenses DESTINATION ${INSTALL_PREFIX}/doc/licenses
 # Install imgui.ini
 install(FILES src/imgui.ini DESTINATION ${INSTALL_PREFIX})
 
-# Install icon
-install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.ico DESTINATION ${INSTALL_PREFIX}/share/pixmaps/)
+# Icon installation and desktop integration assets (no build-time conversion)
+if(UNIX)
+  set(GLADIUS_ICON_NAME gladius)
+  # Install pre-generated PNG icon to hicolor so Icon=gladius works via theme
+  install(FILES ${CMAKE_SOURCE_DIR}/documentation/img/gladius.png DESTINATION /usr/share/icons/hicolor/256x256/apps/ RENAME ${GLADIUS_ICON_NAME}.png)
+  set(GLADIUS_ICON ${GLADIUS_ICON_NAME})
+endif()
+
+# Linux desktop integration (GNOME/KDE): install .desktop file and icon into system directories
+if(UNIX)
+  # Generate desktop launcher file
+  set(GLADIUS_DESKTOP_FILE "${PROJECT_BINARY_DIR}/gladius.desktop")
+  # Paths used inside the desktop file
+  set(GLADIUS_EXEC "/usr/bin/gladius")
+  configure_file(${CMAKE_SOURCE_DIR}/cmake/desktop/gladius.desktop.in ${GLADIUS_DESKTOP_FILE} @ONLY)
+  # Install desktop entry for all users
+  install(FILES ${GLADIUS_DESKTOP_FILE} DESTINATION /usr/share/applications)
+endif()
 
 # Install documentation - not yet available
 # install(DIRECTORY ${CMAKE_SOURCE_DIR}/documentation/ DESTINATION ${INSTALL_PREFIX}/share/doc/)
@@ -316,15 +349,15 @@ if(UNIX)
   file(WRITE "${GLADIUS_LAUNCHER}" "#!/bin/sh\n"
     "# Added by CMake: ensure Gladius' private libs (e.g., custom lib3mf) are found first.\n"
     "GLADIUS_DIR=\"${INSTALL_PREFIX}\"\n"
-    "if [ -z \"\\$LD_LIBRARY_PATH\" ]; then\n"
-    "  export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR\\"\n"
+    "if [ -z \"\$LD_LIBRARY_PATH\" ]; then\n"
+    "  export LD_LIBRARY_PATH=\"\$GLADIUS_DIR\"\n"
     "else\n"
-    "  case :\\$LD_LIBRARY_PATH: in\n"
-    "    *:\\$GLADIUS_DIR:*) ;;\n"
-    "    *) export LD_LIBRARY_PATH=\\"\\$GLADIUS_DIR:\\$LD_LIBRARY_PATH\\" ;;\n"
+    "  case :\$LD_LIBRARY_PATH: in\n"
+    "    *:\$GLADIUS_DIR:*) ;;\n"
+    "    *) export LD_LIBRARY_PATH=\"\$GLADIUS_DIR:\$LD_LIBRARY_PATH\" ;;\n"
     "  esac\n"
     "fi\n"
-    "exec \"\\$GLADIUS_DIR/gladius\" \"$@\"\n")
+    "exec \"\$GLADIUS_DIR/gladius\" \"$@\"\n")
   install(PROGRAMS "${GLADIUS_LAUNCHER}" DESTINATION ${SYMLINK_BIN_DIR} RENAME gladius)
 endif()
 
@@ -358,8 +391,12 @@ if (UNIX)
 endif()
 
 include(CPack)
-add_custom_target( Generate_Installer
-            COMMAND "${CMAKE_CPACK_COMMAND}"
-            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            DEPENDS gladius gladiuslib
-            COMMENT "Running CPack. Please wait...")
+
+# Convenience target to generate installer and ensure required binaries are built first
+add_custom_target(Generate_Installer
+  COMMAND "${CMAKE_CPACK_COMMAND}"
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  # Make sure both desktop app variants are built before packaging
+  DEPENDS gladius gladiusmcp gladius_lib
+  COMMENT "Running CPack. Please wait...")
+

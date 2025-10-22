@@ -1,0 +1,7 @@
+## Import Mesh as beam lattice
+Add a button in the resource outline in the beam lattice extension for importing a mesh (stl) as beam lattice structure. The button should open a dialog where the user can select a filename (with a button to open a open dialog), and a beam diameter. Write an importer that uses the existing stl importer to load the given stl file and add all edges of the triangles as beams to a new beam lattice structure. ensure that you add each beam only once.
+
+
+## Gradient Node
+Add a gradient node for computing gradients using central differences. The node should behave similar to the FunctionCall node regarding referencing the function to be evaluated and passing through the inputs and outputs of the referenced function. The node should have an additional parameter for the step size to be used for the central differences. It should have a property (not an input parameter) for selecting the output parameter of the referenced function to compute the gradient for. This output parameter has to be a scalar value. The gradient should have another attribute for selecting an input parameter of the referenced function that is a vector. The gradient is then computed with respect to this input parameter.
+ The node should only have one vector output with the gradient in each component. The output should be normalized to unit length.

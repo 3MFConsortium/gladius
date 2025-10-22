@@ -1,9 +1,10 @@
 #include "Importer3mf.h"
 #include "BeamLatticeImporter.h"
 
+#include "Lib3mfLoader.h"
+#include <algorithm>
 #include <fmt/format.h>
 #include <lib3mf_abi.hpp>
-#include "Lib3mfLoader.h"
 #include <lib3mf_implicit.hpp>
 #include <lib3mf_types.hpp>
 #include <map>
@@ -84,8 +85,11 @@ namespace gladius::io
         }
         catch (std::exception & e)
         {
-            if (m_eventLogger) {
-                m_eventLogger->addEvent({fmt::format("Error initializing Importer3mf: {}", e.what()), events::Severity::Error});
+            if (m_eventLogger)
+            {
+                m_eventLogger->addEvent(
+                  {fmt::format("Error initializing Importer3mf: {}", e.what()),
+                   events::Severity::Error});
             }
             return;
         }
@@ -149,6 +153,11 @@ namespace gladius::io
     gladius::nodes::NodeBase * createNode(gladius::nodes::Model & model,
                                           Lib3MF::eImplicitNodeType type)
     {
+        // TODO(NormalizeDistanceField-3MF): Add import support for NormalizeDistanceField
+        // nodes once the 3MF implicit function extension defines a corresponding node type.
+        // TODO(FunctionGradient-3MF): Add import support for FunctionGradient nodes once
+        // the 3MF implicit function extension defines a corresponding node type.
+
         ProfileFunction using namespace gladius;
         switch (type)
         {
@@ -254,6 +263,12 @@ namespace gladius::io
             return model.create<nodes::UnsignedDistanceToMesh>();
         case Lib3MF::eImplicitNodeType::Mod:
             return model.create<nodes::Mod>();
+        case Lib3MF::eImplicitNodeType::BeamLattice:
+            return model.create<nodes::SignedDistanceToBeamLattice>();
+        case Lib3MF::eImplicitNodeType::FunctionGradient:
+            return model.create<nodes::FunctionGradient>();
+        case Lib3MF::eImplicitNodeType::NormalizeDistance:
+            return model.create<nodes::NormalizeDistanceField>();
         default:
             throw std::runtime_error("Unknown node type");
             return nullptr;
@@ -547,6 +562,22 @@ namespace gladius::io
                                            typeIndexFrom3mfType(output->GetType()));
                 }
             }
+
+            // For ComposeMatrix, MatrixFromColumns and MatrixFromRows replace "Matrix" output with
+            // "Result"
+            if (node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::ComposeMatrix ||
+                node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::MatrixFromColumns ||
+                node3mf->GetNodeType() == Lib3MF::eImplicitNodeType::MatrixFromRows)
+            {
+                auto * port = newNode->findOutputPort("Matrix");
+                if (port)
+                {
+                    newNode->getOutputs().erase("Matrix");
+                    port->setUniqueName(newNode->getUniqueName() + "_" + "Result");
+                    port->setShortName("Result");
+                    newNode->getOutputs()["Result"] = *port;
+                }
+            }
             newNode->setUniqueName(node3mf->GetIdentifier());
             // tag
             newNode->setTag(node3mf->GetTag());
@@ -584,11 +615,18 @@ namespace gladius::io
             auto input = inputIter->GetCurrent();
             auto parameterName = makeValidVariableName(input->GetIdentifier());
             auto * parameter = node->getParameter(parameterName);
-            bool const nodeIsFunctionCall =
-              node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::FunctionCall;
-            if (!parameter && nodeIsFunctionCall)
+            auto const nodeType = node3mf.GetNodeType();
+            bool const nodeIsFunctionCall = nodeType == Lib3MF::eImplicitNodeType::FunctionCall;
+            bool const nodeIsFunctionGradient =
+              nodeType == Lib3MF::eImplicitNodeType::FunctionGradient;
+            bool const nodeIsNormalizeDistance =
+              nodeType == Lib3MF::eImplicitNodeType::NormalizeDistance;
+
+            bool const allowDynamicInputs =
+              nodeIsFunctionCall || nodeIsFunctionGradient || nodeIsNormalizeDistance;
+
+            if (!parameter && allowDynamicInputs)
             {
-                // create the parameter
                 parameter = node->addInput(parameterName);
             }
 
@@ -606,6 +644,23 @@ namespace gladius::io
 
             *parameter = parameterFromType(input->GetType());
             parameter->setParentId(node->getId());
+
+            if (parameterName == nodes::FieldNames::FunctionId)
+            {
+                parameter->setInputSourceRequired(false);
+            }
+            else if (parameterName == nodes::FieldNames::StepSize)
+            {
+                parameter->setInputSourceRequired(false);
+                parameter->setModifiable(true);
+                parameter->setValue(1e-3f);
+            }
+            else if (allowDynamicInputs)
+            {
+                parameter->marksAsArgument();
+                parameter->setInputSourceRequired(true);
+            }
+
             auto sourcePort = resolveInput(model, input);
             if (sourcePort)
             {
@@ -722,6 +777,29 @@ namespace gladius::io
             auto resourceId = resource->GetModelResourceID();
             resourceNode->setResourceId(resourceId);
         }
+
+        if (node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::FunctionGradient)
+        {
+            auto gradientNode3mf = dynamic_cast<Lib3MF::CFunctionGradientNode *>(&node3mf);
+            auto gradientNode = dynamic_cast<nodes::FunctionGradient *>(node);
+            if (gradientNode && gradientNode3mf)
+            {
+                gradientNode->setSelectedScalarOutput(gradientNode3mf->GetScalarOutputName());
+                gradientNode->setSelectedVectorInput(gradientNode3mf->GetVectorInputName());
+                gradientNode->resolveFunctionId();
+            }
+        }
+        else if (node3mf.GetNodeType() == Lib3MF::eImplicitNodeType::NormalizeDistance)
+        {
+            auto normalizeNode3mf = dynamic_cast<Lib3MF::CNormalizeDistanceNode *>(&node3mf);
+            auto normalizeNode = dynamic_cast<nodes::NormalizeDistanceField *>(node);
+            if (normalizeNode && normalizeNode3mf)
+            {
+                normalizeNode->setSelectedScalarOutput(normalizeNode3mf->GetScalarOutputName());
+                normalizeNode->setSelectedVectorInput(normalizeNode3mf->GetVectorInputName());
+                normalizeNode->resolveFunctionId();
+            }
+        }
     }
 
     void Importer3mf::connectOutputs(gladius::nodes::Model & model,
@@ -823,19 +901,58 @@ namespace gladius::io
             sourceNode = sourceNodeIter->second;
         }
 
+        auto & outputs = sourceNode->getOutputs();
         auto sourcePortName = makeValidVariableName(extractOutputName(refName));
-        auto sourcePortIter = sourceNode->getOutputs().find(sourcePortName);
-        if (sourcePortIter == sourceNode->getOutputs().end())
+        auto sourcePortIter = outputs.find(sourcePortName);
+        if (sourcePortIter == outputs.end())
         {
+            // Legacy files used ".matrix" as the output name; newer versions use "Result"
+            std::string lowerRef = refName;
+            std::transform(lowerRef.begin(), lowerRef.end(), lowerRef.begin(), ::tolower);
+            auto matrixPos = lowerRef.rfind(".matrix");
+            if (matrixPos != std::string::npos)
+            {
+                std::string legacyRef = refName;
+                std::string fallbackRef = refName.substr(0, matrixPos) + ".Result";
+                auto fallbackPortName = makeValidVariableName(extractOutputName(fallbackRef));
+                auto fallbackIter = outputs.find(fallbackPortName);
+
+                if (fallbackIter == outputs.end())
+                {
+                    // Also try lowercase variant for safety
+                    fallbackRef = refName.substr(0, matrixPos) + ".result";
+                    fallbackPortName = makeValidVariableName(extractOutputName(fallbackRef));
+                    fallbackIter = outputs.find(fallbackPortName);
+                }
+
+                if (fallbackIter != outputs.end())
+                {
+                    input->SetReference(fallbackRef);
+                    if (m_eventLogger)
+                    {
+                        m_eventLogger->addEvent({fmt::format("Resolved legacy reference {} to {}",
+                                                             legacyRef,
+                                                             fallbackRef),
+                                                 events::Severity::Info});
+                    }
+                    return &fallbackIter->second;
+                }
+            }
+
             if (m_eventLogger)
             {
+                std::string suggestion;
+                if (!outputs.empty())
+                {
+                    suggestion = outputs.begin()->first;
+                }
                 m_eventLogger->addEvent(
-                  {fmt::format(
-                     "Resolving {} failed. Port of node {} not found: {}. Did you mean {}?\n",
-                     refName,
-                     sourceNodeName,
-                     sourcePortName,
-                     sourceNode->getOutputs().begin()->first),
+                  {fmt::format("Resolving {} failed. Port of node {} not found: {}{}",
+                               refName,
+                               sourceNodeName,
+                               sourcePortName,
+                               suggestion.empty() ? std::string{}
+                                                  : fmt::format(". Did you mean {}?", suggestion)),
                    events::Severity::Error});
             }
 
@@ -1573,7 +1690,7 @@ namespace gladius::io
         {
             throw std::runtime_error(fmt::format("Could not open file {}", filename.string()));
         }
-        
+
         try
         {
             while (image3dIterator->MoveNext())

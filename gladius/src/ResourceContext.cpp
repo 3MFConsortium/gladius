@@ -35,8 +35,8 @@ namespace gladius
     void ResourceContext::initResolutions()
     {
         const auto clipAreaSize =
-          cl_float2{{std::clamp((m_clippingArea.z - m_clippingArea.x), 1.f, 1000.f),
-                     std::clamp((m_clippingArea.w - m_clippingArea.y), 1.f, 1000.f)}};
+          cl_float2{std::clamp((m_clippingArea.z - m_clippingArea.x), 1.f, 1000.f),
+                     std::clamp((m_clippingArea.w - m_clippingArea.y), 1.f, 1000.f)};
 
         const auto verticesPerMM = 40;
         float constexpr superSampling = 1.f;
@@ -44,12 +44,12 @@ namespace gladius
         for (auto & layerRes : m_layerResolutions)
         {
             layerRes = {
-              {static_cast<int>(ceil(superSampling * clipAreaSize.x * verticesPerMM / level)),
-               static_cast<int>(ceil(superSampling * clipAreaSize.y * verticesPerMM / level))}};
+              static_cast<int>(ceil(superSampling * clipAreaSize.x * verticesPerMM / level)),
+               static_cast<int>(ceil(superSampling * clipAreaSize.y * verticesPerMM / level))};
             --level;
         }
-        m_sizeGrid = {{static_cast<int>(clipAreaSize.x * verticesPerMM),
-                       static_cast<int>(clipAreaSize.y * verticesPerMM)}};
+        m_sizeGrid = {static_cast<int>(clipAreaSize.x * verticesPerMM),
+                       static_cast<int>(clipAreaSize.y * verticesPerMM)};
     }
 
     bool isValidClippingArea(cl_float4 clipArea)
@@ -277,10 +277,10 @@ namespace gladius
         m_contourVertexPos->allocateOnDevice();
         std::fill(m_contourVertexPos->getData().begin(),
                   m_contourVertexPos->getData().end(),
-                  cl_float4{{0,
+                  cl_float4{0,
                              std::numeric_limits<float>::max(),
                              std::numeric_limits<float>::max(),
-                             std::numeric_limits<float>::max()}});
+                             std::numeric_limits<float>::max()});
         m_contourVertexPos->write();
 
         m_contourVertexPosBackBuf = std::make_unique<Vertices>(*m_contourVertexPos);

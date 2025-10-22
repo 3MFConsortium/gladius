@@ -211,6 +211,14 @@ namespace gladius
         ResourceManager & getResourceManager();
 
         void addBoundingBoxAsMesh();
+        void addCustomBoxMesh(float width,
+                              float height,
+                              float depth,
+                              float startX = 0.0f,
+                              float startY = 0.0f,
+                              float startZ = 0.0f);
+
+        void addMeshAsBeamLattice(std::filesystem::path const & stlFilename, float beamRadius);
 
         ResourceKey addImageStackResource(std::filesystem::path const & path);
 

@@ -1,7 +1,10 @@
 #include "ToOCLVisitor.h"
 #include "nodesfwd.h"
+#include <array>
 #include <fmt/format.h>
 #include <iostream>
+#include <string>
+#include <unordered_map>
 
 #include <nodes/Assembly.h>
 
@@ -16,6 +19,8 @@ namespace gladius::nodes
     {
         m_currentModel = model;
         m_visitedNodes.clear();
+        m_referenceAnalysisPerformed = false;
+        m_inlineExpressions.clear();
     }
 
     void ToOclVisitor::write(std::ostream & out) const
@@ -24,6 +29,39 @@ namespace gladius::nodes
         out << m_declaration.str();
         out << "\n";
         out << m_definition.str();
+    }
+
+    bool ToOclVisitor::shouldInlineOutput(NodeBase const & node, std::string const & portName) const
+    {
+        // Perform reference analysis if not yet done
+        if (!m_referenceAnalysisPerformed && m_currentModel)
+        {
+            m_referenceAnalyzer.setModel(m_currentModel);
+            m_referenceAnalyzer.analyze();
+            m_referenceAnalysisPerformed = true;
+        }
+
+        // Check if this output should be inlined
+        return m_referenceAnalyzer.shouldInline(node.getId(), portName);
+    }
+
+    std::string ToOclVisitor::resolveParameter(IParameter const & param) const
+    {
+        // Check if the parameter has a source (i.e., connected to an output port)
+        auto const & source = param.getConstSource();
+        if (source.has_value())
+        {
+            // Check if this source has an inline expression
+            auto const key = std::make_pair(source->nodeId, std::string(source->shortName));
+            auto const it = m_inlineExpressions.find(key);
+            if (it != m_inlineExpressions.end())
+            {
+                return it->second;
+            }
+        }
+
+        // Fall back to the default toString() behavior
+        return const_cast<IParameter &>(param).toString();
     }
 
     auto ToOclVisitor::isOutPutOfNodeValid(NodeBase const & node) -> bool
@@ -61,6 +99,115 @@ namespace gladius::nodes
         else
         {
             throw std::runtime_error("Unknown type index");
+        }
+    }
+
+    void ToOclVisitor::emitUnaryOperation(NodeBase & node,
+                                          std::string const & operation,
+                                          std::string const & outputPortName)
+    {
+        if (!isOutPutOfNodeValid(node))
+        {
+            return;
+        }
+
+        auto const & outputPort = node.getOutputs().at(outputPortName);
+        std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
+        std::string const inputExpr = resolveParameter(node.parameter().at(FieldNames::A));
+
+        // Build the expression
+        std::string const expression = fmt::format("{}(({})({}))", operation, typeName, inputExpr);
+
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(node, outputPortName);
+
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(node.getId(), outputPortName);
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format(
+              "{} const {} = {};\n", typeName, outputPort.getUniqueName(), expression);
+        }
+    }
+
+    void ToOclVisitor::emitBinaryOperation(NodeBase & node,
+                                           std::string const & operation,
+                                           std::string const & outputPortName,
+                                           std::string const & param1Name,
+                                           std::string const & param2Name)
+    {
+        if (!isOutPutOfNodeValid(node))
+        {
+            return;
+        }
+
+        auto const & outputPort = node.getOutputs().at(outputPortName);
+        std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
+        std::string const param1Expr = resolveParameter(node.parameter().at(param1Name));
+        std::string const param2Expr = resolveParameter(node.parameter().at(param2Name));
+
+        // Build the expression
+        std::string const expression = fmt::format(
+          "{}(({})({}) , ({})({}))", operation, typeName, param1Expr, typeName, param2Expr);
+
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(node, outputPortName);
+
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(node.getId(), outputPortName);
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format(
+              "{} const {} = {};\n", typeName, outputPort.getUniqueName(), expression);
+        }
+    }
+
+    void ToOclVisitor::emitTernaryOperation(NodeBase & node,
+                                            std::string const & operation,
+                                            std::string const & outputPortName,
+                                            std::string const & param1Name,
+                                            std::string const & param2Name,
+                                            std::string const & param3Name)
+    {
+        if (!isOutPutOfNodeValid(node))
+        {
+            return;
+        }
+
+        auto const & outputPort = node.getOutputs().at(outputPortName);
+        std::string const typeName = typeIndexToOpenCl(outputPort.getTypeIndex());
+        std::string const param1Expr = resolveParameter(node.parameter().at(param1Name));
+        std::string const param2Expr = resolveParameter(node.parameter().at(param2Name));
+        std::string const param3Expr = resolveParameter(node.parameter().at(param3Name));
+
+        // Build the expression
+        std::string const expression =
+          fmt::format("{}({}, {}, {})", operation, param1Expr, param2Expr, param3Expr);
+
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(node, outputPortName);
+
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(node.getId(), outputPortName);
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format(
+              "{} const {} = {};\n", typeName, outputPort.getUniqueName(), expression);
         }
     }
 
@@ -170,15 +317,16 @@ namespace gladius::nodes
             {
                 m_definition << fmt::format(
                   "return (float4)((float3)({0}),isnan({1})|| isinf({1}) ? {2} : {1});\n}}\n",
-                  ending.parameter().at(FieldNames::Color).toString(),
-                  ending.parameter().at(FieldNames::Shape).toString(),
+                  resolveParameter(ending.parameter().at(FieldNames::Color)),
+                  resolveParameter(ending.parameter().at(FieldNames::Shape)),
                   *fallBackValue);
             }
             else
             {
-                m_definition << fmt::format("return (float4)((float3)({0}),{1});\n}}\n",
-                                            ending.parameter().at(FieldNames::Color).toString(),
-                                            ending.parameter().at(FieldNames::Shape).toString());
+                m_definition << fmt::format(
+                  "return (float4)((float3)({0}),{1});\n}}\n",
+                  resolveParameter(ending.parameter().at(FieldNames::Color)),
+                  resolveParameter(ending.parameter().at(FieldNames::Shape)));
             }
             return;
         }
@@ -263,11 +411,24 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(fmt::runtime("float3 const {0} = (float3)({1}, {2}, {3});\n"),
-                                    composeVector.getOutputs()[FieldNames::Result].getUniqueName(),
-                                    composeVector.parameter()[FieldNames::X].toString(),
-                                    composeVector.parameter()[FieldNames::Y].toString(),
-                                    composeVector.parameter()[FieldNames::Z].toString());
+        auto const & outputPort = composeVector.getOutputs().at(FieldNames::Result);
+        std::string const xExpr = resolveParameter(composeVector.parameter().at(FieldNames::X));
+        std::string const yExpr = resolveParameter(composeVector.parameter().at(FieldNames::Y));
+        std::string const zExpr = resolveParameter(composeVector.parameter().at(FieldNames::Z));
+
+        std::string const expression = fmt::format("(float3)({}, {}, {})", xExpr, yExpr, zExpr);
+
+        bool const canInline = shouldInlineOutput(composeVector, FieldNames::Result);
+        if (canInline)
+        {
+            auto const key = std::make_pair(composeVector.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float3 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(ComposeMatrix & composeMatrix)
@@ -277,26 +438,54 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          fmt::runtime("float16 const {0} = (float16)({1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, "
-                       "{10}, {11}, {12}, {13}, {14}, {15}, {16});\n"),
-          composeMatrix.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          composeMatrix.parameter()[FieldNames::M00].toString(),
-          composeMatrix.parameter()[FieldNames::M01].toString(),
-          composeMatrix.parameter()[FieldNames::M02].toString(),
-          composeMatrix.parameter()[FieldNames::M03].toString(),
-          composeMatrix.parameter()[FieldNames::M10].toString(),
-          composeMatrix.parameter()[FieldNames::M11].toString(),
-          composeMatrix.parameter()[FieldNames::M12].toString(),
-          composeMatrix.parameter()[FieldNames::M13].toString(),
-          composeMatrix.parameter()[FieldNames::M20].toString(),
-          composeMatrix.parameter()[FieldNames::M21].toString(),
-          composeMatrix.parameter()[FieldNames::M22].toString(),
-          composeMatrix.parameter()[FieldNames::M23].toString(),
-          composeMatrix.parameter()[FieldNames::M30].toString(),
-          composeMatrix.parameter()[FieldNames::M31].toString(),
-          composeMatrix.parameter()[FieldNames::M32].toString(),
-          composeMatrix.parameter()[FieldNames::M33].toString());
+        auto const & outputPort = composeMatrix.getOutputs().at(FieldNames::Result);
+        auto const m00 = resolveParameter(composeMatrix.parameter().at(FieldNames::M00));
+        auto const m01 = resolveParameter(composeMatrix.parameter().at(FieldNames::M01));
+        auto const m02 = resolveParameter(composeMatrix.parameter().at(FieldNames::M02));
+        auto const m03 = resolveParameter(composeMatrix.parameter().at(FieldNames::M03));
+        auto const m10 = resolveParameter(composeMatrix.parameter().at(FieldNames::M10));
+        auto const m11 = resolveParameter(composeMatrix.parameter().at(FieldNames::M11));
+        auto const m12 = resolveParameter(composeMatrix.parameter().at(FieldNames::M12));
+        auto const m13 = resolveParameter(composeMatrix.parameter().at(FieldNames::M13));
+        auto const m20 = resolveParameter(composeMatrix.parameter().at(FieldNames::M20));
+        auto const m21 = resolveParameter(composeMatrix.parameter().at(FieldNames::M21));
+        auto const m22 = resolveParameter(composeMatrix.parameter().at(FieldNames::M22));
+        auto const m23 = resolveParameter(composeMatrix.parameter().at(FieldNames::M23));
+        auto const m30 = resolveParameter(composeMatrix.parameter().at(FieldNames::M30));
+        auto const m31 = resolveParameter(composeMatrix.parameter().at(FieldNames::M31));
+        auto const m32 = resolveParameter(composeMatrix.parameter().at(FieldNames::M32));
+        auto const m33 = resolveParameter(composeMatrix.parameter().at(FieldNames::M33));
+
+        std::string const expression =
+          fmt::format("(float16)({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+                      m00,
+                      m01,
+                      m02,
+                      m03,
+                      m10,
+                      m11,
+                      m12,
+                      m13,
+                      m20,
+                      m21,
+                      m22,
+                      m23,
+                      m30,
+                      m31,
+                      m32,
+                      m33);
+
+        bool const canInline = shouldInlineOutput(composeMatrix, FieldNames::Result);
+        if (canInline)
+        {
+            auto const key = std::make_pair(composeMatrix.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float16 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(ComposeMatrixFromColumns & composeMatrixFromColumns)
@@ -306,14 +495,36 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          fmt::runtime("float16 const {0} = (float16)({1}.x, {2}.x, {3}.x, {4}.x, {1}.y, {2}.y, "
-                       "{3}.y, {4}.y, {1}.z, {2}.z, {3}.z, {4}.z, 0.f, 0.f, 0.f, 1.f);\n"),
-          composeMatrixFromColumns.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col0].toString(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col1].toString(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col2].toString(),
-          composeMatrixFromColumns.parameter()[FieldNames::Col3].toString());
+        auto const & outputPort = composeMatrixFromColumns.getOutputs().at(FieldNames::Result);
+        auto const col0 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col0));
+        auto const col1 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col1));
+        auto const col2 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col2));
+        auto const col3 =
+          resolveParameter(composeMatrixFromColumns.parameter().at(FieldNames::Col3));
+
+        std::string const expression =
+          fmt::format("(float16)(({0}).x, ({1}).x, ({2}).x, ({3}).x, ({0}).y, ({1}).y, ({2}).y, "
+                      "({3}).y, ({0}).z, ({1}).z, ({2}).z, ({3}).z, 0.f, 0.f, 0.f, 1.f)",
+                      col0,
+                      col1,
+                      col2,
+                      col3);
+
+        bool const canInline = shouldInlineOutput(composeMatrixFromColumns, FieldNames::Result);
+        if (canInline)
+        {
+            auto const key =
+              std::make_pair(composeMatrixFromColumns.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float16 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(ComposeMatrixFromRows & composeMatrixFromRows)
@@ -323,14 +534,32 @@ namespace gladius::nodes
             return;
         }
 
-        m_definition << fmt::format(
-          fmt::runtime("float16 const {0} = (float16)({1}.x, {1}.y, {1}.z, 0.f, {2}.x, {2}.y, "
-                       "{2}.z, 0.f, {3}.x, {3}.y, {3}.z, 0.f, {4}.x, {4}.y, {4}.z, 1.f);\n"),
-          composeMatrixFromRows.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          composeMatrixFromRows.parameter()[FieldNames::Row0].toString(),
-          composeMatrixFromRows.parameter()[FieldNames::Row1].toString(),
-          composeMatrixFromRows.parameter()[FieldNames::Row2].toString(),
-          composeMatrixFromRows.parameter()[FieldNames::Row3].toString());
+        auto const & outputPort = composeMatrixFromRows.getOutputs().at(FieldNames::Result);
+        auto const row0 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row0));
+        auto const row1 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row1));
+        auto const row2 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row2));
+        auto const row3 = resolveParameter(composeMatrixFromRows.parameter().at(FieldNames::Row3));
+
+        std::string const expression =
+          fmt::format("(float16)(({0}).x, ({0}).y, ({0}).z, 0.f, ({1}).x, ({1}).y, ({1}).z, 0.f, "
+                      "({2}).x, ({2}).y, ({2}).z, 0.f, ({3}).x, ({3}).y, ({3}).z, 1.f)",
+                      row0,
+                      row1,
+                      row2,
+                      row3);
+
+        bool const canInline = shouldInlineOutput(composeMatrixFromRows, FieldNames::Result);
+        if (canInline)
+        {
+            auto const key =
+              std::make_pair(composeMatrixFromRows.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float16 const {} = {};\n", outputPort.getUniqueName(), expression);
+        }
     }
 
     void ToOclVisitor::visit(DecomposeVector & decomposeVector)
@@ -340,17 +569,18 @@ namespace gladius::nodes
             return;
         }
 
+        auto const inputVec = resolveParameter(decomposeVector.parameter()[FieldNames::A]);
         m_definition << fmt::format("float const {0} = ((float3)({1})).x;\n",
                                     decomposeVector.getOutputs()[FieldNames::X].getUniqueName(),
-                                    decomposeVector.parameter()[FieldNames::A].toString());
+                                    inputVec);
 
         m_definition << fmt::format("float const {0} = ((float3)({1})).y;\n",
                                     decomposeVector.getOutputs()[FieldNames::Y].getUniqueName(),
-                                    decomposeVector.parameter()[FieldNames::A].toString());
+                                    inputVec);
 
         m_definition << fmt::format("float const {0} = ((float3)({1})).z;\n",
                                     decomposeVector.getOutputs()[FieldNames::Z].getUniqueName(),
-                                    decomposeVector.parameter()[FieldNames::A].toString());
+                                    inputVec);
     }
 
     void ToOclVisitor::visit(SignedDistanceToMesh & signedDistanceToMesh)
@@ -363,9 +593,9 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float const {0} = payload((float3)({1}), (int)({2}), (int)({3}), PASS_PAYLOAD_ARGS);\n",
           signedDistanceToMesh.getOutputs()[FieldNames::Distance].getUniqueName(),
-          signedDistanceToMesh.parameter()[FieldNames::Pos].toString(),
-          signedDistanceToMesh.parameter()[FieldNames::Start].toString(),
-          signedDistanceToMesh.parameter()[FieldNames::End].toString());
+          resolveParameter(signedDistanceToMesh.parameter()[FieldNames::Pos]),
+          resolveParameter(signedDistanceToMesh.parameter()[FieldNames::Start]),
+          resolveParameter(signedDistanceToMesh.parameter()[FieldNames::End]));
     }
 
     void ToOclVisitor::visit(SignedDistanceToBeamLattice & signedDistanceToBeamLattice)
@@ -378,9 +608,9 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float const {0} = payload((float3)({1}), (int)({2}), (int)({3}), PASS_PAYLOAD_ARGS);\n",
           signedDistanceToBeamLattice.getOutputs()[FieldNames::Distance].getUniqueName(),
-          signedDistanceToBeamLattice.parameter()[FieldNames::Pos].toString(),
-          signedDistanceToBeamLattice.parameter()[FieldNames::Start].toString(),
-          signedDistanceToBeamLattice.parameter()[FieldNames::End].toString());
+          resolveParameter(signedDistanceToBeamLattice.parameter()[FieldNames::Pos]),
+          resolveParameter(signedDistanceToBeamLattice.parameter()[FieldNames::Start]),
+          resolveParameter(signedDistanceToBeamLattice.parameter()[FieldNames::End]));
     }
 
     void ToOclVisitor::visit(FunctionCall & functionCall)
@@ -461,6 +691,324 @@ namespace gladius::nodes
         }
     }
 
+    void ToOclVisitor::visit(FunctionGradient & functionGradient)
+    {
+        if (!isOutPutOfNodeValid(functionGradient))
+        {
+            return;
+        }
+
+        auto gradientOutputIter =
+          functionGradient.getOutputs().find(FieldNames::NormalizedGradient);
+        if (gradientOutputIter == functionGradient.getOutputs().end())
+        {
+            return;
+        }
+
+        auto & gradientOutput = gradientOutputIter->second;
+        if (!gradientOutput.isUsed())
+        {
+            return;
+        }
+
+        auto emitFallback = [&](std::string reason)
+        {
+            std::string const fallbackExpr = "(float3)(0.0f)";
+
+            bool const canInline =
+              shouldInlineOutput(functionGradient, FieldNames::NormalizedGradient);
+            auto const key =
+              std::make_pair(functionGradient.getId(), std::string(FieldNames::NormalizedGradient));
+
+            // Always annotate generated source with a fallback comment for diagnostics
+            m_definition << fmt::format("// FunctionGradient fallback: {}\n", reason);
+
+            if (canInline)
+            {
+                m_inlineExpressions[key] = fallbackExpr;
+            }
+            else
+            {
+                m_definition << fmt::format(
+                  "float3 const {0} = {1};\n", gradientOutput.getUniqueName(), fallbackExpr);
+            }
+        };
+
+        if (!functionGradient.hasValidConfiguration())
+        {
+            emitFallback("node not fully configured");
+            return;
+        }
+
+        if (m_assembly == nullptr)
+        {
+            emitFallback("assembly is null");
+            return;
+        }
+
+        functionGradient.resolveFunctionId();
+        auto const functionId = functionGradient.getFunctionId();
+        auto referencedModel = m_assembly->findModel(functionId);
+
+        if (!referencedModel)
+        {
+            emitFallback(fmt::format("referenced model {} not found", functionId));
+            return;
+        }
+
+        auto const & selectedOutputName = functionGradient.getSelectedScalarOutput();
+        auto const & selectedVectorParamName = functionGradient.getSelectedVectorInput();
+
+        auto & referencedOutputs = referencedModel->getOutputs();
+        auto referencedOutputIter = referencedOutputs.find(selectedOutputName);
+        if (referencedOutputIter == referencedOutputs.end())
+        {
+            emitFallback(fmt::format("missing output '{}'", selectedOutputName));
+            return;
+        }
+
+        if (referencedOutputIter->second.getTypeIndex() != ParameterTypeIndex::Float)
+        {
+            emitFallback(fmt::format("output '{}' is not float", selectedOutputName));
+            return;
+        }
+
+        if (!referencedOutputIter->second.isConsumedByFunction())
+        {
+            emitFallback(fmt::format("output '{}' is not marked as consumed", selectedOutputName));
+            return;
+        }
+
+        auto * vectorParameter = functionGradient.getSelectedVectorParameter();
+        if (vectorParameter == nullptr)
+        {
+            emitFallback(fmt::format("vector input '{}' not selected", selectedVectorParamName));
+            return;
+        }
+
+        if (vectorParameter->getTypeIndex() != ParameterTypeIndex::Float3)
+        {
+            emitFallback(fmt::format("vector input '{}' is not float3", selectedVectorParamName));
+            return;
+        }
+
+        auto stepIter = functionGradient.parameter().find(FieldNames::StepSize);
+        if (stepIter == functionGradient.parameter().end())
+        {
+            emitFallback("step size parameter missing");
+            return;
+        }
+
+        auto const functionName = referencedModel->getModelName();
+        std::string const nodeIdStr = std::to_string(functionGradient.getId());
+
+        std::string const stepVarName = fmt::format("FG_step_{}", nodeIdStr);
+        std::string const rawStepExpr = resolveParameter(stepIter->second);
+        m_definition << fmt::format(
+          "float const {0} = fmax(fabs({1}), 1e-8f);\n", stepVarName, rawStepExpr);
+
+        std::string const baseVectorVar = fmt::format("FG_input_{}", nodeIdStr);
+        std::string const baseVectorExpr = resolveParameter(*vectorParameter);
+        m_definition << fmt::format(
+          "float3 const {0} = (float3)({1});\n", baseVectorVar, baseVectorExpr);
+
+        auto & parameters = functionGradient.parameter();
+
+        auto emitEvaluation = [&](std::string const & callTag,
+                                  std::string const & vectorExpression) -> std::string
+        {
+            std::stringstream args;
+            bool first = true;
+
+            for (auto const & [paramName, parameter] : parameters)
+            {
+                if (!parameter.isArgument())
+                {
+                    continue;
+                }
+
+                std::string argumentExpr;
+                if (paramName == selectedVectorParamName)
+                {
+                    argumentExpr = vectorExpression;
+                }
+                else
+                {
+                    argumentExpr = resolveParameter(parameter);
+                }
+
+                if (argumentExpr.empty())
+                {
+                    continue;
+                }
+
+                if (!first)
+                {
+                    args << ", ";
+                }
+
+                args << fmt::format(
+                  "({0})({1})", typeIndexToOpenCl(parameter.getTypeIndex()), argumentExpr);
+                first = false;
+            }
+
+            std::unordered_map<std::string, std::string> localOutputs;
+
+            for (auto & [outputName, outputPort] : referencedOutputs)
+            {
+                if (!outputPort.isConsumedByFunction())
+                {
+                    continue;
+                }
+
+                std::string const localVarName =
+                  fmt::format("{0}_{1}_{2}", callTag, outputName, nodeIdStr);
+                m_definition << fmt::format("{0} {1} = ({0})(0.f);\n",
+                                            typeIndexToOpenCl(outputPort.getTypeIndex()),
+                                            localVarName);
+
+                if (!first)
+                {
+                    args << ", ";
+                }
+
+                args << fmt::format("&{0}", localVarName);
+                first = false;
+
+                localOutputs.emplace(outputName, localVarName);
+            }
+
+            auto selectedOutputVar = localOutputs.find(selectedOutputName);
+            if (selectedOutputVar == localOutputs.end())
+            {
+                throw std::runtime_error(fmt::format(
+                  "FunctionGradient node {0}: referenced output '{1}' is not marked as consumed",
+                  functionGradient.getUniqueName(),
+                  selectedOutputName));
+            }
+
+            if (first)
+            {
+                m_definition << fmt::format("{0}(PASS_PAYLOAD_ARGS);\n", functionName);
+            }
+            else
+            {
+                m_definition << fmt::format(
+                  "{0}({1}, PASS_PAYLOAD_ARGS);\n", functionName, args.str());
+            }
+
+            return selectedOutputVar->second;
+        };
+
+        std::array<char, 3> const axisComponents{'x', 'y', 'z'};
+        std::unordered_map<std::string, std::string> positiveSamples;
+        std::unordered_map<std::string, std::string> negativeSamples;
+
+        for (char component : axisComponents)
+        {
+            std::string const componentStr(1, component);
+
+            std::string const posVectorVar =
+              fmt::format("{0}_pos_{1}", baseVectorVar, componentStr);
+            m_definition << fmt::format("float3 {0} = {1};\n", posVectorVar, baseVectorVar);
+            m_definition << fmt::format("{0}.{1} += {2};\n", posVectorVar, component, stepVarName);
+
+            std::string const posCallTag = fmt::format("FG_pos_{0}_{1}", nodeIdStr, componentStr);
+            std::string const posSample = emitEvaluation(posCallTag, posVectorVar);
+            positiveSamples.emplace(componentStr, posSample);
+
+            std::string const negVectorVar =
+              fmt::format("{0}_neg_{1}", baseVectorVar, componentStr);
+            m_definition << fmt::format("float3 {0} = {1};\n", negVectorVar, baseVectorVar);
+            m_definition << fmt::format("{0}.{1} -= {2};\n", negVectorVar, component, stepVarName);
+
+            std::string const negCallTag = fmt::format("FG_neg_{0}_{1}", nodeIdStr, componentStr);
+            std::string const negSample = emitEvaluation(negCallTag, negVectorVar);
+            negativeSamples.emplace(componentStr, negSample);
+        }
+
+        auto const gradientVarName = fmt::format("FG_gradient_{}", nodeIdStr);
+        m_definition << fmt::format(
+          "float3 const {0} = (float3)(({1} - {2}) / (2.0f * {3}), ({4} - {5}) / (2.0f * {3}),"
+          " ({6} - {7}) / (2.0f * {3}));\n",
+          gradientVarName,
+          positiveSamples.at("x"),
+          negativeSamples.at("x"),
+          stepVarName,
+          positiveSamples.at("y"),
+          negativeSamples.at("y"),
+          positiveSamples.at("z"),
+          negativeSamples.at("z"));
+
+        auto const gradientLenVarName = fmt::format("FG_gradient_len_{}", nodeIdStr);
+        m_definition << fmt::format(
+          "float const {0} = length({1});\n", gradientLenVarName, gradientVarName);
+
+        auto const normalizedVarName = fmt::format("FG_gradient_norm_{}", nodeIdStr);
+        m_definition << fmt::format(
+          "float3 const {0} = ({1} > 1e-8f) ? ({2} / {1}) : (float3)(0.0f);\n",
+          normalizedVarName,
+          gradientLenVarName,
+          gradientVarName);
+
+        // Emit normalized vector output (backward compatible)
+        bool const canInlineVector =
+          shouldInlineOutput(functionGradient, FieldNames::NormalizedGradient);
+        if (canInlineVector)
+        {
+            auto const key =
+              std::make_pair(functionGradient.getId(), std::string(FieldNames::NormalizedGradient));
+            m_inlineExpressions[key] = normalizedVarName;
+        }
+        else
+        {
+            m_definition << fmt::format(
+              "float3 const {0} = {1};\n", gradientOutput.getUniqueName(), normalizedVarName);
+        }
+
+        // Emit raw gradient output (new)
+        auto gradientRawOutputIter = functionGradient.getOutputs().find(FieldNames::Gradient);
+        if (gradientRawOutputIter != functionGradient.getOutputs().end() &&
+            gradientRawOutputIter->second.isUsed())
+        {
+            bool const canInlineGradient =
+              shouldInlineOutput(functionGradient, FieldNames::Gradient);
+            if (canInlineGradient)
+            {
+                auto const key =
+                  std::make_pair(functionGradient.getId(), std::string(FieldNames::Gradient));
+                m_inlineExpressions[key] = gradientVarName;
+            }
+            else
+            {
+                m_definition << fmt::format("float3 const {0} = {1};\n",
+                                            gradientRawOutputIter->second.getUniqueName(),
+                                            gradientVarName);
+            }
+        }
+
+        // Emit magnitude output (new)
+        auto magnitudeOutputIter = functionGradient.getOutputs().find(FieldNames::Magnitude);
+        if (magnitudeOutputIter != functionGradient.getOutputs().end() &&
+            magnitudeOutputIter->second.isUsed())
+        {
+            bool const canInlineMagnitude =
+              shouldInlineOutput(functionGradient, FieldNames::Magnitude);
+            if (canInlineMagnitude)
+            {
+                auto const key =
+                  std::make_pair(functionGradient.getId(), std::string(FieldNames::Magnitude));
+                m_inlineExpressions[key] = gradientLenVarName;
+            }
+            else
+            {
+                m_definition << fmt::format("float const {0} = {1};\n",
+                                            magnitudeOutputIter->second.getUniqueName(),
+                                            gradientLenVarName);
+            }
+        }
+    }
+
     void ToOclVisitor::visit(Addition & addition)
     {
         if (!isOutPutOfNodeValid(addition))
@@ -468,41 +1016,94 @@ namespace gladius::nodes
             return;
         }
 
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(addition.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(addition.parameter().at(FieldNames::B));
+
+        // Build the addition expression
+        std::string expression;
+        std::string typeName;
+
         if (addition.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} + {2};\n",
-                                        addition.getResultOutputPort().getUniqueName(),
-                                        addition.parameter().at(FieldNames::A).toString(),
-                                        addition.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} + {})", aExpr, bExpr);
         }
         else if (addition.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) + (float3)({2});\n",
+            typeName = "float3";
+            expression = fmt::format("({} + {})", aExpr, bExpr);
+        }
+        else
+        {
+            // Unknown type, skip
+            return;
+        }
+
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(addition, FieldNames::Result);
+
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(addition.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                        typeName,
                                         addition.getResultOutputPort().getUniqueName(),
-                                        addition.parameter().at(FieldNames::A).toString(),
-                                        addition.parameter().at(FieldNames::B).toString());
+                                        expression);
         }
     }
-
     void ToOclVisitor::visit(Subtraction & subtraction)
     {
         if (!isOutPutOfNodeValid(subtraction))
         {
             return;
         }
+
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(subtraction.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(subtraction.parameter().at(FieldNames::B));
+
+        // Build the subtraction expression
+        std::string expression;
+        std::string typeName;
+
         if (subtraction.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} - {2};\n",
-                                        subtraction.getResultOutputPort().getUniqueName(),
-                                        subtraction.parameter().at(FieldNames::A).toString(),
-                                        subtraction.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} - {})", aExpr, bExpr);
         }
         else if (subtraction.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) - (float3)({2});\n",
+            typeName = "float3";
+            expression = fmt::format("((float3)({}) - (float3)({}))", aExpr, bExpr);
+        }
+        else
+        {
+            return;
+        }
+
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(subtraction, FieldNames::Result);
+
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(subtraction.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                        typeName,
                                         subtraction.getResultOutputPort().getUniqueName(),
-                                        subtraction.parameter().at(FieldNames::A).toString(),
-                                        subtraction.parameter().at(FieldNames::B).toString());
+                                        expression);
         }
     }
 
@@ -512,19 +1113,47 @@ namespace gladius::nodes
         {
             return;
         }
+
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(multiplication.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(multiplication.parameter().at(FieldNames::B));
+
+        // Build the multiplication expression
+        std::string expression;
+        std::string typeName;
+
         if (multiplication.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} * {2};\n",
-                                        multiplication.getResultOutputPort().getUniqueName(),
-                                        multiplication.parameter().at(FieldNames::A).toString(),
-                                        multiplication.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} * {})", aExpr, bExpr);
         }
         else if (multiplication.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) * (float3)({2});\n",
+            typeName = "float3";
+            expression = fmt::format("((float3)({}) * (float3)({}))", aExpr, bExpr);
+        }
+        else
+        {
+            return;
+        }
+
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(multiplication, FieldNames::Result);
+
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key =
+              std::make_pair(multiplication.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                        typeName,
                                         multiplication.getResultOutputPort().getUniqueName(),
-                                        multiplication.parameter().at(FieldNames::A).toString(),
-                                        multiplication.parameter().at(FieldNames::B).toString());
+                                        expression);
         }
     }
 
@@ -534,19 +1163,46 @@ namespace gladius::nodes
         {
             return;
         }
+
+        // Resolve input parameters (may use inlined expressions)
+        std::string const aExpr = resolveParameter(division.parameter().at(FieldNames::A));
+        std::string const bExpr = resolveParameter(division.parameter().at(FieldNames::B));
+
+        // Build the division expression
+        std::string expression;
+        std::string typeName;
+
         if (division.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float)
         {
-            m_definition << fmt::format("float const {0} = {1} / {2};\n",
-                                        division.getResultOutputPort().getUniqueName(),
-                                        division.parameter().at(FieldNames::A).toString(),
-                                        division.parameter().at(FieldNames::B).toString());
+            typeName = "float";
+            expression = fmt::format("({} / {})", aExpr, bExpr);
         }
         else if (division.getResultOutputPort().getTypeIndex() == ParameterTypeIndex::Float3)
         {
-            m_definition << fmt::format("float3 const {0} = (float3)({1}) / (float3)({2});\n",
+            typeName = "float3";
+            expression = fmt::format("((float3)({}) / (float3)({}))", aExpr, bExpr);
+        }
+        else
+        {
+            return;
+        }
+
+        // Check if this result should be inlined
+        bool const canInline = shouldInlineOutput(division, FieldNames::Result);
+
+        if (canInline)
+        {
+            // Store the expression for inlining
+            auto const key = std::make_pair(division.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            // Emit a variable declaration
+            m_definition << fmt::format("{} const {} = {};\n",
+                                        typeName,
                                         division.getResultOutputPort().getUniqueName(),
-                                        division.parameter().at(FieldNames::A).toString(),
-                                        division.parameter().at(FieldNames::B).toString());
+                                        expression);
         }
     }
 
@@ -556,10 +1212,24 @@ namespace gladius::nodes
         {
             return;
         }
-        m_definition << fmt::format("float const {0} = dot({1}, {2});\n",
-                                    dotProduct.getResultOutputPort().getUniqueName(),
-                                    dotProduct.parameter()[FieldNames::A].toString(),
-                                    dotProduct.parameter()[FieldNames::B].toString());
+
+        std::string const aExpr = resolveParameter(dotProduct.parameter()[FieldNames::A]);
+        std::string const bExpr = resolveParameter(dotProduct.parameter()[FieldNames::B]);
+        std::string const expression = fmt::format("dot({}, {})", aExpr, bExpr);
+
+        bool const canInline = shouldInlineOutput(dotProduct, FieldNames::Result);
+
+        if (canInline)
+        {
+            auto const key = std::make_pair(dotProduct.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            m_definition << fmt::format("float const {} = {};\n",
+                                        dotProduct.getResultOutputPort().getUniqueName(),
+                                        expression);
+        }
     }
 
     void ToOclVisitor::visit(CrossProduct & crossProduct)
@@ -568,10 +1238,24 @@ namespace gladius::nodes
         {
             return;
         }
-        m_definition << fmt::format("float3 const {0} = cross({1}, {2});\n",
-                                    crossProduct.getResultOutputPort().getUniqueName(),
-                                    crossProduct.parameter()[FieldNames::A].toString(),
-                                    crossProduct.parameter()[FieldNames::B].toString());
+
+        std::string const aExpr = resolveParameter(crossProduct.parameter()[FieldNames::A]);
+        std::string const bExpr = resolveParameter(crossProduct.parameter()[FieldNames::B]);
+        std::string const expression = fmt::format("cross({}, {})", aExpr, bExpr);
+
+        bool const canInline = shouldInlineOutput(crossProduct, FieldNames::Result);
+
+        if (canInline)
+        {
+            auto const key = std::make_pair(crossProduct.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            m_definition << fmt::format("float3 const {} = {};\n",
+                                        crossProduct.getResultOutputPort().getUniqueName(),
+                                        expression);
+        }
     }
 
     void ToOclVisitor::visit(MatrixVectorMultiplication & matrixVectorMultiplication)
@@ -583,8 +1267,8 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float3 const {0} = matrixVectorMul3f((float16)({1}), {2});\n",
           matrixVectorMultiplication.getResultOutputPort().getUniqueName(),
-          matrixVectorMultiplication.parameter().at(FieldNames::A).toString(),
-          matrixVectorMultiplication.parameter().at(FieldNames::B).toString());
+          resolveParameter(matrixVectorMultiplication.parameter().at(FieldNames::A)),
+          resolveParameter(matrixVectorMultiplication.parameter().at(FieldNames::B)));
     }
 
     void ToOclVisitor::visit(Transpose & transpose)
@@ -596,128 +1280,53 @@ namespace gladius::nodes
         m_definition << fmt::format(
           fmt::runtime("float16 const {0} = transpose((float16)({1}));\n"),
           transpose.getOutputs()[FieldNames::Matrix].getUniqueName(),
-          transpose.parameter()[FieldNames::Matrix].toString());
+          resolveParameter(transpose.parameter()[FieldNames::Matrix]));
     }
 
     void ToOclVisitor::visit(Sine & sine)
     {
-        if (!isOutPutOfNodeValid(sine))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = sin({2});\n",
-                                    typeIndexToOpenCl(sine.getResultOutputPort().getTypeIndex()),
-                                    sine.getResultOutputPort().getUniqueName(),
-                                    sine.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sine, "sin", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Cosine & cosine)
     {
-        if (!isOutPutOfNodeValid(cosine))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = cos({2});\n",
-                                    typeIndexToOpenCl(cosine.getResultOutputPort().getTypeIndex()),
-                                    cosine.getResultOutputPort().getUniqueName(),
-                                    cosine.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(cosine, "cos", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Tangent & tangent)
     {
-        if (!isOutPutOfNodeValid(tangent))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = tan({2});\n",
-                                    typeIndexToOpenCl(tangent.getResultOutputPort().getTypeIndex()),
-                                    tangent.getResultOutputPort().getUniqueName(),
-                                    tangent.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(tangent, "tan", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(ArcSin & arcSin)
     {
-        if (!isOutPutOfNodeValid(arcSin))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = asin({2});\n",
-                                    typeIndexToOpenCl(arcSin.getResultOutputPort().getTypeIndex()),
-                                    arcSin.getResultOutputPort().getUniqueName(),
-                                    arcSin.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(arcSin, "asin", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(ArcCos & arcCos)
     {
-        if (!isOutPutOfNodeValid(arcCos))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = acos({2});\n",
-                                    typeIndexToOpenCl(arcCos.getResultOutputPort().getTypeIndex()),
-                                    arcCos.getResultOutputPort().getUniqueName(),
-                                    arcCos.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(arcCos, "acos", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(ArcTan & arcTan)
     {
-        if (!isOutPutOfNodeValid(arcTan))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = atan({2});\n",
-                                    typeIndexToOpenCl(arcTan.getResultOutputPort().getTypeIndex()),
-                                    arcTan.getResultOutputPort().getUniqueName(),
-                                    arcTan.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(arcTan, "atan", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Pow & power)
     {
-        if (!isOutPutOfNodeValid(power))
-        {
-            return;
-        }
-
-        m_definition << fmt::format(
-          fmt::runtime("{0} const {1} = pow(({0})({2}), ({0})({3}));\n"),
-          typeIndexToOpenCl(power.getOutputs().at(FieldNames::Value).getTypeIndex()),
-          power.getOutputs().at(FieldNames::Value).getUniqueName(),
-          power.parameter().at(FieldNames::Base).toString(),
-          power.parameter().at(FieldNames::Exponent).toString());
+        emitBinaryOperation(
+          power, "pow", FieldNames::Value, FieldNames::Base, FieldNames::Exponent);
     }
 
     void ToOclVisitor::visit(Sqrt & sqrtNode)
     {
-        if (!isOutPutOfNodeValid(sqrtNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format(
-          "{0} const {1} = sqrt(({0})({2}));\n",
-          typeIndexToOpenCl(sqrtNode.getResultOutputPort().getTypeIndex()),
-          sqrtNode.getResultOutputPort().getUniqueName(),
-          sqrtNode.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sqrtNode, "sqrt", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Fmod & modulus)
     {
-        if (!isOutPutOfNodeValid(modulus))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = fmod(({0})({2}), ({0})({3}));\n",
-                                    typeIndexToOpenCl(modulus.getResultOutputPort().getTypeIndex()),
-                                    modulus.getResultOutputPort().getUniqueName(),
-                                    modulus.parameter().at(FieldNames::A).toString(),
-                                    modulus.parameter().at(FieldNames::B).toString());
+        emitBinaryOperation(modulus, "fmod", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Mod & modulus)
@@ -732,50 +1341,24 @@ namespace gladius::nodes
         m_definition << fmt::format("{0} const {1} = glsl_mod{4}f(({0})({2}), ({0})({3}));\n",
                                     typeIndexToOpenCl(modulus.getResultOutputPort().getTypeIndex()),
                                     modulus.getResultOutputPort().getUniqueName(),
-                                    modulus.parameter().at(FieldNames::A).toString(),
-                                    modulus.parameter().at(FieldNames::B).toString(),
+                                    resolveParameter(modulus.parameter().at(FieldNames::A)),
+                                    resolveParameter(modulus.parameter().at(FieldNames::B)),
                                     numCopmonents);
     }
 
     void ToOclVisitor::visit(Max & maxNode)
     {
-        if (!isOutPutOfNodeValid(maxNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = max(({0})({2}), ({0})({3}));\n",
-                                    typeIndexToOpenCl(maxNode.getResultOutputPort().getTypeIndex()),
-                                    maxNode.getResultOutputPort().getUniqueName(),
-                                    maxNode.parameter().at(FieldNames::A).toString(),
-                                    maxNode.parameter().at(FieldNames::B).toString());
+        emitBinaryOperation(maxNode, "max", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Min & minNode)
     {
-        if (!isOutPutOfNodeValid(minNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = min(({0})({2}), ({0})({3}));\n",
-                                    typeIndexToOpenCl(minNode.getResultOutputPort().getTypeIndex()),
-                                    minNode.getResultOutputPort().getUniqueName(),
-                                    minNode.parameter().at(FieldNames::A).toString(),
-                                    minNode.parameter().at(FieldNames::B).toString());
+        emitBinaryOperation(minNode, "min", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Abs & absNode)
     {
-        if (!isOutPutOfNodeValid(absNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = fabs(({0})({2}));\n",
-                                    typeIndexToOpenCl(absNode.getResultOutputPort().getTypeIndex()),
-                                    absNode.getResultOutputPort().getUniqueName(),
-                                    absNode.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(absNode, "fabs", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Length & lengthNode)
@@ -784,24 +1367,29 @@ namespace gladius::nodes
         {
             return;
         }
-        m_definition << fmt::format("float const {0} = length((float3)({1}));\n",
-                                    lengthNode.getResultOutputPort().getUniqueName(),
-                                    lengthNode.parameter().at(FieldNames::A).toString());
+
+        std::string const inputExpr = resolveParameter(lengthNode.parameter().at(FieldNames::A));
+        std::string const expression = fmt::format("length((float3)({}))", inputExpr);
+
+        bool const canInline = shouldInlineOutput(lengthNode, FieldNames::Result);
+
+        if (canInline)
+        {
+            auto const key = std::make_pair(lengthNode.getId(), std::string(FieldNames::Result));
+            m_inlineExpressions[key] = expression;
+        }
+        else
+        {
+            m_definition << fmt::format("float const {} = {};\n",
+                                        lengthNode.getResultOutputPort().getUniqueName(),
+                                        expression);
+        }
     }
 
     void ToOclVisitor::visit(Mix & mixNode)
     {
-        if (!isOutPutOfNodeValid(mixNode))
-        {
-            return;
-        }
-
-        m_definition << fmt::format("{0} const {1} = mix(({0})({2}), ({0})({3}), ({0})({4}));\n",
-                                    typeIndexToOpenCl(mixNode.getResultOutputPort().getTypeIndex()),
-                                    mixNode.getResultOutputPort().getUniqueName(),
-                                    mixNode.parameter().at(FieldNames::A).toString(),
-                                    mixNode.parameter().at(FieldNames::B).toString(),
-                                    mixNode.parameter().at(FieldNames::Ratio).toString());
+        emitTernaryOperation(
+          mixNode, "mix", FieldNames::Result, FieldNames::A, FieldNames::B, FieldNames::Ratio);
     }
 
     void ToOclVisitor::visit(Transformation & transformation)
@@ -815,8 +1403,8 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float3 const {0} = matrixVectorMul3f((float16)({1}), {2});\n",
           transformation.getOutputs()[FieldNames::Pos].getUniqueName(),
-          transformation.parameter()[FieldNames::Transformation].toString(),
-          transformation.parameter()[FieldNames::Pos].toString());
+          resolveParameter(transformation.parameter()[FieldNames::Transformation]),
+          resolveParameter(transformation.parameter()[FieldNames::Pos]));
     }
 
     // Resource
@@ -861,14 +1449,15 @@ namespace gladius::nodes
                                     static_cast<int>(imageSampler.getTileStyleV()),
                                     static_cast<int>(imageSampler.getTileStyleW()));
 
-        m_definition << fmt::format("float4 const {0}_rgba = {1}((float3)({2}), (float3)({3}), "
-                                    "{4}, {5}_tileStyle, PASS_PAYLOAD_ARGS);\n",
-                                    imageSampler.getOutputs().at(FieldNames::Color).getUniqueName(),
-                                    samplerName,
-                                    imageSampler.parameter().at(FieldNames::UVW).toString(),
-                                    imageSampler.parameter().at(FieldNames::Dimensions).toString(),
-                                    imageSampler.parameter().at(FieldNames::Start).toString(),
-                                    imageSampler.getUniqueName());
+        m_definition << fmt::format(
+          "float4 const {0}_rgba = {1}((float3)({2}), (float3)({3}), "
+          "{4}, {5}_tileStyle, PASS_PAYLOAD_ARGS);\n",
+          imageSampler.getOutputs().at(FieldNames::Color).getUniqueName(),
+          samplerName,
+          resolveParameter(imageSampler.parameter().at(FieldNames::UVW)),
+          resolveParameter(imageSampler.parameter().at(FieldNames::Dimensions)),
+          resolveParameter(imageSampler.parameter().at(FieldNames::Start)),
+          imageSampler.getUniqueName());
 
         m_definition << fmt::format(
           "float3 const {0} = {1}_rgba.xyz;\n",
@@ -888,85 +1477,87 @@ namespace gladius::nodes
             return;
         }
 
+        auto const matrixParam =
+          resolveParameter(decomposeMatrixNode.parameter()[FieldNames::Matrix]);
         m_definition << fmt::format(
           "float const {0} = {1}.s0;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M00].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s1;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M01].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s2;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M02].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s3;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M03].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s4;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M10].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s5;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M11].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s6;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M12].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s7;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M13].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s8;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M20].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.s9;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M21].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sa;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M22].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sb;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M23].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sc;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M30].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sd;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M31].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.se;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M32].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
 
         m_definition << fmt::format(
           "float const {0} = {1}.sf;\n",
           decomposeMatrixNode.getOutputs()[FieldNames::M33].getUniqueName(),
-          decomposeMatrixNode.parameter()[FieldNames::Matrix].toString());
+          matrixParam);
     }
 
     void ToOclVisitor::visit(Inverse & inverse)
@@ -978,7 +1569,7 @@ namespace gladius::nodes
 
         m_definition << fmt::format("float16 const {0} = inverse((float16)({1}));\n",
                                     inverse.getOutputs()[FieldNames::Result].getUniqueName(),
-                                    inverse.parameter()[FieldNames::Matrix].toString());
+                                    resolveParameter(inverse.parameter()[FieldNames::Matrix]));
     }
 
     void ToOclVisitor::visit(ArcTan2 & arcTan2)
@@ -991,59 +1582,28 @@ namespace gladius::nodes
           "{0} const {1} = atan2({2}, {3});\n",
           typeIndexToOpenCl(arcTan2.getOutputs().at(FieldNames::Result).getTypeIndex()),
           arcTan2.getOutputs().at(FieldNames::Result).getUniqueName(),
-          arcTan2.parameter().at(FieldNames::A).toString(),
-          arcTan2.parameter().at(FieldNames::B).toString());
+          resolveParameter(arcTan2.parameter().at(FieldNames::A)),
+          resolveParameter(arcTan2.parameter().at(FieldNames::B)));
     }
 
     void ToOclVisitor::visit(Exp & exp)
     {
-        if (!isOutPutOfNodeValid(exp))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = exp({2});\n",
-          typeIndexToOpenCl(exp.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          exp.getOutputs().at(FieldNames::Result).getUniqueName(),
-          exp.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(exp, "exp", FieldNames::Result);
     }
+
     void ToOclVisitor::visit(Log & log)
     {
-        if (!isOutPutOfNodeValid(log))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = log({2});\n",
-          typeIndexToOpenCl(log.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          log.getOutputs().at(FieldNames::Result).getUniqueName(),
-          log.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(log, "log", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Log2 & log2)
     {
-        if (!isOutPutOfNodeValid(log2))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = log2({2});\n",
-          typeIndexToOpenCl(log2.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          log2.getOutputs().at(FieldNames::Result).getUniqueName(),
-          log2.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(log2, "log2", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Log10 & log10)
     {
-        if (!isOutPutOfNodeValid(log10))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = log10({2});\n",
-          typeIndexToOpenCl(log10.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          log10.getOutputs().at(FieldNames::Result).getUniqueName(),
-          log10.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(log10, "log10", FieldNames::Result);
     }
 
     // result = A < B ? C : D
@@ -1058,130 +1618,56 @@ namespace gladius::nodes
           "{0} const {1} = {2} < {3} ? {4} : {5};\n",
           typeIndexToOpenCl(select.getOutputs().at(FieldNames::Result).getTypeIndex()),
           select.getOutputs().at(FieldNames::Result).getUniqueName(),
-          select.parameter().at(FieldNames::A).toString(),
-          select.parameter().at(FieldNames::B).toString(),
-          select.parameter().at(FieldNames::C).toString(),
-          select.parameter().at(FieldNames::D).toString());
+          resolveParameter(select.parameter().at(FieldNames::A)),
+          resolveParameter(select.parameter().at(FieldNames::B)),
+          resolveParameter(select.parameter().at(FieldNames::C)),
+          resolveParameter(select.parameter().at(FieldNames::D)));
     }
 
     void ToOclVisitor::visit(Clamp & clamp)
     {
-        if (!isOutPutOfNodeValid(clamp))
-        {
-            return;
-        }
-
-        m_definition << fmt::format(
-          "{0} const {1} = clamp({2}, {3}, {4});\n",
-          typeIndexToOpenCl(clamp.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          clamp.getOutputs().at(FieldNames::Result).getUniqueName(),
-          clamp.parameter().at(FieldNames::A).toString(),
-          clamp.parameter().at(FieldNames::Min).toString(),
-          clamp.parameter().at(FieldNames::Max).toString());
+        emitTernaryOperation(
+          clamp, "clamp", FieldNames::Result, FieldNames::A, FieldNames::Min, FieldNames::Max);
     }
 
     void ToOclVisitor::visit(SinH & sinh)
     {
-        if (!isOutPutOfNodeValid(sinh))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = sinh({2});\n",
-          typeIndexToOpenCl(sinh.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          sinh.getOutputs().at(FieldNames::Result).getUniqueName(),
-          sinh.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sinh, "sinh", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(CosH & cosh)
     {
-        if (!isOutPutOfNodeValid(cosh))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = cosh({2});\n",
-          typeIndexToOpenCl(cosh.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          cosh.getOutputs().at(FieldNames::Result).getUniqueName(),
-          cosh.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(cosh, "cosh", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(TanH & tanh)
     {
-        if (!isOutPutOfNodeValid(tanh))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = tanh({2});\n",
-          typeIndexToOpenCl(tanh.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          tanh.getOutputs().at(FieldNames::Result).getUniqueName(),
-          tanh.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(tanh, "tanh", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Round & round)
     {
-        if (!isOutPutOfNodeValid(round))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = round({2});\n",
-          typeIndexToOpenCl(round.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          round.getOutputs().at(FieldNames::Result).getUniqueName(),
-          round.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(round, "round", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Ceil & ceil)
     {
-        if (!isOutPutOfNodeValid(ceil))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = ceil({2});\n",
-          typeIndexToOpenCl(ceil.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          ceil.getOutputs().at(FieldNames::Result).getUniqueName(),
-          ceil.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(ceil, "ceil", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Floor & floor)
     {
-        if (!isOutPutOfNodeValid(floor))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = floor({2});\n",
-          typeIndexToOpenCl(floor.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          floor.getOutputs().at(FieldNames::Result).getUniqueName(),
-          floor.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(floor, "floor", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Sign & sign)
     {
-        if (!isOutPutOfNodeValid(sign))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = sign({2});\n",
-          typeIndexToOpenCl(sign.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          sign.getOutputs().at(FieldNames::Result).getUniqueName(),
-          sign.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(sign, "sign", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(Fract & fract)
     {
-        if (!isOutPutOfNodeValid(fract))
-        {
-            return;
-        }
-        m_definition << fmt::format(
-          "{0} const {1} = fract({2});\n",
-          typeIndexToOpenCl(fract.getOutputs().at(FieldNames::Result).getTypeIndex()),
-          fract.getOutputs().at(FieldNames::Result).getUniqueName(),
-          fract.parameter().at(FieldNames::A).toString());
+        emitUnaryOperation(fract, "fract", FieldNames::Result);
     }
 
     void ToOclVisitor::visit(VectorFromScalar & vectorFromScalar)
@@ -1193,7 +1679,7 @@ namespace gladius::nodes
         m_definition << fmt::format(
           "float3 const {0} = (float3)({1},{1},{1});\n",
           vectorFromScalar.getOutputs().at(FieldNames::Result).getUniqueName(),
-          vectorFromScalar.parameter().at(FieldNames::A).toString());
+          resolveParameter(vectorFromScalar.parameter().at(FieldNames::A)));
     }
 
     void ToOclVisitor::visit(UnsignedDistanceToMesh & unsignedDistanceToMesh)
@@ -1207,9 +1693,9 @@ namespace gladius::nodes
           "float const {0} = fabs(payload((float3)({1}), (int)({2}), (int)({3}), "
           "PASS_PAYLOAD_ARGS));\n", // Todo: Use optimized method for unsigned distance
           unsignedDistanceToMesh.getOutputs()[FieldNames::Distance].getUniqueName(),
-          unsignedDistanceToMesh.parameter()[FieldNames::Pos].toString(),
-          unsignedDistanceToMesh.parameter()[FieldNames::Start].toString(),
-          unsignedDistanceToMesh.parameter()[FieldNames::End].toString());
+          resolveParameter(unsignedDistanceToMesh.parameter()[FieldNames::Pos]),
+          resolveParameter(unsignedDistanceToMesh.parameter()[FieldNames::Start]),
+          resolveParameter(unsignedDistanceToMesh.parameter()[FieldNames::End]));
     }
 
     void ToOclVisitor::visit(BoxMinMax & boxMinMax)
@@ -1221,8 +1707,8 @@ namespace gladius::nodes
 
         m_definition << fmt::format("float const {0} = bbBox({1}, {2}, {3});\n",
                                     boxMinMax.getOutputs().at(FieldNames::Shape).getUniqueName(),
-                                    boxMinMax.parameter().at(FieldNames::Pos).toString(),
-                                    boxMinMax.parameter().at(FieldNames::Min).toString(),
-                                    boxMinMax.parameter().at(FieldNames::Max).toString());
+                                    resolveParameter(boxMinMax.parameter().at(FieldNames::Pos)),
+                                    resolveParameter(boxMinMax.parameter().at(FieldNames::Min)),
+                                    resolveParameter(boxMinMax.parameter().at(FieldNames::Max)));
     }
 } // namespace gladius::nodes
